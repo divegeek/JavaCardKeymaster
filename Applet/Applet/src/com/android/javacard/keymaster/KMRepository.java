@@ -189,6 +189,7 @@ public class KMRepository {
       if (commandTable[cmdIndex].getIns() == ins) {
         return commandTable[cmdIndex];
       }
+      cmdIndex++;
     }
     throw new KMException(ISO7816.SW_INS_NOT_SUPPORTED);
   }

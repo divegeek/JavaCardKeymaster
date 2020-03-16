@@ -40,12 +40,12 @@ public abstract class KMAbstractCmd implements KMCommand {
     }
     // Pass control to concrete command subclass
     KMArray resp = this.process(args, context);
+    context.setBufferLength((short)0);
     // If there is resp then serialize and send
     if (resp != null) {
       // set outgoing buffer
-      encoder.encode(resp, context.getBuffer(), (short) 0, context.getBufferLength());
-    }else{
-      context.setBufferLength((short)0);
+      short len = encoder.encode(resp, context.getBuffer(), (short) 0, (short)context.getBuffer().length);
+      context.setBufferLength(len);
     }
   }
 

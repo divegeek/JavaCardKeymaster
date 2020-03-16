@@ -173,7 +173,7 @@ public class KMDecoder {
 
   private KMByteBlob decode(KMByteBlob exp) {
     short payloadLength = readMajorTypeWithPayloadLength(BYTES_TYPE);
-    KMByteBlob inst = exp.instance(buffer, (short) (startOff + 1), payloadLength);
+    KMByteBlob inst = exp.instance(buffer, startOff, payloadLength);
     incrementStartOff(payloadLength);
     return inst;
   }

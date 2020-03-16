@@ -18,6 +18,11 @@ package com.android.javacard.keymaster;
 
 public class KMGetHWInfoCmd extends KMAbstractCmd {
   public static final byte INS_GET_HW_INFO_CMD = 0x1E;
+  public static final byte[] JavacardKeymasterDevice = {
+    0x4A, 0x61, 0x76, 0x61, 0x63, 0x61, 0x72, 0x64, 0x4B, 0x65, 0x79, 0x6D, 0x61, 0x73, 0x74, 0x65,
+    0x72, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65,
+  };
+  public static final byte[] Google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
 
   @Override
   protected KMArray getExpectedArgs() {
@@ -26,11 +31,22 @@ public class KMGetHWInfoCmd extends KMAbstractCmd {
 
   @Override
   protected KMArray process(KMArray args, KMContext context) {
-    return null;
+    return KMArray.instance((short) 3)
+        .add((short) 0, KMEnum.instance(KMType.HARDWARE_TYPE, KMType.STRONGBOX))
+        .add(
+            (short) 1,
+            KMByteBlob.instance(
+                JavacardKeymasterDevice, (short) 0, (short) JavacardKeymasterDevice.length))
+        .add((short) 2, KMByteBlob.instance(Google, (short) 0, (short) Google.length));
   }
 
   @Override
   public byte getIns() {
     return INS_GET_HW_INFO_CMD;
+  }
+
+  @Override
+  public boolean hasArguments() {
+    return false;
   }
 }

@@ -47,7 +47,7 @@ public class KMByteBlob extends KMType {
 
   // copy the blob
   public static KMByteBlob instance(byte[] blob, short startOff, short length) {
-    if ((length <= 0) || (startOff >= length) || ((short)(startOff+length) > blob.length)) {
+    if ((length <= 0) || ((short)(startOff+length) > blob.length)) {
       throw new KMException(ISO7816.SW_WRONG_LENGTH);
     }
     KMByteBlob inst = instance(length);

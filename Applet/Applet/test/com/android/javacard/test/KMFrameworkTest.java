@@ -28,10 +28,12 @@ import com.android.javacard.keymaster.KMType;
 import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
+import javacard.framework.Util;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.experimental.theories.suppliers.TestedOn;
 
 public class KMFrameworkTest {
 
@@ -46,22 +48,56 @@ public class KMFrameworkTest {
 
     // Select applet
     simulator.selectApplet(appletAID1);
-    byte[] buf = new byte[512];
-
-    // test provision command
-    KMArray cmd = makeProvisionCmd();
-    KMEncoder enc = new KMEncoder();
-    short actualLen = enc.encode(cmd, buf, (short) 0, (short) 512);
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x23, 0x40, 0x00, buf, 0, actualLen);
-    //print(commandAPDU.getBytes());;
-    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
-    Assert.assertEquals(0x9000, response.getSW());
-
-    //test getHWInfo command
-
-  // Delete i.e. uninstall applet
+    testProvisionCmd(simulator);
+    testGetHwInfoCmd(simulator);
+    // Delete i.e. uninstall applet
     simulator.deleteApplet(appletAID1);
+  }
 
+  public void testProvisionCmd(CardSimulator simulator){
+      byte[] buf = new byte[512];
+      // test provision command
+      KMArray cmd = makeProvisionCmd();
+      KMEncoder enc = new KMEncoder();
+      short actualLen = enc.encode(cmd, buf, (short) 0, (short)buf.length);
+      CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x23, 0x40, 0x00, buf, 0, actualLen);
+      //print(commandAPDU.getBytes());;
+      ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+      Assert.assertEquals(0x9000, response.getSW());
+  }
+
+  public void testGetHwInfoCmd(CardSimulator simulator){
+    byte[] buf = new byte[512];
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1E, 0x40, 0x00);
+    //print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    KMDecoder dec = new KMDecoder();
+    KMArray exp = KMArray.instance((short)3)
+      .add((short)0, KMEnum.instance().setType(KMType.HARDWARE_TYPE))
+      .add((short)1, KMByteBlob.instance())
+      .add((short)2, KMByteBlob.instance());
+    byte[] respBuf = response.getBytes();
+    short len = (short)respBuf.length;
+    KMArray resp = dec.decode(exp,respBuf, (short)0, len);
+    Assert.assertEquals(3, resp.length());
+    KMEnum secLevel = (KMEnum)resp.get((short)0);
+    KMByteBlob kmName = (KMByteBlob) resp.get((short)1);
+    KMByteBlob authorName = (KMByteBlob) resp.get((short)2);
+    Assert.assertEquals(KMType.HARDWARE_TYPE, secLevel.getType());
+    Assert.assertEquals(KMType.STRONGBOX, secLevel.getVal());
+    String kmNameStr = byteBlobToString(kmName);
+    String authorNameStr = byteBlobToString(authorName);
+    Assert.assertEquals( "JavacardKeymasterDevice",kmNameStr);
+    Assert.assertEquals( "Google",authorNameStr);
+    Assert.assertEquals(0x9000, response.getSW());
+  }
+
+  private String byteBlobToString(KMByteBlob blob) {
+    StringBuilder sb = new StringBuilder();
+    for(short i = 0; i<blob.length(); i++){
+      sb.append((char)blob.get(i));
+    }
+    return sb.toString();
   }
 
   private void print(byte[] cmdApdu){
