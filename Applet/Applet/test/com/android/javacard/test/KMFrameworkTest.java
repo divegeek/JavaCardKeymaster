@@ -53,6 +53,7 @@ public class KMFrameworkTest {
     KMEncoder enc = new KMEncoder();
     short actualLen = enc.encode(cmd, buf, (short) 0, (short) 512);
     CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x23, 0x40, 0x00, buf, 0, actualLen);
+    //print(commandAPDU.getBytes());;
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     Assert.assertEquals(0x9000, response.getSW());
 
@@ -61,6 +62,17 @@ public class KMFrameworkTest {
   // Delete i.e. uninstall applet
     simulator.deleteApplet(appletAID1);
 
+  }
+
+  private void print(byte[] cmdApdu){
+    StringBuilder sb = new StringBuilder();
+    for(int i = 0; i < cmdApdu.length; i++){
+      sb.append(String.format(" 0x%02X", cmdApdu[i])) ;
+      if(((i-1)%38 == 0) && ((i-1) >0)){
+        sb.append(";\n");
+      }
+    }
+    System.out.println(sb.toString());
   }
 
   private KMArray makeProvisionCmd() {
@@ -72,11 +84,11 @@ public class KMFrameworkTest {
     // Argument 2
     KMEnum keyFormat = KMEnum.instance(KMType.KEY_FORMAT, KMType.X509);
     // Argument 3
-    byte[] byteBlob = new byte[255];
-    for (short i = 0; i < 255; i++) {
+    byte[] byteBlob = new byte[48];
+    for (short i = 0; i < 48; i++) {
       byteBlob[i] = (byte) i;
     }
-    KMByteBlob keyBlob = KMByteBlob.instance(byteBlob, (short) 0, (short) 255);
+    KMByteBlob keyBlob = KMByteBlob.instance(byteBlob, (short) 0, (short)byteBlob.length);
     // Array of expected arguments
     return KMArray.instance((short) 3)
         .add((short) 0, keyparams)

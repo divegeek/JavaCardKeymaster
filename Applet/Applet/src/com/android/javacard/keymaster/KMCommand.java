@@ -16,6 +16,8 @@
 
 package com.android.javacard.keymaster;
 
+import javacard.framework.APDU;
+
 /** This interface declares methods to be implemented by the command instances. */
 public interface KMCommand {
   /**
@@ -32,4 +34,10 @@ public interface KMCommand {
    * @return instruction code which is related APDU INS.
    */
   byte getIns();
+
+  /**
+   * Indicates whether command has arguments.
+   * @ return true if the command has arguments
+   */
+    boolean hasArguments();
 }

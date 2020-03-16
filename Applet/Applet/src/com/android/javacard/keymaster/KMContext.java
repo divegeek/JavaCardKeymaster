@@ -16,8 +16,6 @@
 
 package com.android.javacard.keymaster;
 
-import javacard.framework.APDU;
-
 /**
  * This class provides data structure for information which is passed between the Keymaster Applet
  * and the commands. It is created by applet and initialized for the process request. Applet sets
@@ -27,8 +25,6 @@ import javacard.framework.APDU;
 public class KMContext {
   private KMRepository repository;
   private byte keymasterState;
-  private KMMessenger messenger;
-  private APDU apdu;
   private KMOperationState opState;
   private byte[] buffer;
   private short bufferLength;
@@ -50,42 +46,6 @@ public class KMContext {
     return keymasterState;
   }
 
-  /**
-   * Setter for the apdu. Set by the applet.
-   *
-   * @param apdu for the current command.
-   */
-  public void setApdu(APDU apdu) {
-    this.apdu = apdu;
-  }
-
-  /**
-   * Getter for the apdu. Used by the commands.
-   *
-   * @return apdu for the current command.
-   */
-  public APDU getApdu() {
-    return apdu;
-  }
-
-  /**
-   * Setter for the messenger which provides methods to send and receive data to and from android
-   * device which acts as master for this javacard applet. Set by the applet.
-   *
-   * @param messenger represents the sender and receiver for the to and from the master.
-   */
-  public void setMessenger(KMMessenger messenger) {
-    this.messenger = messenger;
-  }
-
-  /**
-   * Getter for the messenger Used by the applet.
-   *
-   * @return messenger represents the sender and receiver for the to and from the master.
-   */
-  public KMMessenger getMessenger() {
-    return messenger;
-  }
 
   /**
    * Getter for buffer used for receiving or sending data to or from the master. Used by the

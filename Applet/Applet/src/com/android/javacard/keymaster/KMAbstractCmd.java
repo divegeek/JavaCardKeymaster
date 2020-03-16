@@ -32,12 +32,10 @@ public abstract class KMAbstractCmd implements KMCommand {
     KMEncoder encoder = context.getRepository().getEncoder();
     KMDecoder decoder = context.getRepository().getDecoder();
     // Get getExpectedArgs if expected
-    KMArray argsProto = getExpectedArgs();
     KMArray args = null;
-    if (argsProto != null) {
-      // receive the incoming data for the getExpectedArgs
-      context.getMessenger().receiveIncoming(context);
+    if (hasArguments()) {
       // Deserialize the getExpectedArgs
+      KMArray argsProto = getExpectedArgs();
       args = decoder.decode(argsProto, context.getBuffer(), (short) 0, context.getBufferLength());
     }
     // Pass control to concrete command subclass
@@ -46,7 +44,8 @@ public abstract class KMAbstractCmd implements KMCommand {
     if (resp != null) {
       // set outgoing buffer
       encoder.encode(resp, context.getBuffer(), (short) 0, context.getBufferLength());
-      context.getMessenger().sendOutgoing(context);
+    }else{
+      context.setBufferLength((short)0);
     }
   }
 
@@ -75,5 +74,10 @@ public abstract class KMAbstractCmd implements KMCommand {
    */
   protected boolean validateState(byte state) {
     return (KMKeymasterApplet.ACTIVE_STATE == state);
+  }
+
+  @Override
+  public boolean hasArguments(){
+    return true;
   }
 }

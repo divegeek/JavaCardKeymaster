@@ -1,8 +1,4 @@
-<project name="JavaCardKeymaster"
-  basedir="."
->
-  <basename file="${basedir}" property="applet.name"/>
-  <import file="build_common.xml"/>
+<project name="JavaCardKeymaster" basedir=".">
 
   <!-- Properties - other properties are included from build_common.xml -->
   <property environment="env"/>
@@ -11,6 +7,17 @@
   <property name="test.dir" value="Applet/test"/>
   <property name="unit-test.test.build.dir" value="build/unittest/test"/>
   <property name="unit-test.src.build.dir" value="build/unittest/src"/>
+  <property name="jc.home" value="${env.JC_HOME_SIMULATOR}"/>
+  <property name="jc.home.tools" value="${env.JC_HOME_TOOLS}"/>
+  <property name="redirect.output" value="default.output"/>
+  <property name="build.sysclasspath" value="ignore"/>
+  <property name="env.JC_TARGET_PLATFORM" value="3.1.0"/>
+
+  <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+    <classpath>
+      <pathelement location="${jc.home}/lib/ant-contrib-1.0b3.jar"/>
+    </classpath>
+  </taskdef>
 
   <!-- Unit Testing uses jcardsim with javacard classic 3.0.5 apis -->
   <path id="unit-test.classpath">
@@ -20,6 +27,32 @@
     <pathelement location="lib/jcardsim-3.0.5-SNAPSHOT.jar"/>
   </path>
 
+  <path id="jc_jars"
+    description="Sets the classpath to Java Card API">
+    <pathelement path="${jc.home}/lib/api_classic.jar"/>
+    <pathelement path="${jc.home}/lib/api_classic_annotations.jar"/>
+  </path>
+
+  <path id="jc_tools_jars"
+    description="Sets the classpath to Java Card API and tools">
+    <pathelement path="${jc.home}/lib/api_classic.jar"/>
+    <pathelement path="${jc.home}/lib/tools_simulator.jar"/>
+    <pathelement path="${jc.home.tools}/lib/tools.jar"/>
+    <pathelement path="${jc.home}/lib/api_classic_annotations.jar"/>
+  </path>
+
+  <!-- Definitions for tasks for javacard tools -->
+  <taskdef name="convert"
+    classname="com.sun.javacard.ant.tasks.ConverterTask"
+    classpath="${jc.home.tools}/lib/jctasks_tools.jar"/>
+  <taskdef name="verifycap"
+    classname="com.sun.javacard.ant.tasks.VerifyCapTask"
+    classpath="${jc.home.tools}/lib/jctasks_tools.jar"/>
+  <taskdef name="scriptgen"
+    classname="com.sun.javacard.ant.tasks.ScriptgenTask"
+    classpath="${jc.home}/lib/jctasks_simulator.jar"/>
+
+  <!-- Targets -->
   <target name="cleanall">
     <delete dir="./build"/>
   </target>
@@ -51,13 +84,13 @@
         <include name="**/*.exp"/>
       </fileset>
       <regexpmapper from="(.*)\.(.*)"
-        to="${applet.name}.\2"
+        to="JavaCardKeymaster.\2"
         casesensitive="yes"/>
     </copy>
   </target>
 
   <target name="verify_applet" depends="convert_applet">
-    <verifycap capfile="./build/${applet.name}.cap" outfile="./build/digest.txt">
+    <verifycap capfile="./build/JavaCardKeymaster.cap" outfile="./build/digest.txt">
       <exportfiles dir="${jc.home.tools}/api_export_files_${env.JC_TARGET_PLATFORM}"
         includes="**/*.exp"/>
       <classpath refid="jc_tools_jars"/>
@@ -65,16 +98,16 @@
   </target>
 
   <target name="generate_script" depends="verify_applet">
-    <scriptgen capfile="./build/${applet.name}.cap"
+    <scriptgen capfile="./build/JavaCardKeymaster.cap"
       outfile="./build/scr.txt"
       hashfile="./build/digest.txt">
       <classpath refid="jc_tools_jars"/>
     </scriptgen>
 
-    <concat destfile="./build/${applet.name}.scr">
+    <concat destfile="./build/JavaCardKeymaster.scr">
       <filelist dir="." files="powerup.scr"/>
       <filelist dir="./build" files="scr.txt"/>
-      <filelist dir="." files="${applet.name}.scr"/>
+      <filelist dir="." files="JavaCardKeymaster.scr"/>
       <filelist dir="." files="powerdown.scr"/>
     </concat>
     <delete>
@@ -86,7 +119,7 @@
     <java classname="com.sun.javacard.apdutool.Main" output="${redirect.output}" failonerror="true">
       <arg value="-nobanner"/>
       <arg value="-noatr"/>
-      <arg value="build/${applet.name}.scr"/>
+      <arg value="build/JavaCardKeymaster.scr"/>
       <classpath refid="jc_tools_jars"/>
     </java>
   </target>

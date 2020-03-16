@@ -30,7 +30,7 @@ import javacardx.apdu.ExtendedLength;
  */
 // TODO Currently implementing ExtendedLength for ease of testing
 //  - remove this in future.
-public class KMKeymasterApplet extends Applet implements KMMessenger, AppletEvent, ExtendedLength {
+public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLength {
   // Constants.
   public static final short MAX_LENGTH = (short) 0x04ff; // TODO: make this value configurable.
   private static final byte CLA_ISO7816_NO_SM_NO_CHAN = (byte) 0x80;
@@ -148,19 +148,23 @@ public class KMKeymasterApplet extends Applet implements KMMessenger, AppletEven
     try {
       // Get the command object for specific INS from the repository.
       KMCommand command = repository.getCommand(apduIns);
-
       // Get the empty context object from the repository.
       KMContext context = repository.getContext();
-
       // Initialize context
       context.setKeymasterState(getKeymasterState());
-      context.setApdu(apdu);
-      context.setMessenger(this);
       context.setBuffer(repository.getBuffer());
+      if(command.hasArguments()){
+        receiveIncoming(context, apdu);
+      }
       // Execute the command. If the execution fails then an exception is thrown.
       command.execute(context);
 
-      // Update the Keymaster state according to the updated context.
+      // context has data that needs to be sent
+      if(context.getBufferLength() >0 ){
+        sendOutgoing(context, apdu);
+      }
+
+      // Update the Keymaster state according to the context.
       setKeymasterState(context.getKeymasterState());
     } catch (KMException exception) {
       // TODO: error handling for command related error.
@@ -173,16 +177,15 @@ public class KMKeymasterApplet extends Applet implements KMMessenger, AppletEven
    *
    * @param context of current command.
    */
-  @Override
-  public void sendOutgoing(KMContext context) {
+  public void sendOutgoing(KMContext context, APDU apdu) {
     // Initialize source
-    APDU apdu = context.getApdu();
     short srcLength = context.getBufferLength();
     if (srcLength > MAX_LENGTH) {
       throw new KMException(ISO7816.SW_WRONG_LENGTH);
     }
     // Send data
     byte[] srcBuffer = context.getBuffer();
+    apdu.setOutgoing();
     apdu.setOutgoingLength(srcLength);
     apdu.sendBytesLong(srcBuffer, (short) 0, srcLength);
   }
@@ -192,10 +195,8 @@ public class KMKeymasterApplet extends Applet implements KMMessenger, AppletEven
    *
    * @param context of current command.
    */
-  @Override
-  public void receiveIncoming(KMContext context) {
+  public void receiveIncoming(KMContext context, APDU apdu) {
     // Initialize source
-    APDU apdu = context.getApdu();
     byte[] srcBuffer = apdu.getBuffer();
     // Initialize destination
     byte[] destBuffer = context.getBuffer();
