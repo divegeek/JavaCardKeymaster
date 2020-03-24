@@ -1,0 +1,41 @@
+// FIXME: your file license if you have one
+
+cc_binary {
+    // FIXME: this should only be -impl for a passthrough hal.
+    // In most cases, to convert this to a binderized implementation, you should:
+    // - change '-impl' to '-service' here and make it a cc_binary instead of a
+    //   cc_library_shared.
+    // - add a *.rc file for this module.
+    // - delete HIDL_FETCH_I* functions.
+    // - call configureRpcThreadpool and registerAsService on the instance.
+    // You may also want to append '-impl/-service' with a specific identifier like
+    // '-vendor' or '-<hardware identifier>' etc to distinguish it.
+    // FIXME: this should be 'vendor: true' for modules that will eventually be
+    // on AOSP.
+    name: "android.hardware.keymaster@4.0-service.javacard",
+    defaults: ["hidl_defaults"],
+    relative_install_path: "hw",
+    vendor: true,
+    init_rc: ["4.0/android.hardware.keymaster@4.0-service.javacard.rc"],
+    srcs: [
+        "4.0/service.cpp",
+        "4.0/JavacardKeymaster4Device.cpp",
+    ],
+    local_include_dirs: [
+        "include",
+    ],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libdl",
+        "libbase",
+        "libutils",
+        "libhardware",
+        "libhidlbase",
+        "libkeymaster_messages",
+        "libcn-cbor",
+        "android.hardware.keymaster@4.0",
+    ],
+    
+    vintf_fragments: ["4.0/android.hardware.keymaster@4.0-service.javacard.xml"],
+}
