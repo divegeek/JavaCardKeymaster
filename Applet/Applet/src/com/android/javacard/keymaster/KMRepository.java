@@ -28,12 +28,14 @@ import javacard.security.KeyBuilder;
 
 public class KMRepository {
   private static final byte CMD_TABLE_LENGTH = 20;
-  private static final byte REF_TABLE_SIZE = 10;
+  private static final byte REF_TABLE_SIZE = 5;
   private static final short HEAP_SIZE = 0x1000;
   private static final byte INT_TABLE_SIZE = 10;
   private static final byte TYPE_ARRAY_SIZE = 100;
   private static final byte INT_SIZE = 4;
   private static final byte LONG_SIZE = 8;
+  private static final short ENTROPY_POOL_SIZE = 32;
+
   private KMCommand[] commandTable = null;
   private KMContext context = null;
   private byte[] buffer = null;
@@ -86,6 +88,8 @@ public class KMRepository {
   private Object[] uint64Array = null;
   private byte uint64Index = 0;
   private KMOperationState[] operationStateTable = null;
+  private byte[] entropyPool = null;
+  private byte[] counter;
 
   public void initialize() {
     // Initialize buffers and context.
@@ -126,15 +130,15 @@ public class KMRepository {
     }
     // Initialize types
     KMType.initialize(this);
-    byteBlobRefTable = new KMByteBlob[REF_TABLE_SIZE];
+    byteBlobRefTable = new KMByteBlob[(short)(REF_TABLE_SIZE*4)];
     KMByteBlob.create(byteBlobRefTable);
     integerRefTable = new KMInteger[REF_TABLE_SIZE];
     KMInteger.create(integerRefTable);
-    arrayRefTable = new KMArray[REF_TABLE_SIZE];
+    arrayRefTable = new KMArray[(short)(REF_TABLE_SIZE*4)];
     KMArray.create(arrayRefTable);
     vectorRefTable = new KMVector[REF_TABLE_SIZE];
     KMVector.create(vectorRefTable);
-    enumRefTable = new KMEnum[REF_TABLE_SIZE];
+    enumRefTable = new KMEnum[(short)(REF_TABLE_SIZE*2)];
     KMEnum.create(enumRefTable);
     byteTagRefTable = new KMByteTag[REF_TABLE_SIZE];
     KMByteTag.create(byteTagRefTable);
@@ -172,6 +176,9 @@ public class KMRepository {
       uint64Array[index] = new byte[LONG_SIZE];
       index++;
     }
+    entropyPool = new byte[ENTROPY_POOL_SIZE];
+    counter = new byte[8];
+
     JCSystem.commitTransaction();
   }
 
@@ -510,5 +517,9 @@ public class KMRepository {
     }
     byteHeapIndex += length;
     return (short) (byteHeapIndex - length);
+  }
+
+  public byte[] getEntropyPool() {
+    return entropyPool;
   }
 }

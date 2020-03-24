@@ -29,6 +29,7 @@ import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import javacard.framework.Util;
+import javacard.security.RandomData;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import org.junit.Assert;
@@ -50,6 +51,8 @@ public class KMFrameworkTest {
     simulator.selectApplet(appletAID1);
     testProvisionCmd(simulator);
     testGetHwInfoCmd(simulator);
+    testAddRngEntropyCmd(simulator);
+
     // Delete i.e. uninstall applet
     simulator.deleteApplet(appletAID1);
   }
@@ -67,7 +70,6 @@ public class KMFrameworkTest {
   }
 
   public void testGetHwInfoCmd(CardSimulator simulator){
-    byte[] buf = new byte[512];
     CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1E, 0x40, 0x00);
     //print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
@@ -91,6 +93,19 @@ public class KMFrameworkTest {
     Assert.assertEquals( "Google",authorNameStr);
     Assert.assertEquals(0x9000, response.getSW());
   }
+  private void testAddRngEntropyCmd(CardSimulator simulator){
+    byte[] buf = new byte[512];
+    // test provision command
+    KMArray cmd = makeAddRngEntropyCmd();
+    KMEncoder enc = new KMEncoder();
+    short actualLen = enc.encode(cmd, buf, (short) 0, (short)buf.length);
+
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x18, 0x40, 0x00, buf, 0, actualLen);
+    //print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    Assert.assertEquals(0x9000, response.getSW());
+  }
+
 
   private String byteBlobToString(KMByteBlob blob) {
     StringBuilder sb = new StringBuilder();
@@ -131,4 +146,16 @@ public class KMFrameworkTest {
         .add((short) 1, keyFormat)
         .add((short) 2, keyBlob);
   }
+  private KMArray makeAddRngEntropyCmd() {
+    // Argument 1
+    byte[] byteBlob = new byte[32];
+    for (short i = 0; i < 32; i++) {
+      byteBlob[i] = (byte) i;
+    }
+    KMByteBlob keyBlob = KMByteBlob.instance(byteBlob, (short) 0, (short)byteBlob.length);
+    // Array of expected arguments
+    return KMArray.instance((short) 1)
+      .add((short) 0, keyBlob);
+  }
+
 }
