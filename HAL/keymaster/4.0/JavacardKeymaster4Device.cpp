@@ -37,8 +37,7 @@ JavacardKeymaster4Device::~JavacardKeymaster4Device() {
 
 // Methods from ::android::hardware::keymaster::V4_0::IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
-    // TODO implement
-    UNUSED(_hidl_cb);
+    _hidl_cb(SecurityLevel::STRONGBOX, "JavacardKeymaster4.1Device v0.1", "Android Open Source Project");
     return Void();
 }
 
