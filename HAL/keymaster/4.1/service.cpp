@@ -16,7 +16,7 @@
 */
 
 #include <android-base/logging.h>
-#include <android/hardware/keymaster/4.0/IKeymasterDevice.h>
+#include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 #include <hidl/HidlTransportSupport.h>
 #include <JavacardKeymaster4Device.h>
 
@@ -27,7 +27,7 @@ int main() {
 
     auto status = keymaster->registerAsService();
     if (status != android::OK) {
-        LOG(FATAL) << "Could not register service for Keymaster 4.0 (" << status << ")";
+        LOG(FATAL) << "Could not register service for Keymaster 4.1 (" << status << ")";
         return -1;
     }
 
