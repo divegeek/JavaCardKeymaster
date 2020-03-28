@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMHmacSharingParameters extends KMType {
   public static final byte SEED = 0x00;
@@ -47,7 +48,7 @@ public class KMHmacSharingParameters extends KMType {
 
   public static KMHmacSharingParameters instance(KMArray vals) {
     if (vals.length() != 2) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     KMHmacSharingParameters inst = repository.newHmacSharingParameters();
     inst.vals = vals;

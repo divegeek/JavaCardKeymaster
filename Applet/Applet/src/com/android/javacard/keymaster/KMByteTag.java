@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMByteTag extends KMTag {
 
@@ -74,7 +75,7 @@ public class KMByteTag extends KMTag {
 
   public static KMByteTag instance(short key) {
     if (!validateKey(key)) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     KMByteTag tag = repository.newByteTag();
     tag.key = key;
@@ -93,7 +94,7 @@ public class KMByteTag extends KMTag {
   // create default assignBlob without any value
   public static KMByteTag instance(short key, KMByteBlob array) {
     if (!validateKey(key)) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     KMByteTag tag = repository.newByteTag();
     tag.key = key;

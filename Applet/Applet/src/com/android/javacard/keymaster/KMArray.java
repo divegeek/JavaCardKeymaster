@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMArray extends KMType {
   private KMType[] vals;
@@ -67,7 +68,7 @@ public class KMArray extends KMType {
 
   public KMArray add(short index, KMType val) {
     if (index >= length) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     vals[(short) (startOff + index)] = val;
     return this;
@@ -75,7 +76,7 @@ public class KMArray extends KMType {
 
   public KMType get(short index) {
     if (index >= length) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     return vals[(short) (startOff + index)];
   }

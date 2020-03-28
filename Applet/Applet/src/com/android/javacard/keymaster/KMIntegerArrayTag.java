@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMIntegerArrayTag extends KMTag {
   private static final short[] tags = {USER_SECURE_ID};
@@ -69,7 +70,7 @@ public class KMIntegerArrayTag extends KMTag {
 
   public static KMIntegerArrayTag instance(short key) {
     if (!validateKey(key)) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     KMIntegerArrayTag tag = repository.newIntegerArrayTag();
     tag.key = key;
@@ -79,10 +80,10 @@ public class KMIntegerArrayTag extends KMTag {
 
   public static KMIntegerArrayTag instance(short key, KMVector val) {
     if (!(val.getType() instanceof KMInteger)) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     if (!(validateKey(key))) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     KMIntegerArrayTag tag = repository.newIntegerArrayTag();
     tag.key = key;

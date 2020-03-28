@@ -23,12 +23,12 @@ public class KMOperationState {
   private KMOperationState() {
     operationHandle = null;
   }
-
+/*
   public static KMOperationState instance(KMContext context) {
     // TODO make operation handle
     return context.getRepository().newOperationState();
   }
-
+*/
   public static void create(KMOperationState[] opStateRefTable) {
     byte index = 0;
     while (index < opStateRefTable.length) {
@@ -44,9 +44,11 @@ public class KMOperationState {
   public void setOperationHandle(KMInteger operationHandle) {
     this.operationHandle = operationHandle;
   }
-
+/*
   public void release(KMContext context) {
     // TODO release handle
     context.getRepository().releaseOperationState(this);
   }
+
+ */
 }

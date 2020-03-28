@@ -1,6 +1,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.CryptoException;
@@ -9,27 +10,25 @@ import javacard.security.RandomData;
 import javacardx.crypto.Cipher;
 
 public class KMUtil {
+  private static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte AES_BLOCK_SIZE = 16;
-  private static KMRepository repository = null;
+  public static final byte[] aesICV = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
   private static byte[] counter;
-  private static boolean initialized = false;
   private static AESKey aesKey;
-  private static Cipher aesEcb;
-
-  public static void init(KMRepository repo) {
-    if (!initialized) {
-      KMUtil.repository = repo;
-      counter = repo.newIntegerArray((short) 8);
-      KMUtil.initEntropyPool(repo.getEntropyPool());
+  private static Cipher aesCbc;
+  private static byte[] entropyPool;
+  public static void init() {
+      entropyPool = new byte[ENTROPY_POOL_SIZE];
+      counter = KMRepository.instance().newIntegerArray((short) 8);
+      KMUtil.initEntropyPool(entropyPool);
       try {
-        aesEcb = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
+        //Note: ALG_AES_BLOCK_128_CBC_NOPAD not supported by simulator.
+        aesCbc = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
       } catch (CryptoException exp) {
         // TODO change this to proper error code
-        throw new KMException(ISO7816.SW_UNKNOWN);
+        ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
       }
-      aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
-      initialized = true;
-    }
+      aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
   }
 
   public static void initEntropyPool(byte[] pool) {
@@ -40,26 +39,31 @@ public class KMUtil {
     }
     try {
       trng = RandomData.getInstance(RandomData.ALG_TRNG);
+      trng.nextBytes(pool, (short) 0, (short) pool.length);
     } catch (CryptoException exp) {
       if (exp.getReason() == CryptoException.NO_SUCH_ALGORITHM) {
         //TODO change this when possible
         // simulator does not support TRNG algorithm. So, PRNG algorithm (deprecated) is used.
         trng = RandomData.getInstance(RandomData.ALG_PSEUDO_RANDOM);
+        trng.nextBytes(pool, (short) 0, (short) pool.length);
       } else {
         // TODO change this to proper error code
-        throw new KMException(ISO7816.SW_UNKNOWN);
+        ISOException.throwIt(ISO7816.SW_UNKNOWN);
       }
     }
-    trng.nextBytes(pool, (short) 0, (short) pool.length);
+
   }
 
   // Generate a secure random number from existing entropy pool. This uses aes ecb algorithm with
   // 8 byte counter and 16 byte block size.
   public static void newRandomNumber(byte[] num, short startOff, short length) {
+    KMRepository repository = KMRepository.instance();
     byte[] bufPtr = repository.getByteHeapRef();
     short countBufInd = repository.newByteArray(AES_BLOCK_SIZE);
     short randBufInd = repository.newByteArray(AES_BLOCK_SIZE);
     short len = AES_BLOCK_SIZE;
+    aesKey.setKey(entropyPool, (short) 0);
+    aesCbc.init(aesKey, Cipher.MODE_ENCRYPT, aesICV, (short)0, (short)16);
     while (length > 0) {
       if (length < len ) len = length;
       // increment counter by one
@@ -67,9 +71,7 @@ public class KMUtil {
       // copy the 8 byte counter into the 16 byte counter buffer.
       Util.arrayCopy(counter, (short) 0, bufPtr, countBufInd, (short) counter.length);
       // encrypt the counter buffer with existing entropy which forms the aes key.
-      aesKey.setKey(repository.getEntropyPool(), (short) 0);
-      aesEcb.init(aesKey, Cipher.MODE_ENCRYPT);
-      aesEcb.doFinal(bufPtr, countBufInd, AES_BLOCK_SIZE, bufPtr, randBufInd);
+      aesCbc.doFinal(bufPtr, countBufInd, AES_BLOCK_SIZE, bufPtr, randBufInd);
       // copy the encrypted counter block to buffer passed in the argument
       Util.arrayCopy(bufPtr, randBufInd, num, startOff, len);
       length = (short) (length - len);
@@ -98,4 +100,9 @@ public class KMUtil {
       }
     }
   }
+
+  public static byte[] getEntropyPool() {
+    return entropyPool;
+  }
+
 }

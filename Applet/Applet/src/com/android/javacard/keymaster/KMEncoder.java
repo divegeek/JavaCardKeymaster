@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 public class KMEncoder {
@@ -124,7 +125,7 @@ public class KMEncoder {
       encode((KMHardwareAuthToken) exp);
       return;
     }
-    throw new KMException(ISO7816.SW_DATA_INVALID);
+    ISOException.throwIt(ISO7816.SW_DATA_INVALID);
   }
 
   private void encode(KMKeyParameters obj) {
@@ -288,7 +289,7 @@ public class KMEncoder {
   private void incrementStartOff(short inc){
     startOff += inc;
     if (startOff >= this.length) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
 }

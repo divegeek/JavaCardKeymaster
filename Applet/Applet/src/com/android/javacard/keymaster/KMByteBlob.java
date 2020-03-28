@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 // Byte val represents contiguous memory buffer.
@@ -48,7 +49,7 @@ public class KMByteBlob extends KMType {
   // copy the blob
   public static KMByteBlob instance(byte[] blob, short startOff, short length) {
     if ((length <= 0) || ((short)(startOff+length) > blob.length)) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     KMByteBlob inst = instance(length);
     Util.arrayCopyNonAtomic(blob, startOff, inst.val, inst.startOff, inst.length);
@@ -58,7 +59,7 @@ public class KMByteBlob extends KMType {
   // returns empty blob with given length
   public static KMByteBlob instance(short length) {
     if (length <= 0) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     KMByteBlob inst = instance();
     inst.startOff = repository.newByteArray(length);
@@ -83,20 +84,20 @@ public class KMByteBlob extends KMType {
 
   public void add(short index, byte val) {
     if (index >= this.length) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (this.val == null) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     this.val[(short) (startOff + index)] = val;
   }
 
   public byte get(short index) {
     if (index >= this.length) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (this.val == null) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     return this.val[(short) (startOff + index)];
   }

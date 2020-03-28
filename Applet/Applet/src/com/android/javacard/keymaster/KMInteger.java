@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 // Represents 8 bit, 16 bit, 32 bit and 64 bit integers
@@ -99,34 +100,35 @@ public class KMInteger extends KMType {
 
   public short getShort() {
     if (val == null) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     } else if (val.length != 4) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     return Util.makeShort(val[2], val[3]);
   }
 
   public byte getByte() {
     if (val == null) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     } else if (val.length != 4) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     return val[3];
   }
 
   // copy the integer value from bytes
   public static KMInteger instance(byte[] num, short srcOff, short length) {
+    if(length > 8){
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
     if (length == 1) {
       return uint_8(num[srcOff]);
     } else if (length == 2) {
       return uint_16(Util.makeShort(num[srcOff], num[(short) (srcOff + 1)]));
     } else if (length == 4) {
       return uint_32(num, srcOff);
-    } else if (length == 8) {
-      return uint_64(num, srcOff);
     } else {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      return uint_64(num, srcOff);
     }
   }
 }
