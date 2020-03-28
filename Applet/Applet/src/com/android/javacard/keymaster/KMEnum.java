@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMEnum extends KMType {
   private static short[] types = {HARDWARE_TYPE, KEY_FORMAT, KEY_DERIVATION_FUNCTION};
@@ -48,7 +49,7 @@ public class KMEnum extends KMType {
   public static KMEnum instance(short enumType, byte val) {
     KMEnum inst = repository.newEnum();
     if (!validateEnum(enumType, val)) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     inst.type = enumType;
     inst.val = val;

@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 // Implements UINT, ULONG and DATE tags.
 public class KMIntegerTag extends KMTag {
@@ -78,7 +79,7 @@ public class KMIntegerTag extends KMTag {
 
   public static KMIntegerTag instance(short key) {
     if (!validateKey(key)) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     KMIntegerTag tag = repository.newIntegerTag();
     tag.key = key;

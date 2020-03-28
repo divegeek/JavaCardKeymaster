@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMVerificationToken extends KMType {
   public static final byte CHALLENGE = 0x00;
@@ -61,7 +62,7 @@ public class KMVerificationToken extends KMType {
 
   public static KMVerificationToken instance(KMArray vals) {
     if (vals.length() != 5) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     KMVerificationToken inst = repository.newVerificationToken();
     inst.vals = vals;

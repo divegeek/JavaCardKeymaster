@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMKeyCharacteristics extends KMType {
   public static final byte SOFTWARE_ENFORCED = 0x00;
@@ -47,7 +48,7 @@ public class KMKeyCharacteristics extends KMType {
 
   public static KMKeyCharacteristics instance(KMArray vals) {
     if (vals.length() != 2) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     KMKeyCharacteristics inst = repository.newKeyCharacteristics();
     inst.vals = vals;

@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -27,20 +28,14 @@ import javacard.security.KeyBuilder;
 //  to handle onInstall and onSelect.
 
 public class KMRepository {
-  private static final byte CMD_TABLE_LENGTH = 20;
   private static final byte REF_TABLE_SIZE = 5;
   private static final short HEAP_SIZE = 0x1000;
   private static final byte INT_TABLE_SIZE = 10;
   private static final byte TYPE_ARRAY_SIZE = 100;
   private static final byte INT_SIZE = 4;
   private static final byte LONG_SIZE = 8;
-  private static final short ENTROPY_POOL_SIZE = 32;
-
-  private KMCommand[] commandTable = null;
-  private KMContext context = null;
-  private byte[] buffer = null;
+  private static KMRepository repository;
   private AESKey masterKey = null;
-  private boolean contextLocked = false;
   private KMEncoder encoder = null;
   private KMDecoder decoder = null;
 
@@ -91,38 +86,23 @@ public class KMRepository {
   private byte[] entropyPool = null;
   private byte[] counter;
 
-  public void initialize() {
+  public static KMRepository instance() {
+    if (repository == null) {
+      repository = new KMRepository();
+    }
+    return repository;
+  }
+
+  public KMRepository(){
+    initialize();
+  }
+
+  private void initialize() {
     // Initialize buffers and context.
     JCSystem.beginTransaction();
     encoder = new KMEncoder();
     decoder = new KMDecoder();
-    buffer = new byte[KMKeymasterApplet.MAX_LENGTH];
-    context = new KMContext();
-    context.setRepository(this);
-    contextLocked = false;
     operationStateTable = new KMOperationState[4];
-    // Initialize command table.
-    commandTable = new KMCommand[CMD_TABLE_LENGTH];
-    commandTable[0] = new KMProvisionCmd();
-    commandTable[1] = new KMGenerateKeyCmd();
-    commandTable[2] = new KMImportKeyCmd();
-    commandTable[3] = new KMExportKeyCmd();
-    commandTable[4] = new KMComputeSharedHmacCmd();
-    commandTable[5] = new KMBeginOperationCmd();
-    commandTable[6] = new KMUpdateOperationCmd();
-    commandTable[7] = new KMFinishOperationCmd();
-    commandTable[8] = new KMAbortOperationCmd();
-    commandTable[9] = new KMVerifyAuthorizationCmd();
-    commandTable[10] = new KMAddRngEntropyCmd();
-    commandTable[11] = new KMImportWrappedKeyCmd();
-    commandTable[12] = new KMAttestKeyCmd();
-    commandTable[13] = new KMUpgradeKeyCmd();
-    commandTable[14] = new KMDeleteKeyCmd();
-    commandTable[15] = new KMDeleteAllKeysCmd();
-    commandTable[16] = new KMDestroyAttestationIdsCmd();
-    commandTable[17] = new KMGetHWInfoCmd();
-    commandTable[18] = new KMGetKeyCharacteristicsCmd();
-    commandTable[19] = new KMGetHmacSharingParametersCmd();
     // Initialize masterkey - AES 256 bit key.
     if (masterKey == null) {
       masterKey =
@@ -176,8 +156,6 @@ public class KMRepository {
       uint64Array[index] = new byte[LONG_SIZE];
       index++;
     }
-    entropyPool = new byte[ENTROPY_POOL_SIZE];
-    counter = new byte[8];
 
     JCSystem.commitTransaction();
   }
@@ -190,26 +168,6 @@ public class KMRepository {
     return decoder;
   }
 
-  public KMCommand getCommand(byte ins) throws KMException {
-    short cmdIndex = 0;
-    while (cmdIndex < CMD_TABLE_LENGTH) {
-      if (commandTable[cmdIndex].getIns() == ins) {
-        return commandTable[cmdIndex];
-      }
-      cmdIndex++;
-    }
-    throw new KMException(ISO7816.SW_INS_NOT_SUPPORTED);
-  }
-
-  public KMContext getContext() throws KMException {
-    if (!contextLocked) {
-      contextLocked = true;
-      return context;
-    } else {
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-  }
-
   public void onUninstall() {
     masterKey = null;
   }
@@ -219,11 +177,8 @@ public class KMRepository {
   }
 
   private void reset() {
-    contextLocked = false;
-    Util.arrayFillNonAtomic(buffer, (short) 0, (short) buffer.length, (byte) 0);
-    Util.arrayFillNonAtomic(byteHeap, (short) 0, (short) buffer.length, (byte) 0);
+    Util.arrayFillNonAtomic(byteHeap, (short) 0, (short) byteHeap.length, (byte) 0);
     byteHeapIndex = 0;
-    Util.arrayFillNonAtomic(buffer, (short) 0, (short) buffer.length, (byte) 0);
     short index = 0;
     while (index < typeRefTable.length) {
       typeRefTable[index] = null;
@@ -285,10 +240,6 @@ public class KMRepository {
     // Nothing to be done currently.
   }
 
-  public byte[] getBuffer() {
-    return buffer;
-  }
-
   public AESKey getMasterKey() {
     return masterKey;
   }
@@ -298,7 +249,7 @@ public class KMRepository {
     if (length == 4) {
       if (uint32Index >= uint32Array.length) {
         // TODO this is placeholder exception value. This needs to be replaced by 910E, 91A1 or 9210
-        throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
       }
       byte[] ret = (byte[]) uint32Array[uint32Index];
       uint32Index++;
@@ -306,20 +257,21 @@ public class KMRepository {
     } else if (length == 8) {
       if (uint64Index >= uint64Array.length) {
         // TODO this is placeholder exception value. This needs to be replaced by 910E, 91A1 or 9210
-        throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
       }
       byte[] ret = (byte[]) uint64Array[uint64Index];
       uint64Index++;
       return ret;
     } else {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
+    return null;// this will never be executed.
   }
 
   public KMByteBlob newByteBlob() {
     if (blobRefIndex >= byteBlobRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMByteBlob ret = byteBlobRefTable[blobRefIndex];
     blobRefIndex++;
@@ -329,7 +281,7 @@ public class KMRepository {
   public KMInteger newInteger() {
     if (intRefIndex >= integerRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMInteger ret = integerRefTable[intRefIndex];
     intRefIndex++;
@@ -339,7 +291,7 @@ public class KMRepository {
   public KMEnumTag newEnumTag() {
     if (enumTagRefIndex >= enumTagRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMEnumTag ret = enumTagRefTable[enumTagRefIndex];
     enumTagRefIndex++;
@@ -349,7 +301,7 @@ public class KMRepository {
   public KMEnumArrayTag newEnumArrayTag() {
     if (enumArrayTagRefIndex >= enumArrayTagRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMEnumArrayTag ret = enumArrayTagRefTable[enumArrayTagRefIndex];
     enumArrayTagRefIndex++;
@@ -359,7 +311,7 @@ public class KMRepository {
   public KMIntegerTag newIntegerTag() {
     if (intTagRefIndex >= intTagRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMIntegerTag ret = intTagRefTable[intTagRefIndex];
     intTagRefIndex++;
@@ -369,7 +321,7 @@ public class KMRepository {
   public KMIntegerArrayTag newIntegerArrayTag() {
     if (intArrayTagRefIndex >= intArrayTagRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMIntegerArrayTag ret = intArrayTagRefTable[intArrayTagRefIndex];
     intArrayTagRefIndex++;
@@ -379,7 +331,7 @@ public class KMRepository {
   public KMBoolTag newBoolTag() {
     if (boolTagRefIndex >= boolTagRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMBoolTag ret = boolTagRefTable[boolTagRefIndex];
     boolTagRefIndex++;
@@ -389,7 +341,7 @@ public class KMRepository {
   public KMByteTag newByteTag() {
     if (byteTagRefIndex >= byteTagRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMByteTag ret = byteTagRefTable[byteTagRefIndex];
     byteTagRefIndex++;
@@ -399,7 +351,7 @@ public class KMRepository {
   public KMKeyParameters newKeyParameters() {
     if (keyParametersRefIndex >= keyParametersRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMKeyParameters ret = keyParametersRefTable[keyParametersRefIndex];
     keyParametersRefIndex++;
@@ -409,7 +361,7 @@ public class KMRepository {
   public KMArray newArray() {
     if (arrayRefIndex >= arrayRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMArray ret = arrayRefTable[arrayRefIndex];
     arrayRefIndex++;
@@ -419,7 +371,7 @@ public class KMRepository {
   public KMKeyCharacteristics newKeyCharacteristics() {
     if (keyCharRefIndex >= keyCharRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMKeyCharacteristics ret = keyCharRefTable[keyCharRefIndex];
     keyCharRefIndex++;
@@ -429,7 +381,7 @@ public class KMRepository {
   public KMHardwareAuthToken newHwAuthToken() {
     if (hwAuthTokenRefIndex >= hwAuthTokenRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMHardwareAuthToken ret = hwAuthTokenRefTable[hwAuthTokenRefIndex];
     hwAuthTokenRefIndex++;
@@ -439,7 +391,7 @@ public class KMRepository {
   public KMHmacSharingParameters newHmacSharingParameters() {
     if (hmacSharingParamsRefIndex >= hmacSharingParamsRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMHmacSharingParameters ret = hmacSharingParamsRefTable[hmacSharingParamsRefIndex];
     hmacSharingParamsRefIndex++;
@@ -449,7 +401,7 @@ public class KMRepository {
   public KMVerificationToken newVerificationToken() {
     if (verTokenRefIndex >= verTokenRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMVerificationToken ret = verTokenRefTable[verTokenRefIndex];
     verTokenRefIndex++;
@@ -459,7 +411,7 @@ public class KMRepository {
   public KMOperationState newOperationState() {
     if (opStateRefIndex >= opStateRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMOperationState ret = operationStateTable[opStateRefIndex];
     opStateRefIndex++;
@@ -469,14 +421,14 @@ public class KMRepository {
   public void releaseOperationState(KMOperationState state){
     opStateRefIndex--;
     if(opStateRefIndex <0){
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     opStateRefTable[opStateRefIndex] = state;
   }
   public KMVector newVector() {
     if (vectorRefIndex >= vectorRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMVector ret = vectorRefTable[vectorRefIndex];
     vectorRefIndex++;
@@ -486,7 +438,7 @@ public class KMRepository {
   public KMEnum newEnum() {
     if (enumRefIndex >= enumRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     KMEnum ret = enumRefTable[enumRefIndex];
     enumRefIndex++;
@@ -504,7 +456,7 @@ public class KMRepository {
   public short newTypeArray(short length) {
     if (((short) (typeRefIndex + length)) >= typeRefTable.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     typeRefIndex += length;
     return (short) (typeRefIndex - length);
@@ -513,13 +465,9 @@ public class KMRepository {
   public short newByteArray(short length) {
     if (((short) (byteHeapIndex + length)) >= byteHeap.length) {
       // TODO this is placeholder exception value.
-      throw new KMException(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     byteHeapIndex += length;
     return (short) (byteHeapIndex - length);
-  }
-
-  public byte[] getEntropyPool() {
-    return entropyPool;
   }
 }

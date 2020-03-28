@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
 // TODO Clean and refactor the code.
 public class KMDecoder {
@@ -67,7 +68,7 @@ public class KMDecoder {
     readTagKey(exp.getTagType());
     // the values are array of integers.
     if (!(exp.getValues().getType() instanceof KMInteger)) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     return exp.instance(this.tagKey, decode(exp.getValues(), (KMInteger) exp.getValues().getType()));
   }
@@ -90,10 +91,10 @@ public class KMDecoder {
     // BOOL Tag is a leaf node and it must always have tiny encoded uint value = 1.
     // TODO check this out.
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     if ((byte) (buffer[startOff] & ADDITIONAL_MASK) != 0x01) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     incrementStartOff((short) 1);
     return exp.instance(tagKey);
@@ -104,12 +105,12 @@ public class KMDecoder {
     // Enum Tag value will always be integer with max 1 byte length.
     // TODO Check this out.
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short len = (short) (buffer[startOff] & ADDITIONAL_MASK);
     byte enumVal = 0;
     if (len > UINT8_LENGTH) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (len < UINT8_LENGTH) {
       enumVal = (byte)(len & ADDITIONAL_MASK);
@@ -126,12 +127,12 @@ public class KMDecoder {
 
     // Enum value will always be integer with max 1 byte length.
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short len = (short) (buffer[startOff] & ADDITIONAL_MASK);
     byte enumVal = 0;
     if (len > UINT8_LENGTH) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (len < UINT8_LENGTH) {
       enumVal = (byte)(len & ADDITIONAL_MASK);
@@ -147,9 +148,12 @@ public class KMDecoder {
   private KMInteger decode(KMInteger exp) {
     KMInteger inst;
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short len = (short) (buffer[startOff] & ADDITIONAL_MASK);
+    if(len > UINT64_LENGTH){
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
     incrementStartOff((short) 1);
     if (len < UINT8_LENGTH) {
       inst = exp.uint_8((byte)(len & ADDITIONAL_MASK));
@@ -162,11 +166,9 @@ public class KMDecoder {
     } else if (len == UINT32_LENGTH) {
       inst = exp.instance(buffer, startOff, (short) 4);
       incrementStartOff((short) 4);
-    } else if (len == UINT64_LENGTH) {
+    } else {
       inst = exp.instance(buffer, startOff, (short) 8);
       incrementStartOff((short) 8);
-    } else {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
     }
     return inst;
   }
@@ -181,7 +183,7 @@ public class KMDecoder {
   private KMArray decode(KMArray exp) {
     short payloadLength = readMajorTypeWithPayloadLength(ARRAY_TYPE);
     if (exp.length() != payloadLength) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     KMArray inst = exp.instance(payloadLength);
     short index = 0;
@@ -260,7 +262,7 @@ public class KMDecoder {
     }
     if (exp instanceof KMVector) {
       if (!((((KMVector) exp).getType()) instanceof KMInteger)) {
-        throw new KMException(ISO7816.SW_DATA_INVALID);
+        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
       }
       return decode((KMVector) exp, (KMInteger) ((KMVector) exp).getType());
     }
@@ -300,16 +302,17 @@ public class KMDecoder {
     if (exp instanceof KMHardwareAuthToken) {
       return decode((KMHardwareAuthToken) exp);
     }
-    throw new KMException(ISO7816.SW_DATA_INVALID);
+    ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    return null;
   }
 
   private short peekTagType() {
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
 
     if ((short) (buffer[startOff] & ADDITIONAL_MASK) != UINT32_LENGTH) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     return (short)
         ((Util.makeShort(buffer[(short) (startOff + 1)], buffer[(short) (startOff + 2)]))
@@ -318,16 +321,16 @@ public class KMDecoder {
 
   private void readTagKey(short expectedTagType) {
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     if ((byte) (buffer[startOff] & ADDITIONAL_MASK) != UINT32_LENGTH) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     incrementStartOff((short) 1);
     this.tagType = readShort();
     this.tagKey = readShort();
     if (tagType != expectedTagType) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
 
@@ -336,11 +339,11 @@ public class KMDecoder {
     short payloadLength = 0;
     byte val = readByte();
     if ((short) (val & MAJOR_TYPE_MASK) != majorType) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short lenType = (short) (val & ADDITIONAL_MASK);
     if (lenType > UINT16_LENGTH) {
-      throw new KMException(ISO7816.SW_WRONG_LENGTH);
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (lenType < UINT8_LENGTH) {
       payloadLength = lenType;
@@ -367,7 +370,7 @@ public class KMDecoder {
   private void incrementStartOff(short inc) {
     startOff += inc;
     if (startOff > this.length) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
 }

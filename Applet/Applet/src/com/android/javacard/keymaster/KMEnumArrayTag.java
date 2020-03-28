@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMEnumArrayTag extends KMTag {
 
@@ -84,7 +85,7 @@ public class KMEnumArrayTag extends KMTag {
     // check if key is valid.
     byte[] vals = getAllowedEnumValues(key);
     if (vals == null) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     KMEnumArrayTag tag = repository.newEnumArrayTag();
     tag.key = key;
@@ -124,7 +125,7 @@ public class KMEnumArrayTag extends KMTag {
     // validate key
     byte[] allowedVals = getAllowedEnumValues(key);
     if (allowedVals == null) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short byteIndex = 0;
     while (byteIndex < blob.length()) {
@@ -138,7 +139,7 @@ public class KMEnumArrayTag extends KMTag {
         enumIndex++;
       }
       if (!validValue) {
-        throw new KMException(ISO7816.SW_DATA_INVALID);
+        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
       }
       byteIndex++;
     }

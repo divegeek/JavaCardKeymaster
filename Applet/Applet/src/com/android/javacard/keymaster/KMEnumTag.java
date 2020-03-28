@@ -17,6 +17,7 @@
 package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 
 public class KMEnumTag extends KMTag {
 
@@ -60,13 +61,12 @@ public class KMEnumTag extends KMTag {
   }
 
   public static KMEnumTag instance(short key) {
-    if (validateEnum(key, NO_VALUE)) {
-      KMEnumTag tag = repository.newEnumTag();
-      tag.key = key;
-      return tag;
-    } else {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+    if(!validateEnum(key, NO_VALUE)){
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
+    KMEnumTag tag = repository.newEnumTag();
+    tag.key = key;
+    return tag;
   }
 
   public static void create(KMEnumTag[] enumTagRefTable) {
@@ -124,7 +124,7 @@ public class KMEnumTag extends KMTag {
   // instantiate enum tag.
   public static KMEnumTag instance(short key, byte val) {
     if (!validateEnum(key, val)) {
-      throw new KMException(ISO7816.SW_DATA_INVALID);
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     KMEnumTag tag = instance(key);
     tag.val = val;

@@ -16,14 +16,13 @@
 
 package com.android.javacard.keymaster;
 
-import javacard.framework.ISOException;
-
-public class KMException extends ISOException {
+public class KMException {
 
   // The Applet is not in a correct state in order to execute the command.
   public static final short CMD_NOT_ACCEPTED_WRONG_STATE = (short) 0x6901;
-  public KMException(short i) {
-    super(i);
+
+  public static boolean handle(short reason) {
+    return false;
   }
 }
 
