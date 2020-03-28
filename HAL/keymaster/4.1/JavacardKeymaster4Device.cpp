@@ -25,8 +25,10 @@
 /* TODO Remove below UNUSED */
 #define UNUSED(a) a=a
 
+namespace android {
+namespace hardware {
 namespace keymaster {
-namespace V4_0 {
+namespace V4_1 {
 
 JavacardKeymaster4Device::JavacardKeymaster4Device() {
     // TODO
@@ -35,7 +37,7 @@ JavacardKeymaster4Device::JavacardKeymaster4Device() {
 JavacardKeymaster4Device::~JavacardKeymaster4Device() {
 }
 
-// Methods from ::android::hardware::keymaster::V4_0::IKeymasterDevice follow.
+// Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
     _hidl_cb(SecurityLevel::STRONGBOX, "JavacardKeymaster4.1Device v0.1", "Android Open Source Project");
     return Void();
@@ -204,12 +206,34 @@ Return<::android::hardware::keymaster::V4_0::ErrorCode> JavacardKeymaster4Device
     return ::android::hardware::keymaster::V4_0::ErrorCode {};
 }
 
-
-// Methods from ::android::hidl::base::V1_0::IBase follow.
-
-//IKeymasterDevice* HIDL_FETCH_IKeymasterDevice(const char* /* name */) {
-    //return new JavacardKeymaster4Device();
-//}
-//
-}  // namespace android::hardware::keymaster::implementation
+// Methods from ::android::hardware::keymaster::V4_1::IKeymasterDevice follow.
+Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device::deviceLocked(bool passwordOnly, const ::android::hardware::keymaster::V4_0::VerificationToken& verificationToken) {
+    // TODO implement
+    UNUSED(passwordOnly);
+    size_t challenge = verificationToken.challenge;
+    UNUSED(challenge);
+    return ::android::hardware::keymaster::V4_1::ErrorCode {};
 }
+
+Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device::earlyBootEnded() {
+    // TODO implement
+    return ::android::hardware::keymaster::V4_1::ErrorCode {};
+}
+
+Return<void> JavacardKeymaster4Device::beginOp(::android::hardware::keymaster::V4_0::KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& inParams, const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken, beginOp_cb _hidl_cb) {
+    // TODO implement
+    UNUSED(purpose);
+    size_t size = keyBlob.size();
+    size = inParams.size();
+    uint64_t challenge = authToken.challenge;
+    UNUSED(challenge);
+    UNUSED(size);
+    UNUSED(_hidl_cb);
+
+    return Void();
+}
+
+}  // namespace V4_1
+}  // namespace keymaster
+}  // namespace hardware
+}  // namespace android

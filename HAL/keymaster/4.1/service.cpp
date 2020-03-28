@@ -1,6 +1,6 @@
 /*
 **
-** Copyright 2018, The Android Open Source Project
+** Copyright 2020, The Android Open Source Project
 **
 ** Licensed under the Apache License, Version 2.0 (the "License");
 ** you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 int main() {
     ::android::hardware::configureRpcThreadpool(1, true);
 
-    auto keymaster = new ::keymaster::V4_0::JavacardKeymaster4Device();
+    auto keymaster = new ::android::hardware::keymaster::V4_1::JavacardKeymaster4Device();
 
     auto status = keymaster->registerAsService();
     if (status != android::OK) {
