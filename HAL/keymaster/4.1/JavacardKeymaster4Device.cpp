@@ -15,7 +15,7 @@
  ** limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.keymaster@4.0-impl.trusty"
+#define LOG_TAG "android.hardware.keymaster@4.1-service.javacard"
 
 #include <keymaster/authorization_set.h>
 #include <cutils/log.h>

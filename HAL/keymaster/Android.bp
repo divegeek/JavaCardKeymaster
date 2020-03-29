@@ -23,6 +23,7 @@ cc_binary {
         "4.1/service.cpp",
         "4.1/JavacardKeymaster4Device.cpp",
         "4.1/Operation.cpp",
+        "4.1/CborConverter.cpp"
     ],
     local_include_dirs: [
         "include",
