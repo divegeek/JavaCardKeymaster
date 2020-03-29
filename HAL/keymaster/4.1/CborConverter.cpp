@@ -16,7 +16,6 @@
  */
 
 #include <CborConverter.h>
-#include "../include/CborConverter.h"
 
 namespace android {
 namespace hardware {
