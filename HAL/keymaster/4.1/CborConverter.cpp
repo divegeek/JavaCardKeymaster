@@ -16,6 +16,7 @@
  */
 
 #include <CborConverter.h>
+#include "../include/CborConverter.h"
 
 namespace android {
 namespace hardware {
@@ -30,25 +31,25 @@ CborConverter::~CborConverter() {
 //TODO
 }
 
-uint32_t CborConverter::decodeHardwareAuthToken(const uint8_t *buf, size_t len,
-                                                std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken> &tokens) {
+uint32_t CborConverter::decodeHardwareAuthTokens(const uint8_t *buf, const size_t len,
+                                                 std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken> &tokens) {
     //TODO
 }
 
-uint32_t CborConverter::encodeHardwareAuthToken(
-        const std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken> &tokens, uint8_t **buf,
-        size_t *len) {
+uint32_t CborConverter::encodeHardwareAuthTokens(
+        const std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken> &tokens,
+        uint8_t **buf, size_t *len) {
     //TODO
 }
 
-uint32_t CborConverter::decodeHmacSharingParameters(const uint8_t *buf, size_t len,
+uint32_t CborConverter::decodeHmacSharingParameters(const uint8_t *buf, const size_t len,
                                                     std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters> &params) {
     //TODO
 }
 
 uint32_t CborConverter::encodeHmacSharingParameters(
-        std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters> &params, uint8_t **buf,
-        size_t *len) {
+        std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters> &params,
+        uint8_t **buf, size_t *len) {
     //TODO
 }
 
@@ -58,31 +59,30 @@ uint32_t CborConverter::encodeKeyCharacteristics(
     //TODO
 }
 
-uint32_t CborConverter::decodeKeyCharacteristics(const uint8_t *buf, size_t len,
+uint32_t CborConverter::decodeKeyCharacteristics(const uint8_t *buf, const size_t len,
                                                  std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics> &keyCharacteristics) {
     //TODO
 }
 
-uint32_t CborConverter::encodeKeyParameter(
-        const std::vector<::android::hardware::keymaster::V4_0::KeyParameter> &params, uint8_t **buf,
-        size_t *len) {
+uint32_t CborConverter::encodeKeyParameters(
+        const std::vector<::android::hardware::keymaster::V4_0::KeyParameter> &params,
+        uint8_t **buf, size_t *len) {
     //TODO
 }
 
-uint32_t CborConverter::encodeKeyParameter(
-        const std::vector<::android::hardware::keymaster::V4_0::KeyParameter> &params, uint8_t **buf,
-        size_t *len) {
+uint32_t CborConverter::decodeKeyParameters(const uint8_t *buf, const size_t len,
+                                            std::vector<::android::hardware::keymaster::V4_0::KeyParameter> &params) {
     //TODO
 }
 
-uint32_t CborConverter::encodeVerificationToken(
-        const std::vector<::android::hardware::keymaster::V4_0::VerificationToken> &tokens, uint8_t **buf,
-        size_t *len) {
+uint32_t CborConverter::encodeVerificationTokens(
+        const std::vector<::android::hardware::keymaster::V4_0::VerificationToken> &tokens,
+        uint8_t **buf, size_t *len) {
     //TODO
 }
 
-uint32_t CborConverter::decodeVerificationToken(const uint8_t *buf, size_t len,
-                                                std::vector<::android::hardware::keymaster::V4_0::VerificationToken> &tokens) {
+uint32_t CborConverter::decodeVerificationTokens(const uint8_t *buf, const size_t len,
+                                                 std::vector<::android::hardware::keymaster::V4_0::VerificationToken> &tokens) {
     //TODO
 }
 
