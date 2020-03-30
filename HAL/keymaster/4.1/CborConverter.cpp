@@ -30,68 +30,93 @@ CborConverter::~CborConverter() {
 //TODO
 }
 
-uint32_t CborConverter::decodeHardwareAuthTokens(const uint8_t *buf, const size_t len,
-                                                 std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken> &tokens) {
+uint32_t CborConverter::decodeData(const uint8_t *buf, const size_t len, void **ctx) {
     //TODO
 }
 
-uint32_t CborConverter::encodeHardwareAuthTokens(
-        const std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken> &tokens,
-        uint8_t **buf, size_t *len) {
+uint32_t CborConverter::getElement(const void *ctx, const uint32_t index, void **innerCtx) {
     //TODO
 }
 
-uint32_t CborConverter::decodeHmacSharingParameters(const uint8_t *buf, const size_t len,
-                                                    std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters> &params) {
+uint32_t CborConverter::getHmacSharingParameters(const void *ctx,
+                                                 std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters> &params) {
+    //TODO
+}
+
+uint32_t CborConverter::getVerificationTokens(const void *ctx,
+                                              std::vector<::android::hardware::keymaster::V4_0::VerificationToken> &tokens) {
+    //TODO
+}
+
+uint32_t CborConverter::getKeyParameters(const void *ctx,
+                                         std::vector<::android::hardware::keymaster::V4_0::KeyParameter> &params) {
+    //TODO
+}
+
+uint32_t CborConverter::getHardwareAuthTokens(const void *ctx,
+                                              std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken> &tokens) {
+    //TODO
+}
+
+uint32_t CborConverter::getKeyCharacteristics(const void *ctx,
+                                              std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics> &keyCharacteristics) {
+    //TODO
+}
+
+uint32_t CborConverter::getByteArray(const void *ctx, std::vector <uint8_t> &bytes) {
+    //TODO
+}
+
+uint32_t CborConverter::getUInt64Array(const void *ctx, std::vector <uint64_t> &values) {
+    //TODO
+}
+
+uint32_t CborConverter::getUInt32Array(const void *ctx, std::vector <uint32_t> &values) {
     //TODO
 }
 
 uint32_t CborConverter::encodeHmacSharingParameters(
-        std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters> &params,
-        uint8_t **buf, size_t *len) {
-    //TODO
-}
-
-uint32_t CborConverter::encodeKeyCharacteristics(
-        const std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics> &keyCharacteristics,
-        uint8_t **buf, size_t *len) {
-    //TODO
-}
-
-uint32_t CborConverter::decodeKeyCharacteristics(const uint8_t *buf, const size_t len,
-                                                 std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics> &keyCharacteristics) {
-    //TODO
-}
-
-uint32_t CborConverter::encodeKeyParameters(
-        const std::vector<::android::hardware::keymaster::V4_0::KeyParameter> &params,
-        uint8_t **buf, size_t *len) {
-    //TODO
-}
-
-uint32_t CborConverter::decodeKeyParameters(const uint8_t *buf, const size_t len,
-                                            std::vector<::android::hardware::keymaster::V4_0::KeyParameter> &params) {
+        const std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters> &params,
+        std::vector <uint8_t> &cborData) {
     //TODO
 }
 
 uint32_t CborConverter::encodeVerificationTokens(
         const std::vector<::android::hardware::keymaster::V4_0::VerificationToken> &tokens,
-        uint8_t **buf, size_t *len) {
+        std::vector <uint8_t> &cborData) {
     //TODO
 }
 
-uint32_t CborConverter::decodeVerificationTokens(const uint8_t *buf, const size_t len,
-                                                 std::vector<::android::hardware::keymaster::V4_0::VerificationToken> &tokens) {
+uint32_t CborConverter::encodeKeyParameters(
+        const std::vector<::android::hardware::keymaster::V4_0::KeyParameter> &params,
+        std::vector <uint8_t> &cborData) {
     //TODO
 }
 
-uint32_t CborConverter::encodeByteArray(const std::vector <uint8_t> &bytes, uint8_t **buf,
-                                        size_t *len) {
+uint32_t CborConverter::encodeHardwareAuthTokens(
+        const std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken> &tokens,
+        std::vector <uint8_t> &cborData) {
     //TODO
 }
 
-uint32_t CborConverter::decodeByteArray(const uint8_t *buf, const size_t len,
-                                        std::vector <uint8_t> &bytes) {
+uint32_t CborConverter::encodeKeyCharacteristics(
+        const std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics> &keyCharacteristics,
+        std::vector <uint8_t> &cborData) {
+    //TODO
+}
+
+uint32_t CborConverter::encodeByteArray(const std::vector <uint8_t> &bytes,
+                                        std::vector <uint8_t> &cborData) {
+    //TODO
+}
+
+uint32_t CborConverter::encodeUInt64Array(std::vector <uint64_t> &bytes,
+                                          std::vector <uint8_t> &cborData) {
+    //TODO
+}
+
+uint32_t CborConverter::encodeUInt32Array(std::vector <uint32_t> &bytes,
+                                          std::vector <uint8_t> &cborData) {
     //TODO
 }
 

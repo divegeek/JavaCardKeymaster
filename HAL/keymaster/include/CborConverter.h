@@ -31,113 +31,151 @@ class CborConverter {
 
         //Conversion methods
         /**
-         * Converts from Cbor format to array of HmacSharingParameters structures.
-         * @param[in] buf The array of bytes to convert.
+         * Decodes the CBOR data and returns a context. This context
+         * has to be passed to each API for retrieving individual elements.
+         * @param[in] buf The array of bytes to decode.
          * @param[in] len The number of bytes in the array.
-         * @param[out] params The parsed array of HmacSharingParameters structure.
+         * @param[out] ctx Data structure formed from parsed CBOR data.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t decodeHmacSharingParameters(const uint8_t *buf, const size_t len, std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters>& params);
-
-         /**
-          * Converts from array of HmacSharingParameters structures to Cbor format.
-          * @param[in] params Array of HmacSharingParameters instances to be encoded.
-          * @param[out] buf Encoded byte array.
-          * @param[out] len The number of bytes in the encoded array.
-          * @return 0 if success, or error code if failure.
-          */
-        uint32_t encodeHmacSharingParameters(std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters>& params, uint8_t **buf, size_t *len);
+        uint32_t decodeData(const uint8_t *buf, const size_t len, void **ctx);
 
         /**
-         * Converts Cbor format to array of VerificationToken structures.
-         * @param[in] buf The array of bytes to convert.
-         * @param[in] len The number of bytes in the array.
-         * @param[out] tokens The parsed array of VerificationToken structures.
+         * Get an element at index from the main context.
+         * @param[in] ctx Data structure pointer returned from @ref decodeData(const uint8_t, const size_t, void**).
+         * @param[in] index The position where to retrieve the element from.
+         * @param[out] innerCtx Data structure corresponding to the element at index.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t decodeVerificationTokens(const uint8_t *buf, const size_t len, std::vector<::android::hardware::keymaster::V4_0::VerificationToken>& tokens);
+        uint32_t getElement(const void *ctx, const uint32_t index, void **innerCtx);
+
+        /**
+         * Retrieves the array of HmacSharingParameters.
+         * @param[in] ctx Data structure context corresponding to this element.
+         * @param[out] params The array of HmacSharingParameters.
+         * @return  0 if success, or error code if failure.
+         */
+        uint32_t getHmacSharingParameters(const void *ctx, std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters>& params);
+
+        /**
+         * Converts from array of HmacSharingParameters structures to Cbor format.
+         * @param[in] params Array of HmacSharingParameters instances to be encoded.
+         * @param[out] cborData Encoded byte array.
+         * @return 0 if success, or error code if failure.
+         */
+        uint32_t encodeHmacSharingParameters(const std::vector<::android::hardware::keymaster::V4_0::HmacSharingParameters>& params, std::vector<uint8_t>& cborData);
+
+        /**
+         * Retrieves the array of VerificationTokens.
+         * @param[in] ctx Data structure context corresponding to this element.
+         * @param[out] tokens The array of VerificationToken structures.
+         * @return 0 if success, or error code if failure.
+         */
+        uint32_t getVerificationTokens(const void *ctx, std::vector<::android::hardware::keymaster::V4_0::VerificationToken>& tokens);
 
         /**
          * Converts from array of VerificationToken structures to Cbor format.
          * @param[in] tokens Array of VerificationToken instances to be encoded.
-         * @param[out] buf Encoded byte array.
-         * @param[out] len The number of bytes in the encoded array.
+         * @param[out] cborData Encoded byte array.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t encodeVerificationTokens(const std::vector<::android::hardware::keymaster::V4_0::VerificationToken>& tokens, uint8_t **buf, size_t *len);
+        uint32_t encodeVerificationTokens(const std::vector<::android::hardware::keymaster::V4_0::VerificationToken>& tokens, std::vector<uint8_t>& cborData);
 
         /**
-         * Converts Cbor format to array of KeyParameter structures.
-         * @param[in] buf The array of bytes to convert.
-         * @param[in] len The number of bytes in the array.
-         * @param[out] params The parsed array of KeyParameter structures.
+         * Retrieves the array of KeyParameter structures.
+         * @param[in] ctx Data structure context corresponding to this element.
+         * @param[out] params The array of KeyParameter structures.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t decodeKeyParameters(const uint8_t *buf, const size_t len, std::vector<::android::hardware::keymaster::V4_0::KeyParameter>& params);
+        uint32_t getKeyParameters(const void *ctx, std::vector<::android::hardware::keymaster::V4_0::KeyParameter>& params);
 
         /**
          * Converts from array of KeyParameter structures to Cbor format.
          * @param[in] params Array of KeyParameter instances to be encoded.
-         * @param[out] buf Encoded byte array.
-         * @param[out] len The number of bytes in the encoded array.
+         * @param[out] cborData Encoded byte array.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t encodeKeyParameters(const std::vector<::android::hardware::keymaster::V4_0::KeyParameter>& params, uint8_t **buf, size_t *len);
+        uint32_t encodeKeyParameters(const std::vector<::android::hardware::keymaster::V4_0::KeyParameter>& params, std::vector<uint8_t>& cborData);
 
         /**
-         * Converts Cbor format to array of HardwareAuthToken structures.
-         * @param[in] buf The array of bytes to convert.
-         * @param[in] len The number of bytes in the array.
-         * @param[out] tokens The parsed HardwareAuthToken structure.
+         * Retrieves the array of HardwareAuthToken structures.
+         * @param[in] ctx Data structure context corresponding to this element.
+         * @param[out] tokens The array of HardwareAuthToken structures.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t decodeHardwareAuthTokens(const uint8_t *buf, const size_t len, std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken>& tokens);
+        uint32_t getHardwareAuthTokens(const void *ctx, std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken>& tokens);
 
         /**
          * Converts from array of HardwareAuthToken structures to Cbor format.
          * @param[in] tokens Array of HardwareAuthToken instances to be encoded.
-         * @param[out] buf Encoded byte array.
-         * @param[out] len The number of bytes in the encoded array.
+         * @param[out] cborData Encoded byte array.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t encodeHardwareAuthTokens(const std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken>& tokens, uint8_t **buf, size_t *len);
+        uint32_t encodeHardwareAuthTokens(const std::vector<::android::hardware::keymaster::V4_0::HardwareAuthToken>& tokens, std::vector<uint8_t>& cborData);
 
         /**
-         * Converts Cbor format to array of keyCharacteristics structures.
-         * @param[in] buf The array of bytes to convert.
-         * @param[in] len The number of bytes in the array.
-         * @param[out] keyCharacteristics The parsed array of keyCharacteristics structures.
+         * Retrieves the array of keyCharacteristics structures.
+         * @param[in] ctx Data structure context corresponding to this element.
+         * @param[out] keyCharacteristics The array of keyCharacteristics structures.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t decodeKeyCharacteristics(const uint8_t *buf, const size_t len, std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics>& keyCharacteristics);
+        uint32_t getKeyCharacteristics(const void *ctx, std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics>& keyCharacteristics);
 
         /**
          * Converts from array of KeyCharacteristics structures to Cbor format.
          * @param[in] keyCharacteristics Array of KeyCharacteristics instances to be encoded.
-         * @param[out] buf Encoded byte array.
-         * @param[out] len The number of bytes in the encoded array.
+         * @param[out] cborData Encoded byte array.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t encodeKeyCharacteristics(const std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics>& keyCharacteristics, uint8_t **buf, size_t *len);
+        uint32_t encodeKeyCharacteristics(const std::vector<::android::hardware::keymaster::V4_0::KeyCharacteristics>& keyCharacteristics, std::vector<uint8_t>& cborData);
 
         /**
-         * Converts Cbor format to vector array.
-         * @param[in] buf The array of bytes to convert.
-         * @param[in] len The number of bytes in the array.
-         * @param[out] bytes The parsed vector array.
+         * Retrieves byte array.
+         * @param[in] ctx Data structure context corresponding to this element.
+         * @param[out] bytes The parsed byte array.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t decodeByteArray(const uint8_t *buf, const size_t len, std::vector<uint8_t>& bytes);
+        uint32_t getByteArray(const void *ctx, std::vector<uint8_t>& bytes);
 
         /**
          * Converts from vector array to Cbor format.
-         * @param[in] bytes vector array instance to be encoded.
-         * @param[out] buf Encoded byte array.
-         * @param[out] len The number of bytes in the encoded array.
+         * @param[in] bytes Byte array instance to be encoded.
+         * @param[out] cborData Encoded byte array.
          * @return 0 if success, or error code if failure.
          */
-        uint32_t encodeByteArray(const std::vector<uint8_t>& bytes, uint8_t **buf, size_t *len);
+        uint32_t encodeByteArray(const std::vector<uint8_t>& bytes, std::vector<uint8_t>& cborData);
 
+        /**
+         * Retrieves uint64_t array.
+         * @param[in] ctx Data structure context corresponding to this element.
+         * @param[out] values The parsed uint64_t array.
+         * @return 0 if success, or error code if failure.
+         */
+        uint32_t getUInt64Array(const void *ctx, std::vector<uint64_t>& values);
+
+        /**
+         * Retrieves uint32_t array.
+         * @param[in]  ctx Data structure context corresponding to this element.
+         * @param[out] values The parsed uint32_t array.
+         * @return 0 if success, or error code if failure.
+         */
+        uint32_t getUInt32Array(const void *ctx, std::vector<uint32_t>& values);
+
+        /**
+         * Converts from uint64_t array to Cbor format.
+         * @param bytes uint64_t array to be encoded.
+         * @param cborData Encoded byte array.
+         * @return 0 if success, or error code if failure.
+         */
+        uint32_t encodeUInt64Array(std::vector<uint64_t> &bytes, std::vector<uint8_t>& cborData);
+
+        /**
+         * Converts from uint32_t array to Cbor format.
+         * @param bytes uint64_t array to be encoded.
+         * @param cborData Encoded byte array.
+         * @return 0 if success, or error code if failure.
+         */
+        uint32_t encodeUInt32Array(std::vector<uint32_t> &bytes, std::vector<uint8_t>& cborData);
 };
 
 } // namespace V4_1
