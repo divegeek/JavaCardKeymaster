@@ -18,8 +18,11 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMEnumTag extends KMTag {
+  private static KMEnumTag prototype;
+  private static short instPtr;
 
   private static short[] tags = {
     ALGORITHM, ECCURVE, BLOB_USAGE_REQ, USER_AUTH_TYPE, ORIGIN, HARDWARE_TYPE
@@ -27,49 +30,63 @@ public class KMEnumTag extends KMTag {
 
   private static Object[] enums = null;
 
-  private short key;
-  private byte val;
+  private KMEnumTag() {}
 
-  // assignBlob constructor
-  private KMEnumTag() {
-    init();
+  private static KMEnumTag proto(short ptr) {
+    if (prototype == null) prototype = new KMEnumTag();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    key = 0;
-    val = 0;
+  // pointer to an empty instance used as expression
+  public static short exp() {
+    short ptr = instance(TAG_TYPE, (short)2);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), ENUM_TAG);
+    return ptr;
   }
 
-  @Override
+  public static short instance(short key) {
+    if(!validateEnum(key, NO_VALUE)){
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short ptr = KMType.instance(TAG_TYPE, (short)4);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), ENUM_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
+    return ptr;
+  }
+
+  public static short instance(short key, byte val) {
+    if(!validateEnum(key, val)){
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short ptr = instance(TAG_TYPE, (short)5);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), ENUM_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
+    heap[(short)(ptr+TLV_HEADER_SIZE+4)]= val;
+    return ptr;
+  }
+
+  public static KMEnumTag cast(short ptr) {
+    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE)) != ENUM_TAG) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return proto(ptr);
+  }
+
   public short getKey() {
-    return key;
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
   }
 
-  @Override
-  public short length() {
-    return 1;
-  }
-
-  @Override
   public short getTagType() {
     return KMType.ENUM_TAG;
   }
 
-  public static KMEnumTag instance() {
-    return repository.newEnumTag();
+  public byte getValue() {
+    return heap[(short)(instPtr+TLV_HEADER_SIZE+4)];
   }
 
-  public static KMEnumTag instance(short key) {
-    if(!validateEnum(key, NO_VALUE)){
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    KMEnumTag tag = repository.newEnumTag();
-    tag.key = key;
-    return tag;
-  }
-
-  public static void create(KMEnumTag[] enumTagRefTable) {
+  public static void create() {
     if (enums == null) {
       enums =
           new Object[] {
@@ -81,15 +98,11 @@ public class KMEnumTag extends KMTag {
             new byte[] {SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX}
           };
     }
-    byte index = 0;
-    while (index < enumTagRefTable.length) {
-      enumTagRefTable[index] = new KMEnumTag();
-      index++;
-    }
   }
 
   // validate enumeration keys and values.
   private static boolean validateEnum(short key, byte value) {
+    create();
     // check if key exists
     short index = (short) tags.length;
     while (--index >= 0) {
@@ -114,20 +127,5 @@ public class KMEnumTag extends KMTag {
     }
     // return false if key does not exist
     return false;
-  }
-
-  // get value of this tag assignBlob.
-  public byte getValue() {
-    return val;
-  }
-
-  // instantiate enum tag.
-  public static KMEnumTag instance(short key, byte val) {
-    if (!validateEnum(key, val)) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    KMEnumTag tag = instance(key);
-    tag.val = val;
-    return tag;
   }
 }

@@ -22,7 +22,6 @@ import javacard.framework.AppletEvent;
 import javacard.framework.CardRuntimeException;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacardx.apdu.ExtendedLength;
 
@@ -71,11 +70,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   // GetHwInfo information
   // TODO change this to just filling the buffer
-  private static final byte[] JavacardKeymasterDevice = {
-    0x4A, 0x61, 0x76, 0x61, 0x63, 0x61, 0x72, 0x64, 0x4B, 0x65, 0x79, 0x6D, 0x61, 0x73, 0x74, 0x65,
-    0x72, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65,
-  };
-  private static final byte[] Google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
   private static final short MAX_SEED_SIZE = 2048;
 
   // State of the applet.
@@ -84,12 +78,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private KMRepository repository;
   private byte keymasterState = ILLEGAL_STATE;
   private byte[] buffer;
+  private short bufferStartOffset;
+  private short bufferLength;
 
   /** Registers this applet. */
   protected KMKeymasterApplet() {
     keymasterState = KMKeymasterApplet.INSTALL_STATE;
     repository = KMRepository.instance();
     KMUtil.init();
+    KMType.initialize();
     encoder = new KMEncoder();
     decoder = new KMDecoder();
     register();
@@ -113,7 +110,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    */
   @Override
   public boolean select() {
-    KMRepository.instance().onSelect();
+    repository.onSelect();
     if (keymasterState == KMKeymasterApplet.INSTALL_STATE) {
       keymasterState = KMKeymasterApplet.FIRST_SELECT_STATE;
     } else if (keymasterState == KMKeymasterApplet.INACTIVE_STATE) {
@@ -127,7 +124,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   /** De-selects this applet. */
   @Override
   public void deselect() {
-    KMRepository.instance().onDeselect();
+    repository.onDeselect();
     if (keymasterState == KMKeymasterApplet.ACTIVE_STATE) {
       keymasterState = KMKeymasterApplet.INACTIVE_STATE;
     }
@@ -136,7 +133,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   /** Uninstalls the applet after cleaning the repository. */
   @Override
   public void uninstall() {
-    KMRepository.instance().onUninstall();
+    repository.onUninstall();
     if (keymasterState != KMKeymasterApplet.UNINSTALLED_STATE) {
       keymasterState = KMKeymasterApplet.UNINSTALLED_STATE;
     }
@@ -149,10 +146,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    */
   @Override
   public void process(APDU apdu) {
-    KMRepository.instance().onProcess();
-    if (buffer == null) {
-      buffer = JCSystem.makeTransientByteArray(MAX_LENGTH, JCSystem.CLEAR_ON_RESET);
-    }
+    repository.onProcess();
     // Verify whether applet is in correct state.
     if ((keymasterState != KMKeymasterApplet.ACTIVE_STATE)
         && (keymasterState != KMKeymasterApplet.FIRST_SELECT_STATE)) {
@@ -188,177 +182,174 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Process the apdu
     try {
       // Handle the command
-      handle(apduIns, apdu);
+      switch (apduIns) {
+        case INS_GENERATE_KEY_CMD:
+          processGenerateKey(apdu);
+          break;
+        case INS_IMPORT_KEY_CMD:
+          processImportKeyCmd(apdu);
+          break;
+        case INS_IMPORT_WRAPPED_KEY_CMD:
+          processImportWrappedKeyCmd(apdu);
+          break;
+        case INS_EXPORT_KEY_CMD:
+          processExportKeyCmd(apdu);
+          break;
+        case INS_ATTEST_KEY_CMD:
+          processAttestKeyCmd(apdu);
+          break;
+        case INS_UPGRADE_KEY_CMD:
+          processUpgradeKeyCmd(apdu);
+          break;
+        case INS_DELETE_KEY_CMD:
+          processDeleteKeyCmd(apdu);
+          break;
+        case INS_DELETE_ALL_KEYS_CMD:
+          processDeleteAllKeysCmd(apdu);
+          break;
+        case INS_ADD_RNG_ENTROPY_CMD:
+          processAddRngEntropyCmd(apdu);
+          break;
+        case INS_COMPUTE_SHARED_HMAC_CMD:
+          processComputeSharedHmacCmd(apdu);
+          break;
+        case INS_DESTROY_ATT_IDS_CMD:
+          processDestroyAttIdsCmd(apdu);
+          break;
+        case INS_VERIFY_AUTHORIZATION_CMD:
+          processVerifyAuthenticationCmd(apdu);
+          break;
+        case INS_GET_HMAC_SHARING_PARAM_CMD:
+          processGetHmacSharingParamCmd(apdu);
+          break;
+        case INS_GET_KEY_CHARACTERISTICS_CMD:
+          processGetKeyCharacteristicsCmd(apdu);
+          break;
+        case INS_GET_HW_INFO_CMD:
+          processGetHwInfoCmd(apdu);
+          break;
+        case INS_BEGIN_OPERATION_CMD:
+          processBeginOperationCmd(apdu);
+          break;
+        case INS_UPDATE_OPERATION_CMD:
+          processUpdateOperationCmd(apdu);
+          break;
+        case INS_FINISH_OPERATION_CMD:
+          processFinishOperationCmd(apdu);
+          break;
+        case INS_ABORT_OPERATION_CMD:
+          processAbortOperationCmd(apdu);
+          break;
+        case INS_PROVISION_CMD:
+          processProvisionCmd(apdu);
+          break;
+        default:
+          ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
+      }
+
     } catch (CardRuntimeException exception) {
       if (!(KMException.handle(exception.getReason()))) {
         CardRuntimeException.throwIt(exception.getReason());
       }
     } finally {
-      // Reset the buffer.
-      Util.arrayFillNonAtomic(buffer, (short) 0, MAX_LENGTH, (byte) 0);
+      repository.clean();
     }
   }
 
   /** Sends a response, may be extended response, as requested by the command. */
-  private void sendOutgoing(byte[] srcBuffer, short srcLength, APDU apdu) {
-    if (srcLength > MAX_LENGTH) {
+  private void sendOutgoing(APDU apdu) {
+    if (bufferLength > MAX_LENGTH) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     // Send data
     apdu.setOutgoing();
-    apdu.setOutgoingLength(srcLength);
-    apdu.sendBytesLong(srcBuffer, (short) 0, srcLength);
+    apdu.setOutgoingLength(bufferLength);
+    apdu.sendBytesLong(buffer, bufferStartOffset, bufferLength);
   }
 
   /** Receives data, which can be extended data, as requested by the command instance. */
-  private short receiveIncoming(byte[] destBuffer, APDU apdu) {
-    // Initialize source
+  private void receiveIncoming(APDU apdu) {
     byte[] srcBuffer = apdu.getBuffer();
-    // Initialize destination
-    short destOffset = (short) 0;
-    // Receive data
     short recvLen = apdu.setIncomingAndReceive();
     short srcOffset = apdu.getOffsetCdata();
-    short srcLength = apdu.getIncomingLength();
-    if (srcLength > MAX_LENGTH) {
+    bufferLength  = apdu.getIncomingLength();
+    bufferStartOffset = repository.alloc(bufferLength);
+    buffer = repository.getHeap();
+    short index = bufferStartOffset;
+    // Receive data
+    if (bufferLength > MAX_LENGTH) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    while (recvLen > 0) {
-      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, destBuffer, destOffset, recvLen);
-      destOffset += recvLen;
+    while (recvLen > 0 && ((short)(index - bufferStartOffset) < bufferLength)) {
+      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, index, recvLen);
+      index += recvLen;
       recvLen = apdu.receiveBytes(srcOffset);
     }
-    return srcLength;
   }
 
-  // Commands
-  private void handle(byte ins, APDU apdu) {
-    switch (ins) {
-      case INS_GENERATE_KEY_CMD:
-        processGenerateKey(apdu);
-        break;
-      case INS_IMPORT_KEY_CMD:
-        processImportKeyCmd(apdu);
-        break;
-      case INS_IMPORT_WRAPPED_KEY_CMD:
-        processImportWrappedKeyCmd(apdu);
-        break;
-      case INS_EXPORT_KEY_CMD:
-        processExportKeyCmd(apdu);
-        break;
-      case INS_ATTEST_KEY_CMD:
-        processAttestKeyCmd(apdu);
-        break;
-      case INS_UPGRADE_KEY_CMD:
-        processUpgradeKeyCmd(apdu);
-        break;
-      case INS_DELETE_KEY_CMD:
-        processDeleteKeyCmd(apdu);
-        break;
-      case INS_DELETE_ALL_KEYS_CMD:
-        processDeleteAllKeysCmd(apdu);
-        break;
-      case INS_ADD_RNG_ENTROPY_CMD:
-        processAddRngEntropyCmd(apdu);
-        break;
-      case INS_COMPUTE_SHARED_HMAC_CMD:
-        processComputeSharedHmacCmd(apdu);
-        break;
-      case INS_DESTROY_ATT_IDS_CMD:
-        processDestroyAttIdsCmd(apdu);
-        break;
-      case INS_VERIFY_AUTHORIZATION_CMD:
-        processVerifyAuthenticationCmd(apdu);
-        break;
-      case INS_GET_HMAC_SHARING_PARAM_CMD:
-        processGetHmacSharingParamCmd(apdu);
-        break;
-      case INS_GET_KEY_CHARACTERISTICS_CMD:
-        processGetKeyCharacteristicsCmd(apdu);
-        break;
-      case INS_GET_HW_INFO_CMD:
-        processGetHwInfoCmd(apdu);
-        break;
-      case INS_BEGIN_OPERATION_CMD:
-        processBeginOperationCmd(apdu);
-        break;
-      case INS_UPDATE_OPERATION_CMD:
-        processUpdateOperationCmd(apdu);
-        break;
-      case INS_FINISH_OPERATION_CMD:
-        processFinishOperationCmd(apdu);
-        break;
-      case INS_ABORT_OPERATION_CMD:
-        processAbortOperationCmd(apdu);
-        break;
-      case INS_PROVISION_CMD:
-        processProvisionCmd(apdu);
-        break;
-      default:
-        ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
-    }
-  }
-
-  private short processProvisionCmd(APDU apdu) {
-    // Receive the incoming request fully from the master.
-    short length = receiveIncoming(buffer, apdu);
+  private void processProvisionCmd(APDU apdu) {
+    // Receive the incoming request fully from the master into buffer.
+    receiveIncoming(apdu);
     // Re-purpose the apdu buffer as scratch pad.
     byte[] scratchPad = apdu.getBuffer();
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) apdu.getBuffer().length, (byte) 0);
     // Argument 1
-    KMKeyParameters keyparams = KMKeyParameters.instance();
+    short keyparams = KMKeyParameters.exp();
     // Argument 2
-    KMEnum keyFormat = KMEnum.instance().setType(KMType.KEY_FORMAT);
+    short keyFormat = KMEnum.instance(KMType.KEY_FORMAT);
     // Argument 3
-    KMByteBlob keyBlob = KMByteBlob.instance();
+    short keyBlob = KMByteBlob.exp();
     // Array of expected arguments
-    KMArray argsProto =
-        KMArray.instance((short) 3)
-            .add((short) 0, keyparams)
-            .add((short) 1, keyFormat)
-            .add((short) 2, keyBlob);
+    short argsProto = KMArray.instance((short) 3);
+    KMArray.cast(argsProto).add((short) 0, keyparams);
+    KMArray.cast(argsProto).add((short) 1, keyFormat);
+    KMArray.cast(argsProto).add((short) 2, keyBlob);
     // Decode the argument
-    KMArray args = decoder.decode(argsProto, buffer, (short) 0, length);
+    short args = decoder.decode(argsProto, buffer, bufferStartOffset, bufferLength);
     // TODO execute the function
     // Change the state to ACTIVE
     if (keymasterState == KMKeymasterApplet.FIRST_SELECT_STATE) {
       keymasterState = KMKeymasterApplet.ACTIVE_STATE;
     }
-    // nothing to return
-    return 0;
   }
 
   private void processGetHwInfoCmd(APDU apdu) {
     // No arguments expected
+    final byte[] JavacardKeymasterDevice = {
+      0x4A, 0x61, 0x76, 0x61, 0x63, 0x61, 0x72, 0x64, 0x4B, 0x65, 0x79, 0x6D, 0x61, 0x73, 0x74, 0x65,
+      0x72, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65,
+    };
+    final byte[] Google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
+
     // Make the response
-    KMArray resp =
-        KMArray.instance((short) 3)
-            .add((short) 0, KMEnum.instance(KMType.HARDWARE_TYPE, KMType.STRONGBOX))
-            .add(
-                (short) 1,
-                KMByteBlob.instance(
-                    JavacardKeymasterDevice, (short) 0, (short) JavacardKeymasterDevice.length))
-            .add((short) 2, KMByteBlob.instance(Google, (short) 0, (short) Google.length));
-    // Reuse the buffer
-    Util.arrayFillNonAtomic(buffer, (short) 0, MAX_LENGTH, (byte) 0);
-    // Encode the response
-    short len = encoder.encode(resp, buffer, (short) 0, MAX_LENGTH);
-    sendOutgoing(buffer, len, apdu);
+    short respPtr = KMArray.instance((short) 3);
+    KMArray resp = KMArray.cast(respPtr);
+    resp.add((short) 0, KMEnum.instance(KMType.HARDWARE_TYPE, KMType.STRONGBOX));
+    resp.add((short) 1, KMByteBlob.instance(
+                    JavacardKeymasterDevice, (short) 0, (short) JavacardKeymasterDevice.length));
+    resp.add((short) 2, KMByteBlob.instance(Google, (short) 0, (short) Google.length));
+    //TODO change from MAX_LENGTH to actual length.
+    buffer = repository.getHeap();
+    bufferStartOffset = repository.alloc((short)128);
+    // Encode the response - actual bufferLength is 86
+    bufferLength = encoder.encode(respPtr, buffer, bufferStartOffset, MAX_LENGTH);
+    // send buffer to master
+    sendOutgoing(apdu);
   }
 
-  private short processAddRngEntropyCmd(APDU apdu) {
+  private void processAddRngEntropyCmd(APDU apdu) {
     // Receive the incoming request fully from the master.
-    short length = receiveIncoming(buffer, apdu);
+    receiveIncoming(apdu);
     // Re-purpose the apdu buffer as scratch pad.
     byte[] scratchPad = apdu.getBuffer();
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) apdu.getBuffer().length, (byte) 0);
     // Argument 1
-    KMArray argsProto = KMArray.instance((short) 1).add((short) 0, KMByteBlob.instance());
-
+    short argsProto = KMArray.instance((short) 1);
+    KMArray.cast(argsProto).add((short) 0, KMByteBlob.exp());
     // Decode the argument
-    KMArray args = decoder.decode(argsProto, buffer, (short) 0, length);
+    short args = decoder.decode(argsProto, buffer, bufferStartOffset, bufferLength);
     // Process
-    KMByteBlob blob = (KMByteBlob) args.get((short) 0);
+    KMByteBlob blob = KMByteBlob.cast(KMArray.cast(args).get((short) 0));
     // Maximum 2KiB of seed is allowed.
     if (blob.length() > MAX_SEED_SIZE) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -366,8 +357,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Get existing entropy pool.
     byte[] entPool = KMUtil.getEntropyPool();
     // Create new temporary pool.
-    byte[] heapRef = repository.getByteHeapRef();
-    short poolStart = repository.newByteArray((short) entPool.length);
+    byte[] heapRef = repository.getHeap();
+    short poolStart = repository.alloc((short) entPool.length);
     // Populate the new pool with the entropy which is derived from current entropy pool.
     KMUtil.newRandomNumber(heapRef, poolStart, (short) entPool.length);
     // Copy the entropy to the current pool - updates the entropy pool.
@@ -384,75 +375,73 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         randIndex = 0;
       }
     }
-    // Nothing to return
-    return 0;
   }
 
-  private short processAbortOperationCmd(APDU apdu) {
-    return 0;
+  private void processAbortOperationCmd(APDU apdu) {
+
   }
 
-  private short processFinishOperationCmd(APDU apdu) {
-    return 0;
+  private  void processFinishOperationCmd(APDU apdu) {
+
   }
 
-  private short processUpdateOperationCmd(APDU apdu) {
-    return 0;
+  private  void processUpdateOperationCmd(APDU apdu) {
+
   }
 
-  private short processBeginOperationCmd(APDU apdu) {
-    return 0;
+  private  void processBeginOperationCmd(APDU apdu) {
+
   }
 
-  private short processGetKeyCharacteristicsCmd(APDU apdu) {
-    return 0;
+  private  void processGetKeyCharacteristicsCmd(APDU apdu) {
+
   }
 
-  private short processGetHmacSharingParamCmd(APDU apdu) {
-    return 0;
+  private  void processGetHmacSharingParamCmd(APDU apdu) {
+
   }
 
-  private short processVerifyAuthenticationCmd(APDU apdu) {
-    return 0;
+  private  void processVerifyAuthenticationCmd(APDU apdu) {
+
   }
 
-  private short processDestroyAttIdsCmd(APDU apdu) {
-    return 0;
+  private  void processDestroyAttIdsCmd(APDU apdu) {
+
   }
 
-  private short processComputeSharedHmacCmd(APDU apdu) {
-    return 0;
+  private  void processComputeSharedHmacCmd(APDU apdu) {
+
   }
 
-  private short processDeleteAllKeysCmd(APDU apdu) {
-    return 0;
+  private  void processDeleteAllKeysCmd(APDU apdu) {
+
   }
 
-  private short processDeleteKeyCmd(APDU apdu) {
-    return 0;
+  private  void processDeleteKeyCmd(APDU apdu) {
+
   }
 
-  private short processUpgradeKeyCmd(APDU apdu) {
-    return 0;
+  private  void processUpgradeKeyCmd(APDU apdu) {
+
   }
 
-  private short processAttestKeyCmd(APDU apdu) {
-    return 0;
+  private  void processAttestKeyCmd(APDU apdu) {
+
   }
 
-  private short processExportKeyCmd(APDU apdu) {
-    return 0;
+  private  void processExportKeyCmd(APDU apdu) {
+
   }
 
-  private short processImportWrappedKeyCmd(APDU apdu) {
-    return 0;
+  private  void processImportWrappedKeyCmd(APDU apdu) {
+
   }
 
-  private short processImportKeyCmd(APDU apdu) {
-    return 0;
+  private  void processImportKeyCmd(APDU apdu) {
+
   }
 
-  private short processGenerateKey(APDU apdu) {
-    return 0;
+  private  void processGenerateKey(APDU apdu) {
+
   }
 }

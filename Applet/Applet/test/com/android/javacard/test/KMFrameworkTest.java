@@ -60,7 +60,7 @@ public class KMFrameworkTest {
   public void testProvisionCmd(CardSimulator simulator){
       byte[] buf = new byte[512];
       // test provision command
-      KMArray cmd = makeProvisionCmd();
+      short cmd = makeProvisionCmd();
       KMEncoder enc = new KMEncoder();
       short actualLen = enc.encode(cmd, buf, (short) 0, (short)buf.length);
       CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x23, 0x40, 0x00, buf, 0, actualLen);
@@ -74,18 +74,19 @@ public class KMFrameworkTest {
     //print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     KMDecoder dec = new KMDecoder();
-    KMArray exp = KMArray.instance((short)3)
-      .add((short)0, KMEnum.instance().setType(KMType.HARDWARE_TYPE))
-      .add((short)1, KMByteBlob.instance())
-      .add((short)2, KMByteBlob.instance());
+    short arrPtr = KMArray.instance((short)3);
+    KMArray exp = KMArray.cast(arrPtr);
+      exp.add((short)0, KMEnum.instance(KMType.HARDWARE_TYPE));
+      exp.add((short)1, KMByteBlob.exp());
+      exp.add((short)2, KMByteBlob.exp());
     byte[] respBuf = response.getBytes();
     short len = (short)respBuf.length;
-    KMArray resp = dec.decode(exp,respBuf, (short)0, len);
-    Assert.assertEquals(3, resp.length());
-    KMEnum secLevel = (KMEnum)resp.get((short)0);
-    KMByteBlob kmName = (KMByteBlob) resp.get((short)1);
-    KMByteBlob authorName = (KMByteBlob) resp.get((short)2);
-    Assert.assertEquals(KMType.HARDWARE_TYPE, secLevel.getType());
+    short respPtr = dec.decode(arrPtr,respBuf, (short)0, len);
+    Assert.assertEquals(3, KMArray.cast(respPtr).length());
+    KMEnum secLevel = KMEnum.cast(KMArray.cast(respPtr).get((short)0));
+    short kmName = KMArray.cast(respPtr).get((short)1);
+    short authorName = KMArray.cast(respPtr).get((short)2);
+    Assert.assertEquals(KMType.HARDWARE_TYPE, secLevel.getEnumType());
     Assert.assertEquals(KMType.STRONGBOX, secLevel.getVal());
     String kmNameStr = byteBlobToString(kmName);
     String authorNameStr = byteBlobToString(authorName);
@@ -96,7 +97,7 @@ public class KMFrameworkTest {
   private void testAddRngEntropyCmd(CardSimulator simulator){
     byte[] buf = new byte[512];
     // test provision command
-    KMArray cmd = makeAddRngEntropyCmd();
+    short cmd = makeAddRngEntropyCmd();
     KMEncoder enc = new KMEncoder();
     short actualLen = enc.encode(cmd, buf, (short) 0, (short)buf.length);
 
@@ -107,8 +108,9 @@ public class KMFrameworkTest {
   }
 
 
-  private String byteBlobToString(KMByteBlob blob) {
+  private String byteBlobToString(short blobPtr) {
     StringBuilder sb = new StringBuilder();
+    KMByteBlob blob = KMByteBlob.cast(blobPtr);
     for(short i = 0; i<blob.length(); i++){
       sb.append((char)blob.get(i));
     }
@@ -126,36 +128,38 @@ public class KMFrameworkTest {
     System.out.println(sb.toString());
   }
 
-  private KMArray makeProvisionCmd() {
+  private short makeProvisionCmd() {
     // Argument 1
-    KMArray vals =
-        KMArray.instance((short) 1)
-            .add((short) 0, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
-    KMKeyParameters keyparams = KMKeyParameters.instance(vals);
+    short arrPtr = KMArray.instance((short) 1);
+    KMArray vals = KMArray.cast(arrPtr);
+    vals.add((short) 0, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
+    short keyparamsPtr = KMKeyParameters.instance(arrPtr);
     // Argument 2
-    KMEnum keyFormat = KMEnum.instance(KMType.KEY_FORMAT, KMType.X509);
+    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.X509);
     // Argument 3
     byte[] byteBlob = new byte[48];
     for (short i = 0; i < 48; i++) {
       byteBlob[i] = (byte) i;
     }
-    KMByteBlob keyBlob = KMByteBlob.instance(byteBlob, (short) 0, (short)byteBlob.length);
+    short keyBlobPtr = KMByteBlob.instance(byteBlob, (short) 0, (short)byteBlob.length);
     // Array of expected arguments
-    return KMArray.instance((short) 3)
-        .add((short) 0, keyparams)
-        .add((short) 1, keyFormat)
-        .add((short) 2, keyBlob);
+    short argPtr = KMArray.instance((short) 3);
+    KMArray arg = KMArray.cast(argPtr);
+    arg.add((short) 0, keyparamsPtr);
+    arg.add((short) 1, keyFormatPtr);
+    arg.add((short) 2, keyBlobPtr);
+    return argPtr;
   }
-  private KMArray makeAddRngEntropyCmd() {
+  private short makeAddRngEntropyCmd() {
     // Argument 1
     byte[] byteBlob = new byte[32];
     for (short i = 0; i < 32; i++) {
       byteBlob[i] = (byte) i;
     }
-    KMByteBlob keyBlob = KMByteBlob.instance(byteBlob, (short) 0, (short)byteBlob.length);
+    short keyBlob = KMByteBlob.instance(byteBlob, (short) 0, (short)byteBlob.length);
     // Array of expected arguments
-    return KMArray.instance((short) 1)
-      .add((short) 0, keyBlob);
+    short arrPtr =  KMArray.instance((short) 1);
+    KMArray.cast(arrPtr).add((short) 0, keyBlob);
+    return arrPtr;
   }
-
 }

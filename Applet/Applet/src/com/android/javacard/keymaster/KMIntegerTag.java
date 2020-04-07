@@ -18,9 +18,13 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 // Implements UINT, ULONG and DATE tags.
 public class KMIntegerTag extends KMTag {
+  private static KMIntegerTag prototype;
+  private static short instPtr;
+
   private static final short[] tags = {
     // UINT
     KEYSIZE,
@@ -43,66 +47,80 @@ public class KMIntegerTag extends KMTag {
     CREATION_DATETIME
   };
 
-  private short key;
-  private KMInteger val;
-  private short tagType;
+  private KMIntegerTag() {}
 
-  private KMIntegerTag() {
-    init();
+  private static KMIntegerTag proto(short ptr) {
+    if (prototype == null) prototype = new KMIntegerTag();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    key = 0;
-    val = null;
-    tagType = KMType.UINT_TAG;
+  public static short exp(short tagType) {
+    if (!validateTagType(tagType)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short intPtr = KMInteger.exp();
+    short ptr = instance(TAG_TYPE, (short)6);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), tagType);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), INVALID_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), intPtr);
+    return ptr;
   }
 
-  @Override
-  public short getKey() {
-    return key;
-  }
-
-  @Override
-  public short length() {
-    return (short) val.getValue().length;
-  }
-
-  @Override
-  public short getTagType() {
-    return tagType;
-  }
-
-  public static KMIntegerTag instance() {
-    return repository.newIntegerTag();
-  }
-
-  public static KMIntegerTag instance(short key) {
+  public static short instance(short tagType, short key) {
+    if (!validateTagType(tagType)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
     if (!validateKey(key)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    KMIntegerTag tag = repository.newIntegerTag();
-    tag.key = key;
-    tag.val = null;
-    return tag;
+    short intPtr = KMInteger.exp();
+    return instance(tagType, key, intPtr);
   }
 
-  public static KMIntegerTag instance(short givenKey, KMInteger val) {
-    KMIntegerTag tag = KMIntegerTag.instance(givenKey);
-    tag.val = val;
-    if (val.length() == 8) {
-      tag.tagType = KMType.ULONG_TAG;
+  public static short instance(short tagType, short key, short intObj) {
+    if (!validateTagType(tagType)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    return tag;
+    if (!validateKey(key)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    if(heap[intObj] != INTEGER_TYPE) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short ptr = instance(TAG_TYPE, (short)6);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), tagType);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), intObj);
+    return ptr;
   }
 
-  public static void create(KMIntegerTag[] intTagRefTable) {
-    byte index = 0;
-    while (index < intTagRefTable.length) {
-      intTagRefTable[index] = new KMIntegerTag();
-      index++;
+  public static KMIntegerTag cast(short ptr) {
+    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    short tagType = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
+    if (!validateTagType(tagType)) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
+    return proto(ptr);
   }
+
+  public short getTagType() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE));
+  }
+
+  public short getKey() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
+  }
+
+  public short getValue() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+  }
+
+  public short length() {
+    KMInteger obj = KMInteger.cast(getValue());
+    return obj.length();
+  }
+
 
   private static boolean validateKey(short key) {
     short index = (short) tags.length;
@@ -114,22 +132,12 @@ public class KMIntegerTag extends KMTag {
     return false;
   }
 
-  public KMInteger getValue() {
-    return this.val;
+  // TODO this should be combined with validateKey to actually validate {tagType, tagKey} pair.
+  private static boolean validateTagType(short tagType) {
+    if ((tagType == DATE_TAG) || (tagType == UINT_TAG) || (tagType == ULONG_TAG)) {
+      return true;
+    }
+    return false;
   }
 
-  public KMIntegerTag setValue(KMInteger val) {
-    this.val = val;
-    return this;
-  }
-
-  public KMIntegerTag asULong() {
-    tagType = KMType.ULONG_TAG;
-    return this;
-  }
-
-  public KMIntegerTag asDate() {
-    tagType = KMType.DATE_TAG;
-    return this;
-  }
 }

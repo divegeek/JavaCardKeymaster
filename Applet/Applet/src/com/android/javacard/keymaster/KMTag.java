@@ -16,8 +16,9 @@
 
 package com.android.javacard.keymaster;
 
-public abstract class KMTag extends KMType {
-  public abstract short getTagType();
+import javacard.framework.Util;
 
-  public abstract short getKey();
+public class KMTag extends KMType {
+  public static short getTagType(short ptr){return Util.getShort(heap, (short)(ptr+TLV_HEADER_SIZE));}
+  public static short getKey(short ptr){return Util.getShort(heap, (short)(ptr+TLV_HEADER_SIZE+2));}
 }

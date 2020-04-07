@@ -16,53 +16,58 @@
 
 package com.android.javacard.keymaster;
 
+
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+import javacard.framework.Util;
+
 public class KMKeyParameters extends KMType {
-  private KMArray vals;
+  private static KMKeyParameters prototype;
+  private static short instPtr;
 
-  private KMKeyParameters() {
-    init();
+  private KMKeyParameters() {}
+
+  private static KMKeyParameters proto(short ptr) {
+    if (prototype == null) prototype = new KMKeyParameters();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    vals = null;
+  public static short exp() {
+    short arrPtr = KMArray.instance((short)9);
+    KMArray arr = KMArray.cast(arrPtr);
+    arr.add((short) 0, KMIntegerTag.exp(UINT_TAG));
+    arr.add((short) 1, KMIntegerArrayTag.exp(UINT_ARRAY_TAG));
+    arr.add((short) 2, KMIntegerTag.exp(ULONG_TAG));
+    arr.add((short) 3, KMIntegerTag.exp(DATE_TAG));
+    arr.add((short) 4, KMIntegerArrayTag.exp(ULONG_ARRAY_TAG));
+    arr.add((short) 5, KMEnumTag.exp());
+    arr.add((short) 6, KMEnumArrayTag.exp());
+    arr.add((short) 7, KMByteTag.exp());
+    arr.add((short) 8, KMBoolTag.exp());
+    return instance(arrPtr);
   }
 
-  @Override
+  public static short instance(short vals) {
+    short ptr = KMType.instance(KEY_PARAM_TYPE, (short)2);
+    Util.setShort(heap, (short)(ptr + TLV_HEADER_SIZE), vals);
+    return ptr;
+  }
+
+  public static KMKeyParameters cast(short ptr) {
+    if (heap[ptr] != KEY_PARAM_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    short arrPtr = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
+    if(heap[arrPtr] != ARRAY_TYPE)  ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    return proto(ptr);
+  }
+
+  public short getVals() {
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+  }
+
   public short length() {
-    return vals.length();
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).length();
   }
 
-  public static KMKeyParameters instance() {
-    KMKeyParameters inst = repository.newKeyParameters();
-    inst.vals = KMArray.instance((short) 9);
-    inst.vals.add((short) 0, KMIntegerTag.instance());
-    inst.vals.add((short) 1, KMIntegerArrayTag.instance());
-    inst.vals.add((short) 2, KMIntegerTag.instance().asULong());
-    inst.vals.add((short) 3, KMIntegerTag.instance().asDate());
-    inst.vals.add((short) 4, KMIntegerArrayTag.instance().asUlongArray());
-    inst.vals.add((short) 5, KMEnumTag.instance());
-    inst.vals.add((short) 6, KMEnumArrayTag.instance());
-    inst.vals.add((short) 7, KMByteTag.instance());
-    inst.vals.add((short) 8, KMBoolTag.instance());
-    return inst;
-  }
-
-  public static KMKeyParameters instance(KMArray vals) {
-    KMKeyParameters inst = repository.newKeyParameters();
-    inst.vals = vals;
-    return inst;
-  }
-
-  public static void create(KMKeyParameters[] keyParametersRefTable) {
-    byte index = 0;
-    while (index < keyParametersRefTable.length) {
-      keyParametersRefTable[index] = new KMKeyParameters();
-      index++;
-    }
-  }
-
-  public KMArray getVals() {
-    return vals;
-  }
 }

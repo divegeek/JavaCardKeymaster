@@ -18,117 +18,115 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 // Represents 8 bit, 16 bit, 32 bit and 64 bit integers
 public class KMInteger extends KMType {
-  private byte[] val;
+  private static final short UINT_32 = 4;
+  private static final short UINT_64 = 8;
+  private static KMInteger prototype;
+  private static short instPtr;
 
-  private KMInteger() {
-    init();
+  private KMInteger() {}
+
+  private static KMInteger proto(short ptr) {
+    if (prototype == null) prototype = new KMInteger();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    val = null;
+  public static short exp() {
+    return KMType.exp(INTEGER_TYPE);
   }
 
-  @Override
-  public short length() {
-    return (short) this.val.length;
-  }
-
-  public static KMInteger instance() {
-    return repository.newInteger();
-  }
-
-  // create integer and copy byte value
-  public static KMInteger uint_8(byte num) {
-    KMInteger inst = repository.newInteger();
-    inst.val = repository.newIntegerArray((short) 4);
-    inst.val[3] = num;
-    return inst;
-  }
-
-  // create integer and copy short value
-  public static KMInteger uint_16(short num) {
-    KMInteger inst = repository.newInteger();
-    inst.val = repository.newIntegerArray((short) 4);
-    inst.val[2] = (byte) ((num >> 8) & 0xff);
-    inst.val[3] = (byte) (num & 0xff);
-    return inst;
-  }
-
-  // create integer and copy integer value
-  public static KMInteger uint_32(byte[] num, short offset) {
-    KMInteger inst = repository.newInteger();
-    inst.val = repository.newIntegerArray((short) 4);
-    Util.arrayCopy(num, offset, inst.val, (short) 0, (short) 4);
-    return inst;
-  }
-
-  // create integer and copy integer value
-  public static KMInteger uint_64(byte[] num, short offset) {
-    KMInteger inst = repository.newInteger();
-    inst.val = repository.newIntegerArray((short) 8);
-    Util.arrayCopy(num, offset, inst.val, (short) 0, (short) 8);
-    return inst;
-  }
-
-  public static void create(KMInteger[] integerRefTable) {
-    byte index = 0;
-    while (index < integerRefTable.length) {
-      integerRefTable[index] = new KMInteger();
-      index++;
+  // return an empty integer instance
+  public static short instance(short length) {
+    if ((length <= 0) || (length > 8)) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    if (length > 4) {
+      length = UINT_64;
+    } else {
+      length = UINT_32;
     }
+    return KMType.instance(INTEGER_TYPE, length);
   }
 
-  public byte[] getValue() {
-    return val;
-  }
-
-  public KMInteger setValue(short val) {
-    this.val[2] = (byte) (val >> 8);
-    this.val[3] = (byte) (val & 0xFF);
-    return this;
-  }
-
-  public KMInteger setValue(byte[] val) {
-    this.val = val;
-    return this;
-  }
-
-  public short getShort() {
-    if (val == null) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    } else if (val.length != 4) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
-    return Util.makeShort(val[2], val[3]);
-  }
-
-  public byte getByte() {
-    if (val == null) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    } else if (val.length != 4) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
-    return val[3];
-  }
-
-  // copy the integer value from bytes
-  public static KMInteger instance(byte[] num, short srcOff, short length) {
-    if(length > 8){
+  public static short instance(byte[] num, short srcOff, short length) {
+    if (length > 8) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (length == 1) {
       return uint_8(num[srcOff]);
     } else if (length == 2) {
-      return uint_16(Util.makeShort(num[srcOff], num[(short) (srcOff + 1)]));
+      return uint_16(Util.getShort(num, srcOff));
     } else if (length == 4) {
       return uint_32(num, srcOff);
     } else {
       return uint_64(num, srcOff);
     }
+  }
+
+  public static KMInteger cast(short ptr) {
+    byte[] heap = repository.getHeap();
+    if (heap[ptr] != INTEGER_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (Util.getShort(heap, (short) (ptr + 1)) == INVALID_VALUE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return proto(ptr);
+  }
+
+  // create integer and copy byte value
+  public static short uint_8(byte num) {
+    short ptr = instance(UINT_32);
+    heap[(short) (ptr + TLV_HEADER_SIZE + 3)] = num;
+    return ptr;
+  }
+
+  // create integer and copy short value
+  public static short uint_16(short num) {
+    short ptr = instance(UINT_32);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), num);
+    return ptr;
+  }
+
+  // create integer and copy integer value
+  public static short uint_32(byte[] num, short offset) {
+    short ptr = instance(UINT_32);
+    Util.arrayCopy(num, offset, heap, (short) (ptr + TLV_HEADER_SIZE), UINT_32);
+    return ptr;
+  }
+
+  // create integer and copy integer value
+  public static short uint_64(byte[] num, short offset) {
+    short ptr = instance(UINT_64);
+    Util.arrayCopy(num, offset, heap, (short) (ptr + TLV_HEADER_SIZE), UINT_64);
+    return ptr;
+  }
+
+  // Get the length of the integer
+  public short length() {
+    return Util.getShort(heap, (short) (instPtr + 1));
+  }
+
+  // Get the buffer pointer in which blob is contained.
+  public byte[] getBuffer() {
+    return heap;
+  }
+
+  // Get the start of value
+  public short getStartOff() {
+    return (short) (instPtr + TLV_HEADER_SIZE);
+  }
+
+  public void getValue(byte[] dest, short destOff, short length){
+    Util.arrayCopyNonAtomic(heap, (short)(instPtr+TLV_HEADER_SIZE), dest, destOff, length);
+  }
+
+  public short getShort() {
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+  }
+
+  public byte getByte() {
+    return heap[(short) (instPtr + TLV_HEADER_SIZE + 3)];
   }
 }

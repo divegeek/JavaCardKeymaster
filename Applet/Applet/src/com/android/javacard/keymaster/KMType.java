@@ -16,8 +16,27 @@
 
 package com.android.javacard.keymaster;
 
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+import javacard.framework.Util;
+
 public abstract class KMType {
-  public static final short TAG_TYPE_MASK = (short) 0xF000;
+  public static final short INVALID_VALUE = (short)0x8000;
+  protected static final byte TLV_HEADER_SIZE = 3;
+
+  // Types
+  public static final byte BYTE_BLOB_TYPE = 0x01;
+  public static final byte INTEGER_TYPE = 0x02;
+  public static final byte ENUM_TYPE = 0x03;
+  public static final byte TAG_TYPE = 0x04;
+  public static final byte ARRAY_TYPE = 0x05;
+  public static final byte KEY_PARAM_TYPE = 0x06;
+  public static final byte KEY_CHAR_TYPE = 0x07;
+  public static final byte HW_AUTH_TOKEN_TYPE = 0x08;
+  public static final byte VERIFICATION_TOKEN_TYPE = 0x09;
+  public static final byte HMAC_SHARING_PARAM_TYPE = 0x0A;
+
+  // Tags
   public static final short INVALID_TAG = 0x0000;
   public static final short ENUM_TAG = 0x1000;
   public static final short ENUM_ARRAY_TAG = 0x2000;
@@ -29,6 +48,7 @@ public abstract class KMType {
   public static final short BIGNUM_TAG = (short) 0x8000;
   public static final short BYTES_TAG = (short) 0x9000;
   public static final short ULONG_ARRAY_TAG = (short) 0xA000;
+  public static final short TAG_TYPE_MASK = (short) 0xF000;
 
   // Enum Tag
   // Algorithm Enum Tag key and values
@@ -225,12 +245,29 @@ public abstract class KMType {
   public static final byte NO_VALUE = (byte) 0xff;
 
   protected static KMRepository repository;
+  protected static byte[] heap;
 
-  public static void initialize(KMRepository repo) {
-    KMType.repository = repo;
+  public static void initialize() {
+    KMType.repository = KMRepository.instance();
+    KMType.heap = repository.getHeap();
   }
 
-  public abstract void init();
+  public static byte getType(short ptr){return heap[ptr];}
+  public static short length(short ptr){return Util.getShort(heap, (short)(ptr+1));}
+  public static short getValue(short ptr){return Util.getShort(heap, (short)(ptr+TLV_HEADER_SIZE));}
 
-  public abstract short length();
+  protected static short instance(byte type, short length){
+    if (length <= 0) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    short ptr = repository.alloc((short) (length + TLV_HEADER_SIZE));
+    heap[ptr] = type;
+    Util.setShort(heap, (short) (ptr + 1), length);
+    return ptr;
+  }
+
+  protected static short exp(byte type) {
+    short ptr = repository.alloc(TLV_HEADER_SIZE);
+    heap[ptr] = type;
+    Util.setShort(heap, (short) (ptr + 1), INVALID_VALUE);
+    return ptr;
+  }
 }
