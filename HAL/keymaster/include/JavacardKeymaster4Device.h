@@ -21,6 +21,7 @@
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
+#include "CborConverter.h"
 
 namespace android {
 namespace hardware {
@@ -63,10 +64,23 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     // Methods from ::android::hardware::keymaster::V4_1::IKeymasterDevice follow.
     Return<::android::hardware::keymaster::V4_1::ErrorCode> deviceLocked(bool passwordOnly, const ::android::hardware::keymaster::V4_0::VerificationToken& verificationToken) override;
     Return<::android::hardware::keymaster::V4_1::ErrorCode> earlyBootEnded() override;
-    Return<void> beginOp(::android::hardware::keymaster::V4_0::KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& inParams, const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken, beginOp_cb _hidl_cb) override;
+    Return<void> beginOp(::android::hardware::keymaster::V4_0::KeyPurpose purpose,
+                         const hidl_vec<uint8_t>& keyBlob,
+                         const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& inParams,
+                         const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken,
+                         beginOp_cb _hidl_cb) override {
+        return super::begin(
+                purpose, keyBlob, inParams, authToken,
+                [&](auto hidl_err, auto hidl_params, auto hidl_handle) {
+                    _hidl_cb(static_cast<::android::hardware::keymaster::V4_1::ErrorCode>(hidl_err),
+                             hidl_params,
+                             new ::android::hardware::keymaster::V4_1::support::Operation(hidl_handle));
+                });
 
-    // Methods from ::android::hidl::base::V1_0::IBase follow.
+    }
 
+protected:
+    CborConverter cborConverter_;
 };
 
 }  // namespace V4_1
