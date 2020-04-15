@@ -60,6 +60,7 @@ public:
     bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& vec);
     bool getHardwareAuthToken(const std::unique_ptr<Item>& item, const uint32_t pos, HardwareAuthToken& authType);
     bool getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<KeyParameter> keyParams);
+    bool getErrorCode(const std::unique_ptr<Item>& item, const uint32_t pos, ErrorCode& errorCode);
    
 
 private:

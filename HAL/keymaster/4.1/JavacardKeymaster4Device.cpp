@@ -16,22 +16,27 @@
  */
 
 #define LOG_TAG "android.hardware.keymaster@4.1-service.javacard"
-
+#include <iomanip>
+#include <sstream>
+#include <iostream>
 #include <keymaster/authorization_set.h>
 #include <cutils/log.h>
 #include <keymaster/android_keymaster_messages.h>
 #include <JavacardKeymaster4Device.h>
+#include "../include/JavacardKeymaster4Device.h"
 
-/* TODO Remove below UNUSED */
-#define UNUSED(a) a=a
+#define UNUSED(a) a=a /* TODO Remove UNUSED. Added temporarily to solve compilation errors. */
+#define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v0.1"
+#define JAVACARD_KEYMASTER_AUTHOR    "Android Open Source Project"
 
 namespace android {
 namespace hardware {
 namespace keymaster {
 namespace V4_1 {
 
-JavacardKeymaster4Device::JavacardKeymaster4Device() {
-    // TODO
+JavacardKeymaster4Device::JavacardKeymaster4Device()
+    : cborConverter_(new CborConverter()) {
+
 }
 
 JavacardKeymaster4Device::~JavacardKeymaster4Device() {
@@ -39,21 +44,49 @@ JavacardKeymaster4Device::~JavacardKeymaster4Device() {
 
 // Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
-    _hidl_cb(::android::hardware::keymaster::V4_0::SecurityLevel::STRONGBOX, "JavacardKeymaster4.1Device v0.1", "Android Open Source Project");
+    _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingParameters_cb _hidl_cb) {
-    // TODO implement
-    UNUSED(_hidl_cb);
+    vec<uint8_t> cborData;
+    CborConverter cc;
+    ::android::hardware::keymaster::V4_0::HmacSharingParameters hmacSharingParameters;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = 0;
+
+    // TODO Call OMAPI layer and get the Cbor format data.
+
+    auto ctx = cc.decodeData(cborData);
+    if (ctx != null) {
+        cc.getErrorCode(ctx, 0, errorCode); //Error Code
+        cc.getHmacSharingParameters(ctx, 1, hmacSharingParameters); //HmacSharingParameters.
+        _hidl_cb(errorCode, hmacSharingParameters);
+    }
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<::android::hardware::keymaster::V4_0::HmacSharingParameters>& params, computeSharedHmac_cb _hidl_cb) {
-    // TODO implement
-    size_t size = params.size();
-    UNUSED(size);
-    UNUSED(_hidl_cb);
+    Array array;
+    CborConverter cc;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = 0;
+    for(size_t i = 0; i < params.size(); ++i) {
+        array.add(params[i].seed);
+        array.add(params[i].nonce);
+    }
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    auto ctx = cc.decodeData(cborOutData); /* TODO Is this separate API required */
+    if (ctx != null) {
+        std::vector<uint8_t> bstr;
+        hidl_vec<uint8_t> sharingCheck;
+        cc.getErrorCode(ctx, 0, errorCode); //Error Code
+        cc.getBinaryArray(ctx, 1, bstr);
+        sharingCheck.setToExternal(bstr.data(), bstr.size());
+        _hidl_cb(errorCode, sharingCheck);
+    }
     return Void();
 }
 

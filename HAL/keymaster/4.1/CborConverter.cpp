@@ -24,17 +24,15 @@
 using namespace cppbor;
 #define UNUSED(A) A = A
 
-HardwareAuthenticatorType convertToHardwareAuthenticatorType(uint64_t val) {
-    switch (static_cast<HardwareAuthenticatorType>(val)) {
-    case HardwareAuthenticatorType::NONE: 
-        return HardwareAuthenticatorType::NONE;
-    case HardwareAuthenticatorType::PASSWORD:
-        return HardwareAuthenticatorType::PASSWORD;
-    case HardwareAuthenticatorType::FINGERPRINT:
-        return HardwareAuthenticatorType::FINGERPRINT;
-    case HardwareAuthenticatorType::ANY:
-        return HardwareAuthenticatorType::ANY;
-    }
+namespace {
+template<typename T>
+inline T legacyEnumConversion(const unint64_t val) {
+    return static_cast<T>(val);
+}
+
+}
+ErrorCode convertToErrorcode(uint64_t val) {
+
 }
 
 bool convertToTag(uint64_t val, Tag& tag) {
@@ -144,12 +142,12 @@ bool CborConverter::getHardwareAuthToken(const std::unique_ptr<Item>& item, cons
     uint64_t authType;
     if (!getUint64<uint64_t>(item, pos+3, authType))
         return ret;
-    token.authenticatorType = convertToHardwareAuthenticatorType(authType);
+    token.authenticatorType = legacyEnumConversion<HardwareAuthenticatorType>(authType);
     //Timestamp
     if (!getUint64<uint64_t>(item, pos+4, token.timestamp))
         return ret;
     //MAC
-    if (!getBinaryArray(item, pos + 5, mac))
+    if (!getBinaryArray(item, pos+5, mac))
         return ret;
     token.mac.setToExternal(mac.data(), mac.size());
     ret = true;
@@ -171,6 +169,16 @@ bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const ui
         }
         keyParams.push_back(param);
     }
+    ret = true;
+    return ret;
+}
+
+bool CborConverter::getErrorCode(const std::unique_ptr<Item>& item, const uint32_t pos, ErrorCode& errorCode) {
+    bool ret = false;
+    uint64_t errorVal;
+    if (!getUint64<uint64_t>(item, pos, errorVal))
+        return ret;
+    errorCode = legacyEnumConversion<ErrorCode>(errorVal);
     ret = true;
     return ret;
 }
