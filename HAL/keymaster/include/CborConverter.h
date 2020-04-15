@@ -1,4 +1,20 @@
-#pragma
+/*
+ **
+ ** Copyright 2020, The Android Open Source Project
+ **
+ ** Licensed under the Apache License, Version 2.0 (the "License");
+ ** you may not use this file except in compliance with the License.
+ ** You may obtain a copy of the License at
+ **
+ **     http://www.apache.org/licenses/LICENSE-2.0
+ **
+ ** Unless required by applicable law or agreed to in writing, software
+ ** distributed under the License is distributed on an "AS IS" BASIS,
+ ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ ** See the License for the specific language governing permissions and
+ ** limitations under the License.
+ */
+
 #ifndef __CBOR_CONVERTER_H_
 #define __CBOR_CONVERTER_H_
 #include <sstream>
@@ -8,61 +24,27 @@
 #include <iterator>
 #include <memory>
 #include <numeric>
-#include "cppbor.h"
-#include "cppbor_parse.h"
-using namespace cppbor;
-/* Test Start */
-typedef struct HmacSharingParameters {
-    std::vector<uint8_t> seed;
-    uint8_t nonce[32];
-};
-enum class HardwareAuthenticatorType {
-    NONE = 0,
-    PASSWORD = 1 << 0,
-    FINGERPRINT = 1 << 1,
-    ANY = 0xFFFFFFFF
-};
-typedef struct HardwareAuthToken {
-    uint64_t challenge;
-    uint64_t userId;
-    uint64_t authenticatorId;
-    HardwareAuthenticatorType authType;
-    uint64_t timestamp;
-    std::vector<uint8_t> mac;
-};
-enum class Algorithm {
-    RSA = 0,
-    ECDSA = 1,
-    DSA = 2
-};
-enum class PaddingMode {
-    PKCS_1 = 0,
-    PKCS_5 = 1,
-    OAEP = 2,
-};
-enum class TAG {
-    ABC = 0,
-    DEF = 1,
-    GHI = 2
-};
-typedef struct KeyParameter {
-    TAG tag;
-    union IntegerParams {
-        Algorithm algorithm;
-        PaddingMode mode;
-        bool boolValue;
-        uint32_t u32t;
-        uint64_t u64t;
-    };
-    IntegerParams f;
-    std::vector<uint8_t> blob;
-};
-typedef struct VerificationToken {
-    uint64_t challenge;
-    uint64_t timestamp;
+#include <cppbor.h>
+#include <cppbor_parse.h>
+#include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 
-};
-/*Test End*/
+#define EMPTY(A) *(A*)nullptr
+
+using namespace cppbor;
+
+using ::android::hardware::keymaster::V4_0::ErrorCode;
+using ::android::hardware::keymaster::V4_0::HardwareAuthenticatorType;
+using ::android::hardware::keymaster::V4_0::HardwareAuthToken;
+using ::android::hardware::keymaster::V4_0::HmacSharingParameters;
+using ::android::hardware::keymaster::V4_0::IKeymasterDevice;
+using ::android::hardware::keymaster::V4_0::KeyCharacteristics;
+using ::android::hardware::keymaster::V4_0::KeyFormat;
+using ::android::hardware::keymaster::V4_0::KeyParameter;
+using ::android::hardware::keymaster::V4_0::KeyPurpose;
+using ::android::hardware::keymaster::V4_0::SecurityLevel;
+using ::android::hardware::keymaster::V4_0::Tag;
+using ::android::hardware::keymaster::V4_0::VerificationToken;
+
 class CborConverter
 {
 public:
@@ -88,11 +70,11 @@ private:
         const Array* arr = nullptr;
 
         if (MajorType::ARRAY != getType(item)) {
-            return nullptr;
+            return EMPTY(std::unique_ptr<Item>);
         }
         arr = item.get()->asArray();
         if (arr->size() < (pos + 1)) {
-            return nullptr;
+            return EMPTY(std::unique_ptr<Item>);
         }
         return (*arr)[pos];
     }

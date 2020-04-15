@@ -1,10 +1,28 @@
-#pragma
+/*
+ **
+ ** Copyright 2020, The Android Open Source Project
+ **
+ ** Licensed under the Apache License, Version 2.0 (the "License");
+ ** you may not use this file except in compliance with the License.
+ ** You may obtain a copy of the License at
+ **
+ **     http://www.apache.org/licenses/LICENSE-2.0
+ **
+ ** Unless required by applicable law or agreed to in writing, software
+ ** distributed under the License is distributed on an "AS IS" BASIS,
+ ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ ** See the License for the specific language governing permissions and
+ ** limitations under the License.
+ */
+
 #include <sstream>
 #include <iostream>
 #include <cppbor.h>
 #include <cppbor_parse.h>
-#include "CborConverter.h"
+#include <CborConverter.h>
+
 using namespace cppbor;
+#define UNUSED(A) A = A
 
 HardwareAuthenticatorType convertToHardwareAuthenticatorType(uint64_t val) {
     switch (static_cast<HardwareAuthenticatorType>(val)) {
@@ -19,7 +37,10 @@ HardwareAuthenticatorType convertToHardwareAuthenticatorType(uint64_t val) {
     }
 }
 
-bool convertToTag(uint64_t val, TAG& tag) {
+bool convertToTag(uint64_t val, Tag& tag) {
+    UNUSED(tag);
+    UNUSED(val);
+#if 0
     switch (static_cast<TAG>(val)) {
     case TAG::ABC:
         tag = TAG::ABC;
@@ -34,16 +55,20 @@ bool convertToTag(uint64_t val, TAG& tag) {
         return false;
     }
     return true;
+#endif
+    return false;
 }
 
-bool getTagValue(TAG& tag, KeyParameter& keyParam, uint64_t& value) {
+bool getTagValue(Tag& tag, KeyParameter& keyParam, uint64_t& value) {
+    UNUSED(value);
+    UNUSED(keyParam);
+    UNUSED(tag);
     return false;
 }
 
 bool CborConverter::getKeyparameter(const std::pair<const std::unique_ptr<Item>&,
     const std::unique_ptr<Item>&> pair, KeyParameter& keyParam) {
     bool ret = false;
-    KeyParameter::IntegerParams p;
     uint64_t value;
     //TAG will be always uint32_t
     if (!getUint64<uint64_t>(pair.first, 0, value)) {
@@ -59,19 +84,16 @@ bool CborConverter::getKeyparameter(const std::pair<const std::unique_ptr<Item>&
         //Convert value to corresponding enum and assign to keyParam.f
     }
     else if (MajorType::BSTR == getType(pair.second)) {
-        if (!getBinaryArray(pair.second, 0, keyParam.blob)) {
+	std::vector<uint8_t> blob;
+        if (!getBinaryArray(pair.second, 0, blob)) {
             return ret;
         }
+	keyParam.blob.setToExternal(blob.data(), blob.size());
     }
-    else {
-        return ret;
-    }
+    return ret;
 }
 
 ParseResult CborConverter::decodeData(const std::vector<uint8_t> cborData) {
-    const uint8_t* pos;
-    std::unique_ptr<Item> item;
-    std::string message;
     return parse(cborData);
 }
 
@@ -91,21 +113,24 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
 
 
 bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos, HmacSharingParameters& params) {
-    std::vector<uint8_t> nonce;
+    std::vector<uint8_t> paramValue;
     bool ret = false;
     //Seed
-    if (!getBinaryArray(item, pos, params.seed))
+    if (!getBinaryArray(item, pos, paramValue))
         return ret;
+    params.seed.setToExternal(paramValue.data(), paramValue.size());
+    paramValue.clear();
     //nonce
-    if (!getBinaryArray(item, pos+1, nonce))
+    if (!getBinaryArray(item, pos+1, paramValue))
         return ret;
-    std::copy(nonce.begin(), nonce.end(), params.nonce);
+    memcpy(params.nonce.data(), paramValue.data(), paramValue.size());
     ret = true;
     return ret;
 }
 
 bool CborConverter::getHardwareAuthToken(const std::unique_ptr<Item>& item, const uint32_t pos, HardwareAuthToken& token) {
     bool ret = false;
+    std::vector<uint8_t> mac;
     //challenge
     if (!getUint64<uint64_t>(item, pos, token.challenge))
         return ret;
@@ -119,12 +144,14 @@ bool CborConverter::getHardwareAuthToken(const std::unique_ptr<Item>& item, cons
     uint64_t authType;
     if (!getUint64<uint64_t>(item, pos+3, authType))
         return ret;
-    token.authType = convertToHardwareAuthenticatorType(authType);
+    token.authenticatorType = convertToHardwareAuthenticatorType(authType);
     //Timestamp
     if (!getUint64<uint64_t>(item, pos+4, token.timestamp))
         return ret;
-    if (!getBinaryArray(item, pos + 5, token.mac))
+    //MAC
+    if (!getBinaryArray(item, pos + 5, mac))
         return ret;
+    token.mac.setToExternal(mac.data(), mac.size());
     ret = true;
     return ret;
 }

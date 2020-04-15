@@ -39,7 +39,7 @@ JavacardKeymaster4Device::~JavacardKeymaster4Device() {
 
 // Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
-    _hidl_cb(SecurityLevel::STRONGBOX, "JavacardKeymaster4.1Device v0.1", "Android Open Source Project");
+    _hidl_cb(::android::hardware::keymaster::V4_0::SecurityLevel::STRONGBOX, "JavacardKeymaster4.1Device v0.1", "Android Open Source Project");
     return Void();
 }
 
@@ -218,19 +218,6 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
 Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device::earlyBootEnded() {
     // TODO implement
     return ::android::hardware::keymaster::V4_1::ErrorCode {};
-}
-
-Return<void> JavacardKeymaster4Device::beginOp(::android::hardware::keymaster::V4_0::KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& inParams, const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken, beginOp_cb _hidl_cb) {
-    // TODO implement
-    UNUSED(purpose);
-    size_t size = keyBlob.size();
-    size = inParams.size();
-    uint64_t challenge = authToken.challenge;
-    UNUSED(challenge);
-    UNUSED(size);
-    UNUSED(_hidl_cb);
-
-    return Void();
 }
 
 }  // namespace V4_1
