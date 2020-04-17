@@ -26,6 +26,7 @@
 #include <numeric>
 #include <cppbor.h>
 #include <cppbor_parse.h>
+#include <hidl/HidlSupport.h>
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 
 #define EMPTY(A) *(A*)nullptr
@@ -61,7 +62,12 @@ public:
     bool getHardwareAuthToken(const std::unique_ptr<Item>& item, const uint32_t pos, HardwareAuthToken& authType);
     bool getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<KeyParameter> keyParams);
     bool getErrorCode(const std::unique_ptr<Item>& item, const uint32_t pos, ErrorCode& errorCode);
-   
+    bool addKeyparameters(Array& array, const android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>&
+    keyParams);   
+bool addHardwareAuthToken(Array& array, const ::android::hardware::keymaster::V4_0::HardwareAuthToken&
+authToken);
+bool getVerificationToken(const std::unique_ptr<Item>& item, const uint32_t pos, VerificationToken&
+token);
 
 private:
 	inline MajorType getType(const std::unique_ptr<Item> &item) { return item.get()->type(); }

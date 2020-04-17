@@ -23,7 +23,9 @@
 #include <cutils/log.h>
 #include <keymaster/android_keymaster_messages.h>
 #include <JavacardKeymaster4Device.h>
-#include "../include/JavacardKeymaster4Device.h"
+#include <cppbor.h>
+#include <cppbor_parse.h>
+#include <CborConverter.h>
 
 #define UNUSED(a) a=a /* TODO Remove UNUSED. Added temporarily to solve compilation errors. */
 #define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v0.1"
@@ -34,8 +36,7 @@ namespace hardware {
 namespace keymaster {
 namespace V4_1 {
 
-JavacardKeymaster4Device::JavacardKeymaster4Device()
-    : cborConverter_(new CborConverter()) {
+JavacardKeymaster4Device::JavacardKeymaster4Device() {
 
 }
 
@@ -49,55 +50,80 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
 }
 
 Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingParameters_cb _hidl_cb) {
-    vec<uint8_t> cborData;
-    CborConverter cc;
+    std::vector<uint8_t> cborData;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
     ::android::hardware::keymaster::V4_0::HmacSharingParameters hmacSharingParameters;
-    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = 0;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
 
     // TODO Call OMAPI layer and get the Cbor format data.
 
-    auto ctx = cc.decodeData(cborData);
-    if (ctx != null) {
-        cc.getErrorCode(ctx, 0, errorCode); //Error Code
-        cc.getHmacSharingParameters(ctx, 1, hmacSharingParameters); //HmacSharingParameters.
-        _hidl_cb(errorCode, hmacSharingParameters);
+    std::tie(item, pos, message) = parse(cborData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Error Code
+        cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters); //HmacSharingParameters.
     }
+    _hidl_cb(errorCode, hmacSharingParameters);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<::android::hardware::keymaster::V4_0::HmacSharingParameters>& params, computeSharedHmac_cb _hidl_cb) {
-    Array array;
-    CborConverter cc;
-    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = 0;
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    hidl_vec<uint8_t> sharingCheck;
+
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    std::vector<uint8_t> tempVec;
     for(size_t i = 0; i < params.size(); ++i) {
-        array.add(params[i].seed);
-        array.add(params[i].nonce);
+        array.add(static_cast<std::vector<uint8_t>>(params[i].seed));
+	for(size_t j = 0; i < params[j].nonce.size(); j++) {
+	    tempVec.push_back(params[i].nonce[j]);
+	}
+        array.add(tempVec);
+	tempVec.clear();
     }
     std::vector<uint8_t> cborData = array.encode();
 
     // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
 
     std::vector<uint8_t> cborOutData; /*Received from OMAPI */
-    auto ctx = cc.decodeData(cborOutData); /* TODO Is this separate API required */
-    if (ctx != null) {
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
         std::vector<uint8_t> bstr;
-        hidl_vec<uint8_t> sharingCheck;
-        cc.getErrorCode(ctx, 0, errorCode); //Error Code
-        cc.getBinaryArray(ctx, 1, bstr);
+        cborConverter_.getErrorCode(item, 0, errorCode); //Error Code
+        cborConverter_.getBinaryArray(item, 1, bstr);
         sharingCheck.setToExternal(bstr.data(), bstr.size());
-        _hidl_cb(errorCode, sharingCheck);
     }
+    _hidl_cb(errorCode, sharingCheck);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t operationHandle, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& parametersToVerify, const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken, verifyAuthorization_cb _hidl_cb) {
-    // TODO implement
-    UNUSED(operationHandle);
-    size_t size = parametersToVerify.size();
-    UNUSED(size);
-    uint64_t challenge = authToken.challenge;
-    UNUSED(challenge);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    ::android::hardware::keymaster::V4_0::VerificationToken verificationToken;
+
+    /* Convert input data to cbor format */
+    array.add(operationHandle);
+    cborConverter_.addKeyparameters(array, parametersToVerify);
+    cborConverter_.addHardwareAuthToken(array, authToken);
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getVerificationToken(item, 1, verificationToken);
+    }
+    _hidl_cb(errorCode, verificationToken);
     return Void();
 }
 
