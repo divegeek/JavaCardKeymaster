@@ -45,32 +45,48 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
             case TagType::UINT:
             case TagType::UINT_REP:
                 map.add(static_cast<uint64_t>(param.tag), param.f.integer);
-            break;
+                break;
             case TagType::ULONG:
             case TagType::ULONG_REP:
                 map.add(static_cast<uint64_t>(param.tag), param.f.longInteger);
-            break;
+                break;
             case TagType::DATE:
                 map.add(static_cast<uint64_t>(param.tag), param.f.dateTime);
-            break;
+                break;
             case TagType::BOOL:
                 map.add(static_cast<uint64_t>(param.tag), param.f.boolValue);
-            break;
+                break;
             case TagType::BIGNUM:
             case TagType::BYTES:
                 map.add(static_cast<uint64_t>(param.tag), (std::vector<uint8_t>(param.blob)));
                 break;
             default: 
-            /* Invalid skip */
-            break;
+                /* Invalid skip */
+                break;
         }
     }
     array.add(std::move(map));
     return true;
 }
 
+bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, const uint32_t pos,
+        ::android::hardware::keymaster::V4_0::KeyCharacteristics& keyCharacteristics) {
+    bool ret = false;
+
+    if (!getKeyParameters(item, pos, keyCharacteristics.softwareEnforced)) {
+        return ret;
+    }
+
+    if (!getKeyParameters(item, pos+1, keyCharacteristics.hardwareEnforced)) {
+        return ret;
+    }
+    //success
+    ret = true;
+    return ret;
+}
+
 bool CborConverter::getKeyparameter(const std::pair<const std::unique_ptr<Item>&,
-    const std::unique_ptr<Item>&> pair, KeyParameter& keyParam) {
+        const std::unique_ptr<Item>&> pair, KeyParameter& keyParam) {
     bool ret = false;
     uint64_t value;
     //TAG will be always uint32_t
@@ -87,20 +103,20 @@ bool CborConverter::getKeyparameter(const std::pair<const std::unique_ptr<Item>&
             case TagType::UINT:
             case TagType::UINT_REP:
                 keyParam.f.integer = static_cast<uint32_t>(value);
-            break;
+                break;
             case TagType::ULONG:
             case TagType::ULONG_REP:
                 keyParam.f.longInteger = static_cast<uint32_t>(value);
-            break;
+                break;
             case TagType::DATE:
                 keyParam.f.dateTime = static_cast<uint32_t>(value);
-            break;
+                break;
             case TagType::BOOL:
                 keyParam.f.boolValue = static_cast<bool>(value);
-            break;
+                break;
             default: 
-            /* Invalid skip */
-            break;
+                /* Invalid skip */
+                break;
         }
     }
     else if (MajorType::BSTR == getType(pair.second)) {
@@ -115,6 +131,24 @@ bool CborConverter::getKeyparameter(const std::pair<const std::unique_ptr<Item>&
 
 ParseResult CborConverter::decodeData(const std::vector<uint8_t> cborData) {
     return parse(cborData);
+}
+
+bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
+        ::android::hardware::hidl_vec<::android::hardware::hidl_vec<uint8_t>>& data) {
+    bool ret = false;
+    const std::unique_ptr<Item>& arrayItem = getItemAtPos(item, pos);
+    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+        return ret;
+    const Array* arr = arrayItem.get()->asArray();
+    size_t arrSize = arr->size();
+    for (int i = 0; i < arrSize; i++) {
+        std::vector<uint8_t> innerData;
+        if (!getBinaryArray(arrayItem, i, innerData))
+            return ret;
+        data[i].setToExternal(innerData.data(), innerData.size());
+    }
+    ret = true; // success
+    return ret;
 }
 
 bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& value) {
@@ -148,8 +182,18 @@ bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, 
     return ret;
 }
 
+bool CborConverter::addVerificationToken(Array& array, const ::android::hardware::keymaster::V4_0::VerificationToken&
+        verificationToken) {
+    array.add(verificationToken.challenge);
+    array.add(verificationToken.timestamp);
+    addKeyparameters(array, verificationToken.parametersVerified);
+    array.add(static_cast<uint64_t>(verificationToken.securityLevel));
+    array.add((std::vector<uint8_t>(verificationToken.mac)));
+    return true;
+}
+
 bool CborConverter::addHardwareAuthToken(Array& array, const ::android::hardware::keymaster::V4_0::HardwareAuthToken&
-authToken) {
+        authToken) {
     array.add(authToken.challenge);
     array.add(authToken.userId);
     array.add(authToken.authenticatorId);
@@ -188,7 +232,7 @@ bool CborConverter::getHardwareAuthToken(const std::unique_ptr<Item>& item, cons
 }
 
 bool CborConverter::getVerificationToken(const std::unique_ptr<Item>& item, const uint32_t pos, VerificationToken&
-token) {
+        token) {
     bool ret = false;
     std::vector<uint8_t> mac;
     //challenge
@@ -200,17 +244,15 @@ token) {
         return ret;
 
     //List of KeyParameters
-    std::vector<KeyParameter> keyParams;
-    if (!getKeyParameters(item, pos+2, keyParams))
+    if (!getKeyParameters(item, pos+2, token.parametersVerified))
         return ret;
-    token.parametersVerified.setToExternal(keyParams.data(), keyParams.size());
 
     //AuthenticatorId
     uint64_t val;
     if (!getUint64<uint64_t>(item, pos+3, val))
         return ret;
     token.securityLevel = static_cast<SecurityLevel>(val);
-    
+
     //MAC
     if (!getBinaryArray(item, pos+4, mac))
         return ret;
@@ -220,7 +262,7 @@ token) {
 
 }
 
-bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<KeyParameter> keyParams) {
+bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& keyParams) {
     bool ret = false;
     const std::unique_ptr<Item>& mapItem = getItemAtPos(item, pos);
     if ((mapItem == nullptr) && (MajorType::MAP != getType(mapItem)))
@@ -229,23 +271,12 @@ bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const ui
     const Map* map = mapItem.get()->asMap();
     size_t mapSize = map->size();
     for (int i = 0; i < mapSize; i++) {
-        KeyParameter param;
+        ::android::hardware::keymaster::V4_0::KeyParameter param;
         if (!getKeyparameter((*map)[i], param)) {
             return ret;
         }
-        keyParams.push_back(param);
+        keyParams[i] = std::move(param);
     }
     ret = true;
     return ret;
 }
-
-bool CborConverter::getErrorCode(const std::unique_ptr<Item>& item, const uint32_t pos, ErrorCode& errorCode) {
-    bool ret = false;
-    uint64_t errorVal;
-    if (!getUint64<uint64_t>(item, pos, errorVal))
-        return ret;
-    errorCode = static_cast<ErrorCode>(errorVal);
-    ret = true;
-    return ret;
-}
-

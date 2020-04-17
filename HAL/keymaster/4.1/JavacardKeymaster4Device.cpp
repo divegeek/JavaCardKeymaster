@@ -79,11 +79,11 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<::androi
     std::vector<uint8_t> tempVec;
     for(size_t i = 0; i < params.size(); ++i) {
         array.add(static_cast<std::vector<uint8_t>>(params[i].seed));
-	for(size_t j = 0; i < params[j].nonce.size(); j++) {
-	    tempVec.push_back(params[i].nonce[j]);
-	}
+        for(size_t j = 0; i < params[j].nonce.size(); j++) {
+            tempVec.push_back(params[i].nonce[j]);
+        }
         array.add(tempVec);
-	tempVec.clear();
+        tempVec.clear();
     }
     std::vector<uint8_t> cborData = array.encode();
 
@@ -128,155 +128,414 @@ Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t operationHan
 }
 
 Return<::android::hardware::keymaster::V4_0::ErrorCode> JavacardKeymaster4Device::addRngEntropy(const hidl_vec<uint8_t>& data) {
-    // TODO implement
-    size_t size = data.size();
-    UNUSED(size);
-    return ::android::hardware::keymaster::V4_0::ErrorCode {};
+    const uint8_t* pos;
+    cppbor::Array array;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+
+    /* Convert input data to cbor format */
+    array.add(std::vector<uint8_t>(data));
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+    }
+    return errorCode;
 }
 
 Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& keyParams, generateKey_cb _hidl_cb) {
-    // TODO implement
-    UNUSED(_hidl_cb);
-    size_t size = keyParams.size();
-    UNUSED(size);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    hidl_vec<uint8_t> keyBlob;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    ::android::hardware::keymaster::V4_0::KeyCharacteristics keyCharacteristics;
+
+    cborConverter_.addKeyparameters(array, keyParams);
+    std::vector<uint8_t> cborData = array.encode();
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        std::vector<uint8_t> bstr;
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getBinaryArray(item, 1, bstr);
+        keyBlob.setToExternal(bstr.data(), bstr.size());
+        cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
+    }
+    _hidl_cb(errorCode, keyBlob, keyCharacteristics);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& keyParams, ::android::hardware::keymaster::V4_0::KeyFormat keyFormat, const hidl_vec<uint8_t>& keyData, importKey_cb _hidl_cb) {
-    // TODO implement
-    size_t size = keyParams.size();
-    size = keyData.size();
-    UNUSED(size);
-    UNUSED(keyFormat);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    hidl_vec<uint8_t> keyBlob;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    ::android::hardware::keymaster::V4_0::KeyCharacteristics keyCharacteristics;
+
+    cborConverter_.addKeyparameters(array, keyParams);
+    array.add(static_cast<uint64_t>(keyFormat));
+    array.add(std::vector<uint8_t>(keyData));
+    std::vector<uint8_t> cborData = array.encode();
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        std::vector<uint8_t> bstr;
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getBinaryArray(item, 1, bstr);
+        keyBlob.setToExternal(bstr.data(), bstr.size());
+        cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
+    }
+    _hidl_cb(errorCode, keyBlob, keyCharacteristics);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>& wrappedKeyData, const hidl_vec<uint8_t>& wrappingKeyBlob, const hidl_vec<uint8_t>& maskingKey, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& unwrappingParams, uint64_t passwordSid, uint64_t biometricSid, importWrappedKey_cb _hidl_cb) {
-    // TODO implement
-    size_t size = wrappedKeyData.size();
-    size = wrappingKeyBlob.size();
-    size = maskingKey.size();
-    size = unwrappingParams.size();
-    UNUSED(size);
-    UNUSED(passwordSid);
-    UNUSED(biometricSid);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    hidl_vec<uint8_t> keyBlob;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    ::android::hardware::keymaster::V4_0::KeyCharacteristics keyCharacteristics;
+
+    array.add(std::vector<uint8_t>(wrappedKeyData));
+    array.add(std::vector<uint8_t>(wrappingKeyBlob));
+    array.add(std::vector<uint8_t>(maskingKey));
+    cborConverter_.addKeyparameters(array, unwrappingParams);
+    array.add(passwordSid);
+    array.add(biometricSid);
+    std::vector<uint8_t> cborData = array.encode();
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        std::vector<uint8_t> bstr;
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getBinaryArray(item, 1, bstr);
+        keyBlob.setToExternal(bstr.data(), bstr.size());
+        cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
+    }
+    _hidl_cb(errorCode, keyBlob, keyCharacteristics);
+
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::getKeyCharacteristics(const hidl_vec<uint8_t>& keyBlob, const hidl_vec<uint8_t>& clientId, const hidl_vec<uint8_t>& appData, getKeyCharacteristics_cb _hidl_cb) {
-    // TODO implement
-    size_t size = keyBlob.size();
-    size = clientId.size();
-    size = appData.size();
-    UNUSED(size);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    ::android::hardware::keymaster::V4_0::KeyCharacteristics keyCharacteristics;
+
+    array.add(std::vector<uint8_t>(keyBlob));
+    array.add(std::vector<uint8_t>(clientId));
+    array.add(std::vector<uint8_t>(appData));
+    std::vector<uint8_t> cborData = array.encode();
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getKeyCharacteristics(item, 1, keyCharacteristics);
+    }
+    _hidl_cb(errorCode, keyCharacteristics);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::exportKey(::android::hardware::keymaster::V4_0::KeyFormat keyFormat, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<uint8_t>& clientId, const hidl_vec<uint8_t>& appData, exportKey_cb _hidl_cb) {
-    // TODO implement
-    size_t size = clientId.size();
-    size = keyBlob.size();
-    size = appData.size();
-    UNUSED(size);
-    UNUSED(keyFormat);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    hidl_vec<uint8_t> keyMaterial;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+
+    array.add(static_cast<uint64_t>(keyFormat));
+    array.add(std::vector<uint8_t>(keyBlob));
+    array.add(std::vector<uint8_t>(clientId));
+    array.add(std::vector<uint8_t>(appData));
+    std::vector<uint8_t> cborData = array.encode();
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        std::vector<uint8_t> bstr;
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getBinaryArray(item, 1, bstr);
+        keyMaterial.setToExternal(bstr.data(), bstr.size());
+    }
+    _hidl_cb(errorCode, keyMaterial);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToAttest, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& attestParams, attestKey_cb _hidl_cb) {
-    // TODO implement
-    size_t size = attestParams.size();
-    size = keyToAttest.size();
-    UNUSED(size);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    hidl_vec<uint8_t> keyBlob;
+    ::android::hardware::hidl_vec<::android::hardware::hidl_vec<uint8_t>> certChain;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+
+    array.add(std::vector<uint8_t>(keyToAttest));
+    cborConverter_.addKeyparameters(array, attestParams);
+    std::vector<uint8_t> cborData = array.encode();
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getMultiBinaryArray(item, 1, certChain);
+    }
+    _hidl_cb(errorCode, certChain);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::upgradeKey(const hidl_vec<uint8_t>& keyBlobToUpgrade, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& upgradeParams, upgradeKey_cb _hidl_cb) {
-    // TODO implement
-    size_t size = keyBlobToUpgrade.size();
-    size = upgradeParams.size();
-    UNUSED(size);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    hidl_vec<uint8_t> upgradedKeyBlob;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+
+    array.add(std::vector<uint8_t>(keyBlobToUpgrade));
+    cborConverter_.addKeyparameters(array, upgradeParams);
+    std::vector<uint8_t> cborData = array.encode();
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        std::vector<uint8_t> bstr;
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getBinaryArray(item, 1, bstr);
+        upgradedKeyBlob.setToExternal(bstr.data(), bstr.size());
+    }
+    _hidl_cb(errorCode, upgradedKeyBlob);
     return Void();
 }
 
 Return<::android::hardware::keymaster::V4_0::ErrorCode> JavacardKeymaster4Device::deleteKey(const hidl_vec<uint8_t>& keyBlob) {
-    // TODO implement
-    size_t size = keyBlob.size();
-    UNUSED(size);
-    return ::android::hardware::keymaster::V4_0::ErrorCode {};
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+
+    array.add(std::vector<uint8_t>(keyBlob));
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+    }
+    return errorCode;
 }
 
 Return<::android::hardware::keymaster::V4_0::ErrorCode> JavacardKeymaster4Device::deleteAllKeys() {
-    // TODO implement
-    return ::android::hardware::keymaster::V4_0::ErrorCode {};
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+    }
+    return errorCode;
 }
 
 Return<::android::hardware::keymaster::V4_0::ErrorCode> JavacardKeymaster4Device::destroyAttestationIds() {
-    // TODO implement
-    return ::android::hardware::keymaster::V4_0::ErrorCode {};
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+    }
+    return errorCode;
 }
 
 Return<void> JavacardKeymaster4Device::begin(::android::hardware::keymaster::V4_0::KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& inParams, const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken, begin_cb _hidl_cb) {
-    // TODO implement
-    UNUSED(purpose);
-    size_t size = keyBlob.size();
-    size = inParams.size();
-    UNUSED(size);
-    uint64_t challenge = authToken.challenge;
-    UNUSED(challenge);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    ::android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter> outParams;
+    uint64_t operationHandle = 0;
+
+    /* Convert input data to cbor format */
+    array.add(static_cast<uint64_t>(purpose));
+    array.add(std::vector<uint8_t>(keyBlob));
+    cborConverter_.addKeyparameters(array, inParams);
+    cborConverter_.addHardwareAuthToken(array, authToken);
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getKeyParameters(item, 1, outParams);
+        cborConverter_.getUint64(item, 2, operationHandle);
+    }
+    _hidl_cb(errorCode, outParams, operationHandle);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& inParams, const hidl_vec<uint8_t>& input, const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken, const ::android::hardware::keymaster::V4_0::VerificationToken& verificationToken, update_cb _hidl_cb) {
-    // TODO implement
-    UNUSED(operationHandle);
-    size_t size = inParams.size();
-    size = input.size();
-    UNUSED(size);
-    uint64_t challange = verificationToken.challenge;
-    challange = authToken.challenge;
-    UNUSED(challange);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    ::android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter> outParams;
+    uint32_t inputConsumed = 0;
+    hidl_vec<uint8_t> output;
+
+    /* Convert input data to cbor format */
+    array.add(operationHandle);
+    cborConverter_.addKeyparameters(array, inParams);
+    array.add(std::vector<uint8_t>(input));
+    cborConverter_.addHardwareAuthToken(array, authToken);
+    cborConverter_.addVerificationToken(array, verificationToken);
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        std::vector<uint8_t> bstr;
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getUint64(item, 1, inputConsumed);
+        cborConverter_.getKeyParameters(item, 2, outParams);
+        cborConverter_.getBinaryArray(item, 3, bstr);
+        output.setToExternal(bstr.data(), bstr.size());
+    }
+    _hidl_cb(errorCode, inputConsumed, outParams, output);
     return Void();
 }
 
 Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& inParams, const hidl_vec<uint8_t>& input, const hidl_vec<uint8_t>& signature, const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken, const ::android::hardware::keymaster::V4_0::VerificationToken& verificationToken, finish_cb _hidl_cb) {
-    // TODO implement
-    UNUSED(operationHandle);
-    size_t size = inParams.size();
-    size = input.size();
-    size = signature.size();
-    uint64_t challange = authToken.challenge;
-    challange = verificationToken.challenge;
-    UNUSED(challange);
-    UNUSED(_hidl_cb);
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+    ::android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter> outParams;
+    hidl_vec<uint8_t> output;
+
+    /* Convert input data to cbor format */
+    array.add(operationHandle);
+    cborConverter_.addKeyparameters(array, inParams);
+    array.add(std::vector<uint8_t>(input));
+    array.add(std::vector<uint8_t>(signature));
+    cborConverter_.addHardwareAuthToken(array, authToken);
+    cborConverter_.addVerificationToken(array, verificationToken);
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        std::vector<uint8_t> bstr;
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        cborConverter_.getKeyParameters(item, 1, outParams);
+        cborConverter_.getBinaryArray(item, 2, bstr);
+        output.setToExternal(bstr.data(), bstr.size());
+    }
+    _hidl_cb(errorCode, outParams, output);
     return Void();
 }
 
 Return<::android::hardware::keymaster::V4_0::ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
-    // TODO implement
-    UNUSED(operationHandle);
-    return ::android::hardware::keymaster::V4_0::ErrorCode {};
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
+
+    /* Convert input data to cbor format */
+    array.add(operationHandle);
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode<::android::hardware::keymaster::V4_0::ErrorCode>(item, 0, errorCode); //Errorcode
+    }
+    return errorCode;
 }
 
 // Methods from ::android::hardware::keymaster::V4_1::IKeymasterDevice follow.
 Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device::deviceLocked(bool passwordOnly, const ::android::hardware::keymaster::V4_0::VerificationToken& verificationToken) {
-    // TODO implement
-    UNUSED(passwordOnly);
-    size_t challenge = verificationToken.challenge;
-    UNUSED(challenge);
-    return ::android::hardware::keymaster::V4_1::ErrorCode {};
+    cppbor::Array array;
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_1::ErrorCode errorCode = ::android::hardware::keymaster::V4_1::ErrorCode::UNKNOWN_ERROR;
+
+    /* Convert input data to cbor format */
+    array.add(passwordOnly);
+    cborConverter_.addVerificationToken(array, verificationToken);
+    std::vector<uint8_t> cborData = array.encode();
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+    }
+    return errorCode;
 }
 
 Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device::earlyBootEnded() {
-    // TODO implement
-    return ::android::hardware::keymaster::V4_1::ErrorCode {};
+    const uint8_t* pos;
+    std::unique_ptr<Item> item;
+    std::string message;
+    ::android::hardware::keymaster::V4_1::ErrorCode errorCode = ::android::hardware::keymaster::V4_1::ErrorCode::UNKNOWN_ERROR;
+
+    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+    std::tie(item, pos, message) = parse(cborOutData);
+    if (item != nullptr) {
+        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+    }
+    return errorCode;
 }
 
 }  // namespace V4_1
