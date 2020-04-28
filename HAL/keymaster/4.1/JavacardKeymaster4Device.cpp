@@ -77,14 +77,16 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<::androi
 
     ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> tempVec;
+    cppbor::Array innerArray;
     for(size_t i = 0; i < params.size(); ++i) {
-        array.add(static_cast<std::vector<uint8_t>>(params[i].seed));
+        innerArray.add(static_cast<std::vector<uint8_t>>(params[i].seed));
         for(size_t j = 0; i < params[j].nonce.size(); j++) {
             tempVec.push_back(params[i].nonce[j]);
         }
-        array.add(tempVec);
+        innerArray.add(tempVec);
         tempVec.clear();
     }
+    array.add(std::move(innerArray));
     std::vector<uint8_t> cborData = array.encode();
 
     // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
@@ -166,6 +168,7 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<::android::har
     if (item != nullptr) {
         std::vector<uint8_t> bstr;
         cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        /* TODO keyBlob is BSTR <ARRAY> */
         cborConverter_.getBinaryArray(item, 1, bstr);
         keyBlob.setToExternal(bstr.data(), bstr.size());
         cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
@@ -193,6 +196,7 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<::android::hardw
     if (item != nullptr) {
         std::vector<uint8_t> bstr;
         cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+        /* TODO keyBlob is BSTR <ARRAY> */
         cborConverter_.getBinaryArray(item, 1, bstr);
         keyBlob.setToExternal(bstr.data(), bstr.size());
         cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
@@ -215,12 +219,13 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
     array.add(std::vector<uint8_t>(maskingKey));
     cborConverter_.addKeyparameters(array, unwrappingParams);
     array.add(passwordSid);
-    array.add(biometricSid);
+    array.add(biometricSid); /* TODO if biometricSid optional if user not sent this don't encode this cbor format */
     std::vector<uint8_t> cborData = array.encode();
     // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
     std::vector<uint8_t> cborOutData; /*Received from OMAPI */
     std::tie(item, pos, message) = parse(cborOutData);
     if (item != nullptr) {
+        /* TODO keyBlob is BSTR <ARRAY> */
         std::vector<uint8_t> bstr;
         cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
         cborConverter_.getBinaryArray(item, 1, bstr);
@@ -272,6 +277,7 @@ Return<void> JavacardKeymaster4Device::exportKey(::android::hardware::keymaster:
     std::vector<uint8_t> cborOutData; /*Received from OMAPI */
     std::tie(item, pos, message) = parse(cborOutData);
     if (item != nullptr) {
+        /* TODO Keyblobc - BSTR(<ARRAY>)*/
         std::vector<uint8_t> bstr;
         cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
         cborConverter_.getBinaryArray(item, 1, bstr);
@@ -319,6 +325,7 @@ Return<void> JavacardKeymaster4Device::upgradeKey(const hidl_vec<uint8_t>& keyBl
     std::vector<uint8_t> cborOutData; /*Received from OMAPI */
     std::tie(item, pos, message) = parse(cborOutData);
     if (item != nullptr) {
+        /* TODO Keyblob BSTR(ARRAY) */
         std::vector<uint8_t> bstr;
         cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
         cborConverter_.getBinaryArray(item, 1, bstr);

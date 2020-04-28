@@ -73,11 +73,15 @@ bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, con
         ::android::hardware::keymaster::V4_0::KeyCharacteristics& keyCharacteristics) {
     bool ret = false;
 
-    if (!getKeyParameters(item, pos, keyCharacteristics.softwareEnforced)) {
+    const std::unique_ptr<Item>& arrayItem = getItemAtPos(item, pos);
+    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+        return ret;
+
+    if (!getKeyParameters(arrayItem, 0, keyCharacteristics.softwareEnforced)) {
         return ret;
     }
 
-    if (!getKeyParameters(item, pos+1, keyCharacteristics.hardwareEnforced)) {
+    if (!getKeyParameters(arrayItem, 1, keyCharacteristics.hardwareEnforced)) {
         return ret;
     }
     //success
@@ -169,13 +173,21 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
 bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos, HmacSharingParameters& params) {
     std::vector<uint8_t> paramValue;
     bool ret = false;
+
+    //1. Get ArrayItem
+    //2. First item in the array seed; second item in the array is nonce.
+    const std::unique_ptr<Item>& arrayItem = getItemAtPos(item, pos);
+    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+        return ret;
+
     //Seed
-    if (!getBinaryArray(item, pos, paramValue))
+    if (!getBinaryArray(arrayItem, 0, paramValue))
         return ret;
     params.seed.setToExternal(paramValue.data(), paramValue.size());
     paramValue.clear();
+
     //nonce
-    if (!getBinaryArray(item, pos+1, paramValue))
+    if (!getBinaryArray(arrayItem, 1, paramValue))
         return ret;
     memcpy(params.nonce.data(), paramValue.data(), paramValue.size());
     ret = true;
