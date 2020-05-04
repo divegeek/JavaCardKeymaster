@@ -21,7 +21,9 @@
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
+#include <android-base/properties.h>
 #include "CborConverter.h"
+#include "TransportFactory.h"
 
 namespace android {
 namespace hardware {
@@ -38,8 +40,15 @@ using ::android::sp;
 
 class JavacardKeymaster4Device : public IKeymasterDevice {
   public:
-    explicit JavacardKeymaster4Device();
+    JavacardKeymaster4Device() {
+        if(android::base::GetBoolProperty("ro.kernel.qemu", false))
+           pTransportFactory = std::make_unique<se_transport::TransportFactory>(true);
+        else
+           pTransportFactory = std::make_unique<se_transport::TransportFactory>(false);
+    }
+
     virtual ~JavacardKeymaster4Device();
+
     // Methods from ::android::hardware::keymaster::V4_0::IKeymasterDevice follow.
     Return<void> getHardwareInfo(getHardwareInfo_cb _hidl_cb) override;
     Return<void> getHmacSharingParameters(getHmacSharingParameters_cb _hidl_cb) override;
@@ -67,6 +76,7 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
 
 protected:
     CborConverter cborConverter_;
+    std::unique_ptr<se_transport::TransportFactory> pTransportFactory;
 };
 
 }  // namespace V4_1

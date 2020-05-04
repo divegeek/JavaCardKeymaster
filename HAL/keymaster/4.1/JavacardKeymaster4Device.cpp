@@ -27,7 +27,6 @@
 #include <cppbor_parse.h>
 #include <CborConverter.h>
 
-#define UNUSED(a) a=a /* TODO Remove UNUSED. Added temporarily to solve compilation errors. */
 #define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v0.1"
 #define JAVACARD_KEYMASTER_AUTHOR    "Android Open Source Project"
 
@@ -35,10 +34,6 @@ namespace android {
 namespace hardware {
 namespace keymaster {
 namespace V4_1 {
-
-JavacardKeymaster4Device::JavacardKeymaster4Device() {
-
-}
 
 JavacardKeymaster4Device::~JavacardKeymaster4Device() {
 }
@@ -390,29 +385,35 @@ Return<::android::hardware::keymaster::V4_0::ErrorCode> JavacardKeymaster4Device
 }
 
 Return<void> JavacardKeymaster4Device::begin(::android::hardware::keymaster::V4_0::KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& inParams, const ::android::hardware::keymaster::V4_0::HardwareAuthToken& authToken, begin_cb _hidl_cb) {
-    cppbor::Array array;
-    const uint8_t* pos;
-    std::unique_ptr<Item> item;
-    std::string message;
     ::android::hardware::keymaster::V4_0::ErrorCode errorCode = ::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR;
     ::android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter> outParams;
     uint64_t operationHandle = 0;
 
-    /* Convert input data to cbor format */
-    array.add(static_cast<uint64_t>(purpose));
-    array.add(std::vector<uint8_t>(keyBlob));
-    cborConverter_.addKeyparameters(array, inParams);
-    cborConverter_.addHardwareAuthToken(array, authToken);
-    std::vector<uint8_t> cborData = array.encode();
+    if (::android::hardware::keymaster::V4_0::KeyPurpose::ENCRYPT == purpose ||
+        ::android::hardware::keymaster::V4_0::KeyPurpose::VERIFY == purpose) {
+        /* Public key operations are handled here*/
+    } else {
+        cppbor::Array array;
+        const uint8_t* pos;
+        std::unique_ptr<Item> item;
+        std::string message;
 
-    // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+        /* Convert input data to cbor format */
+        array.add(static_cast<uint64_t>(purpose));
+        array.add(std::vector<uint8_t>(keyBlob));
+        cborConverter_.addKeyparameters(array, inParams);
+        cborConverter_.addHardwareAuthToken(array, authToken);
+        std::vector<uint8_t> cborData = array.encode();
 
-    std::vector<uint8_t> cborOutData; /*Received from OMAPI */
-    std::tie(item, pos, message) = parse(cborOutData);
-    if (item != nullptr) {
-        cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
-        cborConverter_.getKeyParameters(item, 1, outParams);
-        cborConverter_.getUint64(item, 2, operationHandle);
+        // TODO Call OMAPI layer and sent the cbor data and get the Cbor format data back.
+
+        std::vector<uint8_t> cborOutData; /*Received from OMAPI */
+        std::tie(item, pos, message) = parse(cborOutData);
+        if (item != nullptr) {
+            cborConverter_.getErrorCode(item, 0, errorCode); //Errorcode
+            cborConverter_.getKeyParameters(item, 1, outParams);
+            cborConverter_.getUint64(item, 2, operationHandle);
+        }
     }
     _hidl_cb(errorCode, outParams, operationHandle);
     return Void();
