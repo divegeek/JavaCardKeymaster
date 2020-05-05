@@ -43,29 +43,29 @@ namespace V4_1 {
 #define APDU_RESP_STATUS_OK 0x9000
 
 enum class Instruction {
-     INS_GENERATE_KEY_CMD = 0x10;
-     INS_IMPORT_KEY_CMD = 0x11;
-     INS_IMPORT_WRAPPED_KEY_CMD = 0x12;
-     INS_EXPORT_KEY_CMD = 0x13;
-     INS_ATTEST_KEY_CMD = 0x14;
-     INS_UPGRADE_KEY_CMD = 0x15;
-     INS_DELETE_KEY_CMD = 0x16;
-     INS_DELETE_ALL_KEYS_CMD = 0x17;
-     INS_ADD_RNG_ENTROPY_CMD = 0x18;
-     INS_COMPUTE_SHARED_HMAC_CMD = 0x19;
-     INS_DESTROY_ATT_IDS_CMD = 0x1A;
-     INS_VERIFY_AUTHORIZATION_CMD = 0x1B;
-     INS_GET_HMAC_SHARING_PARAM_CMD = 0x1C;
-     INS_GET_KEY_CHARACTERISTICS_CMD = 0x1D;
-     INS_GET_HW_INFO_CMD = 0x1E;
-     INS_BEGIN_OPERATION_CMD = 0x1F;
-     INS_UPDATE_OPERATION_CMD = 0x20;
-     INS_FINISH_OPERATION_CMD = 0x21;
-     INS_ABORT_OPERATION_CMD = 0x22;
-     INS_PROVISION_CMD = 0x23;
+     INS_GENERATE_KEY_CMD = 0x10,
+     INS_IMPORT_KEY_CMD = 0x11,
+     INS_IMPORT_WRAPPED_KEY_CMD = 0x12,
+     INS_EXPORT_KEY_CMD = 0x13,
+     INS_ATTEST_KEY_CMD = 0x14,
+     INS_UPGRADE_KEY_CMD = 0x15,
+     INS_DELETE_KEY_CMD = 0x16,
+     INS_DELETE_ALL_KEYS_CMD = 0x17,
+     INS_ADD_RNG_ENTROPY_CMD = 0x18,
+     INS_COMPUTE_SHARED_HMAC_CMD = 0x19,
+     INS_DESTROY_ATT_IDS_CMD = 0x1A,
+     INS_VERIFY_AUTHORIZATION_CMD = 0x1B,
+     INS_GET_HMAC_SHARING_PARAM_CMD = 0x1C,
+     INS_GET_KEY_CHARACTERISTICS_CMD = 0x1D,
+     INS_GET_HW_INFO_CMD = 0x1E,
+     INS_BEGIN_OPERATION_CMD = 0x1F,
+     INS_UPDATE_OPERATION_CMD = 0x20,
+     INS_FINISH_OPERATION_CMD = 0x21,
+     INS_ABORT_OPERATION_CMD = 0x22,
+     INS_PROVISION_CMD = 0x23
 };
 
-bool constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut) {
+int32_t constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut) {
     apduOut.push_back(static_cast<uint8_t>(APDU_CLS)); //CLS
     apduOut.push_back(static_cast<uint8_t>(ins)); //INS
     apduOut.push_back(static_cast<uint8_t>(APDU_P1)); //P1
@@ -82,7 +82,7 @@ bool constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std
         apduOut.push_back(static_cast<uint8_t>(0x00));
         apduOut.push_back(static_cast<uint8_t>(0x00));
         apduOut.push_back(static_cast<uint8_t>(0x00)); //TODO Max expected out ??
-    } else if(0 <= inputData.size() && UCHAR_MAX >= inputData.szie()) {
+    } else if(0 <= inputData.size() && UCHAR_MAX >= inputData.size()) {
         //Short length
         apduOut.push_back(static_cast<uint8_t>(inputData.size()));
         //Data
@@ -91,20 +91,35 @@ bool constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std
         //Expected length of output
         apduOut.push_back(static_cast<uint8_t>(0x00));//TODO Max expected out ??
     } else {
-        return false;
+        return static_cast<int32_t>(::android::hardware::keymaster::V4_0::ErrorCode::INSUFFICIENT_BUFFER_SPACE);
     }
 
-    return true;
+    return static_cast<int32_t>(::android::hardware::keymaster::V4_0::ErrorCode::OK);//success
 }
 
 uint16_t getStatus(std::vector<uint8_t>& inputData) {
 	//Last two bytes are the status SW0SW1
     return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
-    /*if (status == (uint16_t)APDU_RESP_STATUS_OK) {
-        resOut.insert(resOut.begin(), inputData.begin(), inputData.end()-2);
-        return true;
+}
+
+inline int32_t sendData(std::unique_ptr<se_transport::TransportFactory>& transport, Instruction ins, std::vector<uint8_t>& inData,
+std::vector<uint8_t>& response) {
+    std::vector<uint8_t> apdu;
+    int32_t ret = constructApduMessage(ins, inData, apdu);
+    if(ret != 0) return ret;
+
+    if(!transport->openConnection()) {
+        return static_cast<int32_t>(::android::hardware::keymaster::V4_0::ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
     }
-    return false;*/
+
+    if(!transport->sendData(apdu.data(), apdu.size(), response)) {
+        return static_cast<int32_t>(::android::hardware::keymaster::V4_0::ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
+    }
+
+    if(APDU_RESP_STATUS_OK != getStatus(response)) {
+        return static_cast<int32_t>(::android::hardware::keymaster::V4_0::ErrorCode::UNKNOWN_ERROR);
+    }
+    return static_cast<int32_t>(::android::hardware::keymaster::V4_0::ErrorCode::OK);//success
 }
 
 JavacardKeymaster4Device::~JavacardKeymaster4Device() {
@@ -113,35 +128,28 @@ JavacardKeymaster4Device::~JavacardKeymaster4Device() {
 // Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
     //_hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
-    std::vector<uint8_t> apdu;
 	std::vector<uint8_t> resp;
+	std::vector<uint8_t> input;
+    const uint8_t* pos;
 	std::unique_ptr<Item> item;
     std::string message;
-	uint64_t securityLevel;
+	uint64_t securityLevel = static_cast<uint64_t>(SecurityLevel::STRONGBOX);
 	hidl_string jcKeymasterName;
 	hidl_string jcKeymasterAuthor;
 
-	bool ret;
-    ret = constructApduMessage(INS_GET_HW_INFO_CMD, std::vector<uint8_t>(), apdu );
-	static_assert(ret, "Failed to get hardware info");
+    int32_t ret = sendData(pTransportFactory, Instruction::INS_GET_HW_INFO_CMD, input, resp);
 
-    ret = pTransport->openConnection();
-	static_assert(ret, "Failed to open connection with secure element");
-
-    ret = pTransport->sendData(apdu.data(), apdu.size(), resp);
-	static_assert(ret, "Failed to send data to secure element");
-
-	static_assert(APDU_RESP_STATUS_OK == getStatus(resp), "Failed to get response from secure element.");
-
-	std::tie(item, pos, message) = parse(std::vector<uint8_t>(resp.begin(), resp.end()-2));//Skip last 2 bytes, it is status.
-    if (item != nullptr) {
-		std::vector<uint8_t> temp;
-        cborConverter_.getUint64(item, 0, securityLevel); //SecurityLevel
-		cborConverter_.getBinaryArray(item, 1, temp);
-		jcKeymasterName.setToExternal(temp.data(), temp.size());
-		temp.clear();
-		cborConverter_.getBinaryArray(item, 2, temp);
-		jcKeymasterAuthor.setToExternal(temp.data(), temp.size());
+    if(ret == static_cast<uint32_t>(::android::hardware::keymaster::V4_0::ErrorCode::OK)) {
+        std::tie(item, pos, message) = parse(std::vector<uint8_t>(resp.begin(), resp.end()-2));//Skip last 2 bytes, it is status.
+        if (item != nullptr) {
+            std::vector<uint8_t> temp;
+            cborConverter_.getUint64(item, 0, securityLevel); //SecurityLevel
+            cborConverter_.getBinaryArray(item, 1, temp);
+            jcKeymasterName = std::string(temp.begin(), temp.end());
+            temp.clear();
+            cborConverter_.getBinaryArray(item, 2, temp);
+            jcKeymasterAuthor = std::string(temp.begin(), temp.end());
+        }
     }
     _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
     return Void();

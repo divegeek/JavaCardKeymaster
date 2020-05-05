@@ -27,8 +27,8 @@ class ITransport {
     virtual ~ITransport(){}
     virtual bool openConnection(connectionCallback cb) = 0;
 	virtual bool openConnection() = 0;
-    virtual bool sendData(const char* inData, const uint32_t inLen, responseCallback cb) = 0;
-    virtual bool sendData(const char* inData, const uint32_t inLen, std::vector<uint8_t>& output) = 0;
+    virtual bool sendData(const uint8_t* inData, const size_t inLen, responseCallback cb) = 0;
+    virtual bool sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) = 0;
     virtual bool closeConnection() = 0;
     virtual bool isConnected() = 0;
 
@@ -40,8 +40,8 @@ public:
 
     bool openConnection(connectionCallback cb) override;
 	bool openConnection() override;
-    bool sendData(const char* inData, const uint32_t inLen, responseCallback cb) override;
-    virtual bool sendData(const char* inData, const uint32_t inLen, std::vector<uint8_t>& output) override;
+    bool sendData(const uint8_t* inData, const size_t inLen, responseCallback cb) override;
+    virtual bool sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) override;
     bool closeConnection() override;
     bool isConnected() override;
 
@@ -52,8 +52,8 @@ class SocketTransport : public ITransport {
 public:
     bool openConnection(connectionCallback cb) override;
 	bool openConnection() override;
-    bool sendData(const char* inData, const uint32_t inLen, responseCallback cb) override;
-    virtual bool sendData(const char* inData, const uint32_t inLen, std::vector<uint8_t>& output) override;
+    bool sendData(const uint8_t* inData, const size_t inLen, responseCallback cb) override;
+    virtual bool sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) override;
     bool closeConnection() override;
     bool isConnected() override;
 private:

@@ -82,7 +82,7 @@ bool SocketTransport::openConnection(connectionCallback cb) {
     return true;
 }
 
-bool SocketTransport::sendData(const char* data, uint32_t dataSize, responseCallback cb) {
+bool SocketTransport::sendData(const uint8_t* data, const size_t dataSize, responseCallback cb) {
     uint8_t buffer[MAX_RECV_BUFFER_SIZE];
 	if (0 > send(mSocket, data ,dataSize , 0 )) {
         LOG(ERROR) << "Failed to send data over socket.";
@@ -97,7 +97,7 @@ bool SocketTransport::sendData(const char* data, uint32_t dataSize, responseCall
     return true;
 }
 
-bool SocketTransport::sendData(const char* inData, const uint32_t inLen, std::vector<uint8_t>& output) {
+bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) {
     uint8_t buffer[MAX_RECV_BUFFER_SIZE];
 	if (0 > send(mSocket, inData, inLen , 0 )) {
         LOG(ERROR) << "Failed to send data over socket.";
