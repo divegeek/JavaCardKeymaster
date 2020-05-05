@@ -19,6 +19,7 @@
 #include <iomanip>
 #include <sstream>
 #include <iostream>
+#include <climits>
 #include <keymaster/authorization_set.h>
 #include <cutils/log.h>
 #include <keymaster/android_keymaster_messages.h>
@@ -35,12 +36,87 @@ namespace hardware {
 namespace keymaster {
 namespace V4_1 {
 
+#define APDU_CLS 0x80
+#define APDU_P1  0x40
+#define APDU_P2  0x00
+#define APDU_RESP_STATUS_OK 0x9000
+
+enum class Instruction {
+     INS_GENERATE_KEY_CMD = 0x10;
+     INS_IMPORT_KEY_CMD = 0x11;
+     INS_IMPORT_WRAPPED_KEY_CMD = 0x12;
+     INS_EXPORT_KEY_CMD = 0x13;
+     INS_ATTEST_KEY_CMD = 0x14;
+     INS_UPGRADE_KEY_CMD = 0x15;
+     INS_DELETE_KEY_CMD = 0x16;
+     INS_DELETE_ALL_KEYS_CMD = 0x17;
+     INS_ADD_RNG_ENTROPY_CMD = 0x18;
+     INS_COMPUTE_SHARED_HMAC_CMD = 0x19;
+     INS_DESTROY_ATT_IDS_CMD = 0x1A;
+     INS_VERIFY_AUTHORIZATION_CMD = 0x1B;
+     INS_GET_HMAC_SHARING_PARAM_CMD = 0x1C;
+     INS_GET_KEY_CHARACTERISTICS_CMD = 0x1D;
+     INS_GET_HW_INFO_CMD = 0x1E;
+     INS_BEGIN_OPERATION_CMD = 0x1F;
+     INS_UPDATE_OPERATION_CMD = 0x20;
+     INS_FINISH_OPERATION_CMD = 0x21;
+     INS_ABORT_OPERATION_CMD = 0x22;
+     INS_PROVISION_CMD = 0x23;
+};
+
+bool constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut) {
+    apduOut.push_back(static_cast<uint8_t>(APDU_CLS)); //CLS
+    apduOut.push_back(static_cast<uint8_t>(ins)); //INS
+    apduOut.push_back(static_cast<uint8_t>(APDU_P1)); //P1
+    apduOut.push_back(static_cast<uint8_t>(APDU_P2)); //P2
+
+    if(UCHAR_MAX < inputData.size() && USHRT_MAX >= inputData.size()) {
+        //Extended length 3 bytes, starts with 0x00
+        apduOut.push_back(static_cast<uint8_t>(0x00));
+        apduOut.push_back(static_cast<uint8_t>(inputData.size() >> 8));
+        apduOut.push_back(static_cast<uint8_t>(inputData.size() & 0xFF));
+        //Data
+        apduOut.insert(apduOut.end(), inputData.begin(), inputData.end());
+        //Expected length of output
+        apduOut.push_back(static_cast<uint8_t>(0x00));
+        apduOut.push_back(static_cast<uint8_t>(0x00));
+        apduOut.push_back(static_cast<uint8_t>(0x00)); //TODO Max expected out ??
+    } else if(0 <= inputData.size() && UCHAR_MAX >= inputData.szie()) {
+        //Short length
+        apduOut.push_back(static_cast<uint8_t>(inputData.size()));
+        //Data
+        if(inputData.size() > 0)
+            apduOut.insert(apduOut.end(), inputData.begin(), inputData.end());
+        //Expected length of output
+        apduOut.push_back(static_cast<uint8_t>(0x00));//TODO Max expected out ??
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
+bool parseApduMessage(std::vector<uint8_t>& inputData, std::vector<uint8_t> &resOut) {
+    uint16_t status = (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
+    if (status == (uint16_t)APDU_RESP_STATUS_OK) {
+        resout.insert(resOut.begin(), inputData.begin(), inputData.end()-2);
+        return true;
+    }
+    return false;
+}
+
 JavacardKeymaster4Device::~JavacardKeymaster4Device() {
 }
 
 // Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
-    _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
+    //_hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
+    std::vector<uint8_t> output;
+    if(!constructApduMessage(INS_GET_HW_INFO_CMD, std::vector<uint8_t>(), output ) {
+        LOG(ERROR) << "Failed to get hardware info";
+    }
+    pTransport->openConnection();
+    pTransport->sendData(output.data(), output.size()
     return Void();
 }
 
