@@ -28,6 +28,10 @@
 
 namespace se_transport {
 
+bool OmapiTransport::openConnection() {
+    return true;
+}
+
 bool OmapiTransport::openConnection(connectionCallback cb) {
     cb(true);
     return true;

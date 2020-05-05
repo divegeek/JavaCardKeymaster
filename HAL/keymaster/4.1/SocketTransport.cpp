@@ -27,27 +27,54 @@
 
 namespace se_transport {
 
-bool SocketTransport::openConnection(connectionCallback cb) {
-	struct sockaddr_in serv_addr; 
+bool SocketTransport::openConnection() {
+	struct sockaddr_in serv_addr;
 
-	if ((mSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-	{ 
+	if ((mSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+	{
         LOG(ERROR) << "Socket creation failed";
-		return false; 
-	} 
+		return false;
+	}
 
-	serv_addr.sin_family = AF_INET; 
-	serv_addr.sin_port = htons(PORT); 
-	
-	// Convert IPv4 and IPv6 addresses from text to binary form 
-	if(inet_pton(AF_INET, IPADDR, &serv_addr.sin_addr)<=0) 
-	{ 
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(PORT);
+
+	// Convert IPv4 and IPv6 addresses from text to binary form
+	if(inet_pton(AF_INET, IPADDR, &serv_addr.sin_addr)<=0)
+	{
         LOG(ERROR) << "Invalid address/ Address not supported.";
         return false;
 	}
 
-	if (connect(mSocket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
-	{ 
+	if (connect(mSocket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+	{
+        LOG(ERROR) << "Connection failed.";
+        return false;
+	}
+    return true;
+}
+
+bool SocketTransport::openConnection(connectionCallback cb) {
+	struct sockaddr_in serv_addr;
+
+	if ((mSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+	{
+        LOG(ERROR) << "Socket creation failed";
+		return false;
+	}
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(PORT);
+
+	// Convert IPv4 and IPv6 addresses from text to binary form
+	if(inet_pton(AF_INET, IPADDR, &serv_addr.sin_addr)<=0)
+	{
+        LOG(ERROR) << "Invalid address/ Address not supported.";
+        return false;
+	}
+
+	if (connect(mSocket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+	{
         LOG(ERROR) << "Connection failed.";
         return false;
 	}
@@ -84,7 +111,6 @@ bool SocketTransport::sendData(const char* inData, const uint32_t inLen, std::ve
         output.push_back(buffer[i]);
     }
     return true;
-
 }
 
 bool SocketTransport::closeConnection() {

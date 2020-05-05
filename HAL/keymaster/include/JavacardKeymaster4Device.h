@@ -41,10 +41,9 @@ using ::android::sp;
 class JavacardKeymaster4Device : public IKeymasterDevice {
   public:
     JavacardKeymaster4Device() {
-        if(android::base::GetBoolProperty("ro.kernel.qemu", false))
-           pTransportFactory = std::make_unique<se_transport::TransportFactory>(true);
-        else
-           pTransportFactory = std::make_unique<se_transport::TransportFactory>(false);
+		/* TODO instead do we need to create object like this std::unique_ptr<se_transport::TransportFactory>(new TransportFactory(true));*/
+		pTransportFactory = std::make_unique<se_transport::TransportFactory>(
+		                           android::base::GetBoolProperty("ro.kernel.qemu", false));
     }
 
     virtual ~JavacardKeymaster4Device();

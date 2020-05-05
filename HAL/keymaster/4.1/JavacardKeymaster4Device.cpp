@@ -27,6 +27,7 @@
 #include <cppbor.h>
 #include <cppbor_parse.h>
 #include <CborConverter.h>
+#include <Transport.h>
 
 #define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v0.1"
 #define JAVACARD_KEYMASTER_AUTHOR    "Android Open Source Project"
@@ -96,13 +97,14 @@ bool constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std
     return true;
 }
 
-bool parseApduMessage(std::vector<uint8_t>& inputData, std::vector<uint8_t> &resOut) {
-    uint16_t status = (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
-    if (status == (uint16_t)APDU_RESP_STATUS_OK) {
-        resout.insert(resOut.begin(), inputData.begin(), inputData.end()-2);
+uint16_t getStatus(std::vector<uint8_t>& inputData) {
+	//Last two bytes are the status SW0SW1
+    return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
+    /*if (status == (uint16_t)APDU_RESP_STATUS_OK) {
+        resOut.insert(resOut.begin(), inputData.begin(), inputData.end()-2);
         return true;
     }
-    return false;
+    return false;*/
 }
 
 JavacardKeymaster4Device::~JavacardKeymaster4Device() {
@@ -111,12 +113,37 @@ JavacardKeymaster4Device::~JavacardKeymaster4Device() {
 // Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
     //_hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
-    std::vector<uint8_t> output;
-    if(!constructApduMessage(INS_GET_HW_INFO_CMD, std::vector<uint8_t>(), output ) {
-        LOG(ERROR) << "Failed to get hardware info";
+    std::vector<uint8_t> apdu;
+	std::vector<uint8_t> resp;
+	std::unique_ptr<Item> item;
+    std::string message;
+	uint64_t securityLevel;
+	hidl_string jcKeymasterName;
+	hidl_string jcKeymasterAuthor;
+
+	bool ret;
+    ret = constructApduMessage(INS_GET_HW_INFO_CMD, std::vector<uint8_t>(), apdu );
+	static_assert(ret, "Failed to get hardware info");
+
+    ret = pTransport->openConnection();
+	static_assert(ret, "Failed to open connection with secure element");
+
+    ret = pTransport->sendData(apdu.data(), apdu.size(), resp);
+	static_assert(ret, "Failed to send data to secure element");
+
+	static_assert(APDU_RESP_STATUS_OK == getStatus(resp), "Failed to get response from secure element.");
+
+	std::tie(item, pos, message) = parse(std::vector<uint8_t>(resp.begin(), resp.end()-2));//Skip last 2 bytes, it is status.
+    if (item != nullptr) {
+		std::vector<uint8_t> temp;
+        cborConverter_.getUint64(item, 0, securityLevel); //SecurityLevel
+		cborConverter_.getBinaryArray(item, 1, temp);
+		jcKeymasterName.setToExternal(temp.data(), temp.size());
+		temp.clear();
+		cborConverter_.getBinaryArray(item, 2, temp);
+		jcKeymasterAuthor.setToExternal(temp.data(), temp.size());
     }
-    pTransport->openConnection();
-    pTransport->sendData(output.data(), output.size()
+    _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
     return Void();
 }
 

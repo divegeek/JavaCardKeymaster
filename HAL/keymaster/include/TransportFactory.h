@@ -23,11 +23,8 @@ namespace se_transport {
 
 class TransportFactory {
     public:
-    /*TransportFactory(bool isDevice) : mTransport( isDevice ? std::unique_ptr<OmapiTransport>(new OmapiTransport()) :
-    std::unique_ptr<SocketTransport>(new SocketTransport())) {
-    }*/
-    TransportFactory(bool isDevice) {
-        if (isDevice)
+    TransportFactory(bool isEmulator) {
+        if (!isEmulator)
             mTransport = std::unique_ptr<OmapiTransport>(new OmapiTransport());
         else
             mTransport = std::unique_ptr<SocketTransport>(new SocketTransport());

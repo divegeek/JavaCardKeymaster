@@ -26,6 +26,7 @@ class ITransport {
     public:
     virtual ~ITransport(){}
     virtual bool openConnection(connectionCallback cb) = 0;
+	virtual bool openConnection() = 0;
     virtual bool sendData(const char* inData, const uint32_t inLen, responseCallback cb) = 0;
     virtual bool sendData(const char* inData, const uint32_t inLen, std::vector<uint8_t>& output) = 0;
     virtual bool closeConnection() = 0;
@@ -38,6 +39,7 @@ class OmapiTransport : public ITransport {
 public:
 
     bool openConnection(connectionCallback cb) override;
+	bool openConnection() override;
     bool sendData(const char* inData, const uint32_t inLen, responseCallback cb) override;
     virtual bool sendData(const char* inData, const uint32_t inLen, std::vector<uint8_t>& output) override;
     bool closeConnection() override;
@@ -49,6 +51,7 @@ class SocketTransport : public ITransport {
 
 public:
     bool openConnection(connectionCallback cb) override;
+	bool openConnection() override;
     bool sendData(const char* inData, const uint32_t inLen, responseCallback cb) override;
     virtual bool sendData(const char* inData, const uint32_t inLen, std::vector<uint8_t>& output) override;
     bool closeConnection() override;
