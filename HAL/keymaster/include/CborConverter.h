@@ -95,24 +95,25 @@ class CborConverter
         inline MajorType getType(const std::unique_ptr<Item> &item) { return item.get()->type(); }
         bool getKeyparameter(const std::pair<const std::unique_ptr<Item>&,
                 const std::unique_ptr<Item>&> pair, KeyParameter& keyParam);
-        inline const std::unique_ptr<Item>& getItemAtPos(const std::unique_ptr<Item>& item, const uint32_t pos) {
-            const Array* arr = nullptr;
+        inline void getItemAtPos(const std::unique_ptr<Item>& item, const uint32_t pos, std::unique_ptr<Item>& subItem) {
+            Array* arr = nullptr;
 
             if (MajorType::ARRAY != getType(item)) {
-                return EMPTY(std::unique_ptr<Item>);
+                return;
             }
-            arr = item.get()->asArray();
+            arr = const_cast<Array*>(item.get()->asArray());
             if (arr->size() < (pos + 1)) {
-                return EMPTY(std::unique_ptr<Item>);
+                return;
             }
-            return (*arr)[pos];
+            subItem = std::move((*arr)[pos]);
         }
 };
 
 template<typename T>
 bool CborConverter::getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value) {
     bool ret = false;
-    const std::unique_ptr<Item>& intItem = getItemAtPos(item, pos);
+    std::unique_ptr<Item> intItem(nullptr);
+    getItemAtPos(item, pos, intItem);
 
     if ((intItem == nullptr) ||
             (std::is_unsigned<T>::value && (MajorType::UINT != getType(intItem))) ||

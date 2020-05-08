@@ -72,8 +72,9 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
 bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, const uint32_t pos,
         ::android::hardware::keymaster::V4_0::KeyCharacteristics& keyCharacteristics) {
     bool ret = false;
+    std::unique_ptr<Item> arrayItem(nullptr);
 
-    const std::unique_ptr<Item>& arrayItem = getItemAtPos(item, pos);
+    getItemAtPos(item, pos, arrayItem);
     if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
         return ret;
 
@@ -140,7 +141,9 @@ ParseResult CborConverter::decodeData(const std::vector<uint8_t> cborData) {
 bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
         ::android::hardware::hidl_vec<::android::hardware::hidl_vec<uint8_t>>& data) {
     bool ret = false;
-    const std::unique_ptr<Item>& arrayItem = getItemAtPos(item, pos);
+    std::unique_ptr<Item> arrayItem(nullptr);
+
+    getItemAtPos(item, pos, arrayItem);
     if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
         return ret;
     const Array* arr = arrayItem.get()->asArray();
@@ -157,7 +160,9 @@ bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const
 
 bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& value) {
     bool ret = false;
-    const std::unique_ptr<Item>& strItem = getItemAtPos(item, pos);
+    std::unique_ptr<Item> strItem(nullptr);
+
+    getItemAtPos(item, pos, strItem);
     if ((strItem == nullptr) && (MajorType::BSTR != getType(strItem)))
         return ret;
 
@@ -173,10 +178,12 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
 bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos, HmacSharingParameters& params) {
     std::vector<uint8_t> paramValue;
     bool ret = false;
+    std::unique_ptr<Item> arrayItem(nullptr);
 
     //1. Get ArrayItem
     //2. First item in the array seed; second item in the array is nonce.
-    const std::unique_ptr<Item>& arrayItem = getItemAtPos(item, pos);
+
+    getItemAtPos(item, pos, arrayItem);
     if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
         return ret;
 
@@ -276,7 +283,8 @@ bool CborConverter::getVerificationToken(const std::unique_ptr<Item>& item, cons
 
 bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& keyParams) {
     bool ret = false;
-    const std::unique_ptr<Item>& mapItem = getItemAtPos(item, pos);
+    std::unique_ptr<Item> mapItem(nullptr);
+    getItemAtPos(item, pos, mapItem);
     if ((mapItem == nullptr) && (MajorType::MAP != getType(mapItem)))
         return ret;
 
