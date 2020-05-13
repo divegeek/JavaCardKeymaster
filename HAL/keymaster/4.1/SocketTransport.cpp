@@ -54,49 +54,6 @@ bool SocketTransport::openConnection() {
     return true;
 }
 
-bool SocketTransport::openConnection(connectionCallback cb) {
-	struct sockaddr_in serv_addr;
-
-	if ((mSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-	{
-        LOG(ERROR) << "Socket creation failed";
-		return false;
-	}
-
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(PORT);
-
-	// Convert IPv4 and IPv6 addresses from text to binary form
-	if(inet_pton(AF_INET, IPADDR, &serv_addr.sin_addr)<=0)
-	{
-        LOG(ERROR) << "Invalid address/ Address not supported.";
-        return false;
-	}
-
-	if (connect(mSocket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-	{
-        LOG(ERROR) << "Connection failed.";
-        return false;
-	}
-    cb(true);// This can be used for Asynchronous calls.
-    return true;
-}
-
-bool SocketTransport::sendData(const uint8_t* data, const size_t dataSize, responseCallback cb) {
-    uint8_t buffer[MAX_RECV_BUFFER_SIZE];
-	if (0 > send(mSocket, data ,dataSize , 0 )) {
-        LOG(ERROR) << "Failed to send data over socket.";
-        return false;
-    }
-	ssize_t valRead = read( mSocket , buffer, MAX_RECV_BUFFER_SIZE);
-    if(0 > valRead) {
-        LOG(ERROR) << "Failed to read data from socket.";
-    }
-    std::vector<uint8_t> output(buffer, buffer+valRead);
-    cb(output);
-    return true;
-}
-
 bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) {
     uint8_t buffer[MAX_RECV_BUFFER_SIZE];
 	if (0 > send(mSocket, inData, inLen , 0 )) {

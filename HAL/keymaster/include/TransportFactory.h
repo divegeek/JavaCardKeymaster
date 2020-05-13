@@ -32,16 +32,8 @@ class TransportFactory {
 
     ~TransportFactory() {}
 
-    inline bool openConnection(connectionCallback cb) {
-        return mTransport->openConnection(cb);
-    }
-
     inline bool openConnection() {
         return mTransport->openConnection();
-    }
-
-    inline bool sendData(const uint8_t* inData, const size_t inLen, responseCallback cb) {
-        return mTransport->sendData(inData, inLen, cb);
     }
 
     inline bool sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) {

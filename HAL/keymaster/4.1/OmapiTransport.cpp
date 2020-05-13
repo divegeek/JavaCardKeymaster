@@ -32,18 +32,6 @@ bool OmapiTransport::openConnection() {
     return true;
 }
 
-bool OmapiTransport::openConnection(connectionCallback cb) {
-    cb(true);
-    return true;
-}
-
-bool OmapiTransport::sendData(const uint8_t* inData, const size_t inLen, responseCallback cb) {
-    std::vector<uint8_t> test(inData, inData+inLen);
-    cb(test);
-    return true;
-
-}
-
 bool OmapiTransport::sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) {
     std::vector<uint8_t> test(inData, inData+inLen);
     output = std::move(test);
