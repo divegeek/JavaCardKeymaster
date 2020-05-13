@@ -104,9 +104,9 @@ std::vector<uint8_t>& response) {
     ErrorCode ret = constructApduMessage(ins, inData, apdu);
     if(ret != ErrorCode::OK) return ret;
 
-    if(!transport->openConnection()) {
-        return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
-    }
+    //if(!transport->openConnection()) {
+    //    return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
+    //}
 
     if(!transport->sendData(apdu.data(), apdu.size(), response)) {
         return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);

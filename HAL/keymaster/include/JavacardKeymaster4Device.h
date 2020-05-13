@@ -56,6 +56,7 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
 		/* TODO instead do we need to create object like this std::unique_ptr<se_transport::TransportFactory>(new TransportFactory(true));*/
 		pTransportFactory = std::make_unique<se_transport::TransportFactory>(
 		                           android::base::GetBoolProperty("ro.kernel.qemu", false));
+        pTransportFactory->openConnection();
     }
 
     virtual ~JavacardKeymaster4Device() {}
