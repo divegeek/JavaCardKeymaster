@@ -21,6 +21,10 @@
 
 namespace se_transport {
 
+/**
+ * TransportFactory class decides which transport mechanism to be used to send data to secure element. In case of
+ * emulator the communication channel is socket and in case of device the communication channel is via OMAPI.
+ */
 class TransportFactory {
     public:
     TransportFactory(bool isEmulator) {
@@ -32,23 +36,39 @@ class TransportFactory {
 
     ~TransportFactory() {}
 
+    /**
+     * Establishes a communication channel with the secure element.
+     */
     inline bool openConnection() {
         return mTransport->openConnection();
     }
 
+    /**
+     * Sends the data to the secure element and also receives back the data.
+     * This is a blocking call.
+     */
     inline bool sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) {
         return mTransport->sendData(inData, inLen, output);
     }
 
+    /**
+     * Close the connection.
+     */
     inline bool closeConnection() {
         return mTransport->closeConnection();
     }
 
+    /**
+     * Returns the connection status of the communication channel.
+     */
     inline bool isConnected() {
         return mTransport->isConnected();
     }
 
     private:
+    /**
+     * Holds the instance of either OmapiTransport class or SocketTransport class.
+     */
     std::unique_ptr<ITransport> mTransport;
 
 };

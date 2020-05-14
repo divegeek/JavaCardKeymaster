@@ -20,7 +20,6 @@
 #include <vector>
 #include "Transport.h"
 
-/* TODO How to get these two values */
 #define PORT    8080
 #define IPADDR  "10.9.40.24"
 #define MAX_RECV_BUFFER_SIZE 2048

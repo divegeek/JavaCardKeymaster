@@ -17,34 +17,27 @@
 
 #ifndef __CBOR_CONVERTER_H_
 #define __CBOR_CONVERTER_H_
-#include <sstream>
+
 #include <iostream>
-#include <cstdint>
-#include <functional>
-#include <iterator>
-#include <memory>
 #include <numeric>
 #include <cppbor.h>
 #include <cppbor_parse.h>
 #include <hidl/HidlSupport.h>
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 
-#define EMPTY(A) *(A*)nullptr
-
 using namespace cppbor;
 
+using ::android::hardware::hidl_vec;
 using ::android::hardware::keymaster::V4_0::ErrorCode;
-using ::android::hardware::keymaster::V4_0::HardwareAuthenticatorType;
 using ::android::hardware::keymaster::V4_0::HardwareAuthToken;
+using ::android::hardware::keymaster::V4_0::HardwareAuthenticatorType;
 using ::android::hardware::keymaster::V4_0::HmacSharingParameters;
-using ::android::hardware::keymaster::V4_0::IKeymasterDevice;
-using ::android::hardware::keymaster::V4_0::KeyCharacteristics;
-using ::android::hardware::keymaster::V4_0::KeyFormat;
 using ::android::hardware::keymaster::V4_0::KeyParameter;
-using ::android::hardware::keymaster::V4_0::KeyPurpose;
-using ::android::hardware::keymaster::V4_0::SecurityLevel;
-using ::android::hardware::keymaster::V4_0::Tag;
 using ::android::hardware::keymaster::V4_0::VerificationToken;
+using ::android::hardware::keymaster::V4_0::KeyCharacteristics;
+using ::android::hardware::keymaster::V4_0::SecurityLevel;
+using ::android::hardware::keymaster::V4_0::TagType;
+using ::android::hardware::keymaster::V4_0::Tag;
 
 class CborConverter
 {
@@ -52,29 +45,78 @@ class CborConverter
         CborConverter() = default;
         ~CborConverter() = default;
 
+        /**
+         * Parses the input data which is in CBOR format and returns a Tuple of Item pointer, buffer pointer and
+         * message.
+         */
         ParseResult decodeData(const std::vector<uint8_t> cborData);
 
-        /* Use this function to get both signed and usinged integers.*/
+        /**
+         * Get the signed/unsigned integer value at a given position from the item pointer.
+         */
         template<typename T>
             bool getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value);
+
+        /**
+         * Get the HmacSharingParameters structure value at the given position from the item pointer.
+         */
         bool getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos, HmacSharingParameters& params);
+
+        /**
+         * Get the Binary string at the given position from the item pointer.
+         */
         bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& vec);
+
+        /**
+         * Get the HardwareAuthToken value at the given position from the item pointer.
+         */
         bool getHardwareAuthToken(const std::unique_ptr<Item>& item, const uint32_t pos, HardwareAuthToken& authType);
-        bool getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& keyParams);
-        bool addKeyparameters(Array& array, const android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>&
+
+        /**
+         * Get the list of KeyParameters value at the given position from the item pointer.
+         */
+        bool getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<KeyParameter>& keyParams);
+
+        /**
+         * Adds the the list of KeyParameters values to the Array item.
+         */
+        bool addKeyparameters(Array& array, const android::hardware::hidl_vec<KeyParameter>&
                 keyParams);
-        bool addHardwareAuthToken(Array& array, const ::android::hardware::keymaster::V4_0::HardwareAuthToken&
+
+        /**
+         * Add HardwareAuthToken value to the Array item.
+         */
+        bool addHardwareAuthToken(Array& array, const HardwareAuthToken&
                 authToken);
+
+        /**
+         * Get the VerificationToken value at the given position from the item pointer.
+         */
         bool getVerificationToken(const std::unique_ptr<Item>& item, const uint32_t pos, VerificationToken&
                 token);
+
+        /**
+         * Get the KeyCharacteristics value at the given position from the item pointer.
+         */
         bool getKeyCharacteristics(const std::unique_ptr<Item> &item, const uint32_t pos,
-                ::android::hardware::keymaster::V4_0::KeyCharacteristics& keyCharacteristics);
+                KeyCharacteristics& keyCharacteristics);
+
+        /**
+         * Get the list of binary arrays at the given position from the item pointer.
+         */
         bool getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
                 ::android::hardware::hidl_vec<::android::hardware::hidl_vec<uint8_t>>& data);
-        bool addVerificationToken(Array& array, const ::android::hardware::keymaster::V4_0::VerificationToken&
+
+        /**
+         * Add VerificationToken value to the Array item.
+         */
+        bool addVerificationToken(Array& array, const VerificationToken&
                 verificationToken);
 
-        template<typename T, typename = std::enable_if_t<(std::is_same_v<T, ::android::hardware::keymaster::V4_0::ErrorCode>) ||
+        /**
+         * Get the ErrorCode value at the give position from the item pointer.
+         */
+        template<typename T, typename = std::enable_if_t<(std::is_same_v<T, ErrorCode>) ||
             (std::is_same_v<T, ::android::hardware::keymaster::V4_1::ErrorCode>)>>
             inline bool getErrorCode(const std::unique_ptr<Item>& item, const uint32_t pos, T& errorCode) {
                 bool ret = false;
@@ -88,13 +130,21 @@ class CborConverter
                 return ret;
             }
 
-
-
-
     private:
+        /**
+         * Get the type of the Item pointer.
+         */
         inline MajorType getType(const std::unique_ptr<Item> &item) { return item.get()->type(); }
+
+        /**
+         * Construct Keyparameter structure from the pair of key and value.
+         */
         bool getKeyparameter(const std::pair<const std::unique_ptr<Item>&,
                 const std::unique_ptr<Item>&> pair, KeyParameter& keyParam);
+
+        /**
+         * Get the sub item pointer from the root item pointer at the given position.
+         */
         inline void getItemAtPos(const std::unique_ptr<Item>& item, const uint32_t pos, std::unique_ptr<Item>& subItem) {
             Array* arr = nullptr;
 

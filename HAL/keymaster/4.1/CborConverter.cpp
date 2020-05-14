@@ -15,26 +15,9 @@
  ** limitations under the License.
  */
 
-#include <sstream>
-#include <iostream>
-#include <cppbor.h>
-#include <cppbor_parse.h>
-#include <hidl/HidlSupport.h>
 #include <CborConverter.h>
 
-using namespace cppbor;
-using ::android::hardware::keymaster::V4_0::KeyParameter;
-using ::android::hardware::keymaster::V4_0::TagType;
-#define UNUSED(A) A = A
-
-bool getTagValue(Tag& tag, KeyParameter& keyParam, uint64_t& value) {
-    UNUSED(value);
-    UNUSED(keyParam);
-    UNUSED(tag);
-    return false;
-}
-
-bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& keyParams) {
+bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl_vec<KeyParameter>& keyParams) {
     Map map;
     for(size_t i = 0; i < keyParams.size(); i++) {
         KeyParameter param = keyParams[i];
@@ -70,7 +53,7 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
 }
 
 bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, const uint32_t pos,
-        ::android::hardware::keymaster::V4_0::KeyCharacteristics& keyCharacteristics) {
+        KeyCharacteristics& keyCharacteristics) {
     bool ret = false;
     std::unique_ptr<Item> arrayItem(nullptr);
 
@@ -201,7 +184,7 @@ bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, 
     return ret;
 }
 
-bool CborConverter::addVerificationToken(Array& array, const ::android::hardware::keymaster::V4_0::VerificationToken&
+bool CborConverter::addVerificationToken(Array& array, const VerificationToken&
         verificationToken) {
     array.add(verificationToken.challenge);
     array.add(verificationToken.timestamp);
@@ -211,7 +194,7 @@ bool CborConverter::addVerificationToken(Array& array, const ::android::hardware
     return true;
 }
 
-bool CborConverter::addHardwareAuthToken(Array& array, const ::android::hardware::keymaster::V4_0::HardwareAuthToken&
+bool CborConverter::addHardwareAuthToken(Array& array, const HardwareAuthToken&
         authToken) {
     array.add(authToken.challenge);
     array.add(authToken.userId);
@@ -281,7 +264,7 @@ bool CborConverter::getVerificationToken(const std::unique_ptr<Item>& item, cons
 
 }
 
-bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& keyParams) {
+bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<KeyParameter>& keyParams) {
     bool ret = false;
     std::unique_ptr<Item> mapItem(nullptr);
     getItemAtPos(item, pos, mapItem);
@@ -291,7 +274,7 @@ bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const ui
     const Map* map = mapItem.get()->asMap();
     size_t mapSize = map->size();
     for (int i = 0; i < mapSize; i++) {
-        ::android::hardware::keymaster::V4_0::KeyParameter param;
+        KeyParameter param;
         if (!getKeyparameter((*map)[i], param)) {
             return ret;
         }

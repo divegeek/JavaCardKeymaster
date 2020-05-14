@@ -18,7 +18,6 @@
 #ifndef KEYMASTER_V4_1_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
 #define KEYMASTER_V4_1_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
 
-#include <assert.h>
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
@@ -56,7 +55,7 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     JavacardKeymaster4Device() {
 		pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
                                 android::base::GetBoolProperty("ro.kernel.qemu", false)));
-        assert(pTransportFactory->openConnection() && "Failed to open connection with secure element");
+        pTransportFactory->openConnection();
     }
 
     virtual ~JavacardKeymaster4Device() {}
