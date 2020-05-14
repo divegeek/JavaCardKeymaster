@@ -16,13 +16,22 @@
 
 package com.android.javacard.keymaster;
 
-public class KMException {
+public class KMException extends RuntimeException {
+  public static short reason;
+  public static KMException exception;
+  private KMException(){
+  }
+  public static void throwIt(short reason){
+    KMException.reason = reason;
+    throw instance();
+  }
+  public static KMException instance(){
+    if(exception == null ) exception = new KMException();
+    return exception;
+  }
 
-  // The Applet is not in a correct state in order to execute the command.
-  public static final short CMD_NOT_ACCEPTED_WRONG_STATE = (short) 0x6901;
-
-  public static boolean handle(short reason) {
-    return false;
+  public void clear(){
+    reason = KMError.UNKNOWN_ERROR;
   }
 }
 

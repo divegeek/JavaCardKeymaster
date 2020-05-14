@@ -65,9 +65,11 @@ public class KMEnumArrayTag extends KMTag {
     }
     KMByteBlob blob = KMByteBlob.cast(byteBlob);
     short byteIndex = 0;
+    short enumIndex;
+    boolean validValue;
     while (byteIndex < blob.length()) {
-      short enumIndex = 0;
-      boolean validValue = false;
+      enumIndex = 0;
+      validValue = false;
       while (enumIndex < allowedVals.length) {
         if (blob.get(byteIndex) == allowedVals[enumIndex]) {
           validValue = true;
@@ -117,7 +119,7 @@ public class KMEnumArrayTag extends KMTag {
       enums =
           new Object[] {
             new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
-            new byte[] {ECB, CBC, CTR},
+            new byte[] {ECB, CBC, CTR, GCM},
             new byte[] {DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
             new byte[] {
               PADDING_NONE, RSA_OAEP, RSA_PSS, RSA_PKCS1_1_5_ENCRYPT, RSA_PKCS1_1_5_SIGN, PKCS7

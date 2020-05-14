@@ -120,7 +120,7 @@ public class KMIntegerArrayTag extends KMTag {
     return false;
   }
 
-  // TODO this should be combined with validateKey to actually validate {tagType, tagKey} pair.
+  // TODO this should be combined with validateKey to actually isValidTag {tagType, tagKey} pair.
   private static boolean validateTagType(short tagType) {
     if ((tagType == ULONG_ARRAY_TAG) || (tagType == UINT_ARRAY_TAG)) {
       return true;

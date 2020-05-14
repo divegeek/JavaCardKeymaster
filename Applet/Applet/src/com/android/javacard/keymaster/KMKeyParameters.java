@@ -16,12 +16,24 @@
 
 package com.android.javacard.keymaster;
 
-
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 public class KMKeyParameters extends KMType {
+
+  private static final short[] swEnforcedTags = {};
+
+  private static final short[] ignoredTags = {
+    KMType.ROOT_OF_TRUST,
+    KMType.RESET_SINCE_ID_ROTATION,
+    KMType.ALLOW_WHILE_ON_BODY,
+    KMType.ATTESTATION_CHALLENGE,
+    KMType.OS_VERSION, // not in hidden
+    KMType.OS_PATCH_LEVEL // not in hidden
+    // ALL_APPLICATIONS missing from types.hal
+  };
+
   private static KMKeyParameters prototype;
   private static short instPtr;
 
@@ -34,7 +46,7 @@ public class KMKeyParameters extends KMType {
   }
 
   public static short exp() {
-    short arrPtr = KMArray.instance((short)9);
+    short arrPtr = KMArray.instance((short) 9);
     KMArray arr = KMArray.cast(arrPtr);
     arr.add((short) 0, KMIntegerTag.exp(UINT_TAG));
     arr.add((short) 1, KMIntegerArrayTag.exp(UINT_ARRAY_TAG));
@@ -49,15 +61,15 @@ public class KMKeyParameters extends KMType {
   }
 
   public static short instance(short vals) {
-    short ptr = KMType.instance(KEY_PARAM_TYPE, (short)2);
-    Util.setShort(heap, (short)(ptr + TLV_HEADER_SIZE), vals);
+    short ptr = KMType.instance(KEY_PARAM_TYPE, (short) 2);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), vals);
     return ptr;
   }
 
   public static KMKeyParameters cast(short ptr) {
     if (heap[ptr] != KEY_PARAM_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     short arrPtr = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
-    if(heap[arrPtr] != ARRAY_TYPE)  ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[arrPtr] != ARRAY_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     return proto(ptr);
   }
 
@@ -70,4 +82,194 @@ public class KMKeyParameters extends KMType {
     return KMArray.cast(arrPtr).length();
   }
 
+  public static short findTag(short tagType, short tagKey, short keyParam) {
+    KMKeyParameters instParam = KMKeyParameters.cast(keyParam);
+    KMArray vals = KMArray.cast(instParam.getVals());
+    short index = 0;
+    short length = vals.length();
+    short key;
+    short type;
+    short ret = KMType.INVALID_VALUE;
+    short obj;
+    while (index < length) {
+      obj = vals.get(index);
+      key = KMTag.getKey(obj);
+      type = KMTag.getTagType(obj);
+      if ((tagKey == key) && (tagType == type)) {
+        ret = obj;
+        break;
+      }
+      index++;
+    }
+    return ret;
+  }
+
+  // KDF, ECIES_SINGLE_HASH_MODE missing from types.hal
+  public static short makeHwEnforced(
+      short keyParamsPtr, byte origin, short osVersionObjPtr, short osPatchObjPtr, byte[] scratchPad) {
+    final short[] hwEnforcedTagArr = {
+      // HW Enforced
+      KMType.ENUM_TAG, KMType.ORIGIN,
+      KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,
+      KMType.ENUM_TAG, KMType.ALGORITHM,
+      KMType.UINT_TAG, KMType.KEYSIZE,
+      KMType.ULONG_TAG, KMType.RSA_PUBLIC_EXPONENT,
+      KMType.ENUM_TAG, KMType.BLOB_USAGE_REQ,
+      KMType.ENUM_ARRAY_TAG, KMType.DIGEST,
+      KMType.ENUM_ARRAY_TAG, KMType.PADDING,
+      KMType.ENUM_ARRAY_TAG, KMType.BLOCK_MODE,
+      KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS,
+      KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,
+      KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID,
+      KMType.BOOL_TAG, KMType.NO_AUTH_REQUIRED,
+      KMType.UINT_TAG, KMType.AUTH_TIMEOUT,
+      KMType.BOOL_TAG, KMType.CALLER_NONCE,
+      KMType.UINT_TAG, KMType.MIN_MAC_LENGTH,
+      KMType.ENUM_TAG, KMType.ECCURVE,
+      KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
+      KMType.BOOL_TAG, KMType.INCLUDE_UNIQUE_ID,
+      KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE,
+      KMType.ENUM_TAG, KMType.USER_AUTH_TYPE
+    };
+    byte index = 0;
+    short tagInd = 0;
+    short arrInd = 0;
+    short tagPtr = 0;
+    short tagKey = 0;
+    short tagType = 0;
+    short arrPtr = KMKeyParameters.cast(keyParamsPtr).getVals();
+    short len = KMArray.cast(arrPtr).length();
+    while (index < len) {
+      tagInd = 0;
+      tagPtr = KMArray.cast(arrPtr).get(index);
+      tagKey = KMTag.getKey(tagPtr);
+      tagType = KMTag.getTagType(tagPtr);
+      if (!isValidTag(tagType, tagKey)) {
+        KMException.throwIt(KMError.INVALID_KEY_BLOB);
+      }
+      while (tagInd < (short) hwEnforcedTagArr.length) {
+        if ((hwEnforcedTagArr[tagInd] == tagType)
+            && (hwEnforcedTagArr[(short) (tagInd + 1)] == tagKey)) {
+          Util.setShort(scratchPad, arrInd, tagPtr);
+          arrInd += 2;
+          break;
+        }
+        tagInd += 2;
+      }
+      index++;
+    }
+    short originTag = KMEnumTag.instance(KMType.ORIGIN, origin);
+    Util.setShort(scratchPad, arrInd, originTag);
+    arrInd += 2;
+    short osVersionTag = KMIntegerTag.instance(KMType.UINT_TAG, KMType.OS_VERSION, osVersionObjPtr);
+    Util.setShort(scratchPad, arrInd, osVersionTag);
+    arrInd += 2;
+    short osPatchTag = KMIntegerTag.instance(KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, osPatchObjPtr);
+    Util.setShort(scratchPad, arrInd, osPatchTag);
+    arrInd += 2;
+    return createKeyParameters(scratchPad, (short) (arrInd / 2));
+  }
+
+  // ALL_USERS, EXPORTABLE missing from types.hal
+  public static short makeSwEnforced(short keyParamsPtr, byte[] scratchPad) {
+    final short[] swEnforcedTagsArr = {
+      KMType.DATE_TAG, KMType.ACTIVE_DATETIME,
+      KMType.DATE_TAG, KMType.ORIGINATION_EXPIRE_DATETIME,
+      KMType.DATE_TAG, KMType.USAGE_EXPIRE_DATETIME,
+      KMType.UINT_TAG, KMType.USERID,
+      KMType.DATE_TAG, KMType.CREATION_DATETIME
+    };
+    byte index = 0;
+    short tagInd = 0;
+    short arrInd = 0;
+    short tagPtr = 0;
+    short tagKey = 0;
+    short tagType = 0;
+    short arrPtr = KMKeyParameters.cast(keyParamsPtr).getVals();
+    short len = KMArray.cast(arrPtr).length();
+    while (index < len) {
+      tagInd = 0;
+      tagPtr = KMArray.cast(arrPtr).get(index);
+      tagKey = KMTag.getKey(tagPtr);
+      tagType = KMTag.getTagType(tagPtr);
+      if (!isValidTag(tagType, tagKey)){
+        KMException.throwIt(KMError.INVALID_KEY_BLOB);
+      }
+      while (tagInd < (short) swEnforcedTagsArr.length) {
+        if ((swEnforcedTagsArr[tagInd] == tagType)
+            && (swEnforcedTagsArr[(short) (tagInd + 1)] == tagKey)) {
+          Util.setShort(scratchPad, arrInd, tagPtr);
+          arrInd += 2;
+          break;
+        }
+        tagInd += 2;
+      }
+      index++;
+    }
+    return createKeyParameters(scratchPad, (short) (arrInd / 2));
+  }
+
+  public static short makeHidden(short keyParamsPtr, short rootOfTrustBlob, byte[] scratchPad) {
+    short appId = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, keyParamsPtr);
+    if (appId != KMTag.INVALID_VALUE) {
+      appId = KMByteTag.cast(appId).getValue();
+    }
+      short appData =
+        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, keyParamsPtr);
+    if (appData != KMTag.INVALID_VALUE) {
+      appData = KMByteTag.cast(appData).getValue();
+    }
+    return makeHidden(appId, appData, rootOfTrustBlob, scratchPad);
+  }
+
+  public static short makeHidden(short appIdBlob, short appDataBlob, short rootOfTrustBlob, byte[] scratchPad){
+    // Order in which the hidden array is created should not change.
+    short index = 0;
+    KMByteBlob.cast(rootOfTrustBlob);
+    Util.setShort(scratchPad, index, rootOfTrustBlob);
+    index += 2;
+    if (appIdBlob != KMTag.INVALID_VALUE) {
+      KMByteBlob.cast(appIdBlob);
+      Util.setShort(scratchPad, index, appIdBlob);
+      index += 2;
+    }
+    if (appDataBlob != KMTag.INVALID_VALUE) {
+      Util.setShort(scratchPad, index, appDataBlob);
+      index += 2;
+    }
+    return createKeyParameters(scratchPad, (short)(index/2));
+
+  }
+  public static boolean isValidTag(short tagType, short tagKey) {
+    short[] invalidTagsArr = {
+      KMType.BYTES_TAG, KMType.NONCE,
+      KMType.BYTES_TAG, KMType.ASSOCIATED_DATA,
+      KMType.BYTES_TAG, KMType.UNIQUE_ID,
+      KMType.UINT_TAG, KMType.MAC_LENGTH,
+      KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY
+    };
+    short index = 0;
+    if (tagKey == KMType.INVALID_TAG) {
+      return false;
+    }
+    while (index < invalidTagsArr.length) {
+      if ((tagType == invalidTagsArr[index]) && (tagKey == invalidTagsArr[(short) (index + 1)])) {
+        return false;
+      }
+      index += 2;
+    }
+    return true;
+  }
+
+  public static short createKeyParameters(byte[] ptrArr, short len) {
+    short arrPtr = KMArray.instance(len);
+    short index = 0;
+    short ptr = 0;
+    while (index < len) {
+      KMArray.cast(arrPtr).add(index, Util.getShort(ptrArr, ptr));
+      index++;
+      ptr += 2;
+    }
+    return KMKeyParameters.instance(arrPtr);
+  }
 }

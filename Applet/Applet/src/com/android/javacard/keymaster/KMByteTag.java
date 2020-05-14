@@ -41,7 +41,9 @@ public class KMByteTag extends KMTag {
     ATTESTATION_ID_MODEL,
     ASSOCIATED_DATA,
     NONCE,
-    CONFIRMATION_TOKEN
+    CONFIRMATION_TOKEN,
+    VERIFIED_BOOT_KEY,
+    VERIFIED_BOOT_HASH
   };
 
   private KMByteTag() {}

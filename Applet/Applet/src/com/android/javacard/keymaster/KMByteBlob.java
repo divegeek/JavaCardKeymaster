@@ -87,4 +87,16 @@ public class KMByteBlob extends KMType {
   public byte[] getBuffer() {
     return heap;
   }
+
+  public void getValue(byte[] destBuf, short destStart, short destLength){
+    Util.arrayCopyNonAtomic(heap, getStartOff(), destBuf, destStart, destLength);
+  }
+
+  public void setValue(byte[] srcBuf, short srcStart, short srcLength){
+    if(length() > srcLength){
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
+    Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), length());
+  }
+
 }

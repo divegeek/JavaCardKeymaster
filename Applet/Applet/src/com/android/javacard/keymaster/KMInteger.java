@@ -23,8 +23,8 @@ import javacard.framework.Util;
 
 // Represents 8 bit, 16 bit, 32 bit and 64 bit integers
 public class KMInteger extends KMType {
-  private static final short UINT_32 = 4;
-  private static final short UINT_64 = 8;
+  public static final short UINT_32 = 4;
+  public static final short UINT_64 = 8;
   private static KMInteger prototype;
   private static short instPtr;
 
@@ -121,11 +121,20 @@ public class KMInteger extends KMType {
   public void getValue(byte[] dest, short destOff, short length){
     Util.arrayCopyNonAtomic(heap, (short)(instPtr+TLV_HEADER_SIZE), dest, destOff, length);
   }
+  public void setValue(byte[] src, short srcOff){
+    Util.arrayCopyNonAtomic(src, srcOff,  heap, (short)(instPtr+TLV_HEADER_SIZE), length());
+  }
+  public short value(byte[] dest, short destOff){
+    Util.arrayCopyNonAtomic(heap, (short)(instPtr+TLV_HEADER_SIZE), dest, destOff, length());
+    return length();
+  }
 
   public short getShort() {
     return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
   }
-
+  public short getSignificantShort(){
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+  }
   public byte getByte() {
     return heap[(short) (instPtr + TLV_HEADER_SIZE + 3)];
   }

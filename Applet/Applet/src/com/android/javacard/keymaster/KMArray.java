@@ -80,7 +80,7 @@ public class KMArray extends KMType {
   public byte containedType(){ return heap[(short)(instPtr + TLV_HEADER_SIZE)];}
 
   public short getStartOff() {
-    return (short) (instPtr + TLV_HEADER_SIZE + 3);
+    return (short) (instPtr + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE);
   }
 
   public short length() {

@@ -18,6 +18,8 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
+import javacard.framework.SystemException;
 import javacard.framework.Util;
 
 public class KMEncoder {
@@ -43,59 +45,100 @@ public class KMEncoder {
   private byte[] buffer;
   private short startOff;
   private short length;
+  private static short[] stack;
+  private static byte stackPtr;
 
   public KMEncoder() {
     buffer = null;
     startOff = 0;
     length = 0;
+    stack = JCSystem.makeTransientShortArray((short)50, JCSystem.CLEAR_ON_RESET);
   }
 
-  public short encode(short object, byte[] buffer, short startOff, short length) {
+  private static void push (short objPtr){
+    stack[stackPtr] = objPtr;
+    stackPtr++;
+  }
+  private static short pop(){
+    stackPtr--;
+    return stack[stackPtr];
+  }
+  private void encode(short obj){
+    push(obj);
+  }
+  public short encode(short object, byte[] buffer, short startOff) {
+    stackPtr = 0;
     this.buffer = buffer;
     this.startOff = startOff;
-    this.length = length;
-    encode(object);
-    this.length = this.startOff;
-    this.startOff = startOff;
-    return this.length;
+    short len = (short) buffer.length;
+    if((len <0) || (len > KMKeymasterApplet.MAX_LENGTH)){
+      this.length = KMKeymasterApplet.MAX_LENGTH;
+    }else{
+      this.length = (short)buffer.length;
+    }
+    //this.length = (short)(startOff + length);
+    push(object);
+    encode();
+    return (short)(this.startOff - startOff);
   }
 
-  private void encode(short exp){
-    byte type = KMType.getType(exp);
-    switch(type){
-      case KMType.BYTE_BLOB_TYPE:
-        encodeByteBlob(exp);
-        return;
-      case KMType.INTEGER_TYPE:
-        encodeInteger(exp);
-        return;
-      case KMType.ARRAY_TYPE:
-        encodeArray(exp);
-        return;
-      case KMType.ENUM_TYPE:
-        encodeEnum(exp);
-        return;
-      case KMType.KEY_PARAM_TYPE:
-        encodeKeyParam(exp);
-        return;
-      case KMType.KEY_CHAR_TYPE:
-        encodeKeyChar(exp);
-        return;
-      case KMType.VERIFICATION_TOKEN_TYPE:
-        encodeVeriToken(exp);
-        return;
-      case KMType.HMAC_SHARING_PARAM_TYPE:
-        encodeHmacSharingParam(exp);
-        return;
-      case KMType.HW_AUTH_TOKEN_TYPE:
-        encodeHwAuthToken(exp);
-        return;
-      case KMType.TAG_TYPE:
-        short tagType = KMTag.getTagType(exp);
-        encodeTag(tagType, exp);
-        return;
-      default:
-        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+
+  public short encodeError(short err, byte[] buffer, short startOff, short length) {
+    this.buffer = buffer;
+    this.startOff = startOff;
+    this.length = (short)(startOff + length);
+    // encode the err as UINT with value in err - should not be greater then 5 bytes.
+    if(err < UINT8_LENGTH){
+      writeByte((byte)(UINT_TYPE | err ));
+    }else if(err < 0x100){
+      writeByte((byte)(UINT_TYPE | UINT8_LENGTH));
+      writeByte((byte)err);
+    }else {
+      writeByte((byte)(UINT_TYPE | UINT16_LENGTH));
+      writeShort(err);
+    }
+    return (short)(this.startOff - startOff);
+  }
+
+  private void encode(){
+    while (stackPtr > 0) {
+      short exp = pop();
+      byte type = KMType.getType(exp);
+      switch (type) {
+        case KMType.BYTE_BLOB_TYPE:
+          encodeByteBlob(exp);
+          break;
+        case KMType.INTEGER_TYPE:
+          encodeInteger(exp);
+          break;
+        case KMType.ARRAY_TYPE:
+          encodeArray(exp);
+          break;
+        case KMType.ENUM_TYPE:
+          encodeEnum(exp);
+          break;
+        case KMType.KEY_PARAM_TYPE:
+          encodeKeyParam(exp);
+          break;
+        case KMType.KEY_CHAR_TYPE:
+          encodeKeyChar(exp);
+          break;
+        case KMType.VERIFICATION_TOKEN_TYPE:
+          encodeVeriToken(exp);
+          break;
+        case KMType.HMAC_SHARING_PARAM_TYPE:
+          encodeHmacSharingParam(exp);
+          break;
+        case KMType.HW_AUTH_TOKEN_TYPE:
+          encodeHwAuthToken(exp);
+          break;
+        case KMType.TAG_TYPE:
+          short tagType = KMTag.getTagType(exp);
+          encodeTag(tagType, exp);
+          break;
+        default:
+          ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+      }
     }
   }
   private void encodeTag(short tagType, short exp){
@@ -147,22 +190,23 @@ public class KMEncoder {
 
   private void encodeArray(short obj) {
     writeMajorTypeWithLength(ARRAY_TYPE, KMArray.cast(obj).length());
-    short index = 0;
     short len = KMArray.cast(obj).length();
-    while(index < len){
+    short index = (short)(len-1);
+    while(index >= 0){
       encode(KMArray.cast(obj).get(index));
-      index++;
+      index--;
     }
   }
 
   private void encodeAsMap(short obj){
     writeMajorTypeWithLength(MAP_TYPE, KMArray.cast(obj).length());
-    short index = 0;
     short len = KMArray.cast(obj).length();
-    while(index < len){
-      short inst = KMArray.cast(obj).get(index);
+    short index = (short)(len-1);
+    short inst;
+    while(index >= 0){
+      inst = KMArray.cast(obj).get(index);
       encode(inst);
-      index++;
+      index--;
     }
   }
 
@@ -208,6 +252,8 @@ public class KMEncoder {
     while(index < len){
       if(val[(short)(startOff + index)] > 0){
         break;
+      }else if(val[(short)(startOff + index)] < 0){
+        break;
       }
       index++; // index will be equal to len if value is 0.
     }
@@ -215,7 +261,8 @@ public class KMEncoder {
     short diff = (short)(len - index);
     if(diff == 0){
       writeByte((byte)(UINT_TYPE | 0));
-    }else if((diff == 1) && val[(short)(startOff + index)] < UINT8_LENGTH){
+    }else if((diff == 1) && (val[(short)(startOff + index)] < UINT8_LENGTH)
+      &&(val[(short)(startOff + index)] >= 0)){
       writeByte((byte)(UINT_TYPE | val[(short)(startOff + index)]));
     }else if (diff == 1){
       writeByte((byte)(UINT_TYPE | UINT8_LENGTH));
@@ -239,11 +286,11 @@ public class KMEncoder {
   }
 
   private void writeByteValue(byte val){
-    if(val < UINT8_LENGTH){
+    if((val < UINT8_LENGTH) && (val >=0)){
       writeByte((byte)(UINT_TYPE | val));
     }else{
       writeByte((byte)(UINT_TYPE | UINT8_LENGTH));
-      writeByte(val);
+      writeByte((byte)val);
     }
   }
 

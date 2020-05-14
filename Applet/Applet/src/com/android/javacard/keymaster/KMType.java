@@ -76,6 +76,7 @@ public abstract class KMType {
   public static final byte USER_AUTH_NONE = 0x00;
   public static final byte PASSWORD = 0x01;
   public static final byte FINGERPRINT = 0x02;
+  // have to be power of 2
   public static final byte ANY = (byte) 0xFF;
 
   // Origin Enum Tag key and values.
@@ -108,6 +109,22 @@ public abstract class KMType {
   public static final byte PKCS8 = 0x01;
   public static final byte RAW = 0x03;
 
+  // Verified Boot State
+  public static final short VERIFIED_BOOT_STATE = (short) 0xF003;
+  public static final byte SELF_SIGNED_BOOT = 0x01;
+  public static final byte VERIFIED_BOOT = 0x02;
+
+  // Verified Boot Key
+  public static final short VERIFIED_BOOT_KEY = (short) 0xF004;
+
+  // Verified Boot Hash
+  public static final short VERIFIED_BOOT_HASH = (short) 0xF005;
+
+  // Device Locked
+  public static final short DEVICE_LOCKED = (short) 0xF006;
+  public static final byte DEVICE_LOCKED_TRUE = 0x01;
+  public static final byte DEVICE_LOCKED_FALSE = 0x00;
+
   // Enum Array Tag
   // Purpose
   public static final short PURPOSE = 0x0002;
@@ -123,6 +140,7 @@ public abstract class KMType {
   public static final byte ECB = 0x01;
   public static final byte CBC = 0x02;
   public static final byte CTR = 0x04;
+  public static final byte GCM = 0x20;
 
   // Digest
   public static final short DIGEST = 0x0005;

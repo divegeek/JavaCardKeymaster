@@ -83,7 +83,7 @@ public class KMBoolTag extends KMTag {
     return heap[(short)(instPtr+TLV_HEADER_SIZE+4)];
   }
 
-  // validate the tag key
+  // isValidTag the tag key
   private static boolean validateKey(short key) {
     short index = (short) tags.length;
     while (--index >= 0) {
@@ -92,5 +92,8 @@ public class KMBoolTag extends KMTag {
       }
     }
     return false;
+  }
+  public static short[] getTags(){
+    return tags;
   }
 }

@@ -132,7 +132,7 @@ public class KMIntegerTag extends KMTag {
     return false;
   }
 
-  // TODO this should be combined with validateKey to actually validate {tagType, tagKey} pair.
+  // TODO this should be combined with validateKey to actually isValidTag {tagType, tagKey} pair.
   private static boolean validateTagType(short tagType) {
     if ((tagType == DATE_TAG) || (tagType == UINT_TAG) || (tagType == ULONG_TAG)) {
       return true;
@@ -140,4 +140,29 @@ public class KMIntegerTag extends KMTag {
     return false;
   }
 
+  public static short getShortValue(short tagType, short tagKey, short keyParameters){
+    short ptr;
+    if(tagType == UINT_TAG){
+      ptr = KMKeyParameters.findTag(KMType.UINT_TAG, tagKey, keyParameters);
+      if (ptr != KMType.INVALID_VALUE) {
+        ptr = KMIntegerTag.cast(ptr).getValue();
+        if(KMInteger.cast(ptr).getSignificantShort() == 0){
+          return KMInteger.cast(ptr).getShort();
+        }
+      }
+    }
+    return KMType.INVALID_VALUE;
+  }
+
+  public static short getValue(byte[] buf, short offset, short tagType, short tagKey, short keyParameters){
+    short ptr;
+    if((tagType == UINT_TAG) || (tagType == ULONG_TAG) || (tagType == DATE_TAG)){
+      ptr = KMKeyParameters.findTag(tagType, tagKey, keyParameters);
+      if (ptr != KMType.INVALID_VALUE) {
+        ptr = KMIntegerTag.cast(ptr).getValue();
+        return KMInteger.cast(ptr).value(buf,offset);
+      }
+    }
+    return KMType.INVALID_VALUE;
+  }
 }

@@ -55,7 +55,27 @@ public class KMDecoder {
     this.length = (short)(startOff+length);
     return decode(expression);
   }
-
+  public short decodeArray(short exp, byte[] buffer, short startOff, short length){
+    this.buffer = buffer;
+    this.startOff = startOff;
+    this.length = (short)(startOff+length);
+    short payloadLength = readMajorTypeWithPayloadLength(ARRAY_TYPE);
+    short expLength = KMArray.cast(exp).length();
+    if(payloadLength > expLength){
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
+    short index = 0;
+    short obj;
+    short type;
+    short arrPtr = KMArray.instance(payloadLength);
+    while (index < payloadLength) {
+      type = KMArray.cast(exp).get(index);
+      obj = decode(type);
+      KMArray.cast(arrPtr).add(index, obj);
+      index++;
+    }
+    return arrPtr;
+  }
   private short decode(short exp){
     byte type = KMType.getType(exp);
     switch(type){
@@ -138,6 +158,9 @@ public class KMDecoder {
     boolean tagFound;
     short tagInd;
     short tagType;
+    short tagClass;
+    short allowedType;
+    short obj;
     // For each tag in payload ...
     while (index < payloadLength) {
       tagFound = false;
@@ -145,12 +168,13 @@ public class KMDecoder {
       tagType = peekTagType();
       // Check against the allowed tags ...
       while (tagInd < length) {
-        short tagClass = KMArray.cast(allowedTags).get(tagInd);
-        short allowedType = KMTag.getTagType(tagClass);
+        tagClass = KMArray.cast(allowedTags).get(tagInd);
+        allowedType = KMTag.getTagType(tagClass);
         // If it is part of allowed tags ...
         if (tagType == allowedType) {
           // then decodeByteBlob and add that to the array.
-          KMArray.cast(vals).add(index, decode(tagClass));
+          obj = decode(tagClass);
+          KMArray.cast(vals).add(index,obj);
           tagFound = true;
           break;
         }
@@ -200,17 +224,21 @@ public class KMDecoder {
     }
     short arrPtr = KMArray.cast(exp).instance(payloadLength);
     short index = 0;
+    short type;
+    short obj;
     // check whether array contains one type of objects or multiple types
     if( KMArray.cast(exp).containedType() == 0){// multiple types specified by expression.
       while (index < payloadLength) {
-        short type = KMArray.cast(exp).get(index);
-        KMArray.cast(arrPtr).add(index, decode(type));
+        type = KMArray.cast(exp).get(index);
+        obj = decode(type);
+        KMArray.cast(arrPtr).add(index, obj);
         index++;
       }
     }else{ // Array is a Vector containing objects of one type
-      short type = KMArray.cast(exp).containedType();
+      type = KMArray.cast(exp).containedType();
       while(index < payloadLength){
-        KMArray.cast(arrPtr).add(index, decode(type));
+        obj = decode(type);
+        KMArray.cast(arrPtr).add(index, obj);
         index++;
       }
     }

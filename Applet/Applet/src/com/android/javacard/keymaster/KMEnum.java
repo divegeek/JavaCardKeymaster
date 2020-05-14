@@ -24,7 +24,8 @@ public class KMEnum extends KMType {
   private static KMEnum prototype;
   private static short instPtr;
 
-  private static short[] types = {HARDWARE_TYPE, KEY_FORMAT, KEY_DERIVATION_FUNCTION};
+  private static short[] types = {HARDWARE_TYPE, KEY_FORMAT, KEY_DERIVATION_FUNCTION,
+    VERIFIED_BOOT_STATE, DEVICE_LOCKED};
 
   private static Object[] enums = null;
 
@@ -87,7 +88,9 @@ public class KMEnum extends KMType {
               ISO18033_2_KDF1_SHA256,
               ISO18033_2_KDF2_SHA1,
               ISO18033_2_KDF2_SHA256
-            }
+            },
+            new byte[] {SELF_SIGNED_BOOT, VERIFIED_BOOT},
+            new byte[] {DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE}
           };
     }
   }
@@ -108,9 +111,11 @@ public class KMEnum extends KMType {
     return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE));
   }
 
-  // validate enumeration keys and values.
+  // isValidTag enumeration keys and values.
   private static boolean validateEnum(short key, byte value) {
     create();
+    byte[] vals;
+    short enumInd;
     // check if key exists
     short index = (short) types.length;
     while (--index >= 0) {
@@ -118,8 +123,8 @@ public class KMEnum extends KMType {
         // check if value given
         if (value != NO_VALUE) {
           // check if the value exist
-          byte[] vals = (byte[]) enums[index];
-          short enumInd = (short) vals.length;
+          vals = (byte[]) enums[index];
+          enumInd = (short) vals.length;
           while (--enumInd >= 0) {
             if (vals[enumInd] == value) {
               // return true if value exist
@@ -136,4 +141,5 @@ public class KMEnum extends KMType {
     // return false if key does not exist
     return false;
   }
+
 }

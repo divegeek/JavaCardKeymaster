@@ -93,16 +93,18 @@ public class KMEnumTag extends KMTag {
             new byte[] {RSA, DES, EC, AES, HMAC},
             new byte[] {P_224, P_256, P_384, P_521},
             new byte[] {STANDALONE, REQUIRES_FILE_SYSTEM},
-            new byte[] {USER_AUTH_NONE, PASSWORD, FINGERPRINT, ANY},
+            new byte[] {USER_AUTH_NONE, PASSWORD, FINGERPRINT, (byte)(PASSWORD & FINGERPRINT),ANY},
             new byte[] {GENERATED, DERIVED, IMPORTED, UNKNOWN, SECURELY_IMPORTED},
             new byte[] {SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX}
           };
     }
   }
 
-  // validate enumeration keys and values.
+  // isValidTag enumeration keys and values.
   private static boolean validateEnum(short key, byte value) {
     create();
+    byte[] vals;
+    short enumInd;
     // check if key exists
     short index = (short) tags.length;
     while (--index >= 0) {
@@ -110,8 +112,8 @@ public class KMEnumTag extends KMTag {
         // check if value given
         if (value != NO_VALUE) {
           // check if the value exist
-          byte[] vals = (byte[]) enums[index];
-          short enumInd = (short) vals.length;
+          vals = (byte[]) enums[index];
+          enumInd = (short) vals.length;
           while (--enumInd >= 0) {
             if (vals[enumInd] == value) {
               // return true if value exist
@@ -127,5 +129,13 @@ public class KMEnumTag extends KMTag {
     }
     // return false if key does not exist
     return false;
+  }
+
+  public static short getValue(short tagType, short keyParameters){
+    short tagPtr = KMKeyParameters.findTag(KMType.ENUM_TAG, tagType, keyParameters);
+    if(tagPtr != KMType.INVALID_VALUE){
+      return heap[(short)(tagPtr+TLV_HEADER_SIZE+4)];
+    }
+    return KMType.INVALID_VALUE;
   }
 }

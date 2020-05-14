@@ -44,11 +44,4 @@ public class KMOperationState {
   public void setOperationHandle(KMInteger operationHandle) {
     this.operationHandle = operationHandle;
   }
-/*
-  public void release(KMContext context) {
-    // TODO release handle
-    context.getRepository().releaseOperationState(this);
-  }
-
- */
 }
