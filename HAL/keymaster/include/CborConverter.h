@@ -26,6 +26,7 @@
 #include <numeric>
 #include <cppbor.h>
 #include <cppbor_parse.h>
+#include <hidl/HidlSupport.h>
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 
 #define EMPTY(A) *(A*)nullptr
@@ -47,47 +48,76 @@ using ::android::hardware::keymaster::V4_0::VerificationToken;
 
 class CborConverter
 {
-public:
-	CborConverter() = default;
-	~CborConverter() = default;
+    public:
+        CborConverter() = default;
+        ~CborConverter() = default;
 
-	ParseResult decodeData(const std::vector<uint8_t> cborData);
+        ParseResult decodeData(const std::vector<uint8_t> cborData);
 
-    /* Use this function to get both signed and usinged integers.*/
-	template<typename T>
-    bool getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value);
-    bool getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos, HmacSharingParameters& params);
-    bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& vec);
-    bool getHardwareAuthToken(const std::unique_ptr<Item>& item, const uint32_t pos, HardwareAuthToken& authType);
-    bool getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<KeyParameter> keyParams);
-   
+        /* Use this function to get both signed and usinged integers.*/
+        template<typename T>
+            bool getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value);
+        bool getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos, HmacSharingParameters& params);
+        bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& vec);
+        bool getHardwareAuthToken(const std::unique_ptr<Item>& item, const uint32_t pos, HardwareAuthToken& authType);
+        bool getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>& keyParams);
+        bool addKeyparameters(Array& array, const android::hardware::hidl_vec<::android::hardware::keymaster::V4_0::KeyParameter>&
+                keyParams);
+        bool addHardwareAuthToken(Array& array, const ::android::hardware::keymaster::V4_0::HardwareAuthToken&
+                authToken);
+        bool getVerificationToken(const std::unique_ptr<Item>& item, const uint32_t pos, VerificationToken&
+                token);
+        bool getKeyCharacteristics(const std::unique_ptr<Item> &item, const uint32_t pos,
+                ::android::hardware::keymaster::V4_0::KeyCharacteristics& keyCharacteristics);
+        bool getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
+                ::android::hardware::hidl_vec<::android::hardware::hidl_vec<uint8_t>>& data);
+        bool addVerificationToken(Array& array, const ::android::hardware::keymaster::V4_0::VerificationToken&
+                verificationToken);
 
-private:
-	inline MajorType getType(const std::unique_ptr<Item> &item) { return item.get()->type(); }
-    bool getKeyparameter(const std::pair<const std::unique_ptr<Item>&,
-        const std::unique_ptr<Item>&> pair, KeyParameter& keyParam);
-    inline const std::unique_ptr<Item>& getItemAtPos(const std::unique_ptr<Item>& item, const uint32_t pos) {
-        const Array* arr = nullptr;
+        template<typename T, typename = std::enable_if_t<(std::is_same_v<T, ::android::hardware::keymaster::V4_0::ErrorCode>) ||
+            (std::is_same_v<T, ::android::hardware::keymaster::V4_1::ErrorCode>)>>
+            inline bool getErrorCode(const std::unique_ptr<Item>& item, const uint32_t pos, T& errorCode) {
+                bool ret = false;
+                uint64_t errorVal;
+                if (!getUint64<uint64_t>(item, pos, errorVal)) {
+                    return ret;
+                }
+                errorCode = static_cast<T>(errorVal);
 
-        if (MajorType::ARRAY != getType(item)) {
-            return EMPTY(std::unique_ptr<Item>);
+                ret = true;
+                return ret;
+            }
+
+
+
+
+    private:
+        inline MajorType getType(const std::unique_ptr<Item> &item) { return item.get()->type(); }
+        bool getKeyparameter(const std::pair<const std::unique_ptr<Item>&,
+                const std::unique_ptr<Item>&> pair, KeyParameter& keyParam);
+        inline void getItemAtPos(const std::unique_ptr<Item>& item, const uint32_t pos, std::unique_ptr<Item>& subItem) {
+            Array* arr = nullptr;
+
+            if (MajorType::ARRAY != getType(item)) {
+                return;
+            }
+            arr = const_cast<Array*>(item.get()->asArray());
+            if (arr->size() < (pos + 1)) {
+                return;
+            }
+            subItem = std::move((*arr)[pos]);
         }
-        arr = item.get()->asArray();
-        if (arr->size() < (pos + 1)) {
-            return EMPTY(std::unique_ptr<Item>);
-        }
-        return (*arr)[pos];
-    }
 };
 
 template<typename T>
 bool CborConverter::getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value) {
     bool ret = false;
-    const std::unique_ptr<Item>& intItem = getItemAtPos(item, pos);
-    
+    std::unique_ptr<Item> intItem(nullptr);
+    getItemAtPos(item, pos, intItem);
+
     if ((intItem == nullptr) ||
-        (std::is_unsigned<T>::value && (MajorType::UINT != getType(intItem))) ||
-        ((std::is_signed<T>::value && (MajorType::NINT != getType(intItem))))) {
+            (std::is_unsigned<T>::value && (MajorType::UINT != getType(intItem))) ||
+            ((std::is_signed<T>::value && (MajorType::NINT != getType(intItem))))) {
         return ret;
     }
 

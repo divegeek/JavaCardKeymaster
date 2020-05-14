@@ -13,15 +13,11 @@
 // limitations under the License.
 //
 
-cc_binary {
-    name: "android.hardware.keymaster@4.1-service.javacard",
-    relative_install_path: "hw",
-    vendor: true,
-    init_rc: ["4.1/android.hardware.keymaster@4.1-service.javacard.rc"],
+cc_library {
+    name: "libJavacardKeymaster41",
     srcs: [
-        "4.1/service.cpp",
         "4.1/JavacardKeymaster4Device.cpp",
-        "4.1/CborConverter.cpp"
+        "4.1/CborConverter.cpp",
     ],
     local_include_dirs: [
         "include",
@@ -35,7 +31,29 @@ cc_binary {
         "libhardware",
         "libhidlbase",
         "libkeymaster_messages",
-	"libcppbor_external",
+        "libcppbor_external",
+        "omapi_external",
         "android.hardware.keymaster@4.1",
+        "android.hardware.keymaster@4.0",
+        "libjc_transport",
+    ],
+}
+
+cc_library {
+    name: "libjc_transport",
+    host_supported: true,
+    vendor_available: true,
+
+    srcs: [
+        "4.1/SocketTransport.cpp",
+        "4.1/OmapiTransport.cpp"
+    ],
+    export_include_dirs: [
+        "include"
+    ],
+    shared_libs: [
+        "libbinder",
+        "libbase",
+        "liblog",
     ],
 }
