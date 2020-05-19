@@ -28,10 +28,9 @@ namespace se_transport {
 
 bool SocketTransport::openConnection() {
 	struct sockaddr_in serv_addr;
-
 	if ((mSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
-        LOG(ERROR) << "Socket creation failed";
+        LOG(ERROR) << "Socket creation failed" << " Error: "<<strerror(errno);
 		return false;
 	}
 
@@ -47,14 +46,28 @@ bool SocketTransport::openConnection() {
 
 	if (connect(mSocket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
 	{
-        LOG(ERROR) << "Connection failed.";
+        close(mSocket);
+        LOG(ERROR) << "Connection failed. Error: " << strerror(errno);
         return false;
 	}
+    socketStatus = true;
     return true;
 }
 
 bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) {
     uint8_t buffer[MAX_RECV_BUFFER_SIZE];
+    int count = 1;
+    while(!socketStatus && count++ < 5 ) {
+        sleep(1);
+        LOG(ERROR) << "Trying to open socket connection... count: " << count;
+        openConnection();
+    }
+
+    if(count >= 5) {
+        LOG(ERROR) << "Failed to open socket connection";
+        return false;
+    }
+
 	if (0 > send(mSocket, inData, inLen , 0 )) {
         LOG(ERROR) << "Failed to send data over socket.";
         return false;
@@ -71,12 +84,13 @@ bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::v
 
 bool SocketTransport::closeConnection() {
     close(mSocket);
+    socketStatus = false;
     return true;
 }
 
 bool SocketTransport::isConnected() {
     //TODO
-    return true;
+    return socketStatus;
 }
 
 }
