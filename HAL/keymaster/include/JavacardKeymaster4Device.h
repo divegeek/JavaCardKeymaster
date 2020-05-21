@@ -24,6 +24,9 @@
 #include <android-base/properties.h>
 #include "CborConverter.h"
 #include "TransportFactory.h"
+#include <keymaster/keymaster_configuration.h>
+#include <keymaster/contexts/pure_soft_keymaster_context.h>
+#include <keymaster/android_keymaster.h>
 
 namespace keymaster {
 namespace V4_1 {
@@ -46,19 +49,15 @@ using ::android::hardware::keymaster::V4_0::OperationHandle;
 using ::android::hardware::keymaster::V4_0::SecurityLevel;
 using ::android::hardware::keymaster::V4_0::VerificationToken;
 using ::android::hardware::keymaster::V4_1::IKeymasterDevice;
-using ::android::hardware::keymaster::V4_1::Tag;
+using ::android::hardware::keymaster::V4_0::Tag;
 
 using V41ErrorCode = ::android::hardware::keymaster::V4_1::ErrorCode;
 
 class JavacardKeymaster4Device : public IKeymasterDevice {
   public:
-    JavacardKeymaster4Device() {
-		pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
-                                android::base::GetBoolProperty("ro.kernel.qemu", false)));
-        pTransportFactory->openConnection();
-    }
-
-    virtual ~JavacardKeymaster4Device() {}
+  
+    JavacardKeymaster4Device();
+    virtual ~JavacardKeymaster4Device();
 
     // Methods from ::android::hardware::keymaster::V4_0::IKeymasterDevice follow.
     Return<void> getHardwareInfo(getHardwareInfo_cb _hidl_cb) override;
@@ -88,6 +87,9 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
 protected:
     CborConverter cborConverter_;
     std::unique_ptr<se_transport::TransportFactory> pTransportFactory;
+	
+private:
+    std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
 };
 
 }  // namespace javacard

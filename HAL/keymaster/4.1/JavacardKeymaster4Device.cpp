@@ -21,6 +21,10 @@
 #include <cppbor_parse.h>
 #include <CborConverter.h>
 #include <Transport.h>
+#include <android-base/logging.h>
+#include <keymaster/key_blob_utils/integrity_assured_key_blob.h>
+#include <keymaster/key_blob_utils/software_keyblobs.h>
+
 #include <JavacardKeymaster4Device.h>
 
 //#define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v0.1"
@@ -34,6 +38,7 @@ namespace keymaster {
 namespace V4_1 {
 namespace javacard {
 
+constexpr size_t kOperationTableSize = 16;
 
 enum class Instruction {
      INS_GENERATE_KEY_CMD = 0x10,
@@ -59,6 +64,98 @@ enum class Instruction {
      INS_DEVICE_LOCKED_CMD = 0x24,
      INS_EARLY_BOOT_ENDED_CMD = 0x25
 };
+
+inline ErrorCode legacy_enum_conversion(const keymaster_error_t value) {
+    return static_cast<ErrorCode>(value);
+}
+
+inline keymaster_key_format_t legacy_enum_conversion(const KeyFormat value) {
+    return static_cast<keymaster_key_format_t>(value);
+}
+
+inline keymaster_tag_t legacy_enum_conversion(const Tag value) {
+    return keymaster_tag_t(value);
+}
+
+inline Tag legacy_enum_conversion(const keymaster_tag_t value) {
+    return Tag(value);
+}
+
+inline keymaster_tag_type_t typeFromTag(const keymaster_tag_t tag) {
+    return keymaster_tag_get_type(tag);
+}
+
+keymaster_key_param_set_t hidlKeyParams2Km(const hidl_vec<KeyParameter>& keyParams) {
+    keymaster_key_param_set_t set;
+
+    set.params = new keymaster_key_param_t[keyParams.size()];
+    set.length = keyParams.size();
+
+    for (size_t i = 0; i < keyParams.size(); ++i) {
+        auto tag = legacy_enum_conversion(keyParams[i].tag);
+        switch (typeFromTag(tag)) {
+        case KM_ENUM:
+        case KM_ENUM_REP:
+            set.params[i] = keymaster_param_enum(tag, keyParams[i].f.integer);
+            break;
+        case KM_UINT:
+        case KM_UINT_REP:
+            set.params[i] = keymaster_param_int(tag, keyParams[i].f.integer);
+            break;
+        case KM_ULONG:
+        case KM_ULONG_REP:
+            set.params[i] = keymaster_param_long(tag, keyParams[i].f.longInteger);
+            break;
+        case KM_DATE:
+            set.params[i] = keymaster_param_date(tag, keyParams[i].f.dateTime);
+            break;
+        case KM_BOOL:
+            if (keyParams[i].f.boolValue)
+                set.params[i] = keymaster_param_bool(tag);
+            else
+                set.params[i].tag = KM_TAG_INVALID;
+            break;
+        case KM_BIGNUM:
+        case KM_BYTES:
+            set.params[i] =
+                keymaster_param_blob(tag, &keyParams[i].blob[0], keyParams[i].blob.size());
+            break;
+        case KM_INVALID:
+        default:
+            set.params[i].tag = KM_TAG_INVALID;
+            /* just skip */
+            break;
+        }
+    }
+
+    return set;
+}
+
+class KmParamSet : public keymaster_key_param_set_t {
+  public:
+    explicit KmParamSet(const hidl_vec<KeyParameter>& keyParams)
+        : keymaster_key_param_set_t(hidlKeyParams2Km(keyParams)) {}
+    KmParamSet(KmParamSet&& other) : keymaster_key_param_set_t{other.params, other.length} {
+        other.length = 0;
+        other.params = nullptr;
+    }
+    KmParamSet(const KmParamSet&) = delete;
+    ~KmParamSet() { delete[] params; }
+};
+
+JavacardKeymaster4Device::JavacardKeymaster4Device(): softKm_(new ::keymaster::AndroidKeymaster(
+	  []() -> auto {
+		  auto context = new PureSoftKeymasterContext();
+		  context->SetSystemVersion(GetOsVersion(), GetOsPatchlevel());
+		  return context;
+	  }(),
+	  kOperationTableSize)) {
+	pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
+							android::base::GetBoolProperty("ro.kernel.qemu", false)));
+	assert(pTransportFactory->openConnection() && "Failed to open connection with secure element");
+}
+
+JavacardKeymaster4Device::~JavacardKeymaster4Device() {}
 
 ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut) {
     apduOut.push_back(static_cast<uint8_t>(APDU_CLS)); //CLS
@@ -289,6 +386,40 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
 }
 
 Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& keyData, importKey_cb _hidl_cb) {
+    keymaster_error_t error;
+    hidl_vec<uint8_t> inKey;
+    
+    if (keyFormat == KeyFormat::PKCS8) {
+	    ImportKeyRequest request;
+	    request.key_description.Reinitialize(KmParamSet(keyParams));
+	    request.key_format = legacy_enum_conversion(keyFormat);
+	    request.SetKeyMaterial(keyData.data(), keyData.size());
+
+	    ImportKeyResponse response;
+	    softKm_->ImportKey(request, &response);
+
+	    KeyCharacteristics resultCharacteristics;
+	    hidl_vec<uint8_t> resultKeyBlob;
+        if (response.error == KM_ERROR_OK) {
+            AuthorizationSet hidden;
+            error = BuildHiddenAuthorizations(request.key_description, &hidden, softwareRootOfTrust);
+            if (error == KM_ERROR_OK) {
+                KeymasterKeyBlob key_material;
+                DeserializeIntegrityAssuredBlob(KeymasterKeyBlob(response.key_blob), hidden,  &key_material, &response.enforced, &response.unenforced);
+
+                inKey.setToExternal(const_cast<uint8_t*>(key_material.key_material), key_material.key_material_size);
+            }
+        }
+    } else if (keyFormat == KeyFormat::RAW) {
+        //convert keyData to keyMaterial
+        inKey = keyData;
+    } else {
+	    KeyCharacteristics resultCharacteristics;
+	    hidl_vec<uint8_t> resultKeyBlob;
+	    _hidl_cb(legacy_enum_conversion(KM_ERROR_UNSUPPORTED_KEY_FORMAT), resultKeyBlob, resultCharacteristics);
+	    return Void();
+    }
+    
     cppbor::Array array;
     const uint8_t* pos;
     std::unique_ptr<Item> item;
@@ -300,7 +431,7 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
 
     cborConverter_.addKeyparameters(array, keyParams);
     array.add(static_cast<uint64_t>(keyFormat));
-    array.add(std::vector<uint8_t>(keyData));
+    array.add(std::vector<uint8_t>(inKey));
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(pTransportFactory, Instruction::INS_IMPORT_KEY_CMD, cborData, cborOutData);

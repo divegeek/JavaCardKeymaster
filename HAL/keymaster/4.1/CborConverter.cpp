@@ -16,6 +16,7 @@
  */
 
 #include <CborConverter.h>
+#include <android-base/logging.h>
 
 bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl_vec<KeyParameter>& keyParams) {
     Map map;
@@ -40,7 +41,10 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
                 map.add(static_cast<uint64_t>(param.tag), param.f.dateTime);
                 break;
             case TagType::BOOL:
-                map.add(static_cast<uint64_t>(param.tag), param.f.boolValue);
+                {
+                uint8_t boolValue = static_cast<uint8_t>(param.f.boolValue);
+                map.add(static_cast<uint64_t>(param.tag), boolValue);
+                }
                 break;
             case TagType::BIGNUM:
             case TagType::BYTES:
