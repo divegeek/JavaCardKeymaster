@@ -21,7 +21,7 @@
 bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl_vec<KeyParameter>& keyParams) {
     Map map;
     std::map<uint64_t, std::vector<uint8_t>> enum_repetition;
-    std::map<uint64_t, std::vector<uint64_t>> uint_repetition;
+    std::map<uint64_t, Array> uint_repetition;
     for(size_t i = 0; i < keyParams.size(); i++) {
         KeyParameter param = keyParams[i];
         TagType tagType = static_cast<TagType>(param.tag & (0xF << 28));
@@ -31,7 +31,7 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
                 map.add(static_cast<uint64_t>(param.tag), param.f.integer);
                 break;
             case TagType::UINT_REP:
-                uint_repetition[static_cast<uint64_t>(param.tag)].push_back(static_cast<uint64_t>(param.f.integer));
+                uint_repetition[static_cast<uint64_t>(param.tag)].add(param.f.integer);
                 break;
             case TagType::ENUM_REP:
                 enum_repetition[static_cast<uint64_t>(param.tag)].push_back(static_cast<uint8_t>(param.f.integer));
@@ -40,7 +40,7 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
                 map.add(static_cast<uint64_t>(param.tag), param.f.longInteger);
                 break;
             case TagType::ULONG_REP:
-                uint_repetition[static_cast<uint64_t>(param.tag)].push_back(param.f.longinteger);
+                uint_repetition[static_cast<uint64_t>(param.tag)].add(param.f.longInteger);
                 break;
             case TagType::DATE:
                 map.add(static_cast<uint64_t>(param.tag), param.f.dateTime);
@@ -64,9 +64,8 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
         }
     }
     if(0 < uint_repetition.size()) {
-        for( auto const& [key, val] : uint_repetition ) {
-            Bstr bstr(val);
-            map.add(key, std::move(bstr));
+        for( auto & [key, val] : uint_repetition ) {
+            map.add(key, std::move(val));
         }
     }
     array.add(std::move(map));
