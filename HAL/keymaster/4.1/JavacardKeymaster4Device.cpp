@@ -388,18 +388,18 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
 Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& keyData, importKey_cb _hidl_cb) {
     keymaster_error_t error;
     hidl_vec<uint8_t> inKey;
-    
+
     if (keyFormat == KeyFormat::PKCS8) {
-	    ImportKeyRequest request;
-	    request.key_description.Reinitialize(KmParamSet(keyParams));
-	    request.key_format = legacy_enum_conversion(keyFormat);
-	    request.SetKeyMaterial(keyData.data(), keyData.size());
+        ImportKeyRequest request;
+        request.key_description.Reinitialize(KmParamSet(keyParams));
+        request.key_format = legacy_enum_conversion(keyFormat);
+        request.SetKeyMaterial(keyData.data(), keyData.size());
 
-	    ImportKeyResponse response;
-	    softKm_->ImportKey(request, &response);
+        ImportKeyResponse response;
+        softKm_->ImportKey(request, &response);
 
-	    KeyCharacteristics resultCharacteristics;
-	    hidl_vec<uint8_t> resultKeyBlob;
+        KeyCharacteristics resultCharacteristics;
+        hidl_vec<uint8_t> resultKeyBlob;
         if (response.error == KM_ERROR_OK) {
             AuthorizationSet hidden;
             error = BuildHiddenAuthorizations(request.key_description, &hidden, softwareRootOfTrust);
@@ -414,12 +414,12 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
         //convert keyData to keyMaterial
         inKey = keyData;
     } else {
-	    KeyCharacteristics resultCharacteristics;
-	    hidl_vec<uint8_t> resultKeyBlob;
-	    _hidl_cb(legacy_enum_conversion(KM_ERROR_UNSUPPORTED_KEY_FORMAT), resultKeyBlob, resultCharacteristics);
-	    return Void();
+        KeyCharacteristics resultCharacteristics;
+        hidl_vec<uint8_t> resultKeyBlob;
+        _hidl_cb(legacy_enum_conversion(KM_ERROR_UNSUPPORTED_KEY_FORMAT), resultKeyBlob, resultCharacteristics);
+        return Void();
     }
-    
+
     cppbor::Array array;
     const uint8_t* pos;
     std::unique_ptr<Item> item;

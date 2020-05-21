@@ -21,6 +21,7 @@
 bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl_vec<KeyParameter>& keyParams) {
     Map map;
     std::map<uint64_t, std::vector<uint8_t>> enum_repetition;
+    std::map<uint64_t, std::vector<uint64_t>> uint_repetition;
     for(size_t i = 0; i < keyParams.size(); i++) {
         KeyParameter param = keyParams[i];
         TagType tagType = static_cast<TagType>(param.tag & (0xF << 28));
@@ -29,22 +30,23 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
             case TagType::UINT:
                 map.add(static_cast<uint64_t>(param.tag), param.f.integer);
                 break;
-            //case TagType::UINT_REP:
+            case TagType::UINT_REP:
+                uint_repetition[static_cast<uint64_t>(param.tag)].push_back(static_cast<uint64_t>(param.f.integer));
+                break;
             case TagType::ENUM_REP:
                 enum_repetition[static_cast<uint64_t>(param.tag)].push_back(static_cast<uint8_t>(param.f.integer));
                 break;
             case TagType::ULONG:
-            case TagType::ULONG_REP:
                 map.add(static_cast<uint64_t>(param.tag), param.f.longInteger);
+                break;
+            case TagType::ULONG_REP:
+                uint_repetition[static_cast<uint64_t>(param.tag)].push_back(param.f.longinteger);
                 break;
             case TagType::DATE:
                 map.add(static_cast<uint64_t>(param.tag), param.f.dateTime);
                 break;
             case TagType::BOOL:
-                {
-                uint8_t boolValue = static_cast<uint8_t>(param.f.boolValue);
-                map.add(static_cast<uint64_t>(param.tag), boolValue);
-                }
+                map.add(static_cast<uint64_t>(param.tag), static_cast<uint8_t>(param.f.boolValue));
                 break;
             case TagType::BIGNUM:
             case TagType::BYTES:
@@ -57,6 +59,12 @@ bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl
     }
     if(0 < enum_repetition.size()) {
         for( auto const& [key, val] : enum_repetition ) {
+            Bstr bstr(val);
+            map.add(key, std::move(bstr));
+        }
+    }
+    if(0 < uint_repetition.size()) {
+        for( auto const& [key, val] : uint_repetition ) {
             Bstr bstr(val);
             map.add(key, std::move(bstr));
         }
