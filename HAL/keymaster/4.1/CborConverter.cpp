@@ -76,7 +76,6 @@ bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, con
         KeyCharacteristics& keyCharacteristics) {
     bool ret = false;
     std::unique_ptr<Item> arrayItem(nullptr);
-
     getItemAtPos(item, pos, arrayItem);
     if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
         return ret;
@@ -93,52 +92,137 @@ bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, con
     return ret;
 }
 
-bool CborConverter::getKeyparameter(const std::pair<const std::unique_ptr<Item>&,
-        const std::unique_ptr<Item>&> pair, KeyParameter& keyParam) {
+bool CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&,
+        const std::unique_ptr<Item>&> pair, std::vector<KeyParameter>& keyParams) {
     bool ret = false;
+    uint64_t key;
     uint64_t value;
-    //TAG will be always uint32_t
-    if (!getUint64<uint64_t>(pair.first, 0, value)) {
+
+    if(!getUint64(pair.first, key)) {
         return ret;
     }
-    keyParam.tag = static_cast<Tag>(value);
 
-    if (MajorType::UINT == getType(pair.second)) {
-        TagType tagType = static_cast<TagType>(keyParam.tag & (0xF << 28));
-        switch(tagType) {
-            case TagType::ENUM:
-            case TagType::ENUM_REP:
-            case TagType::UINT:
-            case TagType::UINT_REP:
+    /* Get the TagType from the Tag */
+    TagType tagType = static_cast<TagType>(key & (0xF << 28));
+    switch(tagType) {
+        case TagType::ENUM_REP:
+            {
+                /* ENUM_REP contains values encoded in a Binary string */
+                const Bstr* bstr = pair.second.get()->asBstr();
+                if(bstr == nullptr) return ret;
+                for (auto bchar : bstr->value()) {
+                    KeyParameter keyParam;
+                    keyParam.tag = static_cast<Tag>(key);
+                    keyParam.f.integer = bchar;
+                    keyParams.push_back(std::move(keyParam));
+                }
+                return true;
+            }
+            break;
+        case TagType::ENUM:
+        case TagType::UINT:
+            {
+                KeyParameter keyParam;
+                keyParam.tag = static_cast<Tag>(key);
+                if(!getUint64(pair.second, value)) {
+                    return ret;
+                }
                 keyParam.f.integer = static_cast<uint32_t>(value);
-                break;
-            case TagType::ULONG:
-            case TagType::ULONG_REP:
-                keyParam.f.longInteger = static_cast<uint32_t>(value);
-                break;
-            case TagType::DATE:
-                keyParam.f.dateTime = static_cast<uint32_t>(value);
-                break;
-            case TagType::BOOL:
+                keyParams.push_back(std::move(keyParam));
+                return true;
+            }
+            break;
+        case TagType::ULONG:
+            {
+                KeyParameter keyParam;
+                keyParam.tag = static_cast<Tag>(key);
+                if(!getUint64(pair.second, value)) {
+                    return ret;
+                }
+                keyParam.f.longInteger = value;
+                keyParams.push_back(std::move(keyParam));
+                return true;
+            }
+            break;
+        case TagType::UINT_REP:
+            {
+                /* UINT_REP contains values encoded in a Array */
+                Array* array = const_cast<Array*>(pair.second.get()->asArray());
+                if(array == nullptr) return ret;
+                for(int i = 0; i < array->size(); i++) {
+                    KeyParameter keyParam;
+                    keyParam.tag = static_cast<Tag>(key);
+                    std::unique_ptr<Item> item = std::move((*array)[i]);
+                    if(!getUint64(item, value)) {
+                        return ret;
+                    }
+                    keyParam.f.integer = static_cast<uint32_t>(value);
+                    keyParams.push_back(std::move(keyParam));
+
+                }
+                return true;
+            }
+            break;
+        case TagType::ULONG_REP:
+            {
+                /* ULONG_REP contains values encoded in a Array */
+                Array* array = const_cast<Array*>(pair.second.get()->asArray());
+                if(array == nullptr) return ret;
+                for(int i = 0; i < array->size(); i++) {
+                    KeyParameter keyParam;
+                    keyParam.tag = static_cast<Tag>(key);
+                    std::unique_ptr<Item> item = std::move((*array)[i]);
+                    if(!getUint64(item, keyParam.f.longInteger)) {
+                        return ret;
+                    }
+                    keyParams.push_back(std::move(keyParam));
+
+                }
+                return true;
+            }
+            break;
+        case TagType::DATE:
+            {
+                KeyParameter keyParam;
+                keyParam.tag = static_cast<Tag>(key);
+                if(!getUint64(pair.second, value)) {
+                    return ret;
+                }
+                keyParam.f.dateTime = value;
+                keyParams.push_back(std::move(keyParam));
+                return true;
+            }
+            break;
+        case TagType::BOOL:
+            {
+                KeyParameter keyParam;
+                keyParam.tag = static_cast<Tag>(key);
+                if(!getUint64(pair.second, value)) {
+                    return ret;
+                }
                 keyParam.f.boolValue = static_cast<bool>(value);
-                break;
-            default: 
-                /* Invalid skip */
-                break;
-        }
-    }
-    else if (MajorType::BSTR == getType(pair.second)) {
-        std::vector<uint8_t> blob;
-        if (!getBinaryArray(pair.second, 0, blob)) {
-            return ret;
-        }
-        keyParam.blob.setToExternal(blob.data(), blob.size());
+                keyParams.push_back(std::move(keyParam));
+                return true;
+            }
+            break;
+        case TagType::BYTES:
+            {
+                std::vector<uint8_t> blob;
+                KeyParameter keyParam;
+                keyParam.tag = static_cast<Tag>(key);
+                if(!getBinaryArray(pair.second, 0, blob)) {
+                    return ret;
+                }
+                keyParam.blob.setToExternal(blob.data(), blob.size());
+                keyParams.push_back(std::move(keyParam));
+                return true;
+            }
+            break;
+        default:
+            /* Invalid skip */
+            break;
     }
     return ret;
-}
-
-ParseResult CborConverter::decodeData(const std::vector<uint8_t> cborData) {
-    return parse(cborData);
 }
 
 bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
@@ -287,19 +371,19 @@ bool CborConverter::getVerificationToken(const std::unique_ptr<Item>& item, cons
 bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<KeyParameter>& keyParams) {
     bool ret = false;
     std::unique_ptr<Item> mapItem(nullptr);
+    std::vector<KeyParameter> params;
     getItemAtPos(item, pos, mapItem);
     if ((mapItem == nullptr) && (MajorType::MAP != getType(mapItem)))
         return ret;
-
     const Map* map = mapItem.get()->asMap();
     size_t mapSize = map->size();
     for (int i = 0; i < mapSize; i++) {
-        KeyParameter param;
-        if (!getKeyparameter((*map)[i], param)) {
+        if (!getKeyParameter((*map)[i], params)) {
             return ret;
         }
-        keyParams[i] = std::move(param);
     }
+    keyParams.resize(params.size());
+    keyParams = params;
     ret = true;
     return ret;
 }

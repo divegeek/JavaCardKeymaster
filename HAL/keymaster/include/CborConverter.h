@@ -46,16 +46,39 @@ class CborConverter
         ~CborConverter() = default;
 
         /**
-         * Parses the input data which is in CBOR format and returns a Tuple of Item pointer, buffer pointer and
-         * message.
+         * Parses the input data which is in CBOR format and returns a Tuple of Item pointer and the first element in the item pointer.          
          */
-        ParseResult decodeData(const std::vector<uint8_t> cborData);
+        template<typename T = ErrorCode>
+        std::tuple<std::unique_ptr<Item>, T> decodeData(const std::vector<uint8_t>& response, bool
+                hasErrorCode) {
+            const uint8_t* pos;
+            std::unique_ptr<Item> item(nullptr);
+            std::string message;
+            T errorCode = T::OK;
+            std::tie(item, pos, message) = parse(response);
+            if(item != nullptr && hasErrorCode) {
+                if(MajorType::ARRAY == getType(item)) {
+                    getErrorCode(item, 0, errorCode);
+                } else if (MajorType::UINT == getType(item)) {
+                    uint64_t err;
+                    getUint64(item, err);
+                    errorCode = static_cast<T>(err);
+                }
+            }
+            return {std::move(item), errorCode};
+        }
 
         /**
          * Get the signed/unsigned integer value at a given position from the item pointer.
          */
         template<typename T>
-            bool getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value);
+        bool getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value);
+
+        /**
+         * Get the signed/unsigned integer value from the item pointer.
+         */
+        template<typename T>
+        bool getUint64(const std::unique_ptr<Item>& item, T& value);
 
         /**
          * Get the HmacSharingParameters structure value at the given position from the item pointer.
@@ -137,10 +160,11 @@ class CborConverter
         inline MajorType getType(const std::unique_ptr<Item> &item) { return item.get()->type(); }
 
         /**
-         * Construct Keyparameter structure from the pair of key and value.
+         * Construct Keyparameter structure from the pair of key and value. If TagType is  ENUM_REP the value contains
+         * binary string. If TagType is UINT_REP or ULONG_REP the value contains Array of unsigned integers.
          */
-        bool getKeyparameter(const std::pair<const std::unique_ptr<Item>&,
-                const std::unique_ptr<Item>&> pair, KeyParameter& keyParam);
+        bool getKeyParameter(const std::pair<const std::unique_ptr<Item>&,
+                const std::unique_ptr<Item>&> pair, std::vector<KeyParameter>& keyParam);
 
         /**
          * Get the sub item pointer from the root item pointer at the given position.
@@ -160,27 +184,33 @@ class CborConverter
 };
 
 template<typename T>
-bool CborConverter::getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value) {
+bool CborConverter::getUint64(const std::unique_ptr<Item>& item, T& value) {
     bool ret = false;
-    std::unique_ptr<Item> intItem(nullptr);
-    getItemAtPos(item, pos, intItem);
-
-    if ((intItem == nullptr) ||
-            (std::is_unsigned<T>::value && (MajorType::UINT != getType(intItem))) ||
-            ((std::is_signed<T>::value && (MajorType::NINT != getType(intItem))))) {
+    if ((item == nullptr) ||
+            (std::is_unsigned<T>::value && (MajorType::UINT != getType(item))) ||
+            ((std::is_signed<T>::value && (MajorType::NINT != getType(item))))) {
         return ret;
     }
 
     if (std::is_unsigned<T>::value) {
-        const Uint* uintVal = intItem.get()->asUint();
+        const Uint* uintVal = item.get()->asUint();
         value = uintVal->value();
     }
     else {
-        const Nint* nintVal = intItem.get()->asNint();
+        const Nint* nintVal = item.get()->asNint();
         value = nintVal->value();
     }
     ret = true;
     return ret; //success
 }
+
+template<typename T>
+bool CborConverter::getUint64(const std::unique_ptr<Item>& item, const uint32_t pos, T& value) {
+    std::unique_ptr<Item> intItem(nullptr);
+    getItemAtPos(item, pos, intItem);
+    return getUint64(intItem, value);
+}
+
+
 
 #endif
