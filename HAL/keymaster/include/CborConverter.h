@@ -62,7 +62,7 @@ class CborConverter
                 } else if (MajorType::UINT == getType(item)) {
                     uint64_t err;
                     getUint64(item, err);
-                    errorCode = static_cast<T>(err);
+                    errorCode = static_cast<T>(get2sCompliment(static_cast<uint32_t>(err)));
                 }
             }
             return {std::move(item), errorCode};
@@ -152,13 +152,18 @@ class CborConverter
                 if (!getUint64<uint64_t>(item, pos, errorVal)) {
                     return ret;
                 }
-                errorCode = static_cast<T>(errorVal);
+                errorCode = static_cast<T>(get2sCompliment(static_cast<uint32_t>(errorVal)));
 
                 ret = true;
                 return ret;
             }
 
     private:
+        /**
+         * Returns the negative value of the same number.
+         */
+        inline int32_t get2sCompliment(uint32_t value) { return static_cast<int32_t>(~value+1); }
+
         /**
          * Get the type of the Item pointer.
          */
