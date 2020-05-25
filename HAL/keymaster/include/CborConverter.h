@@ -88,8 +88,13 @@ class CborConverter
         /**
          * Get the Binary string at the given position from the item pointer.
          */
-        bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& vec);
+        bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& value);
 
+        /**
+         * Get the Binary string at the given position from the item pointer.
+         */
+        bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
+                ::android::hardware::hidl_vec<uint8_t>& value);
         /**
          * Get the HardwareAuthToken value at the given position from the item pointer.
          */

@@ -207,13 +207,11 @@ bool CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&
             break;
         case TagType::BYTES:
             {
-                std::vector<uint8_t> blob;
                 KeyParameter keyParam;
                 keyParam.tag = static_cast<Tag>(key);
-                if(!getBinaryArray(pair.second, 0, blob)) {
+                if(!getBinaryArray(pair.second, 0, keyParam.blob)) {
                     return ret;
                 }
-                keyParam.blob.setToExternal(blob.data(), blob.size());
                 keyParams.push_back(std::move(keyParam));
                 return true;
             }
@@ -236,19 +234,31 @@ bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const
     const Array* arr = arrayItem.get()->asArray();
     size_t arrSize = arr->size();
     for (int i = 0; i < arrSize; i++) {
-        std::vector<uint8_t> innerData;
-        if (!getBinaryArray(arrayItem, i, innerData))
+        if (!getBinaryArray(arrayItem, i, data[i]))
             return ret;
-        data[i].setToExternal(innerData.data(), innerData.size());
     }
     ret = true; // success
     return ret;
 }
 
+bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
+::android::hardware::hidl_vec<uint8_t>& value) {
+    bool ret = false;
+    std::unique_ptr<Item> strItem(nullptr);
+    getItemAtPos(item, pos, strItem);
+    if ((strItem == nullptr) && (MajorType::BSTR != getType(strItem)))
+        return ret;
+
+    const Bstr* bstr = strItem.get()->asBstr();
+    value = bstr->value();
+    ret = true;
+    return ret;
+}
+
+
 bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& value) {
     bool ret = false;
     std::unique_ptr<Item> strItem(nullptr);
-
     getItemAtPos(item, pos, strItem);
     if ((strItem == nullptr) && (MajorType::BSTR != getType(strItem)))
         return ret;
@@ -260,7 +270,6 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
     ret = true;
     return ret;
 }
-
 
 bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos, HmacSharingParameters& params) {
     std::vector<uint8_t> paramValue;
@@ -275,10 +284,8 @@ bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, 
         return ret;
 
     //Seed
-    if (!getBinaryArray(arrayItem, 0, paramValue))
+    if (!getBinaryArray(arrayItem, 0, params.seed))
         return ret;
-    params.seed.setToExternal(paramValue.data(), paramValue.size());
-    paramValue.clear();
 
     //nonce
     if (!getBinaryArray(arrayItem, 1, paramValue))
@@ -311,7 +318,6 @@ bool CborConverter::addHardwareAuthToken(Array& array, const HardwareAuthToken&
 
 bool CborConverter::getHardwareAuthToken(const std::unique_ptr<Item>& item, const uint32_t pos, HardwareAuthToken& token) {
     bool ret = false;
-    std::vector<uint8_t> mac;
     //challenge
     if (!getUint64<uint64_t>(item, pos, token.challenge))
         return ret;
@@ -330,9 +336,8 @@ bool CborConverter::getHardwareAuthToken(const std::unique_ptr<Item>& item, cons
     if (!getUint64<uint64_t>(item, pos+4, token.timestamp))
         return ret;
     //MAC
-    if (!getBinaryArray(item, pos+5, mac))
+    if (!getBinaryArray(item, pos+5, token.mac))
         return ret;
-    token.mac.setToExternal(mac.data(), mac.size());
     ret = true;
     return ret;
 }
@@ -340,7 +345,6 @@ bool CborConverter::getHardwareAuthToken(const std::unique_ptr<Item>& item, cons
 bool CborConverter::getVerificationToken(const std::unique_ptr<Item>& item, const uint32_t pos, VerificationToken&
         token) {
     bool ret = false;
-    std::vector<uint8_t> mac;
     //challenge
     if (!getUint64<uint64_t>(item, pos, token.challenge))
         return ret;
@@ -360,9 +364,8 @@ bool CborConverter::getVerificationToken(const std::unique_ptr<Item>& item, cons
     token.securityLevel = static_cast<SecurityLevel>(val);
 
     //MAC
-    if (!getBinaryArray(item, pos+4, mac))
+    if (!getBinaryArray(item, pos+4, token.mac))
         return ret;
-    token.mac.setToExternal(mac.data(), mac.size());
     ret = true;
     return ret;
 

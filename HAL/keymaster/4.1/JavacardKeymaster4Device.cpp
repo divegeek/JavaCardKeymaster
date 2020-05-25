@@ -367,10 +367,7 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            std::vector<uint8_t> bstr;
-            /* TODO keyBlob is BSTR <ARRAY> */
-            cborConverter_.getBinaryArray(item, 1, bstr);
-            keyBlob.setToExternal(bstr.data(), bstr.size());
+            cborConverter_.getBinaryArray(item, 1, keyBlob);
             cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
         }
     }
@@ -432,10 +429,7 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            std::vector<uint8_t> bstr;
-            /* TODO keyBlob is BSTR <ARRAY> */
-            cborConverter_.getBinaryArray(item, 1, bstr);
-            keyBlob.setToExternal(bstr.data(), bstr.size());
+            cborConverter_.getBinaryArray(item, 1, keyBlob);
             cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
         }
     }
@@ -466,10 +460,7 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            /* TODO keyBlob is BSTR <ARRAY> */
-            std::vector<uint8_t> bstr;
-            cborConverter_.getBinaryArray(item, 1, bstr);
-            keyBlob.setToExternal(bstr.data(), bstr.size());
+            cborConverter_.getBinaryArray(item, 1, keyBlob);
             cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
         }
     }
@@ -524,10 +515,7 @@ Return<void> JavacardKeymaster4Device::exportKey(KeyFormat keyFormat, const hidl
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            /* TODO Keyblobc - BSTR(<ARRAY>)*/
-            std::vector<uint8_t> bstr;
-            cborConverter_.getBinaryArray(item, 1, bstr);
-            keyMaterial.setToExternal(bstr.data(), bstr.size());
+            cborConverter_.getBinaryArray(item, 1, keyMaterial);
         }
     }
     _hidl_cb(errorCode, keyMaterial);
@@ -578,10 +566,7 @@ Return<void> JavacardKeymaster4Device::upgradeKey(const hidl_vec<uint8_t>& keyBl
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            /* TODO Keyblob BSTR(ARRAY) */
-            std::vector<uint8_t> bstr;
-            cborConverter_.getBinaryArray(item, 1, bstr);
-            upgradedKeyBlob.setToExternal(bstr.data(), bstr.size());
+            cborConverter_.getBinaryArray(item, 1, upgradedKeyBlob);
         }
     }
     _hidl_cb(errorCode, upgradedKeyBlob);
@@ -699,11 +684,9 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            std::vector<uint8_t> bstr;
             cborConverter_.getUint64(item, 1, inputConsumed);
             cborConverter_.getKeyParameters(item, 2, outParams);
-            cborConverter_.getBinaryArray(item, 3, bstr);
-            output.setToExternal(bstr.data(), bstr.size());
+            cborConverter_.getBinaryArray(item, 3, output);
         }
     }
     _hidl_cb(errorCode, inputConsumed, outParams, output);
@@ -734,10 +717,8 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            std::vector<uint8_t> bstr;
             cborConverter_.getKeyParameters(item, 1, outParams);
-            cborConverter_.getBinaryArray(item, 2, bstr);
-            output.setToExternal(bstr.data(), bstr.size());
+            cborConverter_.getBinaryArray(item, 2, output);
         }
     }
     _hidl_cb(errorCode, outParams, output);
