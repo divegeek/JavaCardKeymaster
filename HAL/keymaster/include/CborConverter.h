@@ -54,15 +54,20 @@ class CborConverter
             const uint8_t* pos;
             std::unique_ptr<Item> item(nullptr);
             std::string message;
-            T errorCode = T::OK;
+            T errorCode = T::UNKNOWN_ERROR;
+
             std::tie(item, pos, message) = parse(response);
+
             if(item != nullptr && hasErrorCode) {
                 if(MajorType::ARRAY == getType(item)) {
-                    getErrorCode(item, 0, errorCode);
+                    if(!getErrorCode(item, 0, errorCode))
+                        item = nullptr;
                 } else if (MajorType::UINT == getType(item)) {
                     uint64_t err;
-                    getUint64(item, err);
-                    errorCode = static_cast<T>(get2sCompliment(static_cast<uint32_t>(err)));
+                    if(getUint64(item, err)) {
+                        errorCode = static_cast<T>(get2sCompliment(static_cast<uint32_t>(err)));
+                    }
+                    item = nullptr; /*Already read the errorCode. So no need of sending item to client */
                 }
             }
             return {std::move(item), errorCode};
