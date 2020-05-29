@@ -69,6 +69,10 @@ inline ErrorCode legacy_enum_conversion(const keymaster_error_t value) {
     return static_cast<ErrorCode>(value);
 }
 
+inline keymaster_purpose_t legacy_enum_conversion(const KeyPurpose value) {
+    return static_cast<keymaster_purpose_t>(value);
+}
+
 inline keymaster_key_format_t legacy_enum_conversion(const KeyFormat value) {
     return static_cast<keymaster_key_format_t>(value);
 }
@@ -376,7 +380,7 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
 }
 
 Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& keyData, importKey_cb _hidl_cb) {
-    keymaster_error_t error;
+    keymaster_error_t error = KM_ERROR_UNKNOWN_ERROR;
     hidl_vec<uint8_t> inKey;
 
     if (keyFormat == KeyFormat::PKCS8) {
@@ -390,6 +394,7 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
 
         KeyCharacteristics resultCharacteristics;
         hidl_vec<uint8_t> resultKeyBlob;
+        error = response.error;
         if (response.error == KM_ERROR_OK) {
             AuthorizationSet hidden;
             error = BuildHiddenAuthorizations(request.key_description, &hidden, softwareRootOfTrust);
@@ -399,6 +404,12 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
 
                 inKey.setToExternal(const_cast<uint8_t*>(key_material.key_material), key_material.key_material_size);
             }
+        }
+        if(error != KM_ERROR_OK) {
+	        KeyCharacteristics resultCharacteristics;
+	        hidl_vec<uint8_t> resultKeyBlob;
+	        _hidl_cb(legacy_enum_conversion(error), resultKeyBlob, resultCharacteristics);
+	        return Void();
         }
     } else if (keyFormat == KeyFormat::RAW) {
         //convert keyData to keyMaterial
@@ -418,7 +429,7 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
     KeyCharacteristics keyCharacteristics;
 
     cborConverter_.addKeyparameters(array, keyParams);
-    array.add(static_cast<uint64_t>(keyFormat));
+    array.add(static_cast<uint64_t>(KeyFormat::RAW)); //PKCS8 is already converted to RAW
     array.add(std::vector<uint8_t>(inKey));
     std::vector<uint8_t> cborData = array.encode();
 
@@ -629,8 +640,26 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     hidl_vec<KeyParameter> outParams;
     uint64_t operationHandle = 0;
 
-    if (KeyPurpose::ENCRYPT == purpose ||
-        KeyPurpose::VERIFY == purpose) {
+    if (/*KeyPurpose::ENCRYPT == purpose ||*/ KeyPurpose::VERIFY == purpose) {
+        
+        BeginOperationRequest request;
+        request.purpose = legacy_enum_conversion(purpose);
+        request.SetKeyMaterial(keyBlob.data(), keyBlob.size());
+        request.additional_params.Reinitialize(KmParamSet(inParams));
+
+        //TODO need to check AUTH_TOKEN will work here?
+        //hidl_vec<uint8_t> hidl_vec_token = authToken2HidlVec(authToken);
+        //request.additional_params.push_back(
+        //    TAG_AUTH_TOKEN, reinterpret_cast<uint8_t*>(hidl_vec_token.data()), hidl_vec_token.size());
+
+        BeginOperationResponse response;
+        softKm_->BeginOperation(request, &response);
+
+        //hidl_vec<KeyParameter> resultParams;
+        //if (response.error == KM_ERROR_OK) resultParams = kmParamSet2Hidl(response.output_params);
+
+        //_hidl_cb(legacy_enum_conversion(response.error), resultParams, response.op_handle);
+        return Void();
         /* Public key operations are handled here*/
     } else {
         cppbor::Array array;
