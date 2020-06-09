@@ -36,7 +36,7 @@ public abstract class KMType {
   public static final byte VERIFICATION_TOKEN_TYPE = 0x09;
   public static final byte HMAC_SHARING_PARAM_TYPE = 0x0A;
 
-  // Tags
+  // Tag Types
   public static final short INVALID_TAG = 0x0000;
   public static final short ENUM_TAG = 0x1000;
   public static final short ENUM_ARRAY_TAG = 0x2000;
@@ -76,6 +76,7 @@ public abstract class KMType {
   public static final byte USER_AUTH_NONE = 0x00;
   public static final byte PASSWORD = 0x01;
   public static final byte FINGERPRINT = 0x02;
+  public static final byte BOTH = 0x03;
   // have to be power of 2
   public static final byte ANY = (byte) 0xFF;
 
@@ -127,13 +128,13 @@ public abstract class KMType {
 
   // Enum Array Tag
   // Purpose
-  public static final short PURPOSE = 0x0002;
-  public static final byte ENCRYPT = 0x01;
-  public static final byte DECRYPT = 0x02;
-  public static final byte SIGN = 0x04;
-  public static final byte VERIFY = 0x05;
-  public static final byte WRAP_KEY = 0x06;
-  public static final byte ATTEST_KEY = (byte) 0x7F;
+  public static final short PURPOSE = 0x0001;
+  public static final byte ENCRYPT = 0x00;
+  public static final byte DECRYPT = 0x01;
+  public static final byte SIGN = 0x02;
+  public static final byte VERIFY = 0x03;
+  public static final byte WRAP_KEY = 0x05;
+  public static final byte ATTEST_KEY = (byte) 0x7F; /* TODO This is not present in types.hal */
 
   // Block mode
   public static final short BLOCK_MODE = 0x0004;
@@ -194,7 +195,7 @@ public abstract class KMType {
   public static final short ACTIVE_DATETIME = 0x0190;
   public static final short ORIGINATION_EXPIRE_DATETIME = 0x0191;
   public static final short USAGE_EXPIRE_DATETIME = 0x0192;
-  public static final short CREATION_DATETIME = 0x0193;
+  public static final short CREATION_DATETIME = 0x02BD;//0x0193;
 
   // Integer Array Tags - ULONG_REP and UINT_REP.
   // User Secure Id
@@ -275,7 +276,7 @@ public abstract class KMType {
   public static short getValue(short ptr){return Util.getShort(heap, (short)(ptr+TLV_HEADER_SIZE));}
 
   protected static short instance(byte type, short length){
-    if (length <= 0) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    if (length < 0) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     short ptr = repository.alloc((short) (length + TLV_HEADER_SIZE));
     heap[ptr] = type;
     Util.setShort(heap, (short) (ptr + 1), length);

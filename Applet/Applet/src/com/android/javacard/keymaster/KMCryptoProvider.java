@@ -4,8 +4,10 @@ import javacard.security.AESKey;
 import javacard.security.DESKey;
 import javacard.security.ECPrivateKey;
 import javacard.security.HMACKey;
+import javacard.security.Key;
 import javacard.security.KeyPair;
 import javacard.security.RSAPrivateKey;
+import javacard.security.Signature;
 
 public interface KMCryptoProvider {
   KeyPair createRsaKeyPair();
@@ -68,13 +70,39 @@ public interface KMCryptoProvider {
     byte[] bufOut,
     short bufStart);
 
-  ECPrivateKey createEcPrivateKey(byte[] pubBuffer, short pubOff, short pubLength,
-                                             byte[] privBuffer, short privOff, short privLength);
+  ECPrivateKey createEcKey(byte[] privBuffer, short privOff, short privLength);
 
   HMACKey createHMACKey(byte[] secretBuffer, short secretOff, short secretLength);
 
   DESKey createTDESKey(byte[] secretBuffer, short secretOff, short secretLength);
 
-  RSAPrivateKey createRsaPrivateKey(byte[] modBuffer, short modOff, short modLength,
+  RSAPrivateKey createRsaKey(byte[] modBuffer, short modOff, short modLength,
                                     byte[] privBuffer, short privOff, short privLength);
+
+  HMACKey cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength);
+
+  short hmacSign(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart);
+  boolean hmacVerify(HMACKey key, byte[] data, short dataStart, short dataLength,
+                            byte[] mac, short macStart, short macLength);
+
+  KMCipher createRsaDecrypt(short cipherAlg, short padding,
+                            byte[] secret, short secretStart, short secretLength,
+                            byte[] modBuffer, short modOff, short modLength);
+  Signature createRsaSigner(short msgDigestAlg, short padding, byte[] secret, short secretStart,
+                           short secretLength,byte[] modBuffer, short modOff, short modLength);
+  Signature createEcSigner(short msgDigestAlg, byte[] secret, short secretStart,
+                           short secretLength);
+  KMCipher createSymmetricCipher(short cipherAlg, short padding, short mode,
+                               byte[] secret, short secretStart, short secretLength,
+                               byte[] ivBuffer, short ivStart, short ivLength);
+  Signature createHmacSigner(short msgDigestAlg,
+                                  byte[] secret, short secretStart, short secretLength);
+  KMCipher createGCMCipher(short mode, byte[] secret, short secretStart, short secretLength,
+                         byte[] ivBuffer, short ivStart, short ivLength);
+  void delete(KMCipher cipher);
+  void delete(Signature signature);
+  void delete(Key key);
+  void delete(KeyPair keyPair);
+  //TODO remove this later
+  void bypassAesGcm();
 }

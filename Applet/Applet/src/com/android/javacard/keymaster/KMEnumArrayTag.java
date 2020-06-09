@@ -139,4 +139,50 @@ public class KMEnumArrayTag extends KMTag {
     return null;
   }
 
+  public static short getValues(short tagId, short params, byte[] buf, short start) {
+    short tag =
+        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    if (tag == KMType.INVALID_VALUE) {
+      return KMType.INVALID_VALUE;
+    }
+    tag = KMEnumArrayTag.cast(tag).getValues();
+    return KMByteBlob.cast(tag).getValues(buf, start);
+  }
+
+  public short get(short index){
+    return KMByteBlob.cast(getValues()).get(index);
+  }
+
+  public static boolean contains(short tagId, short tagValue, short params) {
+    short tag =
+      KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    if (tag != KMType.INVALID_VALUE) {
+      short index = 0;
+      while (index < KMEnumArrayTag.cast(tag).length()) {
+        if (tagValue == KMEnumArrayTag.cast(tag).get(index)) {
+          return true;
+        }
+        index++;
+      }
+    }
+    return false;
+  }
+  public static short length(short tagId, short params) {
+    short tag =
+      KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    if (tag != KMType.INVALID_VALUE) {
+      return KMEnumArrayTag.cast(tag).length();
+    }
+    return KMType.INVALID_VALUE;
+  }
+  public  boolean contains(short tagValue){
+    short index = 0;
+    while(index < length()){
+      if(get(index) == (byte)tagValue){
+        return true;
+      }
+      index++;
+    }
+    return false;
+  }
 }

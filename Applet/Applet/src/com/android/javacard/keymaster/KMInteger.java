@@ -138,4 +138,24 @@ public class KMInteger extends KMType {
   public byte getByte() {
     return heap[(short) (instPtr + TLV_HEADER_SIZE + 3)];
   }
+
+  public boolean isZero() {
+    if(getShort() == 0 && getSignificantShort() == 0){
+      return true;
+    }
+    return false;
+  }
+
+  public static short compare(short num1, short num2){
+    short num1Ptr = KMInteger.cast(num1).getStartOff();
+    short num2Ptr = KMInteger.cast(num2).getStartOff();
+    short len = KMInteger.cast(num2).length();
+    if(KMInteger.cast(num1).length() > KMInteger.cast(num2).length()){
+      len = KMInteger.cast(num1).length();
+    }
+    return Util.arrayCompare(
+      repository.getHeap(), num1Ptr,
+      repository.getHeap(), num2Ptr,
+      len);
+  }
 }

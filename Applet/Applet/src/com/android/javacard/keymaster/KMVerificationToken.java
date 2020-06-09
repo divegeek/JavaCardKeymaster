@@ -37,8 +37,9 @@ public class KMVerificationToken extends KMType {
     KMArray arr = KMArray.cast(arrPtr);
     arr.add(CHALLENGE, KMInteger.exp());
     arr.add(TIMESTAMP, KMInteger.exp());
-    arr.add(PARAMETERS_VERIFIED, KMKeyParameters.exp());
-    arr.add(SECURITY_LEVEL, KMEnumTag.instance(KMType.HARDWARE_TYPE));
+    //arr.add(PARAMETERS_VERIFIED, KMKeyParameters.exp());
+    arr.add(PARAMETERS_VERIFIED, KMByteBlob.exp());
+    arr.add(SECURITY_LEVEL, KMEnum.instance(KMType.HARDWARE_TYPE));
     arr.add(MAC, KMByteBlob.exp());
     return instance(arrPtr);
   }
@@ -118,7 +119,8 @@ public class KMVerificationToken extends KMType {
   }
 
   public void setParametersVerified(short vals) {
-    KMKeyParameters.cast(vals);
+   // KMKeyParameters.cast(vals);
+    KMByteBlob.cast(vals);
     short arrPtr = getVals();
     KMArray.cast(arrPtr).add(PARAMETERS_VERIFIED, vals);
   }
@@ -129,8 +131,7 @@ public class KMVerificationToken extends KMType {
   }
 
   public void setSecurityLevel(short vals) {
-    short key = KMEnumTag.cast(vals).getKey();
-    if(key != HARDWARE_TYPE) ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    KMEnum.cast(vals);
     short arrPtr = getVals();
     KMArray.cast(arrPtr).add(SECURITY_LEVEL, vals);
   }

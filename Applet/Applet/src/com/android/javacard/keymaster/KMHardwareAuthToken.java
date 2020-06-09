@@ -39,7 +39,7 @@ public class KMHardwareAuthToken extends KMType {
     arr.add(CHALLENGE, KMInteger.exp());
     arr.add(USER_ID, KMInteger.exp());
     arr.add(AUTHENTICATOR_ID, KMInteger.exp());
-    arr.add(HW_AUTHENTICATOR_TYPE, KMEnumTag.instance(KMType.USER_AUTH_TYPE));
+    arr.add(HW_AUTHENTICATOR_TYPE, KMEnum.instance(KMType.USER_AUTH_TYPE));
     arr.add(TIMESTAMP, KMInteger.exp());
     arr.add(MAC, KMByteBlob.exp());
     return instance(arrPtr);
@@ -119,8 +119,7 @@ public class KMHardwareAuthToken extends KMType {
   }
 
   public void setHwAuthenticatorType(short vals) {
-    short key = KMEnumTag.cast(vals).getKey();
-    if(key != USER_AUTH_TYPE) ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    KMEnum.cast(vals);
     short arrPtr = getVals();
     KMArray.cast(arrPtr).add(HW_AUTHENTICATOR_TYPE, vals);
   }

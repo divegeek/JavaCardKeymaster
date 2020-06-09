@@ -26,6 +26,7 @@ import javacard.security.DESKey;
 import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
 import javacard.security.HMACKey;
+import javacard.security.Key;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
 import javacard.security.RSAPrivateKey;
@@ -295,6 +296,7 @@ public class KMSimulator implements KMCryptoProvider {
       byte[] bufOut,
       short bufStart) {
     if (masterKeySecret.length > 16) {
+
       return -1;
     }
     aes128Key.setKey(masterKeySecret, (short) 0);
@@ -303,6 +305,10 @@ public class KMSimulator implements KMCryptoProvider {
   }
 
   @Override
+  public ECPrivateKey createEcKey(byte[] privBuffer, short privOff, short privLength) {
+    return null;
+  }
+
   public ECPrivateKey createEcPrivateKey(byte[] pubBuffer, short pubOff, short pubLength,
                                          byte[] privBuffer, short privOff, short privLength) {
     // Simulator does not support NamedParameterSpec or 256 bit keys
@@ -342,6 +348,77 @@ public class KMSimulator implements KMCryptoProvider {
   }
 
   @Override
+  public RSAPrivateKey createRsaKey(byte[] modBuffer, short modOff, short modLength, byte[] privBuffer, short privOff, short privLength) {
+    return null;
+  }
+
+  @Override
+  public HMACKey cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength) {
+    return null;
+  }
+
+  @Override
+  public short hmacSign(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
+    return 0;
+  }
+
+  @Override
+  public boolean hmacVerify(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
+    return false;
+  }
+
+
+  @Override
+  public KMCipher createRsaDecrypt(short cipherAlg, short padding, byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength) {
+    return null;
+  }
+
+  @Override
+  public Signature createRsaSigner(short msgDigestAlg, short padding, byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength) {
+    return null;
+  }
+
+  @Override
+  public Signature createEcSigner(short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
+    return null;
+  }
+
+  @Override
+  public KMCipher createSymmetricCipher(short cipherAlg, short padding, short mode, byte[] secret, short secretStart, short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
+    return null;
+  }
+
+  @Override
+  public Signature createHmacSigner(short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
+    return null;
+  }
+
+  @Override
+  public KMCipher createGCMCipher(short mode, byte[] secret, short secretStart, short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
+    return null;
+  }
+
+  @Override
+  public void delete(KMCipher cipher) {
+
+  }
+
+
+  @Override
+  public void delete(Signature signature) {
+
+  }
+
+  @Override
+  public void delete(Key key) {
+
+  }
+
+  @Override
+  public void delete(KeyPair keyPair) {
+
+  }
+
   public RSAPrivateKey createRsaPrivateKey(byte[] modBuffer, short modOff, short modLength, byte[] privBuffer, short privOff, short privLength) {
     RSAPrivateKey privKey = (RSAPrivateKey) rsa512KeyPair.getPrivate();
     if(privLength > 64) privLength = 64;
@@ -420,5 +497,9 @@ public class KMSimulator implements KMCryptoProvider {
         break;
       }
     }
+  }
+  @Override
+  public void bypassAesGcm(){
+    jcardSim = true;
   }
 }

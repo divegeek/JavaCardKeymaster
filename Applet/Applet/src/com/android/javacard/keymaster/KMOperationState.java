@@ -16,32 +16,128 @@
 
 package com.android.javacard.keymaster;
 
+import javacard.framework.Util;
+import javacard.security.Signature;
+
 // TODO complete the class design and implementation
 public class KMOperationState {
-  private KMInteger operationHandle;
+  private short opHandleCounter;
+  private boolean active;
+  private boolean trustedConfirmation;
+  // TODO This should be 64 bits
+  private  short handle;
+  private short purpose;
+  private KMCipher cipher;
+  private Signature hmacSigner; // used for trusted confirmation.
+  private Signature signer;
+  private byte[] key;
+  private short keyLength;
+  private byte[] authTime;
+  private boolean authPerOperationReqd;
+  private boolean authTimeoutValidated;
 
-  private KMOperationState() {
-    operationHandle = null;
+  public KMOperationState(){
+    authTime = new byte[8];
+    key = new byte[256];
+    reset();
   }
-/*
-  public static KMOperationState instance(KMContext context) {
-    // TODO make operation handle
-    return context.getRepository().newOperationState();
+
+  public void setTrustedConfirmationSigner(Signature hmacSigner){
+    this.hmacSigner = hmacSigner;
+    trustedConfirmation = true;
   }
-*/
-  public static void create(KMOperationState[] opStateRefTable) {
-    byte index = 0;
-    while (index < opStateRefTable.length) {
-      opStateRefTable[index] = new KMOperationState();
-      index++;
+  public Signature getTrustedConfirmationSigner(){
+    return hmacSigner;
+  }
+  public boolean isTrustedConfirmationRequired(){
+    return trustedConfirmation;
+  }
+  public void activate(){
+    active = true;
+    handle = getOpHandleCounter();
+  }
+  public void reset(){
+    Util.arrayFillNonAtomic(authTime, (short)0,(short)8, (byte)0);
+    keyLength = 0;
+    authPerOperationReqd = false;
+    active = false;
+    handle = 0;
+    key = null;
+    cipher = null;
+    signer = null;
+    purpose = KMType.INVALID_VALUE;
+    trustedConfirmation = false;
+    hmacSigner = null;
+    authTimeoutValidated = false;
+  }
+  //TODO make this random number
+  public short getOpHandleCounter() {
+    opHandleCounter++;
+    if(opHandleCounter < 0){
+      opHandleCounter = 0;
     }
+    return opHandleCounter;
   }
 
-  public KMInteger getOperationHandle() {
-    return operationHandle;
+  public boolean isActive() {
+    return active;
   }
 
-  public void setOperationHandle(KMInteger operationHandle) {
-    this.operationHandle = operationHandle;
+  public short getHandle() {
+    return handle;
+  }
+
+  public short getPurpose() {
+    return purpose;
+  }
+
+  public void setPurpose(short purpose) {
+    this.purpose = purpose;
+  }
+
+  public KMCipher getCipher() {
+    return cipher;
+  }
+
+  public void setCipher(KMCipher cipher) {
+    this.cipher = cipher;
+  }
+
+  public Signature getSigner() {
+    return signer;
+  }
+
+  public void setSigner(Signature signer) {
+    this.signer = signer;
+  }
+
+  public short getKey(byte[] buf, short start) {
+    Util.arrayCopy(key,(short)0, buf, start,keyLength);
+    return keyLength;
+  }
+
+  public void setKey(byte[] buf, short start, short len) {
+    keyLength = len;
+    Util.arrayCopy(buf, start, key, (short)0, len);
+  }
+
+  public boolean isAuthPerOperation() {
+    return authPerOperationReqd;
+  }
+
+  public boolean isAuthTimeoutValidated() {
+    return authTimeoutValidated;
+  }
+
+  public byte[] getAuthTime() {
+    return authTime;
+  }
+
+  public void setAuthTime(byte[] time, short start) {
+    Util.arrayCopy(time, start, authTime, (short)0, (short)8);
+  }
+
+  public void setAuthTimeoutValidated(boolean flag) {
+    authTimeoutValidated = flag;
   }
 }

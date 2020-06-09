@@ -219,15 +219,17 @@ public class KMDecoder {
 
   private short decodeArray(short exp) {
     short payloadLength = readMajorTypeWithPayloadLength(ARRAY_TYPE);
-    if (KMArray.cast(exp).length() != payloadLength) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
     short arrPtr = KMArray.cast(exp).instance(payloadLength);
     short index = 0;
     short type;
     short obj;
     // check whether array contains one type of objects or multiple types
     if( KMArray.cast(exp).containedType() == 0){// multiple types specified by expression.
+      if (KMArray.cast(exp).length() != KMArray.ANY_ARRAY_LENGTH) {
+        if (KMArray.cast(exp).length() != payloadLength) {
+          ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+      }
       while (index < payloadLength) {
         type = KMArray.cast(exp).get(index);
         obj = decode(type);

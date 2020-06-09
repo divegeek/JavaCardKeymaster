@@ -47,8 +47,8 @@ public class KMBoolTag extends KMTag {
 
   // pointer to an empty instance used as expression
   public static short exp() {
-    short ptr = KMType.exp(TAG_TYPE);
-    Util.setShort(heap, (short)(ptr+1), BOOL_TAG);
+    short ptr = instance(TAG_TYPE, (short)2);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), BOOL_TAG);
     return ptr;
   }
 

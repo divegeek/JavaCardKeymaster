@@ -4,6 +4,8 @@
   <property environment="env"/>
   <property name="jdk.home" value="${env.JAVA_HOME}"/>
   <property name="src.dir" value="Applet/src"/>
+  <property name="src.oracle.dir" value="Applet/OracleSimProvider"/>
+  <property name="src.jcard.dir" value="Applet/JCardSimProvider"/>
   <property name="test.dir" value="Applet/test"/>
   <property name="unit-test.test.build.dir" value="build/unittest/test"/>
   <property name="unit-test.src.build.dir" value="build/unittest/src"/>
@@ -60,7 +62,7 @@
   <target name="init">
     <mkdir dir="./build/classes"/>
   </target>
-
+<!--
   <target name="compile_applet" depends="init">
     <pathconvert property="boot_classpath" refid="jc_jars"/>
     <javac srcdir="${src.dir}"
@@ -70,6 +72,20 @@
       debug="yes"
       includeantruntime="no"
       bootclasspath="${boot_classpath}">
+    </javac>
+  </target>
+  -->
+  <target name="compile_applet" depends="init">
+    <pathconvert property="boot_classpath" refid="jc_jars"/>
+    <javac
+      destdir="./build/classes"
+      source="7"
+      target="7"
+      debug="yes"
+      includeantruntime="no"
+      bootclasspath="${boot_classpath}">
+      <src path="${src.dir}"/>
+      <src path="${src.oracle.dir}"/>
     </javac>
   </target>
 
@@ -130,13 +146,22 @@
     <delete dir="${unit-test.src.build.dir}"/>
   </target>
 
+  <!--
   <target name="unit-test.src-compile">
     <mkdir dir="${unit-test.src.build.dir}"/>
     <javac srcdir="${src.dir}" destdir="${unit-test.src.build.dir}" includeantruntime="false">
       <classpath refid="unit-test.classpath"/>
     </javac>
   </target>
-
+-->
+  <target name="unit-test.src-compile">
+    <mkdir dir="${unit-test.src.build.dir}"/>
+    <javac destdir="${unit-test.src.build.dir}" includeantruntime="false">
+      <src path="${src.dir}"/>
+      <src path="${src.jcard.dir}"/>
+      <classpath refid="unit-test.classpath"/>
+    </javac>
+  </target>
   <target name="unit-test.test-compile" depends="unit-test.src-compile">
     <mkdir dir="${unit-test.test.build.dir}"/>
     <javac srcdir="${test.dir}" destdir="${unit-test.test.build.dir}" includeantruntime="false">

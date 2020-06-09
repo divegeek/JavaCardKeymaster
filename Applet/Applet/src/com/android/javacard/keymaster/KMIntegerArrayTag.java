@@ -97,7 +97,7 @@ public class KMIntegerArrayTag extends KMTag {
 
   public short length() {
     short ptr = getValues();
-    return KMIntegerArrayTag.cast(ptr).length();
+    return KMArray.cast(ptr).length();
   }
 
   public void add(short index, short val) {
@@ -127,4 +127,21 @@ public class KMIntegerArrayTag extends KMTag {
     }
     return false;
   }
+
+  public static boolean contains(short tagId, short tagValue, short params) {
+    short tag =
+      KMKeyParameters.findTag(KMType.UINT_ARRAY_TAG, tagId, params);
+    if (tag != KMType.INVALID_VALUE) {
+      short index = 0;
+      tag = KMIntegerArrayTag.cast(tag).getValues();
+      while (index < KMArray.cast(tag).length()) {
+        if (KMInteger.compare(tagValue, KMArray.cast(tag).get(index)) == 0) {
+          return true;
+        }
+        index++;
+      }
+    }
+    return false;
+  }
+
 }

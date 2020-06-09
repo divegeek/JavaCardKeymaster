@@ -91,6 +91,11 @@ public class KMByteBlob extends KMType {
   public void getValue(byte[] destBuf, short destStart, short destLength){
     Util.arrayCopyNonAtomic(heap, getStartOff(), destBuf, destStart, destLength);
   }
+  public short getValues(byte[] destBuf, short destStart){
+    short destLength = length();
+    Util.arrayCopyNonAtomic(heap, getStartOff(), destBuf, destStart, destLength);
+    return destLength;
+  }
 
   public void setValue(byte[] srcBuf, short srcStart, short srcLength){
     if(length() > srcLength){
@@ -98,5 +103,10 @@ public class KMByteBlob extends KMType {
     }
     Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), length());
   }
-
+  public boolean isValid(){
+    if (length() == 0) {
+        return false;
+    }
+    return true;
+  }
 }

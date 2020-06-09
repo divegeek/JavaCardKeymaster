@@ -25,7 +25,7 @@ public class KMEnum extends KMType {
   private static short instPtr;
 
   private static short[] types = {HARDWARE_TYPE, KEY_FORMAT, KEY_DERIVATION_FUNCTION,
-    VERIFIED_BOOT_STATE, DEVICE_LOCKED};
+    VERIFIED_BOOT_STATE, DEVICE_LOCKED, USER_AUTH_TYPE, PURPOSE};
 
   private static Object[] enums = null;
 
@@ -90,7 +90,9 @@ public class KMEnum extends KMType {
               ISO18033_2_KDF2_SHA256
             },
             new byte[] {SELF_SIGNED_BOOT, VERIFIED_BOOT},
-            new byte[] {DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE}
+            new byte[] {DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
+            new byte[] {USER_AUTH_NONE,PASSWORD,FINGERPRINT, BOTH},
+            new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY}
           };
     }
   }

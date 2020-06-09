@@ -21,7 +21,9 @@ import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 public class KMArray extends KMType {
-  private static final short ARRAY_HEADER_SIZE = 3;
+  public static final short ANY_ARRAY_LENGTH = 0x1000;
+  // short Type + short Length
+  private static final short ARRAY_HEADER_SIZE = 4;
   private static KMArray prototype;
   private static short instPtr;
 
@@ -35,28 +37,28 @@ public class KMArray extends KMType {
 
   public static short exp() {
     short ptr = instance(ARRAY_TYPE, ARRAY_HEADER_SIZE);
-    heap[(short)(ptr + TLV_HEADER_SIZE)] = 0;
-    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE + 1),(short)0 );
+    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE),(short)0 );
+    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE + 2),ANY_ARRAY_LENGTH );
     return ptr;
   }
 
-  public static short exp(byte type) {
+  public static short exp(short type) {
     short ptr = instance(ARRAY_TYPE, ARRAY_HEADER_SIZE);
-    heap[(short)(ptr + TLV_HEADER_SIZE)] = type;
-    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE + 1),(short)0 );
+    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE),type);
+    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE + 2),ANY_ARRAY_LENGTH );
     return ptr;
   }
 
   public static short instance(short length) {
     short ptr = KMType.instance(ARRAY_TYPE, (short)(ARRAY_HEADER_SIZE + (length*2)));
-    heap[(short)(ptr + TLV_HEADER_SIZE)] = 0;
-    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE + 1),length);
+    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE),(short)0);
+    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE + 2),length);
     return ptr;
   }
 
   public static short instance(short length, byte type) {
     short ptr = instance(length);
-    heap[(short)(ptr + TLV_HEADER_SIZE)] = type;
+    Util.setShort(heap,(short)(ptr + TLV_HEADER_SIZE),type);
     return ptr;
   }
 
@@ -74,17 +76,17 @@ public class KMArray extends KMType {
   public short get(short index) {
     short len = length();
     if (index >= len) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    return Util.getShort(heap,(short) (instPtr + TLV_HEADER_SIZE + 3 + (short)(index*2)));
+    return Util.getShort(heap,(short) (instPtr + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short)(index*2)));
   }
 
-  public byte containedType(){ return heap[(short)(instPtr + TLV_HEADER_SIZE)];}
+  public short containedType(){ return Util.getShort(heap, (short)(instPtr + TLV_HEADER_SIZE));}
 
   public short getStartOff() {
     return (short) (instPtr + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE);
   }
 
   public short length() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 1));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
   }
 
   public byte[] getBuffer() {
