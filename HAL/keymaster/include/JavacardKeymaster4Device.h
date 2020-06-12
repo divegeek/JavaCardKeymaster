@@ -84,12 +84,17 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     Return<V41ErrorCode> deviceLocked(bool passwordOnly, const VerificationToken& verificationToken) override;
     Return<V41ErrorCode> earlyBootEnded() override;
 
+    //Helper methods.
+    bool getBootParamsInitialized() { return setUpBootParams; }
+    void setBootParams(bool flag) { setUpBootParams = flag; }
+
 protected:
     CborConverter cborConverter_;
     std::unique_ptr<se_transport::TransportFactory> pTransportFactory;
 	
 private:
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
+    bool setUpBootParams;
 };
 
 }  // namespace javacard
