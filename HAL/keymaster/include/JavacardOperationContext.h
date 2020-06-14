@@ -30,15 +30,28 @@ namespace javacard {
 using ::android::hardware::keymaster::V4_0::ErrorCode;
 using ::android::hardware::keymaster::V4_0::Algorithm;
 using ::android::hardware::keymaster::V4_0::KeyPurpose;
+using ::android::hardware::keymaster::V4_0::Digest;
+using ::android::hardware::keymaster::V4_0::PaddingMode;
 
 using sendDataToSE_cb = std::function<ErrorCode(std::vector<uint8_t>& data)>;
 
 enum class Operation;
-struct OperationData;
+
+struct BufferedData {
+    uint8_t buf[MAX_BUF_SIZE];
+    int buf_len;
+};
 
 struct OperationInfo {
     Algorithm alg;
     KeyPurpose purpose;
+    Digest digest;
+    PaddingMode pad;
+};
+
+struct OperationData {
+    OperationInfo info;
+    BufferedData data;
 };
 
 class OperationContext {
@@ -46,31 +59,54 @@ class OperationContext {
 public:
     OperationContext(){}
     ~OperationContext() {}
-    ErrorCode setOperationData(uint64_t operationHandle, OperationInfo& oeprInfo);
-    ErrorCode getOperationData(uint64_t operHandle, OperationInfo& operInfo);
+    ErrorCode setOperationInfo(uint64_t operationHandle, OperationInfo& oeprInfo);
+    ErrorCode getOperationInfo(uint64_t operHandle, OperationInfo& operInfo);
     ErrorCode clearOperationData(uint64_t operationHandle);
     ErrorCode update(uint64_t operHandle, std::vector<uint8_t>& input, sendDataToSE_cb cb);
     ErrorCode finish(uint64_t operHandle, std::vector<uint8_t>& input, sendDataToSE_cb cb);
 
 private:
     std::map<uint64_t, OperationData> operationTable;
+
+    inline ErrorCode getOperationData(uint64_t operHandle, OperationData& oprData) {
+        auto itr = operationTable.find(operHandle);
+        if(itr != operationTable.end()) {
+            oprData = itr->second;
+            return ErrorCode::OK;
+        }
+        return ErrorCode::INVALID_OPERATION_HANDLE;
+    }
+
+    ErrorCode validateInputData(uint64_t operHandle, Operation opr, std::vector<uint8_t>& actualInput,
+    std::vector<uint8_t>& input);
     ErrorCode internalUpdate(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>&
     out);
     inline ErrorCode handleInternalUpdate(uint64_t operHandle, uint8_t* data, size_t len, Operation opr,
             sendDataToSE_cb cb) {
         ErrorCode errorCode = ErrorCode::OK;
         std::vector<uint8_t> out;
-        if(ErrorCode::OK != (errorCode = internalUpdate(operHandle, data, len,
-                        opr, out))) {
+        OperationData oprData;
+
+        if(ErrorCode::OK != (errorCode = getOperationData(operHandle, oprData))) {
             return errorCode;
+        }
+
+        if(Algorithm::AES == oprData.info.alg || Algorithm::TRIPLE_DES == oprData.info.alg) {
+            if(ErrorCode::OK != (errorCode = internalUpdate(operHandle, data, len,
+                            opr, out))) {
+                return errorCode;
+            }
+        } else {
+            /* Other algorithms no buffering required */
+            for(int i = 0; i < len; i++) {
+                out.push_back(data[i]);
+            }
         }
         if(ErrorCode::OK != (errorCode = cb(out))) {
             return errorCode;
         }
         return errorCode;
     }
-
-
 };
 
 }  // namespace javacard
