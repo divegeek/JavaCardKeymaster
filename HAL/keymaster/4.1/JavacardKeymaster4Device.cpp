@@ -24,6 +24,8 @@
 #include <android-base/logging.h>
 #include <keymaster/key_blob_utils/integrity_assured_key_blob.h>
 #include <keymaster/key_blob_utils/software_keyblobs.h>
+#include <keymaster/android_keymaster_utils.h>
+#include <keymaster/wrapped_key.h>
 #include <openssl/aes.h>
 
 #include <JavacardKeymaster4Device.h>
@@ -199,6 +201,42 @@ inline hidl_vec<uint8_t> kmBuffer2hidlVec(const ::keymaster::Buffer& buf) {
     result.setToExternal(const_cast<unsigned char*>(buf.peek_read()), buf.available_read());
     return result;
 }
+
+static inline void blob2Vec(const uint8_t *from, size_t size, std::vector<uint8_t>& to) {
+    for(int i = 0; i < size; ++i) {
+        to.push_back(from[i]);
+    }
+}
+
+static inline ErrorCode parseWrappedKey(const hidl_vec<uint8_t>& wrappedKeyData, std::vector<uint8_t>& iv, std::vector<uint8_t>& transitKey,
+std::vector<uint8_t>& secureKey, std::vector<uint8_t>& tag, hidl_vec<KeyParameter>& authList, KeyFormat&
+keyFormat, std::vector<uint8_t>& wrappedKeyDescription) {
+    KeymasterBlob kmIv;
+    KeymasterKeyBlob kmTransitKey;
+    KeymasterKeyBlob kmSecureKey;
+    KeymasterBlob kmTag;
+    AuthorizationSet authSet;
+    keymaster_key_format_t kmKeyFormat;
+    KeymasterBlob kmWrappedKeyDescription;
+    KeymasterKeyBlob kmWrappedKeyData;
+
+    kmWrappedKeyData.key_material = dup_buffer(wrappedKeyData.data(), wrappedKeyData.size());
+
+    keymaster_error_t error = parse_wrapped_key(kmWrappedKeyData, &kmIv, &kmTransitKey,
+                                                &kmSecureKey, &kmTag, &authSet,
+                                                &kmKeyFormat, &kmWrappedKeyDescription);
+    if (error != KM_ERROR_OK) return legacy_enum_conversion(error);
+    blob2Vec(kmIv.data, kmIv.data_length, iv);
+    blob2Vec(kmTransitKey.key_material, kmTransitKey.key_material_size, transitKey);
+    blob2Vec(kmSecureKey.key_material, kmSecureKey.key_material_size, secureKey);
+    blob2Vec(kmTag.data, kmTag.data_length, tag);
+    authList = kmParamSet2Hidl(authSet);
+    keyFormat = static_cast<KeyFormat>(kmKeyFormat);
+    blob2Vec(kmWrappedKeyDescription.data, kmWrappedKeyDescription.data_length, wrappedKeyDescription);
+
+    return ErrorCode::OK;
+}
+
 
 JavacardKeymaster4Device::JavacardKeymaster4Device(): softKm_(new ::keymaster::AndroidKeymaster(
             []() -> auto {
@@ -508,31 +546,31 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
         return Void();
     }
 
-    cppbor::Array array;
-    std::unique_ptr<Item> item;
-    hidl_vec<uint8_t> keyBlob;
-    std::vector<uint8_t> cborOutData;
-    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    KeyCharacteristics keyCharacteristics;
+	cppbor::Array array;
+	std::unique_ptr<Item> item;
+	hidl_vec<uint8_t> keyBlob;
+	std::vector<uint8_t> cborOutData;
+	ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+	KeyCharacteristics keyCharacteristics;
 
-    cborConverter_.addKeyparameters(array, keyParams);
-    array.add(static_cast<uint64_t>(KeyFormat::RAW)); //PKCS8 is already converted to RAW
-    array.add(std::vector<uint8_t>(inKey));
-    std::vector<uint8_t> cborData = array.encode();
+	cborConverter_.addKeyparameters(array, keyParams);
+	array.add(static_cast<uint64_t>(KeyFormat::RAW)); //PKCS8 is already converted to RAW
+	array.add(std::vector<uint8_t>(inKey));
+	std::vector<uint8_t> cborData = array.encode();
 
-    errorCode = sendData(this, pTransportFactory, Instruction::INS_IMPORT_KEY_CMD, cborData, cborOutData);
+	errorCode = sendData(this, pTransportFactory, Instruction::INS_IMPORT_KEY_CMD, cborData, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                true);
-        if (item != nullptr) {
-            cborConverter_.getBinaryArray(item, 1, keyBlob);
-            cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
-        }
-    }
-    _hidl_cb(errorCode, keyBlob, keyCharacteristics);
-    return Void();
+	if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+		//Skip last 2 bytes in cborData, it contains status.
+		std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+				true);
+		if (item != nullptr) {
+			cborConverter_.getBinaryArray(item, 1, keyBlob);
+			cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
+		}
+	}
+	_hidl_cb(errorCode, keyBlob, keyCharacteristics);
+	return Void();
 }
 
 Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>& wrappedKeyData, const hidl_vec<uint8_t>& wrappingKeyBlob, const hidl_vec<uint8_t>& maskingKey, const hidl_vec<KeyParameter>& unwrappingParams, uint64_t passwordSid, uint64_t biometricSid, importWrappedKey_cb _hidl_cb) {
@@ -542,8 +580,25 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
     std::vector<uint8_t> cborOutData;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     KeyCharacteristics keyCharacteristics;
+    std::vector<uint8_t> iv;
+    std::vector<uint8_t> transitKey;
+    std::vector<uint8_t> secureKey;
+    std::vector<uint8_t> tag;
+    hidl_vec<KeyParameter> authList;
+    KeyFormat keyFormat;
+    std::vector<uint8_t> wrappedKeyDescription;
 
-    array.add(std::vector<uint8_t>(wrappedKeyData));
+    if(ErrorCode::OK != (errorCode = parseWrappedKey(wrappedKeyData, iv, transitKey, secureKey,
+                                        tag, authList, keyFormat, wrappedKeyDescription))) {
+        _hidl_cb(errorCode, keyBlob, keyCharacteristics);
+        return Void();
+    }
+    array.add(transitKey);
+    array.add(iv);
+    array.add(static_cast<uint64_t>(keyFormat));
+    cborConverter_.addKeyparameters(array, authList);
+    array.add(secureKey);
+    array.add(tag);
     array.add(std::vector<uint8_t>(wrappingKeyBlob));
     array.add(std::vector<uint8_t>(maskingKey));
     cborConverter_.addKeyparameters(array, unwrappingParams);
