@@ -27,6 +27,7 @@
 #include <keymaster/keymaster_configuration.h>
 #include <keymaster/contexts/pure_soft_keymaster_context.h>
 #include <keymaster/android_keymaster.h>
+#include <JavacardOperationContext.h>
 
 namespace keymaster {
 namespace V4_1 {
@@ -94,6 +95,7 @@ protected:
 	
 private:
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
+    std::unique_ptr<OperationContext> oprCtx_;
     bool setUpBootParams;
 };
 

@@ -206,7 +206,7 @@ JavacardKeymaster4Device::JavacardKeymaster4Device(): softKm_(new ::keymaster::A
             context->SetSystemVersion(GetOsVersion(), GetOsPatchlevel());
             return context;
             }(),
-            kOperationTableSize)), setUpBootParams(false) {
+            kOperationTableSize)), oprCtx_(new OperationContext()), setUpBootParams(false) {
     pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
                 android::base::GetBoolProperty("ro.kernel.qemu", false)));
     pTransportFactory->openConnection();
@@ -773,7 +773,7 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     cborConverter_.addHardwareAuthToken(array, authToken);
     std::vector<uint8_t> cborData = array.encode();
 
-        errorCode = sendData(this, pTransportFactory, Instruction::INS_BEGIN_OPERATION_CMD, cborData, cborOutData);
+    errorCode = sendData(this, pTransportFactory, Instruction::INS_BEGIN_OPERATION_CMD, cborData, cborOutData);
 
     if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
         //Skip last 2 bytes in cborData, it contains status.
@@ -782,6 +782,8 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
         if (item != nullptr) {
             cborConverter_.getKeyParameters(item, 1, outParams);
             cborConverter_.getUint64(item, 2, operationHandle);
+            /* Store the operationInfo */
+            oprCtx_->setOperationInfo(operationHandle, purpose, inParams);
         }
     }
     _hidl_cb(errorCode, outParams, operationHandle);
@@ -807,29 +809,44 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
         outParams = kmParamSet2Hidl(response.output_params);
         output = kmBuffer2hidlVec(response.output);
     } else if(response.error == KM_ERROR_INVALID_OPERATION_HANDLE) {
-        cppbor::Array array;
-        std::unique_ptr<Item> item;
-        std::vector<uint8_t> cborOutData;
+        std::vector<uint8_t> tempOut;
+        /* OperationContext calls this below sendDataCallback callback function. This callback
+         * may be called multiple times if the input data is larger than MAX_ALLOWED_INPUT_SIZE.
+         */
+        auto sendDataCallback = [&](std::vector<uint8_t>& data, bool) -> ErrorCode {
+            cppbor::Array array;
+            std::unique_ptr<Item> item;
+            std::vector<uint8_t> cborOutData;
 
-        // Convert input data to cbor format
-        array.add(operationHandle);
-        cborConverter_.addKeyparameters(array, inParams);
-        array.add(std::vector<uint8_t>(input));
-        cborConverter_.addHardwareAuthToken(array, authToken);
-        cborConverter_.addVerificationToken(array, verificationToken);
-        std::vector<uint8_t> cborData = array.encode();
+            // Convert input data to cbor format
+            array.add(operationHandle);
+            cborConverter_.addKeyparameters(array, inParams);
+            array.add(data);
+            cborConverter_.addHardwareAuthToken(array, authToken);
+            cborConverter_.addVerificationToken(array, verificationToken);
+            std::vector<uint8_t> cborData = array.encode();
 
-    errorCode = sendData(this, pTransportFactory, Instruction::INS_UPDATE_OPERATION_CMD, cborData, cborOutData);
+            errorCode = sendData(this, pTransportFactory, Instruction::INS_UPDATE_OPERATION_CMD, cborData, cborOutData);
 
-        if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
-            //Skip last 2 bytes in cborData, it contains status.
-            std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                    true);
-            if (item != nullptr) {
-                cborConverter_.getUint64(item, 1, inputConsumed);
-                cborConverter_.getKeyParameters(item, 2, outParams);
-                cborConverter_.getBinaryArray(item, 3, output);
+            if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+                //Skip last 2 bytes in cborData, it contains status.
+                std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                        true);
+                if (item != nullptr) {
+                    /*Ignore inputConsumed from javacard SE since HAL consumes all the input */
+                    //cborConverter_.getUint64(item, 1, inputConsumed);
+                    if(outParams.size() == 0)
+                        cborConverter_.getKeyParameters(item, 2, outParams);
+                    cborConverter_.getBinaryArray(item, 3, tempOut);
+                }
             }
+            return errorCode;
+        };
+        if(ErrorCode::OK == (errorCode = oprCtx_->update(operationHandle, std::vector<uint8_t>(input),
+                        sendDataCallback))) {
+            /* Consumed all the input */
+            inputConsumed = input.size();
+            output = tempOut;
         }
     }
     _hidl_cb(errorCode, inputConsumed, outParams, output);
@@ -854,29 +871,56 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
         outParams = kmParamSet2Hidl(response.output_params);
         output = kmBuffer2hidlVec(response.output);
     } else if (response.error == KM_ERROR_INVALID_OPERATION_HANDLE) {
-        cppbor::Array array;
-        std::unique_ptr<Item> item;
-        std::vector<uint8_t> cborOutData;
+        std::vector<uint8_t> tempOut;
+        /* OperationContext calls this below sendDataCallback callback function. This callback
+         * may be called multiple times if the input data is larger than MAX_ALLOWED_INPUT_SIZE.
+         * This callback function decides whether to call update/finish instruction based on the
+         * input received from the OperationContext through finish variable.
+         * if finish variable is false update instruction is called, if it is true finish instruction
+         * is called.
+         */
+        auto sendDataCallback = [&](std::vector<uint8_t>& data, bool finish) -> ErrorCode {
+            cppbor::Array array;
+            Instruction ins;
+            std::unique_ptr<Item> item;
+            std::vector<uint8_t> cborOutData;
+            int keyParamPos, outputPos;
 
-        // Convert input data to cbor format
-        array.add(operationHandle);
-        cborConverter_.addKeyparameters(array, inParams);
-        array.add(std::vector<uint8_t>(input));
-        array.add(std::vector<uint8_t>(signature));
-        cborConverter_.addHardwareAuthToken(array, authToken);
-        cborConverter_.addVerificationToken(array, verificationToken);
-        std::vector<uint8_t> cborData = array.encode();
-
-    errorCode = sendData(this, pTransportFactory, Instruction::INS_FINISH_OPERATION_CMD, cborData, cborOutData);
-
-        if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
-            //Skip last 2 bytes in cborData, it contains status.
-            std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                    true);
-            if (item != nullptr) {
-                cborConverter_.getKeyParameters(item, 1, outParams);
-                cborConverter_.getBinaryArray(item, 2, output);
+            // Convert input data to cbor format
+            array.add(operationHandle);
+            cborConverter_.addKeyparameters(array, inParams);
+            array.add(data);
+            if(finish) {
+                array.add(std::vector<uint8_t>(signature));
+                ins = Instruction::INS_FINISH_OPERATION_CMD;
+                keyParamPos = 1;
+                outputPos = 2;
+            } else {
+                ins = Instruction::INS_UPDATE_OPERATION_CMD;
+                keyParamPos = 2;
+                outputPos = 3;
             }
+            cborConverter_.addHardwareAuthToken(array, authToken);
+            cborConverter_.addVerificationToken(array, verificationToken);
+            std::vector<uint8_t> cborData = array.encode();
+
+            errorCode = sendData(this, pTransportFactory, ins, cborData, cborOutData);
+
+            if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+                //Skip last 2 bytes in cborData, it contains status.
+                std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                        true);
+                if (item != nullptr) {
+                    if(outParams.size() == 0)
+                        cborConverter_.getKeyParameters(item, keyParamPos, outParams);
+                    cborConverter_.getBinaryArray(item, outputPos, tempOut);
+                }
+            }
+            return errorCode;
+        };
+        if(ErrorCode::OK == (errorCode = oprCtx_->finish(operationHandle, std::vector<uint8_t>(input),
+                        sendDataCallback))) {
+            output = tempOut;
         }
     }
     _hidl_cb(errorCode, outParams, output);
@@ -900,6 +944,8 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
     }
+    /* Delete the entry on this operationHandle */
+    oprCtx_->clearOperationData(operationHandle);
     return errorCode;
 }
 

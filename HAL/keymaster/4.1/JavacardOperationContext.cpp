@@ -32,6 +32,35 @@ enum class Operation {
     Finish = 1
 };
 
+inline ErrorCode hidlParamSet2OperatinInfo(const hidl_vec<KeyParameter>& params, OperationInfo& info) {
+	for(int i = 0; i < params.size(); i++) {
+		const KeyParameter &param = params[i];
+        switch(param.tag) {
+            case Tag::ALGORITHM:
+                info.alg = static_cast<Algorithm>(param.f.integer);
+                break;
+            case Tag::DIGEST:
+                info.digest = static_cast<Digest>(param.f.integer);
+                break;
+            case Tag::PADDING:
+                info.pad = static_cast<PaddingMode>(param.f.integer);
+                break;
+            default:
+                continue;
+        }
+	}
+    return ErrorCode::OK;
+}
+
+ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, KeyPurpose purpose, const hidl_vec<KeyParameter>& params) {
+    ErrorCode errorCode = ErrorCode::OK;
+    OperationInfo info;
+    if(ErrorCode::OK != (errorCode = hidlParamSet2OperatinInfo(params, info))) {
+        return errorCode;
+    }
+    info.purpose = purpose;
+    return setOperationInfo(operationHandle, info);
+}
 
 ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, OperationInfo& operInfo) {
     OperationData data;
@@ -57,7 +86,7 @@ ErrorCode OperationContext::clearOperationData(uint64_t operHandle) {
         return ErrorCode::OK;
 }
 
-ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr, std::vector<uint8_t>& actualInput, std::vector<uint8_t>& input) {
+ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr, const std::vector<uint8_t>& actualInput, std::vector<uint8_t>& input) {
     ErrorCode errorCode = ErrorCode::OK;
     OperationData oprData;
 
@@ -92,7 +121,7 @@ ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr
     return errorCode;
 }
 
-ErrorCode OperationContext::update(uint64_t operHandle, std::vector<uint8_t>& actualInput, sendDataToSE_cb cb) {
+ErrorCode OperationContext::update(uint64_t operHandle, const std::vector<uint8_t>& actualInput, sendDataToSE_cb cb) {
     ErrorCode errorCode = ErrorCode::OK;
     std::vector<uint8_t> input;
 
@@ -129,7 +158,7 @@ ErrorCode OperationContext::update(uint64_t operHandle, std::vector<uint8_t>& ac
     return errorCode;
 }
 
-ErrorCode OperationContext::finish(uint64_t operHandle, std::vector<uint8_t>& actualInput, sendDataToSE_cb cb) {
+ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_t>& actualInput, sendDataToSE_cb cb) {
     ErrorCode errorCode = ErrorCode::OK;
     std::vector<uint8_t> input;
     OperationData oprData;
@@ -169,12 +198,10 @@ ErrorCode OperationContext::finish(uint64_t operHandle, std::vector<uint8_t>& ac
         return errorCode;
     }
 
-    /* Send if any buffered data is remaining */
-    if(oprData.data.buf_len > 0) {
-        if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, nullptr, 0,
-            Operation::Finish, cb))) {
-            return errorCode;
-        }
+    /* Send if any buffered data is remaining or to call finish */
+    if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, nullptr, 0,
+                    Operation::Finish, cb, true))) {
+        return errorCode;
     }
     return errorCode;
 }

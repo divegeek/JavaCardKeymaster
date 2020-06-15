@@ -27,13 +27,16 @@ namespace keymaster {
 namespace V4_1 {
 namespace javacard {
 
+using ::android::hardware::hidl_vec;
 using ::android::hardware::keymaster::V4_0::ErrorCode;
 using ::android::hardware::keymaster::V4_0::Algorithm;
 using ::android::hardware::keymaster::V4_0::KeyPurpose;
 using ::android::hardware::keymaster::V4_0::Digest;
 using ::android::hardware::keymaster::V4_0::PaddingMode;
+using ::android::hardware::keymaster::V4_0::KeyParameter;
+using ::android::hardware::keymaster::V4_0::Tag;
 
-using sendDataToSE_cb = std::function<ErrorCode(std::vector<uint8_t>& data)>;
+using sendDataToSE_cb = std::function<ErrorCode(std::vector<uint8_t>& data, bool finish)>;
 
 enum class Operation;
 
@@ -60,10 +63,11 @@ public:
     OperationContext(){}
     ~OperationContext() {}
     ErrorCode setOperationInfo(uint64_t operationHandle, OperationInfo& oeprInfo);
+    ErrorCode setOperationInfo(uint64_t operationHandle, KeyPurpose purpose, const hidl_vec<KeyParameter>& params);
     ErrorCode getOperationInfo(uint64_t operHandle, OperationInfo& operInfo);
     ErrorCode clearOperationData(uint64_t operationHandle);
-    ErrorCode update(uint64_t operHandle, std::vector<uint8_t>& input, sendDataToSE_cb cb);
-    ErrorCode finish(uint64_t operHandle, std::vector<uint8_t>& input, sendDataToSE_cb cb);
+    ErrorCode update(uint64_t operHandle, const std::vector<uint8_t>& input, sendDataToSE_cb cb);
+    ErrorCode finish(uint64_t operHandle, const std::vector<uint8_t>& input, sendDataToSE_cb cb);
 
 private:
     std::map<uint64_t, OperationData> operationTable;
@@ -77,12 +81,12 @@ private:
         return ErrorCode::INVALID_OPERATION_HANDLE;
     }
 
-    ErrorCode validateInputData(uint64_t operHandle, Operation opr, std::vector<uint8_t>& actualInput,
+    ErrorCode validateInputData(uint64_t operHandle, Operation opr, const std::vector<uint8_t>& actualInput,
     std::vector<uint8_t>& input);
     ErrorCode internalUpdate(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>&
     out);
     inline ErrorCode handleInternalUpdate(uint64_t operHandle, uint8_t* data, size_t len, Operation opr,
-            sendDataToSE_cb cb) {
+            sendDataToSE_cb cb, bool finish=false) {
         ErrorCode errorCode = ErrorCode::OK;
         std::vector<uint8_t> out;
         OperationData oprData;
@@ -98,11 +102,11 @@ private:
             }
         } else {
             /* Other algorithms no buffering required */
-            for(int i = 0; i < len; i++) {
+            for(size_t i = 0; i < len; i++) {
                 out.push_back(data[i]);
             }
         }
-        if(ErrorCode::OK != (errorCode = cb(out))) {
+        if(ErrorCode::OK != (errorCode = cb(out, finish))) {
             return errorCode;
         }
         return errorCode;
