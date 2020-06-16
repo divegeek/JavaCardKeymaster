@@ -185,4 +185,97 @@ public class KMEnumArrayTag extends KMTag {
     }
     return false;
   }
+
+  public boolean isValidDigests(byte alg){
+    short index = 0;
+    short digest;
+    while(index < length()){
+      digest = get(index);
+      switch (alg) {
+        case KMType.EC:
+        case KMType.RSA:
+          if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256) return false;
+          break;
+        case KMType.HMAC:
+          if (digest != KMType.SHA2_256) return false;
+          break;
+        case KMType.AES:
+        case KMType.DES:
+          if (digest != KMType.DIGEST_NONE) return false;
+          break;
+        default:
+          return false;
+      }
+      index++;
+    }
+    return true;
+  }
+
+  public boolean isValidPaddingModes(byte alg){
+    short index = 0;
+    short padding;
+    while(index < length()){
+      padding = get(index);
+      switch(alg){
+        case KMType.RSA:
+          if(padding != KMType.RSA_OAEP && padding != KMType.PADDING_NONE &&
+            padding != KMType.RSA_PKCS1_1_5_SIGN && padding != KMType.RSA_PKCS1_1_5_ENCRYPT &&
+          padding != KMType.RSA_PSS){
+            return false;
+          }
+          break;
+        case KMType.AES:
+        case KMType.DES:
+          if(padding != KMType.PKCS7 && padding != KMType.PADDING_NONE){
+            return false;
+          }
+          break;
+        case KMType.EC:
+        case KMType.HMAC:
+          if(padding != PADDING_NONE){
+            return false;
+          }
+          break;
+        default:
+          return false;
+      }
+      index++;
+    }
+    return true;
+  }
+  public boolean isValidPurpose(byte alg){
+    short index = 0;
+    short purpose;
+    while(index < length()){
+      purpose = get(index);
+      switch(purpose){
+        case KMType.DECRYPT:
+        case KMType.ENCRYPT:
+          if(alg != KMType.RSA && alg != KMType.AES &&
+            alg != KMType.DES){
+            return false;
+          }
+          break;
+        case KMType.SIGN:
+        case KMType.VERIFY:
+          if(alg != KMType.HMAC && alg != KMType.RSA &&
+            alg != KMType.EC){
+            return false;
+          }
+          break;
+        default:
+          return false;
+      }
+      index++;
+    }
+    return true;
+  }
+
+  public boolean isValidBlockMode(byte alg) {
+    if (alg == KMType.AES || alg == KMType.DES) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 }

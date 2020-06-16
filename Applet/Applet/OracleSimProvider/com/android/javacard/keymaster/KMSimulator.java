@@ -367,9 +367,8 @@ public class KMSimulator implements KMCryptoProvider {
     return false;
   }
 
-
   @Override
-  public KMCipher createRsaDecrypt(short cipherAlg, short padding, byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength) {
+  public KMCipher createRsaDecipher(short padding, byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength) {
     return null;
   }
 
@@ -389,7 +388,12 @@ public class KMSimulator implements KMCryptoProvider {
   }
 
   @Override
-  public Signature createHmacSigner(short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
+  public KMCipher createSymmetricCipher(short cipherAlg, short mode, short padding, byte[] secret, short secretStart, short secretLength) {
+    return null;
+  }
+
+  @Override
+  public Signature createHmacSignerVerifier(short purpose, short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
     return null;
   }
 
@@ -502,4 +506,19 @@ public class KMSimulator implements KMCryptoProvider {
   public void bypassAesGcm(){
     jcardSim = true;
   }
+
+  @Override
+  public KMCipher createRsaCipher(short padding, byte[] modBuffer, short modOff, short modLength) {
+    return null;
+  }
+
+  @Override
+  public Signature createRsaVerifier(short msgDigestAlg, short padding, byte[] modBuffer, short modOff, short modLength) {
+    return null;
+  }
+  @Override
+  public Signature createEcVerifier(short msgDigestAlg, byte[] pubKey, short pubKeyStart, short pubKeyLength) {
+    return null;
+  }
+
 }

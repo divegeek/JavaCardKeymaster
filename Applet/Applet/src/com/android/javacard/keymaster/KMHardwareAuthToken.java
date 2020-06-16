@@ -53,6 +53,13 @@ public class KMHardwareAuthToken extends KMType {
 
   public static short instance() {
     short arrPtr = KMArray.instance((short)6);
+    KMArray arr = KMArray.cast(arrPtr);
+    arr.add(CHALLENGE, KMInteger.uint_16((short)0));
+    arr.add(USER_ID, KMInteger.uint_16((short)0));
+    arr.add(AUTHENTICATOR_ID, KMInteger.uint_16((short)0));
+    arr.add(HW_AUTHENTICATOR_TYPE, KMEnum.instance(KMType.USER_AUTH_TYPE, KMType.USER_AUTH_NONE));
+    arr.add(TIMESTAMP, KMInteger.uint_16((short)0));
+    arr.add(MAC, KMByteBlob.instance((short)0));
     return instance(arrPtr);
   }
 

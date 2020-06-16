@@ -24,6 +24,7 @@ import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
+import javacard.security.CryptoException;
 import javacard.security.DESKey;
 import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
@@ -48,7 +49,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short MAX_LENGTH = (short) 0x2000;
   private static final byte CLA_ISO7816_NO_SM_NO_CHAN = (byte) 0x80;
   private static final short KM_HAL_VERSION = (short) 0x4000;
-  private static final short MAX_AUTH_DATA_SIZE = (short) 128;
+  private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short MAX_IO_LENGTH = 0x400;
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
@@ -63,6 +64,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // "Auth Verification"
   public static final byte[] authVerification = {0x41, 0x75, 0x74, 0x68, 0x20, 0x56, 0x65, 0x72, 0x69,
   0x66, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E};
+  // "confirmation token"
+  public static final byte[] confirmationToken = {0x63, 0x6F, 0x6E, 0x66, 0x69, 0x72, 0x6D, 0x61, 0x74,
+  0x69, 0x6F, 0x6E, 0x20, 0x74, 0x6F, 0x6B, 0x65, 0x6E};
+
   // Possible states of the applet.
   private static final byte ILLEGAL_STATE = 0x00;
   private static final byte INSTALL_STATE = 0x01;
@@ -124,6 +129,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte OUTPUT_DATA = 25;
   public static final byte HW_TOKEN = 26;
   public static final byte VERIFICATION_TOKEN = 27;
+  private static final byte SIGNATURE = 28;
 
   // AddRngEntropy
   private static final short MAX_SEED_SIZE = 2048;
@@ -506,6 +512,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processGetHmacSharingParamCmd(APDU apdu) {
+    // No Arguments
+    byte[] scratchPad = apdu.getBuffer();
+    // Create blob containing seed
+    tmpVariables[0] =
+        KMByteBlob.instance(repository.getHmacSeed(), (short) 0, repository.HMAC_SEED_NONCE_SIZE);
+    // Create blob containing nonce
+    cryptoProvider.newRandomNumber(scratchPad, (short) 0, repository.HMAC_SEED_NONCE_SIZE);
+    tmpVariables[1] = KMByteBlob.instance(scratchPad, (short) 0, repository.HMAC_SEED_NONCE_SIZE);
+    // Create HMAC Sharing Parameters
+    tmpVariables[2] = KMHmacSharingParameters.instance();
+    KMHmacSharingParameters.cast(tmpVariables[2]).setNonce(tmpVariables[1]);
+    KMHmacSharingParameters.cast(tmpVariables[2]).setSeed(tmpVariables[0]);
+    // prepare the response
+    tmpVariables[3] = KMArray.instance((short) 2);
+    KMArray.cast(tmpVariables[3]).add((short) 0, KMInteger.uint_16(KMError.OK));
+    KMArray.cast(tmpVariables[3]).add((short) 1, tmpVariables[2]);
+    // Encode the response
+    bufferLength = encoder.encode(tmpVariables[0], buffer, bufferStartOffset);
+    sendOutgoing(apdu);
   }
 
   private void processDeleteAllKeysCmd(APDU apdu) {
@@ -556,15 +581,324 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processComputeSharedHmacCmd(APDU apdu) {
+    // Receive the incoming request fully from the master into buffer.
+    receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
+    tmpVariables[1] = KMArray.instance((short) 1);
+    tmpVariables[2] = KMKeyParameters.exp();
+    tmpVariables[3] = KMHmacSharingParameters.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 0, KMArray.exp(tmpVariables[3])); // Vector of hmac params
+    KMArray.cast(tmpVariables[1]).add((short) 1, tmpVariables[2]); // Key Params
+    // Decode the arguments
+    tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
+    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 1);
+    data[HMAC_SHARING_PARAMS] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    // Concatenate HMAC Params
+    tmpVariables[0] = 0;
+    tmpVariables[1] = KMArray.cast(data[HMAC_SHARING_PARAMS]).length();//total number of params
+    tmpVariables[5] = 0; // index in scratchPad
+    while (tmpVariables[0] < tmpVariables[1]) {
+      // read HmacSharingParam
+      tmpVariables[2] = KMArray.cast(data[HMAC_SHARING_PARAMS]).get(tmpVariables[0]);
+      // get seed
+      tmpVariables[3] = KMHmacSharingParameters.cast(tmpVariables[2]).getSeed();
+      tmpVariables[4] = KMByteBlob.cast(tmpVariables[3]).length();
+      // if seed is present
+      if (tmpVariables[4] == HMAC_SEED_SIZE /*32*/) {
+        // then copy that to scratchPad
+        Util.arrayCopyNonAtomic(
+            KMByteBlob.cast(tmpVariables[3]).getBuffer(),
+            KMByteBlob.cast(tmpVariables[3]).getStartOff(),
+            scratchPad,
+            tmpVariables[5],// index in scratch pad
+            tmpVariables[4]);
+        tmpVariables[5] += tmpVariables[4]; // increment by seed length
+      }
+      // if nonce is present get nonce
+      tmpVariables[3] = KMHmacSharingParameters.cast(tmpVariables[2]).getNonce();
+      tmpVariables[4] = KMByteBlob.cast(tmpVariables[3]).length();
+      // if nonce is not present
+      if (tmpVariables[4] != HMAC_NONCE_SIZE /*32*/) {
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+      // copy nonce to scratchPad
+      Util.arrayCopyNonAtomic(
+          KMByteBlob.cast(tmpVariables[3]).getBuffer(),
+          KMByteBlob.cast(tmpVariables[3]).getStartOff(),
+          scratchPad,
+          tmpVariables[5],
+          tmpVariables[4]);
+      tmpVariables[5] += tmpVariables[4]; // increment by nonce length
+      tmpVariables[0]++; // go to next hmac param in the vector
+    }
+    // ckdf to derive hmac key - scratch pad has the context
+    HMACKey key =
+        cryptoProvider.cmacKdf(
+            repository.getHmacKey(), ckdfLable , scratchPad, (short) 0, tmpVariables[5]);
+    tmpVariables[5] = key.getKey(scratchPad, (short) 0);
+    repository.initComputedHmac(scratchPad, (short) 0, tmpVariables[5]);
+    // Generate sharingKey verification
+    tmpVariables[5] =
+        cryptoProvider.hmacSign(
+            key, sharingCheck, (short) 0, (short) sharingCheck.length, scratchPad, (short) 0);
+    tmpVariables[1] = KMByteBlob.instance(scratchPad, (short) 0, tmpVariables[5]);
+    // prepare the response
+    tmpVariables[0] = KMArray.instance((short) 2);
+    KMArray.cast(tmpVariables[0]).add((short) 0, KMInteger.uint_16(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 1, tmpVariables[1]);
+    // Encode the response
+    bufferLength = encoder.encode(tmpVariables[0], buffer, bufferStartOffset);
+    sendOutgoing(apdu);
   }
 
   private void processUpgradeKeyCmd(APDU apdu) {
+    // Receive the incoming request fully from the master into buffer.
+    receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
+    tmpVariables[1] = KMArray.instance((short) 2);
+    tmpVariables[2] = KMKeyParameters.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 0, KMByteBlob.exp()); // Key Blob
+    KMArray.cast(tmpVariables[1]).add((short) 1, tmpVariables[2]); // Key Params
+    // Decode the arguments
+    tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
+    data[KEY_BLOB] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 1);
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] != KMTag.INVALID_VALUE) {
+      data[APP_ID] = KMByteTag.cast(tmpVariables[0]).getValue();
+    }
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] != KMTag.INVALID_VALUE) {
+      data[APP_DATA] = KMByteTag.cast(tmpVariables[0]).getValue();
+    }
+    // parse existing key blob
+    parseEncryptedKeyBlob(scratchPad);
+    // validate characteristics to be upgraded.
+    // TODO currently only os version and os patch level are upgraded.
+    tmpVariables[0] = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_VERSION, data[HW_PARAMETERS]);
+    tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
+    tmpVariables[1] = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, data[HW_PARAMETERS]);
+    tmpVariables[1] = KMIntegerTag.cast(tmpVariables[1]).getValue();
+    tmpVariables[2] = KMInteger.uint_32(repository.osVersion,(short)0);
+    tmpVariables[3] = KMInteger.uint_32(repository.osPatch,(short)0);
+    tmpVariables[4] = KMInteger.uint_8((byte)0);
+    if(tmpVariables[0] != KMType.INVALID_VALUE){
+      // os version in key characteristics must be less the os version stored in javacard or the
+      // stored version must be zero. Then only upgrade is allowed else it is invalid argument.
+      if(KMInteger.compare(tmpVariables[0], tmpVariables[2]) != -1 &&
+      KMInteger.compare(tmpVariables[2], tmpVariables[4]) != 0){
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+    }
+    if(tmpVariables[1] != KMType.INVALID_VALUE){
+      // The key characteristics should have has os patch level < os patch level stored in javacard
+      // then only upgrade is allowed.
+      if(KMInteger.compare(tmpVariables[1], tmpVariables[3]) != -1){
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+    }
+/*    KMIntegerTag.getValue(
+            scratchPad, (short) 0, );
+    if ((tmpVariables[0] != KMType.INVALID_VALUE)
+        && (Util.arrayCompare(
+                repository.osVersion, (short) 0, scratchPad, (short) 0, tmpVariables[0])
+            != 0)) {
+      if (Util.arrayCompare(repository.osVersion, (short) 0, scratchPad, (short) 0, tmpVariables[0])
+          == -1) {
+        // If the key characteristics has os version > current os version
+        Util.arrayFillNonAtomic(scratchPad, (short) 0, tmpVariables[0], (byte) 0);
+        // If the os version is not zero
+        if (Util.arrayCompare(
+                repository.osVersion, (short) 0, scratchPad, (short) 0, tmpVariables[0])
+            != 0) {
+          KMException.throwIt(KMError.INVALID_ARGUMENT);
+        }
+      }
+    }
+    tmpVariables[0] =
+        KMIntegerTag.getValue(
+            scratchPad, (short) 0, KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, data[HW_PARAMETERS]);
+    if ((tmpVariables[0] != KMType.INVALID_VALUE)
+        && (Util.arrayCompare(repository.osPatch, (short) 0, scratchPad, (short) 0, tmpVariables[0])
+            != 0)) {
+      if (Util.arrayCompare(repository.osPatch, (short) 0, scratchPad, (short) 0, tmpVariables[0])
+          < 0) {
+        // If the key characteristics has os patch level > current os patch
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+    }*/
+    // remove Auth Tag
+    repository.removeAuthTag(data[AUTH_TAG]);
+    // copy origin
+    data[ORIGIN] = KMEnumTag.getValue(KMType.ORIGIN, data[HW_PARAMETERS]);
+    // create new key blob with current os version etc.
+    createEncryptedKeyBlob(scratchPad);
+    // persist new auth tag for rollback resistance.
+    repository.persistAuthTag(data[AUTH_TAG]);
+    // prepare the response
+    tmpVariables[0] = KMArray.instance((short) 2);
+    KMArray.cast(tmpVariables[0]).add((short) 0, KMInteger.uint_16(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 1, data[KEY_BLOB]);
+    // Encode the response
+    bufferLength = encoder.encode(tmpVariables[0], buffer, bufferStartOffset);
+    sendOutgoing(apdu);
   }
 
   private void processExportKeyCmd(APDU apdu) {
+    sendError(apdu, KMError.UNIMPLEMENTED);
   }
 
   private void processImportWrappedKeyCmd(APDU apdu) {
+    // Currently only RAW formatted import key blob are supported
+    if (repository.keyBlobCount > repository.MAX_BLOB_STORAGE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    // Receive the incoming request fully from the master into buffer.
+    receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
+    tmpVariables[1] = KMArray.instance((short) 11);
+    // Arguments
+    tmpVariables[2] = KMKeyParameters.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 0, tmpVariables[2]); // Key Params
+    KMArray.cast(tmpVariables[1]).add((short) 1, KMEnum.instance(KMType.KEY_FORMAT)); // Key Format
+    KMArray.cast(tmpVariables[1]).add((short) 2, KMByteBlob.exp()); // Wrapped Import Key Blob
+    KMArray.cast(tmpVariables[1]).add((short) 3, KMByteBlob.exp()); // Auth Tag
+    KMArray.cast(tmpVariables[1]).add((short) 4, KMByteBlob.exp()); // IV - Nonce
+    KMArray.cast(tmpVariables[1]).add((short) 5, KMByteBlob.exp()); // Encrypted Transport Key
+    KMArray.cast(tmpVariables[1]).add((short) 6, KMByteBlob.exp()); // Wrapping Key KeyBlob
+    KMArray.cast(tmpVariables[1]).add((short) 7, KMByteBlob.exp()); // Masking Key
+    KMArray.cast(tmpVariables[1]).add((short) 8, tmpVariables[2]); // Un-wrapping Params
+    KMArray.cast(tmpVariables[1]).add((short) 9, KMInteger.exp()); // Password Sid
+    KMArray.cast(tmpVariables[1]).add((short) 10, KMInteger.exp()); // Biometric Sid
+    // Decode the arguments
+    tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
+    tmpVariables[3] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    // get algorithm
+    tmpVariables[3] = KMEnumTag.getValue(KMType.ALGORITHM, tmpVariables[3]);
+    if (tmpVariables[3] == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    tmpVariables[3] = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
+    if (tmpVariables[3] == KMType.RSA
+        || tmpVariables[3] == KMType.EC) { // RSA and EC not implemented
+      KMException.throwIt(KMError.UNIMPLEMENTED);
+    }
+    // Key format must be RAW format - X509 and PKCS8 not implemented.
+    tmpVariables[3] = KMArray.cast(tmpVariables[2]).get((short) 1);
+    tmpVariables[3] = KMEnum.cast(tmpVariables[3]).getVal();
+    if (tmpVariables[3] != KMType.RAW) {
+      KMException.throwIt(KMError.UNIMPLEMENTED);
+    }
+    data[AUTH_DATA] = KMArray.cast(tmpVariables[2]).get((short) 3);
+    data[AUTH_TAG] = KMArray.cast(tmpVariables[2]).get((short) 4);
+    data[NONCE] = KMArray.cast(tmpVariables[2]).get((short) 5);
+    data[ENC_TRANSPORT_KEY] = KMArray.cast(tmpVariables[2]).get((short) 6);
+    data[MASKING_KEY] = KMArray.cast(tmpVariables[2]).get((short) 8);
+    // Step 1 - parse wrapping key blob
+    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 9); // wrapping key parameters
+    // Check for app id and app data.
+    data[APP_ID] = KMType.INVALID_VALUE;
+    data[APP_DATA] = KMType.INVALID_VALUE;
+    tmpVariables[3] =
+        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, data[KEY_PARAMETERS]);
+    if (tmpVariables[3] != KMTag.INVALID_VALUE) {
+      data[APP_ID] = KMByteTag.cast(tmpVariables[3]).getValue();
+    }
+    tmpVariables[3] =
+        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, data[KEY_PARAMETERS]);
+    if (tmpVariables[3] != KMTag.INVALID_VALUE) {
+      data[APP_DATA] = KMByteTag.cast(tmpVariables[3]).getValue();
+    }
+    // wrapping key blob
+    data[KEY_BLOB] = KMArray.cast(tmpVariables[2]).get((short) 7);
+    parseEncryptedKeyBlob(scratchPad);
+
+    // Step 2 - Decrypt the encrypted transport key
+    // enforce authorization for WRAP_KEY operation using RSA algorithm according to javacard caps.
+    if (KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]) != KMType.RSA) {
+      KMException.throwIt(KMError.INCOMPATIBLE_ALGORITHM);
+    }
+    if (!(KMEnumArrayTag.contains(KMType.DIGEST, KMType.SHA2_256, data[HW_PARAMETERS]))) {
+      KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+    }
+    if (!(KMEnumArrayTag.contains(KMType.PADDING, KMType.RSA_OAEP, data[HW_PARAMETERS]))) {
+      KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+    }
+    KMCipher cipher =
+        cryptoProvider.createRsaDecipher(
+          KMCipher.PAD_PKCS1_OAEP_SHA256,
+            KMByteBlob.cast(data[SECRET]).getBuffer(),
+            KMByteBlob.cast(data[SECRET]).getStartOff(),
+            KMByteBlob.cast(data[SECRET]).length(),
+            KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
+            KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
+            KMByteBlob.cast(data[PUB_KEY]).length());
+    // Decrypt the transport key
+    tmpVariables[3] =
+        cipher.doFinal(
+            KMByteBlob.cast(data[ENC_TRANSPORT_KEY]).getBuffer(),
+            KMByteBlob.cast(data[ENC_TRANSPORT_KEY]).getStartOff(),
+            KMByteBlob.cast(data[ENC_TRANSPORT_KEY]).length(),
+            scratchPad,
+            (short) 0);
+    data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, tmpVariables[3]);
+    cryptoProvider.delete(cipher);
+
+    // Step 3 - XOR with masking key
+    tmpVariables[4] = KMByteBlob.cast(data[MASKING_KEY]).length();
+    if (tmpVariables[3] != tmpVariables[4]) {
+      KMException.throwIt(KMError.IMPORT_PARAMETER_MISMATCH);
+    }
+    tmpVariables[3] = 0; // index in scratchPad
+    byte[] buf = KMByteBlob.cast(MASKING_KEY).getBuffer();
+    tmpVariables[5] = KMByteBlob.cast(MASKING_KEY).getStartOff();
+    while (tmpVariables[3] < tmpVariables[4]) {
+      scratchPad[tmpVariables[3]] =
+          (byte) (scratchPad[tmpVariables[3]] ^ buf[(short) (tmpVariables[3] + tmpVariables[5])]);
+      scratchPad[3]++;
+    }
+    data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, tmpVariables[3]);
+
+    // Step 4 - AES-GCM decrypt
+    data[IMPORTED_KEY_BLOB] = KMArray.cast(tmpVariables[2]).get((short) 2);
+    data[AUTH_DATA] = KMArray.cast(tmpVariables[2]).get((short) 3);
+    data[AUTH_TAG] = KMArray.cast(tmpVariables[2]).get((short) 4);
+    data[NONCE] = KMArray.cast(tmpVariables[2]).get((short) 5);
+    data[ENC_TRANSPORT_KEY] = KMArray.cast(tmpVariables[2]).get((short) 6);
+    data[MASKING_KEY] = KMArray.cast(tmpVariables[2]).get((short) 8);
+    AESKey key =
+        cryptoProvider.createAESKey(
+            KMByteBlob.cast(data[SECRET]).getBuffer(),
+            KMByteBlob.cast(data[SECRET]).getStartOff(),
+            KMByteBlob.cast(data[SECRET]).length());
+    boolean verification =
+        cryptoProvider.aesGCMDecrypt(
+            key,
+            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).getBuffer(),
+            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).getStartOff(),
+            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).length(),
+            scratchPad,
+            (short) 0,
+            KMByteBlob.cast(data[NONCE]).getBuffer(),
+            KMByteBlob.cast(data[NONCE]).getStartOff(),
+            KMByteBlob.cast(data[NONCE]).length(),
+            KMByteBlob.cast(data[AUTH_DATA]).getBuffer(),
+            KMByteBlob.cast(data[AUTH_DATA]).getStartOff(),
+            KMByteBlob.cast(data[AUTH_DATA]).length(),
+            KMByteBlob.cast(data[AUTH_TAG]).getBuffer(),
+            KMByteBlob.cast(data[AUTH_TAG]).getStartOff(),
+            KMByteBlob.cast(data[AUTH_TAG]).length());
+    if (verification == false) {
+      KMException.throwIt(KMError.IMPORTED_KEY_VERIFICATION_FAILED);
+    }
+    cryptoProvider.delete(key);
+
+    // Step 5 - Import Decrypted Key.
+    data[ORIGIN] = KMType.SECURELY_IMPORTED;
+    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    importKey(apdu, scratchPad);
   }
 
   private void processAttestKeyCmd(APDU apdu) {}
@@ -575,19 +909,1183 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendError(apdu, KMError.UNIMPLEMENTED);
   }
 
-  private void processAbortOperationCmd(APDU apdu) {}
+  private void processAbortOperationCmd(APDU apdu) {
+    receiveIncoming(apdu);
+    tmpVariables[1] = KMArray.instance((short) 1);
+    KMArray.cast(tmpVariables[1]).add((short) 0, KMInteger.exp());
+    tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
+    data[OP_HANDLE] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    tmpVariables[1] = KMInteger.cast(data[OP_HANDLE]).getShort();
+    KMOperationState op = repository.findOperation(tmpVariables[1]);
+    if (op == null) {
+      KMException.throwIt(KMError.INVALID_OPERATION_HANDLE);
+    }
+    repository.releaseOperation(op);
+    sendError(apdu, KMError.OK);
+  }
 
   private void processFinishOperationCmd(APDU apdu) {
     // TODO AES GCM
+    receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
+    tmpVariables[1] = KMArray.instance((short) 6);
+    // Arguments
+    tmpVariables[2] = KMKeyParameters.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 0, KMInteger.exp());
+    KMArray.cast(tmpVariables[1]).add((short) 1, tmpVariables[2]);
+    KMArray.cast(tmpVariables[1]).add((short) 2, KMByteBlob.exp());
+    KMArray.cast(tmpVariables[1]).add((short) 3, KMByteBlob.exp());
+    tmpVariables[3] = KMHardwareAuthToken.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 4, tmpVariables[3]);
+    tmpVariables[4] = KMVerificationToken.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 5, tmpVariables[4]);
+    // Decode the arguments
+    tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
+    data[OP_HANDLE] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 1);
+    data[INPUT_DATA] = KMArray.cast(tmpVariables[2]).get((short) 2);
+    data[SIGNATURE] = KMArray.cast(tmpVariables[2]).get((short) 3);
+    data[HW_TOKEN] = KMArray.cast(tmpVariables[2]).get((short) 4);
+    data[VERIFICATION_TOKEN] = KMArray.cast(tmpVariables[2]).get((short) 5);
+    // Check Operation Handle
+    tmpVariables[1] = KMInteger.cast(data[OP_HANDLE]).getShort();
+    KMOperationState op = repository.findOperation(tmpVariables[1]);
+    if (op == null) {
+      KMException.throwIt(KMError.INVALID_OPERATION_HANDLE);
+    }
+    //Authorize the finish operation
+    authorizeUpdateFinishOperation(op, scratchPad);
+    //Finish trusted Confirmation operation
+    switch(op.getPurpose()){
+      case KMType.SIGN:
+        finishTrustedConfirmationOperation(op);
+      case KMType.VERIFY:
+        finishSigningVerifyingOperation(op,scratchPad);
+        break;
+      case KMType.ENCRYPT:
+        finishEncryptOperation(op, scratchPad);
+        break;
+      case KMType.DECRYPT:
+        finishDecryptOperation(op,scratchPad);
+        break;
+    }
+      // Remove the operation handle
+    repository.releaseOperation(op);
+    // make response
+    tmpVariables[1] = KMArray.instance((short) 0);
+    tmpVariables[1] = KMKeyParameters.instance(tmpVariables[1]);
+    tmpVariables[2] = KMArray.instance((short) 3);
+    if (data[OUTPUT_DATA] == KMType.INVALID_VALUE) {
+      data[OUTPUT_DATA] = KMByteBlob.instance((short) 0);
+    }
+    KMArray.cast(tmpVariables[2]).add((short) 0, KMInteger.uint_16(KMError.OK));
+    KMArray.cast(tmpVariables[2]).add((short) 1, tmpVariables[1]);
+    KMArray.cast(tmpVariables[2]).add((short) 2, data[OUTPUT_DATA]);
+    // Encode the response
+    bufferLength = encoder.encode(tmpVariables[2], buffer, bufferStartOffset);
+    sendOutgoing(apdu);
+    }
+
+    private void finishEncryptOperation(KMOperationState op, byte[] scratchPad) {
+      short len = KMByteBlob.cast(data[INPUT_DATA]).length();
+      switch(op.getAlgorithm()){
+        // Only supported for testing purpose
+        // TODO remove this later on
+        case KMType.RSA:
+          data[OUTPUT_DATA] = KMByteBlob.instance((short)256);
+          // Fill the scratch pad with zero
+          Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
+          if(op.getPadding() == KMType.PADDING_NONE){
+              // Length cannot be greater then key size - we restrict this to 255 that ensures
+            // that it will never be greater then numerical value of the key also.
+              if(len >= 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+ /*             // If Length is same as key size then
+              // compare the data with key value - date should be less then key value.
+              if(len == 255) {
+                // TODO the assumption is that private key exponent value is considered here.
+                tmpVariables[0]= op.getKey(scratchPad,(short)0);
+                tmpVariables[0] = Util.arrayCompare(
+                  KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+                  KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+                  scratchPad, (short)0, tmpVariables[0]);
+                if(tmpVariables[0] >= 0){
+                  KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+                }
+              }
+*/            // copy input data to scratchpad.
+          //TODO the current jacrdsim implementation requires 255 bytes when using encryption with no pad
+            Util.arrayCopyNonAtomic(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+              scratchPad, (short)(255 - len),len);
+            len = (short)255;
+          }else{
+            //copy input data to scratchpad.
+          Util.arrayCopyNonAtomic(
+            KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+            KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+            scratchPad, (short)0,len);
+          }
+          len = op.getCipher().doFinal(
+            scratchPad, (short)0,len, KMByteBlob.cast(data[OUTPUT_DATA]).getBuffer(),
+            KMByteBlob.cast(data[OUTPUT_DATA]).getStartOff());
+            break;
+        case KMType.AES:
+          if(op.getBlockMode() == KMType.GCM){
+            finishAesGCMOperation(op, scratchPad);
+            return;
+          }
+        case KMType.DES:
+              if(op.getAlgorithm() == KMType.AES){
+                tmpVariables[0] = KMCipher.AES_BLOCK_SIZE;
+              }else{
+                tmpVariables[0] = KMCipher.DES_BLOCK_SIZE;
+              }
+              //If no padding then data length must be block aligned
+              if (op.getPadding() == KMType.PADDING_NONE && ((short)(len % tmpVariables[0]) != 0)){
+                KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+              }
+              //If padding i.e. pkcs7 then add padding to right
+              if(op.getPadding() == KMType.PKCS7){
+                // padding bytes
+                if(len % tmpVariables[0] == 0) tmpVariables[1] = tmpVariables[0];
+                else tmpVariables[1] = (short)(tmpVariables[0] - (len % tmpVariables[0]));
+                // final len with padding
+                len = (short)(len+tmpVariables[1]);
+                // intermediate buffer to copy input data+padding
+                tmpVariables[2] = KMByteBlob.instance(len);
+                // fill in the padding
+                Util.arrayFillNonAtomic(
+                  KMByteBlob.cast(tmpVariables[2]).getBuffer(),
+                  KMByteBlob.cast(tmpVariables[2]).getStartOff(),
+                  KMByteBlob.cast(tmpVariables[2]).length(),
+                  (byte)tmpVariables[1]);
+                //copy the input data
+                Util.arrayCopyNonAtomic(
+                  KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+                  KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+                  KMByteBlob.cast(tmpVariables[2]).getBuffer(),
+                  KMByteBlob.cast(tmpVariables[2]).getStartOff(),
+                  KMByteBlob.cast(data[INPUT_DATA]).length());
+                data[INPUT_DATA] = tmpVariables[2];
+              }
+              data[OUTPUT_DATA] = KMByteBlob.instance(len);
+          len = op.getCipher().doFinal(
+            KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+            KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+            KMByteBlob.cast(data[INPUT_DATA]).length(),
+            KMByteBlob.cast(data[OUTPUT_DATA]).getBuffer(),
+            KMByteBlob.cast(data[OUTPUT_DATA]).getStartOff());
+          break;
+      }
+  }
+
+  private void finishDecryptOperation(KMOperationState op, byte[] scratchPad) {
+    short len = KMByteBlob.cast(data[INPUT_DATA]).length();
+    switch(op.getAlgorithm()){
+      // Only supported for testing purpose
+      // TODO remove this later on
+      case KMType.RSA:
+        // Fill the scratch pad with zero
+        Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
+        if(op.getPadding() == KMType.PADDING_NONE &&
+          len != 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+        len = op.getCipher().doFinal(
+          KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+          KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+          len, scratchPad,
+          (short)0);
+        data[OUTPUT_DATA] = KMByteBlob.instance(scratchPad,(short)0, len);
+        break;
+      case KMType.AES:
+        if(op.getBlockMode() == KMType.GCM){
+          finishAesGCMOperation(op, scratchPad);
+          return;
+        }
+      case KMType.DES:
+        if(op.getAlgorithm() == KMType.AES){
+          tmpVariables[0] = KMCipher.AES_BLOCK_SIZE;
+        }else{
+          tmpVariables[0] = KMCipher.DES_BLOCK_SIZE;
+        }
+        if((op.getBlockMode() == KMType.CBC || op.getBlockMode() == KMType.ECB)&& len > 0 &&
+          (len%tmpVariables[0]) != 0)KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+        tmpVariables[1] = repository.alloc(len);
+        byte[] heap = repository.getHeap();
+        len = op.getCipher().doFinal(
+          KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+          KMByteBlob.cast(data[INPUT_DATA]).getStartOff(), len,heap,
+          tmpVariables[1]);
+        //remove padding bytes if pkcs7
+        if(op.getPadding() == KMType.PKCS7 && len >0) len = (short)(len - heap[(short)(tmpVariables[1]+len -1)]);
+        //If padding i.e. pkcs7 then add padding to right
+        data[OUTPUT_DATA] = KMByteBlob.instance(heap, tmpVariables[1], len);
+        break;
+    }
+  }
+
+  private void finishAesGCMOperation(KMOperationState op, byte[] scratchPad) {
+  }
+
+  private void finishSigningVerifyingOperation(KMOperationState op, byte[]scratchPad) {
+    short len = KMByteBlob.cast(data[INPUT_DATA]).length();
+    switch(op.getAlgorithm()){
+        case KMType.RSA:
+          data[OUTPUT_DATA] = KMByteBlob.instance((short)256);
+          // No digest and no padding - This case is not supported in javacard api
+          // TODO confirm whether this case should be handled as it cannot be supported or tested
+          if(op.getDigest() == KMType.DIGEST_NONE && op.getPadding() == KMType.PADDING_NONE){
+            if(op.getPurpose() == KMType.SIGN){
+            // Length cannot be greater then key size
+            if(len > 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+            // If Length is same as key size then
+            // compare the data with key value - date should be less then key value.
+            if(len == 256) {
+              // TODO the assumption is that private key exponent value is considered here.
+              tmpVariables[0]= op.getKey(scratchPad,(short)0);
+              tmpVariables[0] = Util.arrayCompare(
+                KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+                KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+                scratchPad, (short)0, tmpVariables[0]);
+              if(tmpVariables[0] >= 0){
+                KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+              }
+            }
+            }else{//Verify
+              if(len != 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+            }
+            // Fill the scratch pad with zero
+            Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
+            // Everything is fine so copy input data to scratchpad.
+            Util.arrayCopyNonAtomic(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+              scratchPad, (short)(256 - len),len);
+            len = (short)256;
+          }
+          // If PKCS1 padding and no digest - then 0x01||0x00||PS||0x00 on left such that PS = 8 bytes
+          // TODO confirm whether this case should be handled as it cannot be supported or tested
+          if (op.getDigest() == KMType.DIGEST_NONE && op.getPadding() == KMType.RSA_PKCS1_1_5_SIGN) {
+            // Length cannot be greater then 256 -11 = 245 bytes
+            if(len > 245){
+              KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+            }
+            // Fill the scratch pad with zero
+            Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
+            scratchPad[0] = 0x00;
+            scratchPad[1] = 0x01;
+            cryptoProvider.newRandomNumber(scratchPad, (short)2, (short)8);
+            scratchPad[10] = 0x00;
+            //copy the rest of the data on scratch pad.
+            Util.arrayCopyNonAtomic(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+              scratchPad, (short)11,len);
+            len += (short)11;
+          }
+          // Normal case with PKCS1 or PSS padding and with Digest SHA256
+          if(op.getDigest()==KMType.SHA2_256 &&
+            (op.getPadding() == KMType.RSA_PKCS1_1_5_SIGN ||op.getPadding() == KMType.RSA_PSS)){
+          // Fill the scratch pad with zero
+          Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
+          // Copy the data on the scratch pad.
+          Util.arrayCopyNonAtomic(
+            KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+            KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+            scratchPad, (short)0,len);
+          }
+          if(op.getPurpose() == KMType.SIGN){
+          // len of signature will be 256 bytes
+          len = op.getSignerVerifier().sign(scratchPad,(short)0,len,
+            KMByteBlob.cast(data[OUTPUT_DATA]).getBuffer(),
+            KMByteBlob.cast(data[OUTPUT_DATA]).getStartOff());
+          }else{
+            if(!op.getSignerVerifier().verify(scratchPad,(short)0,len,
+              KMByteBlob.cast(data[SIGNATURE]).getBuffer(),
+              KMByteBlob.cast(data[SIGNATURE]).getStartOff(),
+              KMByteBlob.cast(data[SIGNATURE]).length())){
+              KMException.throwIt(KMError.VERIFICATION_FAILED);
+            }
+          }
+          break;
+        case KMType.EC:
+          // Fill the scratch pad with zero
+          Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
+          // If DIGEST NONE then truncate the data to 32 bytes.
+          // TODO Confirm whether this case needs to be supported as javacard does not support.
+          if(op.getDigest() == KMType.DIGEST_NONE || len > 32){
+              len = 32;
+          }
+          if(op.getPurpose() == KMType.SIGN){
+            // len of signature will be 512 bits i.e. 64 bytes
+          len = op.getSignerVerifier().sign(
+            KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+            KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),len,
+            scratchPad,(short)0);
+          data[OUTPUT_DATA] = KMByteBlob.instance(scratchPad,(short)0, len);
+          }else{
+            if(!op.getSignerVerifier().verify(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),len,
+              KMByteBlob.cast(data[SIGNATURE]).getBuffer(),
+              KMByteBlob.cast(data[SIGNATURE]).getStartOff(),
+              KMByteBlob.cast(data[SIGNATURE]).length())){
+              KMException.throwIt(KMError.VERIFICATION_FAILED);
+            }
+          }
+          break;
+        case KMType.HMAC:
+          Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
+          // digest is always present.
+          if(op.getPurpose() == KMType.SIGN){
+            // len of signature will always be 32 bytes.
+          len = op.getSignerVerifier().sign(KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+            KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),len,scratchPad,
+            (short)0);
+            data[OUTPUT_DATA] = KMByteBlob.instance(scratchPad,(short)0, len);
+          }else{
+            if(!op.getSignerVerifier().verify(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),len,
+              KMByteBlob.cast(data[SIGNATURE]).getBuffer(),
+              KMByteBlob.cast(data[SIGNATURE]).getStartOff(),
+              KMByteBlob.cast(data[SIGNATURE]).length())){
+              KMException.throwIt(KMError.VERIFICATION_FAILED);
+            }
+          } break;
+        default:// This is should never happen
+          KMException.throwIt(KMError.OPERATION_CANCELLED);
+          break;
+      }
+  }
+
+  private void finishTrustedConfirmationOperation(KMOperationState op) {
+    // Perform trusted confirmation if required
+    if (op.isTrustedConfirmationRequired()) {
+      tmpVariables[0] = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.CONFIRMATION_TOKEN, data[KEY_PARAMETERS]);
+      if(tmpVariables[0] == KMType.INVALID_VALUE){
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+      tmpVariables[0] = KMByteTag.cast(tmpVariables[0]).getValue();
+      boolean verified = op.getTrustedConfirmationSigner()
+        .verify(
+          KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+          KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+          KMByteBlob.cast(data[INPUT_DATA]).length(),
+          KMByteBlob.cast(tmpVariables[0]).getBuffer(),
+          KMByteBlob.cast(tmpVariables[0]).getStartOff(),
+          KMByteBlob.cast(tmpVariables[0]).length());
+      /*
+      if(tmpVariables[1] != KMByteBlob.cast(tmpVariables[0]).length() ){
+        KMException.throwIt(KMError.VERIFICATION_FAILED);
+      }
+      tmpVariables[0]=Util.arrayCompare(scratchPad,(short)0,
+        KMByteBlob.cast(tmpVariables[0]).getBuffer(),
+        KMByteBlob.cast(tmpVariables[0]).getStartOff(),
+        tmpVariables[1]);*/
+      if(!verified){
+        KMException.throwIt(KMError.VERIFICATION_FAILED);
+      }
+    }
 
   }
 
+  private void authorizeUpdateFinishOperation(KMOperationState op, byte[] scratchPad) {
+    // User Authentication
+    if (op.isSecureUserIdReqd() && !op.isAuthTimeoutValidated()) {
+        validateVerificationToken(op, data[VERIFICATION_TOKEN], scratchPad);
+        tmpVariables[0] = KMInteger.uint_64(op.getAuthTime(), (short) 0);
+        tmpVariables[2] = KMVerificationToken.cast(data[VERIFICATION_TOKEN]).getTimestamp();
+        if (tmpVariables[2] == KMType.INVALID_VALUE) {
+          KMException.throwIt(KMError.VERIFICATION_FAILED);
+        }
+        if (KMInteger.compare(tmpVariables[0], tmpVariables[2]) < 0) {
+          KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
+        }
+        op.setAuthTimeoutValidated(true);
+    } else if(op.isAuthPerOperationReqd()){ // Auth per operation
+      tmpVariables[0] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getChallenge();
+      if (KMInteger.compare(data[OP_HANDLE], tmpVariables[0]) != 0) {
+        KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
+      }
+      authorizeHwAuthToken(scratchPad);
+    }
+  }
+
+  private void validateVerificationToken(KMOperationState op, short verToken, byte[] scratchPad) {
+    // CBOR Encoding is always big endian and Java is big endian
+    short ptr = KMVerificationToken.cast(verToken).getMac();
+    short len = 0;
+    // If mac length is zero then token is empty.
+    if (KMByteBlob.cast(ptr).length() == 0) {
+      return;
+    }
+    // validate operation handle.
+    ptr = KMVerificationToken.cast(verToken).getChallenge();
+    if(op.getHandle() != KMInteger.cast(ptr).getShort()){
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+    // concatenation length will be 37 + length of verified parameters list.
+    short params = KMVerificationToken.cast(verToken).getParametersVerified();
+    Util.arrayFillNonAtomic(scratchPad, (short) 0,
+      (short) (37+KMByteBlob.cast(params).length()), (byte) 0);
+    // Add "Auth Verification" - 17 bytes.
+    Util.arrayCopy(authVerification,(short)0, scratchPad, (short)0, (short)authVerification.length);
+    len = (short)authVerification.length;
+    // concatenate challenge - 8 bytes
+    ptr = KMVerificationToken.cast(verToken).getChallenge();
+    KMInteger.cast(ptr)
+      .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate timestamp -8 bytes
+    ptr = KMVerificationToken.cast(verToken).getTimestamp();
+    KMInteger.cast(ptr)
+      .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate security level - 4 bytes
+    ptr = KMVerificationToken.cast(verToken).getSecurityLevel();
+    scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
+    len += 4;
+    // concatenate Parameters verified - blob of encoded data.
+    ptr = KMVerificationToken.cast(verToken).getParametersVerified();
+    len += KMByteBlob.cast(ptr).getValues(scratchPad, (short)0);
+    len += 4;
+    // hmac the data
+    HMACKey key =
+      cryptoProvider.createHMACKey(
+        repository.getComputedHmacKey(),
+        (short) 0,
+        (short) repository.getComputedHmacKey().length);
+    ptr = KMVerificationToken.cast(verToken).getMac();
+    boolean verified =
+      cryptoProvider.hmacVerify(key, scratchPad, (short) 0, len,
+        KMByteBlob.cast(ptr).getBuffer(),
+        KMByteBlob.cast(ptr).getStartOff(),
+        KMByteBlob.cast(ptr).length());
+    if(!verified){
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+    /*
+
+    // Compare mac.
+    ptr = KMVerificationToken.cast(verToken).getMac();
+    if (macLen != KMByteBlob.cast(ptr).length()) {
+      KMException.throwIt(KMError.INVALID_MAC_LENGTH);
+    }
+    if (Util.arrayCompare(
+      scratchPad, (short) (len+1),
+      KMByteBlob.cast(ptr).getBuffer(), KMByteBlob.cast(ptr).getStartOff(), macLen) != 0) {
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+    */
+
+  }
 
   private void processUpdateOperationCmd(APDU apdu) {
+    // TODO Add Support for AES-GCM
+    receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
+    tmpVariables[1] = KMArray.instance((short) 5);
+    // Arguments
+    tmpVariables[2] = KMKeyParameters.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 0, KMInteger.exp());
+    KMArray.cast(tmpVariables[1]).add((short) 1, tmpVariables[2]);
+    KMArray.cast(tmpVariables[1]).add((short) 2, KMByteBlob.exp());
+    tmpVariables[3] = KMHardwareAuthToken.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 3, tmpVariables[3]);
+    tmpVariables[4] = KMVerificationToken.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 4, tmpVariables[4]);
+    // Decode the arguments
+    tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
+    data[OP_HANDLE] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 1);
+    data[INPUT_DATA] = KMArray.cast(tmpVariables[2]).get((short) 2);
+    data[HW_TOKEN] = KMArray.cast(tmpVariables[2]).get((short) 3);
+    data[VERIFICATION_TOKEN] = KMArray.cast(tmpVariables[2]).get((short) 4);
+    // Check Operation Handle and get op state
+    // Check Operation Handle
+    tmpVariables[1] = KMInteger.cast(data[OP_HANDLE]).getShort();
+    KMOperationState op = repository.findOperation(tmpVariables[1]);
+    if (op == null) {
+      KMException.throwIt(KMError.INVALID_OPERATION_HANDLE);
+    }
+    // authorize the update operation
+    authorizeUpdateFinishOperation(op, scratchPad);
+    // If signing without  digest then do length validation checks
+    tmpVariables[0] = KMByteBlob.cast(data[INPUT_DATA]).length();
+    if (op.getPurpose() == KMType.SIGN || op.getPurpose() == KMType.VERIFY ) {
+      // update the data.
+      op.getSignerVerifier()
+          .update(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+              KMByteBlob.cast(data[INPUT_DATA]).length());
+      // update trusted confirmation operation
+      updateTrustedConfirmationOperation(op);
+      data[OUTPUT_DATA] = KMType.INVALID_VALUE;
+    }
+    if (op.getPurpose() == KMType.ENCRYPT || op.getPurpose() == KMType.DECRYPT){
+      // TODO Update for encrypt/decrypt using RSA will not be supported because to do this op state
+      //  will have to buffer the data - so reject the update if it is rsa algorithm.
+        if(op.getAlgorithm() == KMCipher.CIPHER_RSA) {
+          KMException.throwIt(KMError.OPERATION_CANCELLED);
+        }
+        if (op.getAlgorithm() == KMType.AES) {
+          // input data must be block aligned.
+          // 128 bit block size - HAL must send block aligned data
+          if (tmpVariables[0] % AES_BLOCK_SIZE != 0 || tmpVariables[0] <=0) {
+            KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+          }
+        }
+        if (op.getAlgorithm() == KMType.DES) {
+          // 64 bit block size - HAL must send block aligned data
+          if (tmpVariables[0] % DES_BLOCK_SIZE != 0) {
+            KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+          }
+        }
+        // Otherwise just update the data.
+        tmpVariables[0] =
+            op.getCipher()
+                .update(
+                    KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+                    KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+                    KMByteBlob.cast(data[INPUT_DATA]).length(),
+                    scratchPad,
+                    (short) 0);
+        data[OUTPUT_DATA] = KMByteBlob.instance(scratchPad, (short) 0, tmpVariables[0]);
+      }
+    // make response
+    tmpVariables[1] = KMArray.instance((short) 0);
+    tmpVariables[1] = KMKeyParameters.instance(tmpVariables[1]);
+    tmpVariables[2] = KMArray.instance((short) 4);
+    if (data[OUTPUT_DATA] == KMType.INVALID_VALUE) {
+      data[OUTPUT_DATA] = KMByteBlob.instance((short) 0);
+    }
+    KMArray.cast(tmpVariables[2]).add((short) 0, KMInteger.uint_16(KMError.OK));
+    KMArray.cast(tmpVariables[2]).add((short) 1, KMInteger.uint_16(tmpVariables[0]));
+    KMArray.cast(tmpVariables[2]).add((short) 2, tmpVariables[1]);
+    KMArray.cast(tmpVariables[2]).add((short) 3, data[OUTPUT_DATA]);
+    // Encode the response
+    bufferLength = encoder.encode(tmpVariables[2], buffer, bufferStartOffset);
+    sendOutgoing(apdu);
   }
 
-  private void processBeginOperationCmd(APDU apdu) {}
+  private void updateTrustedConfirmationOperation(KMOperationState op) {
+    if (op.isTrustedConfirmationRequired()) {
+      op.getTrustedConfirmationSigner()
+        .update(
+          KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+          KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+          KMByteBlob.cast(data[INPUT_DATA]).length());
+    }
+  }
 
+  private void processBeginOperationCmd(APDU apdu) {
+    // Receive the incoming request fully from the master into buffer.
+    receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
+    short args = KMType.INVALID_VALUE;
+    tmpVariables[1] = KMArray.instance((short) 4);
+    // Arguments
+    tmpVariables[2] = KMKeyParameters.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 0, KMEnum.instance(KMType.PURPOSE));
+    KMArray.cast(tmpVariables[1]).add((short) 1, KMByteBlob.exp());
+    KMArray.cast(tmpVariables[1]).add((short) 2, tmpVariables[2]);
+    tmpVariables[3] = KMHardwareAuthToken.exp();
+    KMArray.cast(tmpVariables[1]).add((short) 3, tmpVariables[3]);
+    // Decode the arguments
+    args = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
+    data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 2);
+    data[KEY_BLOB] = KMArray.cast(args).get((short) 1);
+    // Check for app id and app data.
+    data[APP_ID] = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, data[KEY_PARAMETERS]);
+    data[APP_DATA] = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, data[KEY_PARAMETERS]);
+    if (data[APP_ID] != KMTag.INVALID_VALUE) {
+      data[APP_ID] = KMByteTag.cast(data[APP_ID]).getValue();
+    }
+    if (data[APP_DATA] != KMTag.INVALID_VALUE) {
+      data[APP_DATA] = KMByteTag.cast(data[APP_DATA]).getValue();
+    }
+    // Parse the encrypted blob and decrypt it.
+    parseEncryptedKeyBlob(scratchPad);
+    // Authorize the begin operation and reserve op - data[OP_HANDLE] will have the handle.
+    // It will also set data[IV] field if required.
+    tmpVariables[0] = KMArray.cast(args).get((short) 0);
+    tmpVariables[0] = KMEnum.cast(tmpVariables[0]).getVal();
+    data[HW_TOKEN] = KMArray.cast(args).get((short) 3);
+    KMOperationState op = repository.reserveOperation();
+    if(op == null) KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
+    data[OP_HANDLE] = op.getHandle();
+    op.setPurpose(tmpVariables[0]);
+    authorizeAndBeginOperation(op, scratchPad);
+    switch (op.getPurpose()){
+      case KMType.SIGN:
+        beginTrustedConfirmationOperation(op);
+      case KMType.VERIFY:
+        beginSignVerifyOperation(op);
+        break;
+      case KMType.ENCRYPT:
+      case KMType.DECRYPT:
+        beginCipherOperation(op);
+        break;
+      default:
+        KMException.throwIt(KMError.UNIMPLEMENTED);
+        break;
+    }
+    // If the data[IV] is required to be returned.
+    if (data[IV] != KMType.INVALID_VALUE) {
+      // TODO confirm  why this is needed
+      tmpVariables[2] = KMArray.instance((short) 1);
+      KMArray.cast(tmpVariables[2]).add((short) 0, KMByteTag.instance(KMType.NONCE, data[IV]));
+    } else {
+      tmpVariables[2] = KMArray.instance((short) 0);
+    }
+    tmpVariables[1] = KMKeyParameters.instance(tmpVariables[2]);
+    tmpVariables[0] = KMArray.instance((short) 3);
+    KMArray.cast(tmpVariables[0]).add((short) 0, KMInteger.uint_16(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 1, tmpVariables[1]);
+    KMArray.cast(tmpVariables[0]).add((short) 2, data[OP_HANDLE]);
+    // Encode the response
+    bufferLength = encoder.encode(tmpVariables[0], buffer, bufferStartOffset);
+    sendOutgoing(apdu);
+  }
+
+  private void beginTrustedConfirmationOperation(KMOperationState op) {
+    // Check for trusted confirmation - if required then set the signer in op state.
+    if (KMKeyParameters.findTag(
+      KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED, data[HW_PARAMETERS]) != KMType.INVALID_VALUE) {
+      // get operation
+      // get the hmac key
+      if (repository.getComputedHmacKey() == null) {
+        KMException.throwIt(KMError.OPERATION_CANCELLED);
+      }
+      // set the Hmac signer
+      op.setTrustedConfirmationSigner(
+        cryptoProvider.createHmacSignerVerifier(Signature.MODE_VERIFY,
+          MessageDigest.ALG_SHA_256,
+          repository.getComputedHmacKey(),
+          (short) 0, (short) repository.getComputedHmacKey().length));
+      op.getTrustedConfirmationSigner().update(confirmationToken,(short)0,(short)confirmationToken.length);
+    }
+  }
+
+  private void authorizeAlgorithm(KMOperationState op){
+    short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]);
+    if(alg == KMType.INVALID_VALUE){
+      KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+    }
+    op.setAlgorithm((byte)alg);
+  }
+  private void authorizePurpose(KMOperationState op){
+    if(!KMEnumArrayTag.contains(KMType.PURPOSE,op.getPurpose(),data[HW_PARAMETERS])){
+      KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
+    }
+  }
+
+  private void authorizeDigest(KMOperationState op){
+    short digests = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST, data[HW_PARAMETERS]);
+    op.setDigest(KMType.DIGEST_NONE);
+    short param = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST, data[KEY_PARAMETERS]);
+    if(param != KMType.INVALID_VALUE){
+      if(KMEnumArrayTag.cast(param).length() != 1) KMException.throwIt(KMError.INVALID_ARGUMENT);
+      param = KMEnumArrayTag.cast(param).get((short)0);
+      if(!KMEnumArrayTag.cast(digests).contains(param)) KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
+      op.setDigest((byte)param);
+    }
+    switch(op.getAlgorithm()){
+      case KMType.EC:
+      case KMType.HMAC:
+        if(param == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
+        break;
+      default:
+        break;
+    }
+  }
+  private void authorizePadding(KMOperationState op){
+    short paddings = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PADDING, data[HW_PARAMETERS]);
+    op.setPadding(KMType.PADDING_NONE);
+    short param = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PADDING, data[KEY_PARAMETERS]);
+    if(param != KMType.INVALID_VALUE){
+      if(KMEnumArrayTag.cast(param).length() != 1) KMException.throwIt(KMError.INVALID_ARGUMENT);
+      param = KMEnumArrayTag.cast(param).get((short)0);
+      if(!KMEnumArrayTag.cast(paddings).contains(param)) KMException.throwIt(KMError.UNSUPPORTED_PADDING_MODE);
+    }
+    switch (op.getAlgorithm()){
+      case KMType.RSA:
+        if(param == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
+        if((op.getPurpose() == KMType.SIGN || op.getPurpose() == KMType.VERIFY)&&
+          param != KMType.PADDING_NONE &&
+          param != KMType.RSA_PSS &&
+          param != KMType.RSA_PKCS1_1_5_SIGN) KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+        if((op.getPurpose() == KMType.ENCRYPT || op.getPurpose() == KMType.DECRYPT) &&
+          param != KMType.PADDING_NONE &&
+          param != KMType.RSA_OAEP &&
+          param != KMType.RSA_PKCS1_1_5_ENCRYPT) KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+        if (param == KMType.PADDING_NONE && op.getDigest() != KMType.DIGEST_NONE) {
+          KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+        }
+        if ((param == KMType.RSA_OAEP || param == KMType.RSA_PSS)
+          && op.getDigest() == KMType.DIGEST_NONE) {
+          KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+        }
+        op.setPadding((byte)param);
+        break;
+      case KMType.DES:
+      case KMType.AES:
+        if(param == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
+        op.setPadding((byte)param);
+        break;
+      default:
+        break;
+    }
+  }
+  private void authorizeBlockModeAndMacLength(KMOperationState op){
+    short param = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.BLOCK_MODE, data[KEY_PARAMETERS]);
+    if(param != KMType.INVALID_VALUE){
+      if(KMEnumArrayTag.cast(param).length() != 1) KMException.throwIt(KMError.INVALID_ARGUMENT);
+      param = KMEnumArrayTag.cast(param).get((short)0);
+    }
+    short macLen =
+      KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAC_LENGTH, data[KEY_PARAMETERS]);
+    switch (op.getAlgorithm()){
+      case KMType.AES:
+        if(param == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
+        if (param == KMType.GCM){
+          if(op.getPadding() != KMType.PADDING_NONE) {
+          KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+        }
+        if (macLen == KMType.INVALID_VALUE) {
+          KMException.throwIt(KMError.MISSING_MAC_LENGTH);
+        }
+        if (macLen % 8 != 0 || macLen > 128 ||
+          macLen < KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[HW_PARAMETERS])) {
+          KMException.throwIt(KMError.INVALID_MAC_LENGTH);
+        }
+      }else if(macLen != KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
+      break;
+      case KMType.DES:
+        if(param == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
+        break;
+      case KMType.HMAC:
+        if (macLen == KMType.INVALID_VALUE) {
+          KMException.throwIt(KMError.MISSING_MAC_LENGTH);
+        }
+        if (macLen != 256 ||
+          macLen < KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[HW_PARAMETERS])) {
+          KMException.throwIt(KMError.INVALID_MAC_LENGTH);
+        }
+        break;
+      default:
+        break;
+    }
+    op.setBlockMode((byte) param);
+  }
+
+  private void authorizeAndBeginOperation(KMOperationState op, byte[] scratchPad) {
+    authorizeAlgorithm(op);
+    authorizePurpose(op);
+    authorizeDigest(op);
+    authorizePadding(op);
+    authorizeBlockModeAndMacLength(op);
+    authorizeKeyUsageForCount();
+    authorizeUserSecureIdAuthTimeout(op, scratchPad);
+    // Authorize Caller Nonce - if caller nonce absent in key char and nonce present in
+    // key params then fail.
+    data[IV] = KMType.INVALID_VALUE;
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.CALLER_NONCE, data[HW_PARAMETERS]);
+    tmpVariables[1] = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.NONCE, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] == KMType.INVALID_VALUE) {
+      if (tmpVariables[1] != KMType.INVALID_VALUE) {
+        KMException.throwIt(KMError.CALLER_NONCE_PROHIBITED);
+      }
+    }
+    if (tmpVariables[1] != KMType.INVALID_VALUE) {
+      data[IV] = KMByteTag.cast(tmpVariables[1]).getValue();
+    }
+    // For symmetric decryption iv is required
+    if(op.getPurpose() == KMType.DECRYPT && data[IV] == KMType.INVALID_VALUE &&
+      (op.getBlockMode() == KMType.CBC || op.getBlockMode() == KMType.GCM)){
+      KMException.throwIt(KMError.MISSING_NONCE);
+    }
+  }
+
+  private void beginCipherOperation(KMOperationState op) {
+    short padding;
+    short alg = -1;
+    short purpose;
+    if(op.getPurpose() == KMType.ENCRYPT) purpose = KMCipher.MODE_ENCRYPT;
+    else purpose = KMCipher.MODE_DECRYPT;
+
+      switch (op.getAlgorithm()) {
+        // Not required to be supported - supported for testing purpose
+        // TODO remove this later
+      case KMType.RSA:
+        if (op.getPadding() == KMType.RSA_PKCS1_1_5_ENCRYPT) padding = KMCipher.PAD_PKCS1;
+        else if(op.getPadding() == KMType.RSA_OAEP){
+          padding = KMCipher.PAD_PKCS1_OAEP_SHA256;
+        }
+        else padding = KMCipher.PAD_NOPAD;
+        try {
+          if(purpose == KMCipher.MODE_DECRYPT){
+          op.setKey(
+            KMByteBlob.cast(data[SECRET]).getBuffer(),
+            KMByteBlob.cast(data[SECRET]).getStartOff(),
+            KMByteBlob.cast(data[SECRET]).length());
+          op.setCipher(
+              cryptoProvider.createRsaDecipher(
+                  padding,
+                  KMByteBlob.cast(data[SECRET]).getBuffer(),
+                  KMByteBlob.cast(data[SECRET]).getStartOff(),
+                  KMByteBlob.cast(data[SECRET]).length(),
+                  KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
+                  KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
+                  KMByteBlob.cast(data[PUB_KEY]).length()));
+          }else{
+            op.setKey(
+              KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
+              KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
+              KMByteBlob.cast(data[PUB_KEY]).length());
+            op.setCipher(
+              cryptoProvider.createRsaCipher(
+                padding,
+                KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
+                KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
+                KMByteBlob.cast(data[PUB_KEY]).length()));
+          }
+        } catch (CryptoException exp) {
+          KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+        }
+        break;
+      case KMType.AES:
+        if (op.getBlockMode() == KMType.GCM) {
+          beginAesGCMOperation(op);
+          return;
+        }
+      case KMType.DES:
+        if (op.getPadding() == KMType.PADDING_NONE) {
+          padding = KMCipher.PAD_NOPAD;
+        } else {
+          padding = KMCipher.PAD_PKCS7;
+        }
+        if (op.getAlgorithm() == KMType.AES) {
+          if (op.getBlockMode() == KMType.CBC) {
+            alg = KMCipher.ALG_AES_BLOCK_128_CBC_NOPAD;
+          } else if (op.getBlockMode() == KMType.ECB) {
+            alg = KMCipher.ALG_AES_BLOCK_128_ECB_NOPAD;
+            data[IV] = KMType.INVALID_VALUE;
+          } else {
+            // data[CIPHER_ALGORITHM] = Cipher.CIPHER_AES_CTR; // Not supported in 3.0.5
+            // TODO change this once we can test.
+            KMException.throwIt(KMError.UNSUPPORTED_BLOCK_MODE);
+          }
+        } else if (op.getAlgorithm() == KMType.DES) {
+          if (op.getBlockMode() == KMType.CBC) {
+            alg = KMCipher.ALG_DES_CBC_NOPAD;
+            if(data[IV] == KMType.INVALID_VALUE){
+              data[IV] = KMByteBlob.instance((short)16);
+              cryptoProvider.newRandomNumber(
+                KMByteBlob.cast(data[IV]).getBuffer(),
+                KMByteBlob.cast(data[IV]).getStartOff(),
+                KMByteBlob.cast(data[IV]).length()
+              );
+            }
+
+          } else {
+            alg = KMCipher.ALG_DES_ECB_NOPAD;
+            data[IV] = KMType.INVALID_VALUE;
+          }
+        } else {
+          KMException.throwIt(KMError.INCOMPATIBLE_ALGORITHM);
+        }
+        op.setKey(
+            KMByteBlob.cast(data[SECRET]).getBuffer(),
+            KMByteBlob.cast(data[SECRET]).getStartOff(),
+            KMByteBlob.cast(data[SECRET]).length());
+        try {
+          if (data[IV] != KMType.INVALID_VALUE) {
+            op.setCipher(
+                cryptoProvider.createSymmetricCipher(
+                    alg,
+                    purpose,
+                    padding,
+                    KMByteBlob.cast(data[SECRET]).getBuffer(),
+                    KMByteBlob.cast(data[SECRET]).getStartOff(),
+                    KMByteBlob.cast(data[SECRET]).length(),
+                    KMByteBlob.cast(data[IV]).getBuffer(),
+                    KMByteBlob.cast(data[IV]).getStartOff(),
+                    KMByteBlob.cast(data[IV]).length()));
+          } else {
+            op.setCipher(
+                cryptoProvider.createSymmetricCipher(
+                    alg,
+                    purpose,
+                    padding,
+                    KMByteBlob.cast(data[SECRET]).getBuffer(),
+                    KMByteBlob.cast(data[SECRET]).getStartOff(),
+                    KMByteBlob.cast(data[SECRET]).length()));
+          }
+        } catch (CryptoException exp) {
+          KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+        }
+    }
+  }
+
+
+  private void beginSignVerifyOperation(KMOperationState op) {
+    short padding;
+    short digest;
+    short purpose;;
+    if(op.getPurpose() == KMType.SIGN) purpose = Signature.MODE_SIGN;
+    else purpose = Signature.MODE_VERIFY;
+    switch(op.getAlgorithm()){
+      case KMType.RSA:
+        if(op.getDigest() == KMType.DIGEST_NONE) digest = MessageDigest.ALG_NULL;
+        else digest = MessageDigest.ALG_SHA_256;
+        if(op.getPadding() ==  KMType.PADDING_NONE) padding = KMCipher.PAD_NOPAD;
+        else if(op.getPadding() ==  KMType.RSA_PSS) padding = KMCipher.PAD_PKCS1_PSS;
+        else padding = KMCipher.PAD_PKCS1;
+        op.setKey(KMByteBlob.cast(data[SECRET]).getBuffer(),
+          KMByteBlob.cast(data[SECRET]).getStartOff(),
+          KMByteBlob.cast(data[SECRET]).length());
+        try{
+          if (op.getPurpose() == KMType.SIGN) {
+            op.setSignerVerifier(
+                cryptoProvider.createRsaSigner(
+                    digest,
+                    padding,
+                    KMByteBlob.cast(data[SECRET]).getBuffer(),
+                    KMByteBlob.cast(data[SECRET]).getStartOff(),
+                    KMByteBlob.cast(data[SECRET]).length(),
+                    KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
+                    KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
+                    KMByteBlob.cast(data[PUB_KEY]).length()));
+          }else{
+            op.setSignerVerifier(
+              cryptoProvider.createRsaVerifier(
+                digest,
+                padding,
+                KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
+                KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
+                KMByteBlob.cast(data[PUB_KEY]).length()));
+          }
+        }catch(CryptoException exp){
+          // Javacard does not support NO digest based signing.
+          KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+        }
+        break;
+      case KMType.EC:
+        if(op.getDigest() == KMType.DIGEST_NONE) digest = MessageDigest.ALG_NULL;
+        else digest = MessageDigest.ALG_SHA_256;
+        op.setKey(KMByteBlob.cast(data[SECRET]).getBuffer(),
+          KMByteBlob.cast(data[SECRET]).getStartOff(),
+          KMByteBlob.cast(data[SECRET]).length());
+        try{
+          if (op.getPurpose() == KMType.SIGN) {
+            op.setSignerVerifier(
+                cryptoProvider.createEcSigner(
+                    digest,
+                    KMByteBlob.cast(data[SECRET]).getBuffer(),
+                    KMByteBlob.cast(data[SECRET]).getStartOff(),
+                    KMByteBlob.cast(data[SECRET]).length()));
+          }else{
+            op.setSignerVerifier(
+              cryptoProvider.createEcVerifier(
+                digest,
+                KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
+                KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
+                KMByteBlob.cast(data[PUB_KEY]).length()));
+          }
+        }catch(CryptoException exp){
+          // Javacard does not support NO digest based signing.
+          KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+        }
+        break;
+      case KMType.HMAC:
+        digest = MessageDigest.ALG_SHA_256;
+        op.setKey(KMByteBlob.cast(data[SECRET]).getBuffer(),
+          KMByteBlob.cast(data[SECRET]).getStartOff(),
+          KMByteBlob.cast(data[SECRET]).length());
+        try{
+          op.setSignerVerifier(
+            cryptoProvider.createHmacSignerVerifier(
+              purpose, digest,
+              KMByteBlob.cast(data[SECRET]).getBuffer(),
+              KMByteBlob.cast(data[SECRET]).getStartOff(),
+              KMByteBlob.cast(data[SECRET]).length()));
+        }catch(CryptoException exp){
+          // Javacard does not support NO digest based signing.
+          KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+        }
+        break;
+      default:
+        KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+        break;
+    }
+  }
+
+  private void authorizeUserSecureIdAuthTimeout(KMOperationState op, byte[] scratchPad) {
+    short authTime;
+    // Authorize User Secure Id and Auth timeout
+    tmpVariables[0] =
+      KMKeyParameters.findTag(KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID, data[HW_PARAMETERS]);
+    if (tmpVariables[0] != KMType.INVALID_VALUE) {
+      tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.UINT_TAG, KMType.AUTH_TIMEOUT, data[HW_PARAMETERS]);
+      if (tmpVariables[0] != KMType.INVALID_VALUE) {
+        // check if hw token is empty - mac should not be empty.
+        tmpVariables[1] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getMac();
+        if (KMByteBlob.cast(tmpVariables[1]).length() == 0) {
+          KMException.throwIt(KMError.INVALID_MAC_LENGTH);
+        }
+        authTime = KMIntegerTag.cast(tmpVariables[0]).getValue();
+        authorizeHwAuthToken(scratchPad);
+        op.setOneTimeAuthReqd(true);
+        authTime = addIntegers(authTime, KMHardwareAuthToken.cast(data[HW_TOKEN]).getTimestamp());
+        op.setAuthTime(KMInteger.cast(authTime).getBuffer(), KMInteger.cast(authTime).getStartOff());
+        op.setAuthTimeoutValidated(false); // auth time validation will happen in update or finish
+      } else { // auth per operation required
+        op.setOneTimeAuthReqd(false);
+        op.setAuthPerOperationReqd(true);
+      }
+    }
+  }
+
+  private void beginAesGCMOperation(KMOperationState op) {
+    short purpose;
+    data[OP_HANDLE] = KMType.INVALID_VALUE;
+    if (op.getPurpose() == KMType.ENCRYPT) {
+      purpose = KMCipher.MODE_ENCRYPT;
+    } else {
+      purpose = KMCipher.MODE_DECRYPT;
+    }
+    if (op.getPadding() != KMType.PADDING_NONE) {
+      KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+    }
+    op.setKey(KMByteBlob.cast(data[SECRET]).getBuffer(),
+      KMByteBlob.cast(data[SECRET]).getStartOff(),
+      KMByteBlob.cast(data[SECRET]).length());
+    op.setCipher(
+        cryptoProvider.createGCMCipher(
+            purpose,
+            KMByteBlob.cast(data[SECRET]).getBuffer(),
+            KMByteBlob.cast(data[SECRET]).getStartOff(),
+            KMByteBlob.cast(data[SECRET]).length(),
+            KMByteBlob.cast(data[IV]).getBuffer(),
+            KMByteBlob.cast(data[IV]).getStartOff(),
+            KMByteBlob.cast(data[IV]).length()));
+    data[OP_HANDLE] = op.getHandle();
+  }
+
+  private void authorizeHwAuthToken(byte[] scratchPad) {
+    validateHwToken(data[HW_TOKEN], scratchPad);
+    tmpVariables[0] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getUserId();
+    if (KMInteger.cast(tmpVariables[0]).isZero()) {
+      tmpVariables[0] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getAuthenticatorId();
+      if (KMInteger.cast(tmpVariables[0]).isZero()) {
+        KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
+      }
+    }
+    // check user secure id
+    if (!KMIntegerArrayTag.contains(KMType.USER_SECURE_ID, tmpVariables[0], data[HW_PARAMETERS])) {
+      KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
+    }
+    // check auth type
+    tmpVariables[1] = KMEnumTag.getValue(KMType.USER_AUTH_TYPE, data[HW_PARAMETERS]);
+    tmpVariables[2] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getHwAuthenticatorType();
+    tmpVariables[2] = KMEnum.cast(tmpVariables[2]).getVal();
+    if (((byte) tmpVariables[2] & (byte) tmpVariables[1]) == 0) {
+      KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
+    }
+  }
+
+  private void validateHwToken(short hwToken, byte[] scratchPad) {
+    // CBOR Encoding is always big endian
+    short ptr = KMHardwareAuthToken.cast(hwToken).getMac();
+    short len = 0;
+    // If mac length is zero then token is empty.
+    if (KMByteBlob.cast(ptr).length() == 0) {
+      return;
+    }
+    // add 0
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 37, (byte) 0);
+    len = 1;
+    // concatenate challenge - 8 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getChallenge();
+    KMInteger.cast(ptr)
+        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate user id - 8 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getUserId();
+    KMInteger.cast(tmpVariables[0])
+        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate authenticator id - 8 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getAuthenticatorId();
+    KMInteger.cast(tmpVariables[0])
+        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate authenticator type - 4 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getHwAuthenticatorType();
+    scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
+    len += 4;
+    // concatenate timestamp -8 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
+    KMInteger.cast(tmpVariables[0])
+        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // hmac the data
+    HMACKey key =
+        cryptoProvider.createHMACKey(
+            repository.getComputedHmacKey(),
+            (short) 0,
+            (short) repository.getComputedHmacKey().length);
+    ptr = KMHardwareAuthToken.cast(hwToken).getMac();
+    boolean verified =
+      cryptoProvider.hmacVerify(key, scratchPad, (short) 0, len,
+        KMByteBlob.cast(ptr).getBuffer(),
+        KMByteBlob.cast(ptr).getStartOff(),
+        KMByteBlob.cast(ptr).length());
+    if(!verified){
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+/*
+    len =
+        cryptoProvider.hmac(key, scratchPad, (short) 0, len, scratchPad, (short) (len + 1) );
+    // Compare mac.
+    ptr = KMHardwareAuthToken.cast(hwToken).getMac();
+    if (len != KMByteBlob.cast(ptr).length()) {
+      KMException.throwIt(KMError.INVALID_MAC_LENGTH);
+    }
+    if (Util.arrayCompare(
+            scratchPad,
+            (short) 38,
+            KMByteBlob.cast(ptr).getBuffer(),
+            KMByteBlob.cast(ptr).getStartOff(),
+            len)
+        != 0) {
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+    */
+  }
+
+  private void authorizeKeyUsageForCount() {
+    // TODO currently only short usageLimit supported - max count 32K.
+    short usageLimit = KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT, data[HW_PARAMETERS]);
+    if (usageLimit == KMType.INVALID_VALUE) return;
+    // get current counter
+    short usage = repository.getRateLimitedKeyCount(data[AUTH_TAG]);
+    if (usage != KMType.INVALID_VALUE) {
+      if(usage < usageLimit){
+        KMException.throwIt(KMError.KEY_MAX_OPS_EXCEEDED);
+      }
+      // increment the counter and store it back.
+      usage++;
+      repository.setRateLimitedKeyCount(data[AUTH_TAG], usage);
+    } else {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+  }
 
   private void processImportKeyCmd(APDU apdu) {
     if (repository.keyBlobCount > repository.MAX_BLOB_STORAGE) {
@@ -617,10 +2115,47 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void importKey(APDU apdu, byte[] scratchPad) {
+    // Bootloader only not supported
+    tmpVariables[0] =
+      KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] != KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_KEY_BLOB);
+    }
+
     // get algorithm
     tmpVariables[3] = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
     if (tmpVariables[3] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMEnumArrayTag.cast(tmpVariables[4]).isValidDigests((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PADDING,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMEnumArrayTag.cast(tmpVariables[4]).isValidPaddingModes((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMEnumArrayTag.cast(tmpVariables[4]).isValidPurpose((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.BLOCK_MODE,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMEnumArrayTag.cast(tmpVariables[4]).isValidBlockMode((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.KEYSIZE,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMIntegerTag.cast(tmpVariables[4]).isValidKeySize((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+      }
     }
     // Check algorithm and dispatch to appropriate handler.
     switch (tmpVariables[3]) {
@@ -1042,10 +2577,53 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Decode the argument
     tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
     data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    // Bootloader only not supported
+    tmpVariables[0] =
+      KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] != KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_KEY_BLOB);
+    }
     // get algorithm
     tmpVariables[3] = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
     if (tmpVariables[3] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    // validate digest - only digest none or 256 is supported.
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMEnumArrayTag.cast(tmpVariables[4]).isValidDigests((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PADDING,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMEnumArrayTag.cast(tmpVariables[4]).isValidPaddingModes((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMEnumArrayTag.cast(tmpVariables[4]).isValidPurpose((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.KEYSIZE,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMIntegerTag.cast(tmpVariables[4]).isValidKeySize((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.BLOCK_MODE,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMEnumArrayTag.cast(tmpVariables[4]).isValidBlockMode((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+      }
+    }
+    tmpVariables[4] = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.KEYSIZE,data[KEY_PARAMETERS]);
+    if(tmpVariables[4] != KMType.INVALID_VALUE){
+      if(!KMIntegerTag.cast(tmpVariables[4]).isValidKeySize((byte)tmpVariables[3])){
+        KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+      }
     }
     // Check algorithm and dispatch to appropriate handler.
     switch (tmpVariables[3]) {
@@ -1217,7 +2795,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[1] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    if (tmpVariables[1] != 168) {
+    if (tmpVariables[1] != 168 && tmpVariables[1] != 192) {
       KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
     }
   }
@@ -1233,10 +2811,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static void validateHmacKey(byte[] scratchPad) {
     // check whether digest sizes are greater then or equal to min mac length.
     // Only SHA256 digest must be supported.
-    if(!KMEnumArrayTag.contains(KMType.DIGEST, KMType.SHA2_256, data[KEY_PARAMETERS])){
-      KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
-    }
-    if(KMEnumArrayTag.length(KMType.DIGEST,data[KEY_PARAMETERS]) != 1){
+    if(KMEnumArrayTag.contains(KMType.DIGEST, KMType.DIGEST_NONE, data[KEY_PARAMETERS])){
       KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
     }
     // Read Minimum Mac length
@@ -1540,4 +3115,44 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
+  private short addIntegers(short num1, short num2){
+    short buf = repository.alloc((short)24);
+    byte[] scratchPad = repository.getHeap();
+    Util.arrayFillNonAtomic(scratchPad, buf, (short)24,(byte)0);
+    Util.arrayCopyNonAtomic(
+      KMInteger.cast(num1).getBuffer(),
+      KMInteger.cast(num1).getStartOff(),scratchPad,(short)(buf+8-KMInteger.cast(num1).length()),
+      KMInteger.cast(num1).length());
+    Util.arrayCopyNonAtomic(
+      KMInteger.cast(num2).getBuffer(),
+      KMInteger.cast(num2).getStartOff(),scratchPad,(short)(buf+16-KMInteger.cast(num2).length()),
+      KMInteger.cast(num2).length());
+    short index = 1;
+    short result = 0;
+    while(index <= 8){
+      result = (short)(scratchPad[(short)(buf+8-index)] + scratchPad[(short)(buf+16-index)]+result);
+      scratchPad[(short)(buf+24-index)] = (byte)(result & 0xFF);
+      result = (short)(result >> 8);
+      index++;
+    }
+    return KMInteger.uint_64(scratchPad,(short)(buf+16));
+  }
+/*
+  private static void print (String lab, byte[] b, short s, short l){
+    byte[] i = new byte[l];
+    Util.arrayCopyNonAtomic(b,s,i,(short)0,l);
+    print(lab,i);
+  }
+  private static void print(String label, byte[] buf){
+    System.out.println(label+": ");
+    StringBuilder sb = new StringBuilder();
+    for(int i = 0; i < buf.length; i++){
+      sb.append(String.format(" 0x%02X", buf[i])) ;
+      if(((i-1)%38 == 0) && ((i-1) >0)){
+        sb.append(";\n");
+      }
+    }
+    System.out.println(sb.toString());
+  }
+*/
 }

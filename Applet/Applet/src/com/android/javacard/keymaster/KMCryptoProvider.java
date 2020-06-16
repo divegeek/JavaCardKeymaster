@@ -85,18 +85,20 @@ public interface KMCryptoProvider {
   boolean hmacVerify(HMACKey key, byte[] data, short dataStart, short dataLength,
                             byte[] mac, short macStart, short macLength);
 
-  KMCipher createRsaDecrypt(short cipherAlg, short padding,
-                            byte[] secret, short secretStart, short secretLength,
-                            byte[] modBuffer, short modOff, short modLength);
+  KMCipher createRsaDecipher(short padding,
+                             byte[] secret, short secretStart, short secretLength,
+                             byte[] modBuffer, short modOff, short modLength);
   Signature createRsaSigner(short msgDigestAlg, short padding, byte[] secret, short secretStart,
-                           short secretLength,byte[] modBuffer, short modOff, short modLength);
+                            short secretLength, byte[] modBuffer, short modOff, short modLength);
   Signature createEcSigner(short msgDigestAlg, byte[] secret, short secretStart,
                            short secretLength);
-  KMCipher createSymmetricCipher(short cipherAlg, short padding, short mode,
+  KMCipher createSymmetricCipher(short cipherAlg, short mode, short padding,
                                byte[] secret, short secretStart, short secretLength,
                                byte[] ivBuffer, short ivStart, short ivLength);
-  Signature createHmacSigner(short msgDigestAlg,
-                                  byte[] secret, short secretStart, short secretLength);
+  KMCipher createSymmetricCipher(short cipherAlg, short mode,short padding,
+                                 byte[] secret, short secretStart, short secretLength);
+  Signature createHmacSignerVerifier(short purpose, short msgDigestAlg,
+                                     byte[] secret, short secretStart, short secretLength);
   KMCipher createGCMCipher(short mode, byte[] secret, short secretStart, short secretLength,
                          byte[] ivBuffer, short ivStart, short ivLength);
   void delete(KMCipher cipher);
@@ -105,4 +107,9 @@ public interface KMCryptoProvider {
   void delete(KeyPair keyPair);
   //TODO remove this later
   void bypassAesGcm();
+
+  KMCipher createRsaCipher(short padding, byte[] buffer, short startOff, short length);
+  Signature createRsaVerifier(short msgDigestAlg, short padding, byte[] modBuffer,
+                              short modOff, short modLength);
+  Signature createEcVerifier(short msgDigestAlg, byte[] pubKey, short pubKeyStart, short pubKeyLength);
 }

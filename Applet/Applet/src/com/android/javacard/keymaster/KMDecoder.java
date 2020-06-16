@@ -92,7 +92,7 @@ public class KMDecoder {
       case KMType.KEY_CHAR_TYPE:
         return decodeKeyChar(exp);
       case KMType.VERIFICATION_TOKEN_TYPE:
-        return decodeVeriToken(exp);
+        return decodeVerificationToken(exp);
       case KMType.HMAC_SHARING_PARAM_TYPE:
         return decodeHmacSharingParam(exp);
       case KMType.HW_AUTH_TOKEN_TYPE:
@@ -128,7 +128,7 @@ public class KMDecoder {
     }
   }
 
-  private short decodeVeriToken(short exp) {
+  private short decodeVerificationToken(short exp) {
     short vals = decode(KMVerificationToken.cast(exp).getVals());
     return KMVerificationToken.instance(vals);
   }

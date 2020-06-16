@@ -225,7 +225,11 @@ public class KMRepository {
     }
     JCSystem.beginTransaction();
     tag.reserved = false;
-    Util.arrayFill(tag.authTag, (short) 0, AES_GCM_AUTH_TAG_LENGTH, (byte) 0);
+    short index = 0;
+    while(index < AES_GCM_AUTH_TAG_LENGTH){
+      tag.authTag[index] = 0;
+      index++;
+    }
     tag.usageCount = 0;
     keyBlobCount--;
     JCSystem.commitTransaction();
@@ -233,12 +237,18 @@ public class KMRepository {
 
   public void removeAllAuthTags() {
     JCSystem.beginTransaction();
+    KMAuthTag tag = null;
     short index = 0;
+    short i = 0;
     while (index < MAX_BLOB_STORAGE) {
-      ((KMAuthTag) authTagRepo[index]).reserved = false;
-      Util.arrayFill(
-          ((KMAuthTag) authTagRepo[index]).authTag, (short) 0, AES_GCM_AUTH_TAG_LENGTH, (byte) 0);
-      ((KMAuthTag) authTagRepo[index]).usageCount = 0;
+      tag = (KMAuthTag) authTagRepo[index];
+      tag.reserved = false;
+      i = 0;
+      while(i < AES_GCM_AUTH_TAG_LENGTH){
+        tag.authTag[i] = 0;
+        i++;
+      }
+      tag.usageCount = 0;
       index++;
     }
     keyBlobCount = 0;
@@ -287,7 +297,7 @@ public class KMRepository {
     short index = 0;
     while(index < MAX_OPS){
       if(((KMOperationState)operationStateTable[index]).isActive() &&
-        ((KMOperationState)operationStateTable[index]).getHandle() == opHandle){
+        ((KMOperationState)operationStateTable[index]).handle() == opHandle){
         return (KMOperationState)operationStateTable[index];
       }
       index++;

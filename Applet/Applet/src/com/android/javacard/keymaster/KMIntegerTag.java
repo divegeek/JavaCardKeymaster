@@ -60,10 +60,10 @@ public class KMIntegerTag extends KMTag {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short intPtr = KMInteger.exp();
-    short ptr = instance(TAG_TYPE, (short)6);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), tagType);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), INVALID_TAG);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), intPtr);
+    short ptr = instance(TAG_TYPE, (short) 6);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), tagType);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), INVALID_TAG);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 4), intPtr);
     return ptr;
   }
 
@@ -85,13 +85,13 @@ public class KMIntegerTag extends KMTag {
     if (!validateKey(key)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    if(heap[intObj] != INTEGER_TYPE) {
+    if (heap[intObj] != INTEGER_TYPE) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    short ptr = instance(TAG_TYPE, (short)6);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), tagType);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), intObj);
+    short ptr = instance(TAG_TYPE, (short) 6);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), tagType);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), key);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 4), intObj);
     return ptr;
   }
 
@@ -105,22 +105,21 @@ public class KMIntegerTag extends KMTag {
   }
 
   public short getTagType() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
   }
 
   public short getValue() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
     KMInteger obj = KMInteger.cast(getValue());
     return obj.length();
   }
-
 
   private static boolean validateKey(short key) {
     short index = (short) tags.length;
@@ -140,13 +139,13 @@ public class KMIntegerTag extends KMTag {
     return false;
   }
 
-  public static short getShortValue(short tagType, short tagKey, short keyParameters){
+  public static short getShortValue(short tagType, short tagKey, short keyParameters) {
     short ptr;
-    if(tagType == UINT_TAG){
+    if (tagType == UINT_TAG) {
       ptr = KMKeyParameters.findTag(KMType.UINT_TAG, tagKey, keyParameters);
       if (ptr != KMType.INVALID_VALUE) {
         ptr = KMIntegerTag.cast(ptr).getValue();
-        if(KMInteger.cast(ptr).getSignificantShort() == 0){
+        if (KMInteger.cast(ptr).getSignificantShort() == 0) {
           return KMInteger.cast(ptr).getShort();
         }
       }
@@ -154,15 +153,44 @@ public class KMIntegerTag extends KMTag {
     return KMType.INVALID_VALUE;
   }
 
-  public static short getValue(byte[] buf, short offset, short tagType, short tagKey, short keyParameters){
+  public static short getValue(
+      byte[] buf, short offset, short tagType, short tagKey, short keyParameters) {
     short ptr;
-    if((tagType == UINT_TAG) || (tagType == ULONG_TAG) || (tagType == DATE_TAG)){
+    if ((tagType == UINT_TAG) || (tagType == ULONG_TAG) || (tagType == DATE_TAG)) {
       ptr = KMKeyParameters.findTag(tagType, tagKey, keyParameters);
       if (ptr != KMType.INVALID_VALUE) {
         ptr = KMIntegerTag.cast(ptr).getValue();
-        return KMInteger.cast(ptr).value(buf,offset);
+        return KMInteger.cast(ptr).value(buf, offset);
       }
     }
     return KMType.INVALID_VALUE;
+  }
+
+  public boolean isValidKeySize(byte alg) {
+    short val = KMIntegerTag.cast(instPtr).getValue();
+    if (KMInteger.cast(val).getSignificantShort() != 0) {
+      return false;
+    }
+    val = KMInteger.cast(val).getShort();
+    switch (alg) {
+      case KMType.RSA:
+        if (val == 2048) return true;
+        break;
+      case KMType.AES:
+        if (val == 128 || val == 256) return true;
+        break;
+      case KMType.DES:
+        if (val == 192 || val == 168) return true;
+        break;
+      case KMType.EC:
+        if (val == 256) return true;
+        break;
+      case KMType.HMAC:
+        if (val % 8 == 0 && val >= 64 && val <= 512) return true;
+        break;
+      default:
+        break;
+    }
+    return false;
   }
 }

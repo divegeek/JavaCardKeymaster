@@ -53,6 +53,13 @@ public class KMVerificationToken extends KMType {
 
   public static short instance() {
     short arrPtr = KMArray.instance((short)5);
+    KMArray arr = KMArray.cast(arrPtr);
+    arr.add(CHALLENGE, KMInteger.uint_16((short)0));
+    arr.add(TIMESTAMP, KMInteger.uint_16((short)0));
+    //arr.add(PARAMETERS_VERIFIED, KMKeyParameters.exp());
+    arr.add(PARAMETERS_VERIFIED, KMByteBlob.instance((short)0));
+    arr.add(SECURITY_LEVEL, KMEnum.instance(KMType.HARDWARE_TYPE, KMType.STRONGBOX));
+    arr.add(MAC, KMByteBlob.instance((short)0));
     return instance(arrPtr);
   }
 

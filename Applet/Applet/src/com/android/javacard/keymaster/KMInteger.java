@@ -147,15 +147,20 @@ public class KMInteger extends KMType {
   }
 
   public static short compare(short num1, short num2){
-    short num1Ptr = KMInteger.cast(num1).getStartOff();
-    short num2Ptr = KMInteger.cast(num2).getStartOff();
-    short len = KMInteger.cast(num2).length();
-    if(KMInteger.cast(num1).length() > KMInteger.cast(num2).length()){
-      len = KMInteger.cast(num1).length();
-    }
+    short num1Buf = repository.alloc((short)8);
+    short num2Buf = repository.alloc((short)8);
+    Util.arrayFillNonAtomic(repository.getHeap(),num1Buf,(short)8,(byte)0);
+    Util.arrayFillNonAtomic(repository.getHeap(),num2Buf,(short)8,(byte)0);
+    short numPtr = KMInteger.cast(num1).getStartOff();
+    short len = KMInteger.cast(num1).length();
+    KMInteger.cast(num1).getValue(repository.getHeap(),(short)(num1Buf+(short)(8-len)),len);
+    numPtr = KMInteger.cast(num2).getStartOff();
+    len = KMInteger.cast(num2).length();
+    KMInteger.cast(num2).getValue(repository.getHeap(),(short)(num2Buf+(short)(8-len)),len);
     return Util.arrayCompare(
-      repository.getHeap(), num1Ptr,
-      repository.getHeap(), num2Ptr,
-      len);
+      repository.getHeap(), num1Buf,
+      repository.getHeap(), num2Buf,
+      (short)8);
   }
+
 }

@@ -5,6 +5,8 @@ import javacardx.crypto.Cipher;
 
 public class KMCipherImpl extends KMCipher{
   Cipher cipher;
+  short cipherAlg;
+  short paddingAlg;
   KMCipherImpl(Cipher c){
     cipher = c;
   }
@@ -16,9 +18,13 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short getCipherAlgorithm() {
-    return cipher.getCipherAlgorithm();
+    return cipherAlg;
   }
 
+  @Override
+  public void setCipherAlgorithm(short alg) {
+    cipherAlg = alg;
+  }
   @Override
   public short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i) {
     return cipher.update(buffer,startOff,length,scratchPad,i);
@@ -26,6 +32,11 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short getPaddingAlgorithm() {
-    return cipher.getPaddingAlgorithm();
+    return paddingAlg;
+  }
+
+  @Override
+  public void setPaddingAlgorithm(short alg) {
+    paddingAlg = alg;
   }
 }

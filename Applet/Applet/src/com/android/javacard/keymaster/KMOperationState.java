@@ -22,8 +22,14 @@ import javacard.security.Signature;
 // TODO complete the class design and implementation
 public class KMOperationState {
   private short opHandleCounter;
+  private byte algorithm;
+  private byte padding;
+  private byte blockMode;
+  private byte digest;
+
   private boolean active;
   private boolean trustedConfirmation;
+  private boolean cipherOperation;
   // TODO This should be 64 bits
   private  short handle;
   private short purpose;
@@ -34,6 +40,7 @@ public class KMOperationState {
   private short keyLength;
   private byte[] authTime;
   private boolean authPerOperationReqd;
+  private boolean secureUserIdReqd;
   private boolean authTimeoutValidated;
 
   public KMOperationState(){
@@ -58,11 +65,13 @@ public class KMOperationState {
   }
   public void reset(){
     Util.arrayFillNonAtomic(authTime, (short)0,(short)8, (byte)0);
+    cipherOperation = false;
     keyLength = 0;
     authPerOperationReqd = false;
+    secureUserIdReqd = false;
     active = false;
     handle = 0;
-    key = null;
+    Util.arrayFillNonAtomic(key,(short)0,(short)key.length,(byte)0);
     cipher = null;
     signer = null;
     purpose = KMType.INVALID_VALUE;
@@ -82,11 +91,16 @@ public class KMOperationState {
   public boolean isActive() {
     return active;
   }
+  public boolean isCipherOperation(){ return cipherOperation;}
+  public void setCipherOperation(boolean flag){cipherOperation = flag;}
 
   public short getHandle() {
-    return handle;
+    return KMInteger.uint_16(handle);
   }
 
+  public short handle(){
+    return handle;
+  }
   public short getPurpose() {
     return purpose;
   }
@@ -103,11 +117,11 @@ public class KMOperationState {
     this.cipher = cipher;
   }
 
-  public Signature getSigner() {
+  public Signature getSignerVerifier() {
     return signer;
   }
 
-  public void setSigner(Signature signer) {
+  public void setSignerVerifier(Signature signer) {
     this.signer = signer;
   }
 
@@ -121,13 +135,14 @@ public class KMOperationState {
     Util.arrayCopy(buf, start, key, (short)0, len);
   }
 
-  public boolean isAuthPerOperation() {
+  public boolean isAuthPerOperationReqd() {
     return authPerOperationReqd;
   }
 
   public boolean isAuthTimeoutValidated() {
     return authTimeoutValidated;
   }
+  public boolean isSecureUserIdReqd(){return secureUserIdReqd;}
 
   public byte[] getAuthTime() {
     return authTime;
@@ -136,8 +151,41 @@ public class KMOperationState {
   public void setAuthTime(byte[] time, short start) {
     Util.arrayCopy(time, start, authTime, (short)0, (short)8);
   }
-
+  public void setOneTimeAuthReqd(boolean flag){secureUserIdReqd = flag;}
   public void setAuthTimeoutValidated(boolean flag) {
     authTimeoutValidated = flag;
+  }
+  public void setAuthPerOperationReqd(boolean flag){ authPerOperationReqd = flag;}
+
+  public byte getAlgorithm() {
+    return algorithm;
+  }
+
+  public void setAlgorithm(byte algorithm) {
+    this.algorithm = algorithm;
+  }
+
+  public byte getPadding() {
+    return padding;
+  }
+
+  public void setPadding(byte padding) {
+    this.padding = padding;
+  }
+
+  public byte getBlockMode() {
+    return blockMode;
+  }
+
+  public void setBlockMode(byte blockMode) {
+    this.blockMode = blockMode;
+  }
+
+  public byte getDigest() {
+    return digest;
+  }
+
+  public void setDigest(byte digest) {
+    this.digest = digest;
   }
 }

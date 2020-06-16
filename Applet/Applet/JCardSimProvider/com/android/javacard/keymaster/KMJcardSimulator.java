@@ -28,11 +28,14 @@ import javacard.security.AESKey;
 import javacard.security.CryptoException;
 import javacard.security.DESKey;
 import javacard.security.ECPrivateKey;
+import javacard.security.ECPublicKey;
 import javacard.security.HMACKey;
 import javacard.security.Key;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
+import javacard.security.MessageDigest;
 import javacard.security.RSAPrivateKey;
+import javacard.security.RSAPublicKey;
 import javacard.security.RandomData;
 import javacard.security.Signature;
 import javacardx.crypto.Cipher;
@@ -115,11 +118,6 @@ public class KMJcardSimulator implements KMCryptoProvider {
   public ECPrivateKey createEcKey(byte[] privBuffer, short privOff, short privLength) {
     KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
     ECPrivateKey privKey = (ECPrivateKey) ecKeyPair.getPrivate();
-    if(privLength > 24){
-      privLength = 24;// simulator does not support more then 24 bytes - 192 bit key.
-    }else if(privLength <= 20){
-      return null;
-    }
     privKey.setS(privBuffer,privOff, privLength);
     return privKey;
   }
@@ -205,7 +203,8 @@ public class KMJcardSimulator implements KMCryptoProvider {
     }
     byte[] keyMaterial = new byte[16];
     key.getKey(keyMaterial,(short)0);
-  //  print("KeyMaterial", keyMaterial);
+    //print("KeyMaterial Enc", keyMaterial);
+    //print("Authdata Enc", authData, authDataStart, authDataLen);
     java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,(short)16, "AES");
     // Create the cipher
     javax.crypto.Cipher cipher = null;
@@ -329,6 +328,9 @@ public class KMJcardSimulator implements KMCryptoProvider {
     }
     byte[] keyMaterial = new byte[16];
     key.getKey(keyMaterial,(short)0);
+    //print("KeyMaterial Dec", keyMaterial);
+    //print("Authdata Dec", authData, authDataStart, authDataLen);
+
     java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,(short)16, "AES");
     // Create the cipher
   javax.crypto.Cipher cipher = null;
@@ -424,7 +426,28 @@ public class KMJcardSimulator implements KMCryptoProvider {
 
   @Override
   public HMACKey cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength) {
-    return null;
+    // This is hardcoded to requirement - 32 byte output with two concatenated 16 bytes K1 and K2.
+    final byte n = 2; // hardcoded - L is 32 bytes and h is 16 byte i.e. CMAC output of AES 128 bit key.
+    final byte[] L = {0,0,1,0}; // [L] 256 bits - hardcoded 32 bits as per reference impl in keymaster.
+    final byte[] zero = {0}; //
+    byte[] iBuf = new byte[]{0,0,0,0}; // [i] counter - 32 bits
+    byte[] keyOut = new byte[(short)(n*16)];
+    Signature prf = Signature.getInstance(Signature.ALG_AES_CMAC_128, false);
+    AESKey key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
+    key.setKey(keyMaterial, (short) 0);
+    prf.init(key, Signature.MODE_SIGN);
+    byte i =1;
+    short pos = 0;
+    while (i <= n) {
+      iBuf[3] = i;
+      prf.update(iBuf, (short) 0, (short) 4); // 4 bytes of iBuf with counter in it
+      prf.update(label, (short) 0, (short) label.length); // label
+      prf.update(zero, (short) 0, (short) 1); // 1 byte of 0x00
+      prf.update(context, contextLength, contextLength); // context
+      pos = prf.sign(L, (short) 0, (short) 4, keyOut, pos); // 4 bytes of L - signature of 16 bytes
+      i++;
+    }
+    return createHMACKey(keyOut, (short)0, (short)keyOut.length);
   }
 
   @Override
@@ -441,10 +464,14 @@ public class KMJcardSimulator implements KMCryptoProvider {
   }
 
   @Override
-  public KMCipher createRsaDecrypt(short cipherAlg, short padding, byte[] secret, short secretStart,
-                                   short secretLength, byte[] modBuffer, short modOff, short modLength) {
-    Cipher rsaCipher = Cipher.getInstance((byte)cipherAlg,
-      (byte)padding,false);
+  public KMCipher createRsaDecipher(short padding, byte[] secret, short secretStart,
+                                    short secretLength, byte[] modBuffer, short modOff, short modLength) {
+    byte cipherAlg = Cipher.ALG_RSA_NOPAD;
+    //TODO implement OAEP algorithm using SunJCE.
+    if(padding == KMCipher.PAD_PKCS1_OAEP_SHA256) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
+    else cipherAlg = Cipher.ALG_RSA_NOPAD;
+    Cipher rsaCipher = Cipher.getInstance(cipherAlg,false);
     RSAPrivateKey key = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_2048, false);
     key.setExponent(secret,secretStart,secretLength);
     key.setModulus(modBuffer, modOff, modLength);
@@ -454,7 +481,13 @@ public class KMJcardSimulator implements KMCryptoProvider {
 
   @Override
   public Signature createRsaSigner(short msgDigestAlg, short padding, byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength) {
-    Signature rsaSigner = Signature.getInstance((byte)msgDigestAlg, Signature.SIG_CIPHER_RSA,(byte)padding,false);
+    short alg = Signature.ALG_RSA_SHA_256_PKCS1;
+    if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    else if(padding == KMCipher.PAD_NOPAD) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    else if(padding == KMCipher.PAD_PKCS1_PSS) alg = Signature.ALG_RSA_SHA_256_PKCS1_PSS;
+    else if(padding == KMCipher.PAD_PKCS1) alg = Signature.ALG_RSA_SHA_256_PKCS1;
+    else CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    Signature rsaSigner = Signature.getInstance((byte)alg, false);
     RSAPrivateKey key = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_2048, false);
     key.setExponent(secret,secretStart,secretLength);
     key.setModulus(modBuffer, modOff, modLength);
@@ -464,67 +497,94 @@ public class KMJcardSimulator implements KMCryptoProvider {
 
   @Override
   public Signature createEcSigner(short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
-    Signature ecSigner = Signature.getInstance((byte)msgDigestAlg, Signature.SIG_CIPHER_ECDSA,Cipher.PAD_NOPAD,false);
+    short alg = Signature.ALG_ECDSA_SHA_256;
+    if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    //KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+    //ecKeyPair.genKeyPair();
+    //ECPrivateKey privKey = (ECPrivateKey) ecKeyPair.getPrivate();
+    //privKey.setS(secret,secretStart, secretLength);
     ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
     key.setS(secret,secretStart,secretLength);
+    Signature ecSigner = Signature.getInstance((byte)alg,false);
     ecSigner.init(key,Signature.MODE_SIGN);
     return ecSigner;
   }
 
   @Override
-  public KMCipher createSymmetricCipher(short cipherAlg, short padding, short mode, byte[] secret,
+  public KMCipher createSymmetricCipher(
+      short cipherAlg,  short mode, short padding, byte[] secret, short secretStart, short secretLength) {
+    return createSymmetricCipher(cipherAlg, mode, padding, secret,secretStart,secretLength,null,(short)0,(short)0);
+  }
+
+  @Override
+  public KMCipher createSymmetricCipher(short cipherAlg, short mode, short padding, byte[] secret,
                                         short secretStart, short secretLength,
                                         byte[] ivBuffer, short ivStart, short ivLength) {
     Key key = null;
+    Cipher symmCipher = null;
     short len = 0;
-    if(cipherAlg == Cipher.CIPHER_AES_CBC || cipherAlg == Cipher.CIPHER_AES_CBC){
-      if(secretLength == 32){
+    switch (secretLength){
+      case 32:
         len = KeyBuilder.LENGTH_AES_256;
-      }else if(secretLength == 16){
+        break;
+      case 16:
         len = KeyBuilder.LENGTH_AES_128;
-      }else{
+        break;
+      case 24:
+        len = KeyBuilder.LENGTH_DES3_3KEY;
+        break;
+      default:
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-      }
-
-      //TODO
-    }else if(secretLength != 21){ // DES Key
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    }else{ //DES Key
-      len = KeyBuilder.LENGTH_DES3_3KEY;
+        break;
     }
     switch(cipherAlg){
-      case Cipher.CIPHER_AES_CBC:
-      case Cipher.CIPHER_AES_ECB:
+      case KMCipher.ALG_AES_BLOCK_128_CBC_NOPAD:
+        cipherAlg = Cipher.ALG_AES_BLOCK_128_CBC_NOPAD;
         key = KeyBuilder.buildKey(KeyBuilder.TYPE_AES,len,false);
         ((AESKey) key).setKey(secret,secretStart);
+        symmCipher = Cipher.getInstance((byte)cipherAlg, false);
+        symmCipher.init(key, (byte) mode, ivBuffer, ivStart, ivLength);
         break;
-      case Cipher.CIPHER_DES_CBC:
-      case Cipher.CIPHER_DES_ECB:
+      case KMCipher.ALG_AES_BLOCK_128_ECB_NOPAD:
+        cipherAlg = Cipher.ALG_AES_BLOCK_128_ECB_NOPAD;
+        key = KeyBuilder.buildKey(KeyBuilder.TYPE_AES,len,false);
+        ((AESKey) key).setKey(secret,secretStart);
+        symmCipher = Cipher.getInstance((byte)cipherAlg, false);
+        symmCipher.init(key, (byte) mode);
+        break;
+      case KMCipher.ALG_DES_CBC_NOPAD:
+        cipherAlg = Cipher.ALG_DES_CBC_NOPAD;
         key = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,len,false);
         ((DESKey) key).setKey(secret,secretStart);
+        symmCipher = Cipher.getInstance((byte)cipherAlg, false);
+        symmCipher.init(key, (byte) mode, ivBuffer, ivStart, ivLength);
+        break;
+      case KMCipher.ALG_DES_ECB_NOPAD:
+        cipherAlg = Cipher.ALG_DES_ECB_NOPAD;
+        key = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,len,false);
+        ((DESKey) key).setKey(secret,secretStart);
+        symmCipher = Cipher.getInstance((byte)cipherAlg, false);
+        symmCipher.init(key, (byte) mode);
         break;
       default://This should never happen
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
         break;
     }
-
-    //TODO
-    Cipher symmCipher = Cipher.getInstance((byte)cipherAlg, Cipher.PAD_NOPAD,false);
-    if (ivBuffer != null) {
-      symmCipher.init(key, (byte) mode, ivBuffer, ivStart, ivLength);
-    }else{
-      symmCipher.init(key, (byte) mode);
-    }
-    return new KMCipherImpl(symmCipher);
+    KMCipher cipher = new KMCipherImpl(symmCipher);
+    cipher.setCipherAlgorithm(cipherAlg);
+    cipher.setPaddingAlgorithm(padding);
+    return cipher;
   }
 
   @Override
-  public Signature createHmacSigner(short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
-    Signature hmacSigner = Signature.getInstance((byte)msgDigestAlg, Signature.SIG_CIPHER_HMAC,Cipher.PAD_NOPAD,false);
+  public Signature createHmacSignerVerifier(short purpose, short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
+    short alg = Signature.ALG_HMAC_SHA_256;
+    if(msgDigestAlg != MessageDigest.ALG_SHA_256) CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    Signature hmacSignerVerifier = Signature.getInstance((byte)alg,false);
     HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short)(secretLength*8), false);
     key.setKey(secret,secretStart,secretLength);
-    hmacSigner.init(key,Signature.MODE_SIGN);
-    return hmacSigner;
+    hmacSignerVerifier.init(key,(byte)purpose);
+    return hmacSignerVerifier;
   }
 
   @Override
@@ -649,12 +709,65 @@ public class KMJcardSimulator implements KMCryptoProvider {
       }
     }
   }
-  private void print (String lab, byte[] b, short s, short l){
+
+  @Override
+  public void bypassAesGcm(){
+    //ignore
+  }
+
+  @Override
+  public KMCipher createRsaCipher(short padding, byte[] modBuffer, short modOff, short modLength) {
+    byte cipherAlg = Cipher.ALG_RSA_NOPAD;
+    //TODO implement OAEP algorithm using SunJCE.
+    //TODO for no pad the buffer length must be 255 max.
+    if(padding == KMCipher.PAD_PKCS1_OAEP_SHA256) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
+    else cipherAlg = Cipher.ALG_RSA_NOPAD;
+    Cipher rsaCipher = Cipher.getInstance(cipherAlg,false);
+    RSAPublicKey key = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
+    byte[] exponent = new byte[]{0x01,0x00,0x01};
+    key.setExponent(exponent,(short)0,(short)3);
+    key.setModulus(modBuffer, modOff, modLength);
+    rsaCipher.init(key,Cipher.MODE_ENCRYPT);
+    return new KMCipherImpl(rsaCipher);
+  }
+
+  @Override
+  public Signature createRsaVerifier(short msgDigestAlg, short padding, byte[] modBuffer, short modOff, short modLength) {
+    short alg = Signature.ALG_RSA_SHA_256_PKCS1;
+    if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    else if(padding == KMCipher.PAD_NOPAD) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    else if(padding == KMCipher.PAD_PKCS1_PSS) alg = Signature.ALG_RSA_SHA_256_PKCS1_PSS;
+    else if(padding == KMCipher.PAD_PKCS1) alg = Signature.ALG_RSA_SHA_256_PKCS1;
+    else CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    Signature rsaVerifier = Signature.getInstance((byte)alg, false);
+    RSAPublicKey key = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
+    byte[] exponent = new byte[]{0x01,0x00,0x01};
+    key.setExponent(exponent,(short)0,(short)3);
+    key.setModulus(modBuffer, modOff, modLength);
+    rsaVerifier.init(key,Signature.MODE_VERIFY);
+    return rsaVerifier;
+  }
+  @Override
+  public Signature createEcVerifier(short msgDigestAlg, byte[] pubKey, short pubKeyStart, short pubKeyLength) {
+    short alg = Signature.ALG_ECDSA_SHA_256;
+    if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+//    KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+//    ecKeyPair.genKeyPair();
+//    ECPublicKey key = (ECPublicKey) ecKeyPair.getPublic();
+    ECPublicKey key = (ECPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);
+    key.setW(pubKey,pubKeyStart,pubKeyLength);
+    Signature ecVerifier = Signature.getInstance((byte)alg,false);
+    ecVerifier.init(key,Signature.MODE_VERIFY);
+    return ecVerifier;
+  }
+  /*
+  private static void print (String lab, byte[] b, short s, short l){
     byte[] i = new byte[l];
     Util.arrayCopyNonAtomic(b,s,i,(short)0,l);
     print(lab,i);
   }
-  private void print(String label, byte[] buf){
+  private static void print(String label, byte[] buf){
     System.out.println(label+": ");
     StringBuilder sb = new StringBuilder();
     for(int i = 0; i < buf.length; i++){
@@ -664,9 +777,5 @@ public class KMJcardSimulator implements KMCryptoProvider {
       }
     }
     System.out.println(sb.toString());
-  }
-  @Override
-  public void bypassAesGcm(){
-    //ignore
-  }
+  }*/
 }

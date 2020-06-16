@@ -448,6 +448,7 @@ public class KMFrameworkTest {
     Assert.assertEquals( "Google",authorNameStr);
     Assert.assertEquals(0x9000, response.getSW());
   }
+
   private void testAddRngEntropyCmd(CardSimulator simulator){
     byte[] buf = new byte[1024];
     // test provision command
@@ -515,14 +516,12 @@ public class KMFrameworkTest {
     //byte[] digest = {KMType.SHA1, KMType.SHA2_256};
     byte[] digest = {KMType.DIGEST_NONE};
     byte[] padding = {KMType.PADDING_NONE};
-    byte[] purpose = {0x02, 0x03};
     vals.add((short)0, KMEnumTag.instance(KMType.ALGORITHM, alg));
     vals.add((short)1, KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16(keysize)));
     //vals.add((short)1, KMIntegerTag.instance(KMType.UINT_TAG, KMType.USERID, KMInteger.uint_32(intVal, (short)0)));
     //vals.add((short)2, KMByteTag.instance(KMType.APPLICATION_ID, KMByteBlob.instance(val, (short)0, (short)val.length)));
      vals.add((short)2, KMIntegerTag.instance(KMType.ULONG_TAG, KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pubVal,(short)0)));
-    vals.add((short)3, KMEnumArrayTag.instance(KMType.PURPOSE, KMByteBlob.instance(purpose,(short)0, (short)purpose.length)));
-   // vals.add((short)4, KMEnumArrayTag.instance(KMType.DIGEST, KMByteBlob.instance(digest,(short)0, (short)digest.length)));
+    vals.add((short)3, KMEnumArrayTag.instance(KMType.DIGEST, KMByteBlob.instance(digest,(short)0, (short)digest.length)));
     //vals.add((short)5, KMEnumArrayTag.instance(KMType.PADDING, KMByteBlob.instance(padding,(short)0, (short)padding.length)));
     short keyParamsPtr = KMKeyParameters.instance(arrPtr);
     // Array of expected arguments
@@ -534,16 +533,20 @@ public class KMFrameworkTest {
   private short makeImportKeySymmCmd(short alg, short size) {
     // Argument 1
     short arrPtr;
+    byte digestType;
     if(alg == KMType.HMAC) {
       arrPtr = KMArray.instance((short) 6);
+      digestType = KMType.SHA2_256;
     } else{
       arrPtr = KMArray.instance((short) 5);
+      digestType = KMType.DIGEST_NONE;
     }
     KMArray vals = KMArray.cast(arrPtr);
     byte[] val = "Test".getBytes();
     byte[] intVal = {1, 2, 3, 4};
     byte[] pubVal = {0x00, 0x01, 0x00, 0x01};
-    byte[] digest = {KMType.SHA2_256};
+    byte[] digest = new byte[1];
+    digest[0] = digestType;
     vals.add((short)0, KMEnumTag.instance(KMType.ALGORITHM, (byte)alg));
     vals.add((short)1, KMIntegerTag.instance(KMType.UINT_TAG, KMType.USERID, KMInteger.uint_32(intVal, (short)0)));
     vals.add((short)2, KMByteTag.instance(KMType.APPLICATION_ID, KMByteBlob.instance(val, (short)0, (short)val.length)));
