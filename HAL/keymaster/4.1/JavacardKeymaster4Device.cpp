@@ -904,6 +904,10 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
             output = tempOut;
         }
     }
+    if(ErrorCode::OK != errorCode) {
+        /* Delete the entry on this operationHandle */
+        oprCtx_->clearOperationData(operationHandle);
+    }
     _hidl_cb(errorCode, inputConsumed, outParams, output);
     return Void();
 }
@@ -978,6 +982,8 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
             output = tempOut;
         }
     }
+    /* Delete the entry on this operationHandle */
+    oprCtx_->clearOperationData(operationHandle);
     _hidl_cb(errorCode, outParams, output);
     return Void();
 }

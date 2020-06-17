@@ -22,6 +22,8 @@
 #define DES_BLOCK_SIZE           8
 #define RSA_INPUT_MSG_LEN      245 /*(256-11)*/
 #define EC_INPUT_MSG_LEN        32
+#define MAX_RSA_BUFFER_SIZE    256
+#define MAX_EC_BUFFER_SIZE      32
 
 namespace keymaster {
 namespace V4_1 {
@@ -94,20 +96,31 @@ ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr
         return errorCode;
     }
 
-    if(Algorithm::RSA == oprData.info.alg && Digest::NONE == oprData.info.digest) {
-        if(actualInput.size() > RSA_INPUT_MSG_LEN)
-            return ErrorCode::INVALID_INPUT_LENGTH;
-    } else if(Algorithm::EC == oprData.info.alg && Digest::NONE == oprData.info.digest) {
-        if(actualInput.size() > EC_INPUT_MSG_LEN) {
+    if(KeyPurpose::SIGN == oprData.info.purpose) {
+        if(Algorithm::RSA == oprData.info.alg && Digest::NONE == oprData.info.digest) {
+            if((oprData.data.buf_len+actualInput.size()) > RSA_INPUT_MSG_LEN)
+                return ErrorCode::INVALID_INPUT_LENGTH;
+        } else if(Algorithm::EC == oprData.info.alg && Digest::NONE == oprData.info.digest) {
             /* Silently truncate the input */
-            for(int i=0; i < EC_INPUT_MSG_LEN; i++) {
-                input.push_back(actualInput[i]);
+            if(oprData.data.buf_len >= EC_INPUT_MSG_LEN) {
+                return ErrorCode::OK;
+            } else if(actualInput.size()+oprData.data.buf_len > EC_INPUT_MSG_LEN) {
+                for(int i=oprData.data.buf_len,j=0; i < EC_INPUT_MSG_LEN; ++i,++j) {
+                    input.push_back(actualInput[j]);
+                }
+                return ErrorCode::OK;
             }
-            return errorCode;
+        }
+    }
+
+    if(KeyPurpose::DECRYPT == oprData.info.purpose && Algorithm::RSA == oprData.info.alg) {
+        if((oprData.data.buf_len+actualInput.size()) > MAX_RSA_BUFFER_SIZE) {
+            return ErrorCode::INVALID_INPUT_LENGTH;
         }
     }
 
     if(opr == Operation::Finish) {
+
         if(oprData.info.pad == PaddingMode::NONE && oprData.info.alg == Algorithm::AES) {
             if(((oprData.data.buf_len+actualInput.size()) % AES_BLOCK_SIZE) != 0)
                 return ErrorCode::INVALID_INPUT_LENGTH;
@@ -161,7 +174,6 @@ ErrorCode OperationContext::update(uint64_t operHandle, const std::vector<uint8_
 ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_t>& actualInput, sendDataToSE_cb cb) {
     ErrorCode errorCode = ErrorCode::OK;
     std::vector<uint8_t> input;
-    OperationData oprData;
 
     /* Validate the input data */
     if(ErrorCode::OK != (errorCode = validateInputData(operHandle, Operation::Update, actualInput, input))) {
@@ -192,10 +204,6 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
             Operation::Finish, cb))) {
             return errorCode;
         }
-    }
-
-    if(ErrorCode::OK != (errorCode = getOperationData(operHandle, oprData))) {
-        return errorCode;
     }
 
     /* Send if any buffered data is remaining or to call finish */

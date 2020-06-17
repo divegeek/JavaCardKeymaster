@@ -21,7 +21,7 @@
 #include <iostream>
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 
-#define MAX_BUF_SIZE 32
+#define MAX_BUF_SIZE 256
 
 namespace keymaster {
 namespace V4_1 {
@@ -85,7 +85,7 @@ private:
     std::vector<uint8_t>& input);
     ErrorCode internalUpdate(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>&
     out);
-    inline ErrorCode handleInternalUpdate(uint64_t operHandle, uint8_t* data, size_t len, Operation opr,
+     ErrorCode handleInternalUpdate(uint64_t operHandle, uint8_t* data, size_t len, Operation opr,
             sendDataToSE_cb cb, bool finish=false) {
         ErrorCode errorCode = ErrorCode::OK;
         std::vector<uint8_t> out;
@@ -100,14 +100,47 @@ private:
                             opr, out))) {
                 return errorCode;
             }
-        } else {
-            /* Other algorithms no buffering required */
-            for(size_t i = 0; i < len; i++) {
-                out.push_back(data[i]);
+
+            if(ErrorCode::OK != (errorCode = cb(out, finish))) {
+                return errorCode;
             }
-        }
-        if(ErrorCode::OK != (errorCode = cb(out, finish))) {
-            return errorCode;
+        } else {
+            if(oprData.info.digest == Digest::NONE) {
+                if(finish) {
+                    for(int i = 0; i < oprData.data.buf_len; ++i) {
+                        out[i] = oprData.data.buf[i];
+                    }
+                    if(ErrorCode::OK != (errorCode = cb(out, finish))) {
+                        return errorCode;
+                    }
+                } else {
+                    /* For RSA/EC algorithms just do buffering, don't send data to SE in update.
+                     * input message length should not be more than the MAX_BUF_SIZE.
+                     */
+                    if(oprData.data.buf_len <= MAX_BUF_SIZE) {
+                        size_t bufIndex = oprData.data.buf_len;
+                        size_t pos = 0;
+                        for(; (pos < len) && (pos < (MAX_BUF_SIZE-bufIndex)); pos++)
+                        {
+                            oprData.data.buf[bufIndex+pos] = data[pos];
+                        }
+                        oprData.data.buf_len += pos;
+                    }
+                }
+            } else {
+                for(size_t j=0; j < len; ++j)
+                {
+                    out[j] = data[j];
+                }
+                /* if len=0, then no need to call the callback, since there is no information to be send to javacard,
+                 * but if finish flag is true irrespective of len callback should be called.
+                 */
+                if(len != 0 || finish) {
+                    if(ErrorCode::OK != (errorCode = cb(out, finish))) {
+                        return errorCode;
+                    }
+                }
+            }
         }
         return errorCode;
     }
