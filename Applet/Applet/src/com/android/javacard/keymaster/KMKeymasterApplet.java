@@ -50,7 +50,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte CLA_ISO7816_NO_SM_NO_CHAN = (byte) 0x80;
   private static final short KM_HAL_VERSION = (short) 0x4000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
-  private static final short MAX_IO_LENGTH = 0x400;
+  private static final short MAX_IO_LENGTH = 0x600;
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
     0x4B, 0x65, 0x79, 0x6D, 0x61, 0x73, 0x74, 0x65, 0x72, 0x20, 0x48, 0x4D, 0x41, 0x43, 0x20, 0x56,
@@ -758,10 +758,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Receive the incoming request fully from the master into buffer.
     receiveIncoming(apdu);
     byte[] scratchPad = apdu.getBuffer();
-    tmpVariables[1] = KMArray.instance((short) 11);
+    tmpVariables[1] = KMArray.instance((short) 12);
     // Arguments
     tmpVariables[2] = KMKeyParameters.exp();
-    KMArray.cast(tmpVariables[1]).add((short) 0, tmpVariables[2]); // Key Params
+    KMArray.cast(tmpVariables[1]).add((short) 0, tmpVariables[2]); // Key Params of wrapped key
     KMArray.cast(tmpVariables[1]).add((short) 1, KMEnum.instance(KMType.KEY_FORMAT)); // Key Format
     KMArray.cast(tmpVariables[1]).add((short) 2, KMByteBlob.exp()); // Wrapped Import Key Blob
     KMArray.cast(tmpVariables[1]).add((short) 3, KMByteBlob.exp()); // Auth Tag
@@ -770,135 +770,138 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(tmpVariables[1]).add((short) 6, KMByteBlob.exp()); // Wrapping Key KeyBlob
     KMArray.cast(tmpVariables[1]).add((short) 7, KMByteBlob.exp()); // Masking Key
     KMArray.cast(tmpVariables[1]).add((short) 8, tmpVariables[2]); // Un-wrapping Params
-    KMArray.cast(tmpVariables[1]).add((short) 9, KMInteger.exp()); // Password Sid
-    KMArray.cast(tmpVariables[1]).add((short) 10, KMInteger.exp()); // Biometric Sid
+    KMArray.cast(tmpVariables[1]).add((short) 9, KMByteBlob.exp()); // Wrapped Key ASSOCIATED AUTH DATA
+    KMArray.cast(tmpVariables[1]).add((short) 10, KMInteger.exp()); // Password Sid
+    KMArray.cast(tmpVariables[1]).add((short) 11, KMInteger.exp()); // Biometric Sid
+    short i = KMArray.cast(tmpVariables[1]).length();
     // Decode the arguments
-    tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
-    tmpVariables[3] = KMArray.cast(tmpVariables[2]).get((short) 0);
-    // get algorithm
-    tmpVariables[3] = KMEnumTag.getValue(KMType.ALGORITHM, tmpVariables[3]);
-    if (tmpVariables[3] == KMType.INVALID_VALUE) {
-      KMException.throwIt(KMError.INVALID_ARGUMENT);
-    }
-    tmpVariables[3] = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
-    if (tmpVariables[3] == KMType.RSA
-        || tmpVariables[3] == KMType.EC) { // RSA and EC not implemented
+    short args = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
+    // Step -0 - check whether the key format and algorithm supported
+    // read algorithm
+    tmpVariables[0] = KMArray.cast(args).get((short) 0);
+    tmpVariables[1] = KMEnumTag.getValue(KMType.ALGORITHM, tmpVariables[0]);
+    // read key format
+    tmpVariables[2] = KMArray.cast(args).get((short) 1);
+    tmpVariables[2] = KMEnum.cast(tmpVariables[2]).getVal();
+    // import of RSA and EC not supported with pkcs8 or x509 format
+    if ((tmpVariables[1] == KMType.RSA || tmpVariables[1] == KMType.EC) &&
+      (tmpVariables[2] != KMType.RAW)) {
       KMException.throwIt(KMError.UNIMPLEMENTED);
     }
-    // Key format must be RAW format - X509 and PKCS8 not implemented.
-    tmpVariables[3] = KMArray.cast(tmpVariables[2]).get((short) 1);
-    tmpVariables[3] = KMEnum.cast(tmpVariables[3]).getVal();
-    if (tmpVariables[3] != KMType.RAW) {
-      KMException.throwIt(KMError.UNIMPLEMENTED);
-    }
-    data[AUTH_DATA] = KMArray.cast(tmpVariables[2]).get((short) 3);
-    data[AUTH_TAG] = KMArray.cast(tmpVariables[2]).get((short) 4);
-    data[NONCE] = KMArray.cast(tmpVariables[2]).get((short) 5);
-    data[ENC_TRANSPORT_KEY] = KMArray.cast(tmpVariables[2]).get((short) 6);
-    data[MASKING_KEY] = KMArray.cast(tmpVariables[2]).get((short) 8);
-    // Step 1 - parse wrapping key blob
-    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 9); // wrapping key parameters
-    // Check for app id and app data.
-    data[APP_ID] = KMType.INVALID_VALUE;
-    data[APP_DATA] = KMType.INVALID_VALUE;
-    tmpVariables[3] =
-        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, data[KEY_PARAMETERS]);
-    if (tmpVariables[3] != KMTag.INVALID_VALUE) {
+    // Step -1 parse the wrapping key blob
+    // read wrapping key blob
+    data[KEY_BLOB] = KMArray.cast(args).get((short) 6);
+    // read un wrapping key params
+    data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 8);
+    // Read App Id and App Data if any from un wrapping key params
+    data[APP_ID] = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, data[KEY_PARAMETERS]);
+    data[APP_DATA] = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, data[KEY_PARAMETERS]);
+    if (data[APP_ID] != KMTag.INVALID_VALUE) {
       data[APP_ID] = KMByteTag.cast(tmpVariables[3]).getValue();
     }
-    tmpVariables[3] =
-        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, data[KEY_PARAMETERS]);
-    if (tmpVariables[3] != KMTag.INVALID_VALUE) {
+    if (data[APP_DATA] != KMTag.INVALID_VALUE) {
       data[APP_DATA] = KMByteTag.cast(tmpVariables[3]).getValue();
     }
-    // wrapping key blob
-    data[KEY_BLOB] = KMArray.cast(tmpVariables[2]).get((short) 7);
+    // parse the wrapping key blob
     parseEncryptedKeyBlob(scratchPad);
-
-    // Step 2 - Decrypt the encrypted transport key
-    // enforce authorization for WRAP_KEY operation using RSA algorithm according to javacard caps.
-    if (KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]) != KMType.RSA) {
-      KMException.throwIt(KMError.INCOMPATIBLE_ALGORITHM);
+    // check whether the wrapping key is RSA with purpose KEY_WRAP, padding RSA_OAEP and Digest SHA2_256.
+    if(KMEnumTag.getValue(KMType.ALGORITHM,data[HW_PARAMETERS]) != KMType.RSA ){
+      KMException.throwIt(KMError.UNSUPPORTED_KEY_ENCRYPTION_ALGORITHM);
     }
-    if (!(KMEnumArrayTag.contains(KMType.DIGEST, KMType.SHA2_256, data[HW_PARAMETERS]))) {
+    if(!KMEnumArrayTag.contains(KMType.DIGEST,KMType.SHA2_256, data[HW_PARAMETERS])){
       KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
     }
-    if (!(KMEnumArrayTag.contains(KMType.PADDING, KMType.RSA_OAEP, data[HW_PARAMETERS]))) {
+    if(!KMEnumArrayTag.contains(KMType.PADDING,KMType.RSA_OAEP, data[HW_PARAMETERS])){
       KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
     }
+    if(!KMEnumArrayTag.contains(KMType.PURPOSE,KMType.WRAP_KEY, data[HW_PARAMETERS])){
+      KMException.throwIt((KMError.INCOMPATIBLE_PURPOSE));
+    }
+    // Step 2 - decrypt the encrypted transport key - 32 bytes AES-GCM key
+    // create rsa decipher
     KMCipher cipher =
-        cryptoProvider.createRsaDecipher(
-          KMCipher.PAD_PKCS1_OAEP_SHA256,
-            KMByteBlob.cast(data[SECRET]).getBuffer(),
-            KMByteBlob.cast(data[SECRET]).getStartOff(),
-            KMByteBlob.cast(data[SECRET]).length(),
-            KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
-            KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
-            KMByteBlob.cast(data[PUB_KEY]).length());
+      cryptoProvider.createRsaDecipher(
+        KMCipher.PAD_PKCS1, // TODO remove this when KMCipher.PAD_PKCS1_OAEP_SHA256 is supported
+        KMByteBlob.cast(data[SECRET]).getBuffer(),
+        KMByteBlob.cast(data[SECRET]).getStartOff(),
+        KMByteBlob.cast(data[SECRET]).length(),
+        KMByteBlob.cast(data[PUB_KEY]).getBuffer(),
+        KMByteBlob.cast(data[PUB_KEY]).getStartOff(),
+        KMByteBlob.cast(data[PUB_KEY]).length());
+    //read encrypted transport key from args
+    tmpVariables[0] = KMArray.cast(args).get((short) 5);
     // Decrypt the transport key
-    tmpVariables[3] =
-        cipher.doFinal(
-            KMByteBlob.cast(data[ENC_TRANSPORT_KEY]).getBuffer(),
-            KMByteBlob.cast(data[ENC_TRANSPORT_KEY]).getStartOff(),
-            KMByteBlob.cast(data[ENC_TRANSPORT_KEY]).length(),
-            scratchPad,
-            (short) 0);
-    data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, tmpVariables[3]);
+    tmpVariables[1] =
+      cipher.doFinal(
+        KMByteBlob.cast(tmpVariables[0]).getBuffer(),
+        KMByteBlob.cast(tmpVariables[0]).getStartOff(),
+        KMByteBlob.cast(tmpVariables[0]).length(),
+        scratchPad,
+        (short) 0);
+    data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, tmpVariables[1]);
     cryptoProvider.delete(cipher);
-
-    // Step 3 - XOR with masking key
-    tmpVariables[4] = KMByteBlob.cast(data[MASKING_KEY]).length();
-    if (tmpVariables[3] != tmpVariables[4]) {
+    // Step 3 - XOR the decrypted AES-GCM key with with masking key
+    // read masking key
+    tmpVariables[0] = KMArray.cast(args).get((short) 7);
+    tmpVariables[1] = KMByteBlob.cast(tmpVariables[0]).length();
+    // Length of masking key and transport key must be same.
+    if (tmpVariables[1] != KMByteBlob.cast(data[SECRET]).length()) {
       KMException.throwIt(KMError.IMPORT_PARAMETER_MISMATCH);
     }
-    tmpVariables[3] = 0; // index in scratchPad
-    byte[] buf = KMByteBlob.cast(MASKING_KEY).getBuffer();
-    tmpVariables[5] = KMByteBlob.cast(MASKING_KEY).getStartOff();
-    while (tmpVariables[3] < tmpVariables[4]) {
-      scratchPad[tmpVariables[3]] =
-          (byte) (scratchPad[tmpVariables[3]] ^ buf[(short) (tmpVariables[3] + tmpVariables[5])]);
-      scratchPad[3]++;
+    tmpVariables[2] = 0; // index
+    // Xor every byte of masking and key and store the result in data[SECRET]
+    while (tmpVariables[2] < tmpVariables[1]) {
+      tmpVariables[3] = (short)(((short)KMByteBlob.cast(tmpVariables[0]).get(tmpVariables[2]))&0x00FF);
+      tmpVariables[4] = (short)(((short)KMByteBlob.cast(data[SECRET]).get(tmpVariables[2]))&0x00FF);
+      KMByteBlob.cast(data[SECRET]).add(tmpVariables[2], (byte)(tmpVariables[3]^tmpVariables[4]));
+      tmpVariables[2]++;
     }
-    data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, tmpVariables[3]);
-
-    // Step 4 - AES-GCM decrypt
-    data[IMPORTED_KEY_BLOB] = KMArray.cast(tmpVariables[2]).get((short) 2);
-    data[AUTH_DATA] = KMArray.cast(tmpVariables[2]).get((short) 3);
-    data[AUTH_TAG] = KMArray.cast(tmpVariables[2]).get((short) 4);
-    data[NONCE] = KMArray.cast(tmpVariables[2]).get((short) 5);
-    data[ENC_TRANSPORT_KEY] = KMArray.cast(tmpVariables[2]).get((short) 6);
-    data[MASKING_KEY] = KMArray.cast(tmpVariables[2]).get((short) 8);
+    // Step 4 - AES-GCM decrypt the wrapped key
+    data[INPUT_DATA] = KMArray.cast(args).get((short) 2);
+    data[AUTH_DATA] = KMArray.cast(args).get((short) 9);
+    data[AUTH_TAG] = KMArray.cast(args).get((short) 3);
+    data[NONCE] = KMArray.cast(args).get((short) 4);
+    Util.arrayFillNonAtomic(scratchPad,(short)0, KMByteBlob.cast(data[INPUT_DATA]).length(),(byte)0);
     AESKey key =
-        cryptoProvider.createAESKey(
-            KMByteBlob.cast(data[SECRET]).getBuffer(),
-            KMByteBlob.cast(data[SECRET]).getStartOff(),
-            KMByteBlob.cast(data[SECRET]).length());
+      cryptoProvider.createAESKey(
+        KMByteBlob.cast(data[SECRET]).getBuffer(),
+        KMByteBlob.cast(data[SECRET]).getStartOff(),
+        KMByteBlob.cast(data[SECRET]).length());
     boolean verification =
-        cryptoProvider.aesGCMDecrypt(
-            key,
-            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).getBuffer(),
-            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).getStartOff(),
-            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).length(),
-            scratchPad,
-            (short) 0,
-            KMByteBlob.cast(data[NONCE]).getBuffer(),
-            KMByteBlob.cast(data[NONCE]).getStartOff(),
-            KMByteBlob.cast(data[NONCE]).length(),
-            KMByteBlob.cast(data[AUTH_DATA]).getBuffer(),
-            KMByteBlob.cast(data[AUTH_DATA]).getStartOff(),
-            KMByteBlob.cast(data[AUTH_DATA]).length(),
-            KMByteBlob.cast(data[AUTH_TAG]).getBuffer(),
-            KMByteBlob.cast(data[AUTH_TAG]).getStartOff(),
-            KMByteBlob.cast(data[AUTH_TAG]).length());
+      cryptoProvider.aesGCMDecrypt(
+        key,
+        KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+        KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+        KMByteBlob.cast(data[INPUT_DATA]).length(),
+        scratchPad,
+        (short) 0,
+        KMByteBlob.cast(data[NONCE]).getBuffer(),
+        KMByteBlob.cast(data[NONCE]).getStartOff(),
+        KMByteBlob.cast(data[NONCE]).length(),
+        KMByteBlob.cast(data[AUTH_DATA]).getBuffer(),
+        KMByteBlob.cast(data[AUTH_DATA]).getStartOff(),
+        KMByteBlob.cast(data[AUTH_DATA]).length(),
+        KMByteBlob.cast(data[AUTH_TAG]).getBuffer(),
+        KMByteBlob.cast(data[AUTH_TAG]).getStartOff(),
+        KMByteBlob.cast(data[AUTH_TAG]).length());
     if (verification == false) {
       KMException.throwIt(KMError.IMPORTED_KEY_VERIFICATION_FAILED);
     }
     cryptoProvider.delete(key);
 
-    // Step 5 - Import Decrypted Key.
+    // Step 5 - Import decrypted key
     data[ORIGIN] = KMType.SECURELY_IMPORTED;
-    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 0);
-    importKey(apdu, scratchPad);
+    data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 0);
+    // create key blob array
+    data[IMPORTED_KEY_BLOB] = KMArray.instance((short)1);
+    // add the byte blob containing decrypted input data
+    KMArray.cast(data[IMPORTED_KEY_BLOB]).add((short)0,
+      KMByteBlob.instance(scratchPad,(short)0, KMByteBlob.cast(data[INPUT_DATA]).length()));
+    // encode the key blob
+    tmpVariables[0] = repository.alloc((short)(KMByteBlob.cast(data[INPUT_DATA]).length()+16));
+    tmpVariables[1] = encoder.encode(data[IMPORTED_KEY_BLOB],repository.getHeap(),tmpVariables[0]);
+    data[IMPORTED_KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), tmpVariables[0], tmpVariables[1]);
+    importKey(apdu,scratchPad);
   }
 
   private void processAttestKeyCmd(APDU apdu) {}

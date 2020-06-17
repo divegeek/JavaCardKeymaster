@@ -263,6 +263,9 @@ public class KMEnumArrayTag extends KMTag {
             return false;
           }
           break;
+        case KMType.WRAP_KEY:
+          if(alg != KMType.RSA) return false;
+          break;
         default:
           return false;
       }

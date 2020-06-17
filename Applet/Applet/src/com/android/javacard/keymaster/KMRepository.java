@@ -23,7 +23,7 @@ import javacard.framework.Util;
 
 public class KMRepository {
   //TODO make the sizes configurable
-  public static final short HEAP_SIZE = 0x2000;
+  public static final short HEAP_SIZE = 10000;
   public static final short MAX_BLOB_STORAGE = 32;
   public static final short AES_GCM_AUTH_TAG_LENGTH = 12;
   public static final short HMAC_SEED_NONCE_SIZE = 16;

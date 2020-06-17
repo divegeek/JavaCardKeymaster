@@ -40,6 +40,7 @@ import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import javacard.framework.Util;
+import javacard.security.AESKey;
 import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
 import javacard.security.KeyPair;
@@ -142,7 +143,7 @@ public class KMVTSTest {
   }
 
   private CommandAPDU encodeApdu(byte ins, short cmd){
-    byte[] buf = new byte[1024];
+    byte[] buf = new byte[2048];
     buf[0] = (byte)0x80;
     buf[1] = ins;
     buf[2] = (byte)0x40;
@@ -467,11 +468,12 @@ public class KMVTSTest {
     KMByteBlob.cast(byteBlob).add((short)3, KMType.RSA_PSS);
     KMByteBlob.cast(byteBlob).add((short)4, KMType.PADDING_NONE);
     short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
-    byteBlob = KMByteBlob.instance((short)4);
+    byteBlob = KMByteBlob.instance((short)5);
     KMByteBlob.cast(byteBlob).add((short)0, KMType.SIGN);
     KMByteBlob.cast(byteBlob).add((short)1, KMType.VERIFY);
     KMByteBlob.cast(byteBlob).add((short)2, KMType.ENCRYPT);
     KMByteBlob.cast(byteBlob).add((short)3, KMType.DECRYPT);
+    KMByteBlob.cast(byteBlob).add((short)4, KMType.WRAP_KEY);
     short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
     byte[] pub = {0,1,0,1};
     short rsaPubExpTag = KMIntegerTag.instance(KMType.ULONG_TAG,KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pub, (short)0));
@@ -689,6 +691,117 @@ public class KMVTSTest {
     Assert.assertEquals(0x9000, response.getSW());
     Assert.assertEquals(error, KMError.OK);
     return ret;
+  }
+  @Test
+  public void testImportWrappedKey(){
+    init();
+    byte[] wrappedKey = new byte[16];
+    cryptoProvider.newRandomNumber(wrappedKey,(short)0,(short)16);
+    byte[] encWrappedKey = new byte[16];
+    AESKey transportKey = cryptoProvider.createAESKey((short)256);
+    byte[] transportKeyMaterial = new byte[32];
+    cryptoProvider.newRandomNumber(transportKeyMaterial,(short)0,(short)32);
+    transportKey.setKey(transportKeyMaterial,(short)0);
+    byte[] nonce = new byte[12];
+    cryptoProvider.newRandomNumber(nonce,(short)0,(short)12);
+    byte[] authData = "Auth Data".getBytes();
+    byte[] authTag = new byte[12];
+    cryptoProvider.aesGCMEncrypt(transportKey,wrappedKey,(short)0,(short)16,encWrappedKey,(short)0,
+      nonce,(short)0, (short)12,authData,(short)0,(short)authData.length,
+      authTag, (short)0, (short)12);
+    byte[] maskingKey = {1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0};
+    byte[] maskedTransportKey = new byte[32];
+    for(int i=0; i< maskingKey.length;i++){
+      maskedTransportKey[i] = (byte)(transportKeyMaterial[i] ^ maskingKey[i]);
+    }
+    short rsaKeyArr = generateRsaKey(null,null);
+    short keyBlobPtr = KMArray.cast(rsaKeyArr).get((short)1);
+    byte[] wrappingKeyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
+      KMByteBlob.cast(keyBlobPtr).getStartOff(),
+      wrappingKeyBlob,(short)0, (short)wrappingKeyBlob.length);
+    short inParams = getRsaParams(KMType.DIGEST_NONE, KMType.RSA_PKCS1_1_5_ENCRYPT);
+    short ret = processMessage(maskedTransportKey,
+      KMByteBlob.instance(wrappingKeyBlob,(short)0, (short)wrappingKeyBlob.length),
+      KMType.ENCRYPT,
+      KMKeyParameters.instance(inParams),
+      (short)0,null,false
+    );
+    keyBlobPtr = KMArray.cast(ret).get((short)2);
+    byte[] encTransportKey = new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
+      encTransportKey,(short)0, (short)encTransportKey.length);
+    short tagCount = 7;
+    short arrPtr = KMArray.instance(tagCount);
+    short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
+    short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)128));
+    short byteBlob = KMByteBlob.instance((short)2);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.ECB);
+    KMByteBlob.cast(byteBlob).add((short)1, KMType.CBC);
+    short blockModeTag = KMEnumArrayTag.instance(KMType.BLOCK_MODE, byteBlob);
+    byteBlob = KMByteBlob.instance((short)2);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.PKCS7);
+    KMByteBlob.cast(byteBlob).add((short)1, KMType.PADDING_NONE);
+    short paddingMode = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
+    byteBlob = KMByteBlob.instance((short)2);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.ENCRYPT);
+    KMByteBlob.cast(byteBlob).add((short)1, KMType.DECRYPT);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
+    short tagIndex = 0;
+    KMArray.cast(arrPtr).add(tagIndex++, boolTag);
+    KMArray.cast(arrPtr).add(tagIndex++, keySize);
+    KMArray.cast(arrPtr).add(tagIndex++, blockModeTag);
+    KMArray.cast(arrPtr).add(tagIndex++, paddingMode);
+    KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, KMType.AES));
+    KMArray.cast(arrPtr).add(tagIndex++, purpose);
+    KMArray.cast(arrPtr).add(tagIndex++, KMBoolTag.instance(KMType.CALLER_NONCE));
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    short nullParams = KMArray.instance((short)0);
+    nullParams = KMKeyParameters.instance(nullParams);
+    short arr = KMArray.instance((short)12);
+    KMArray.cast(arr).add((short) 0, keyParams); // Key Params of wrapped key
+    KMArray.cast(arr).add((short) 1, KMEnum.instance(KMType.KEY_FORMAT,KMType.RAW)); // Key Format
+    KMArray.cast(arr).add((short) 2, KMByteBlob.instance(encWrappedKey,(short)0,(short)encWrappedKey.length)); // Wrapped Import Key Blob
+    KMArray.cast(arr).add((short) 3, KMByteBlob.instance(authTag,(short)0,(short)authTag.length)); // Auth Tag
+    KMArray.cast(arr).add((short) 4, KMByteBlob.instance(nonce,(short)0,(short)nonce.length)); // IV - Nonce
+    KMArray.cast(arr).add((short) 5, KMByteBlob.instance(encTransportKey,(short)0,(short)encTransportKey.length)); // Encrypted Transport Key
+    KMArray.cast(arr).add((short) 6, KMByteBlob.instance(wrappingKeyBlob,(short)0, (short)wrappingKeyBlob.length)); // Wrapping Key KeyBlob
+    KMArray.cast(arr).add((short) 7, KMByteBlob.instance(maskingKey,(short)0,(short)maskingKey.length)); // Masking Key
+    KMArray.cast(arr).add((short) 8, nullParams); // Un-wrapping Params
+    KMArray.cast(arr).add((short) 9, KMByteBlob.instance(authData,(short)0,(short)authData.length)); // Wrapped Key ASSOCIATED AUTH DATA
+    KMArray.cast(arr).add((short) 10, KMInteger.uint_8((byte)0)); // Password Sid
+    KMArray.cast(arr).add((short) 11, KMInteger.uint_8((byte)0)); // Biometric Sid
+    CommandAPDU apdu = encodeApdu((byte)0x12, arr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    ret = KMArray.instance((short) 3);
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    KMArray.cast(ret).add((short)1, KMByteBlob.exp());
+    short inst = KMKeyCharacteristics.exp();
+    KMArray.cast(ret).add((short) 2, inst);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    ret = decoder.decode(ret, respBuf, (short) 0, len);
+    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    short keyBlobLength = KMByteBlob.cast(KMArray.cast(ret).get((short)1)).length();
+    short keyCharacteristics = KMArray.cast(ret).get((short)2);
+    short hwParams = KMKeyCharacteristics.cast(keyCharacteristics).getHardwareEnforced();
+    short swParams = KMKeyCharacteristics.cast(keyCharacteristics).getSoftwareEnforced();
+    Assert.assertEquals(0x9000, response.getSW());
+    Assert.assertEquals(error, KMError.OK);
+    short tag = KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.NO_AUTH_REQUIRED, hwParams);
+    Assert.assertEquals(KMBoolTag.cast(tag).getVal(),0x01);
+    tag = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.KEYSIZE, hwParams);
+    Assert.assertEquals(KMInteger.cast(KMIntegerTag.cast(tag).getValue()).getShort(), 128);
+    tag = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PADDING, hwParams);
+    Assert.assertTrue(KMEnumArrayTag.cast(tag).contains(KMType.PKCS7));
+    tag = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.BLOCK_MODE, hwParams);
+    Assert.assertTrue(KMEnumArrayTag.cast(tag).contains(KMType.ECB));
+    tag = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, hwParams);
+    Assert.assertEquals(KMEnumTag.cast(tag).getValue(), KMType.AES);
+    tag = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ORIGIN, hwParams);
+    Assert.assertEquals(KMEnumTag.cast(tag).getValue(), KMType.SECURELY_IMPORTED);
+    cleanUp();
   }
 
   @Test

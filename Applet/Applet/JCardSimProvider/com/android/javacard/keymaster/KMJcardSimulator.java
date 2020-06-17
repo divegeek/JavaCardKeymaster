@@ -198,10 +198,12 @@ public class KMJcardSimulator implements KMCryptoProvider {
       short authTagStart,
       short authTagLen) {
     //Create the sun jce compliant aes key
-    if(key.getSize() != 128){
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    }
     byte[] keyMaterial = new byte[16];
+    if(key.getSize() == 128){
+      keyMaterial = new byte[16];
+    }else if(key.getSize() == 256){
+      keyMaterial = new byte[32];
+    }
     key.getKey(keyMaterial,(short)0);
     //print("KeyMaterial Enc", keyMaterial);
     //print("Authdata Enc", authData, authDataStart, authDataLen);
@@ -323,10 +325,12 @@ public class KMJcardSimulator implements KMCryptoProvider {
       short authTagStart,
       short authTagLen) {
   //Create the sun jce compliant aes key
-    if(key.getSize() != 128){
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    }
     byte[] keyMaterial = new byte[16];
+    if(key.getSize() == 128){
+      keyMaterial = new byte[16];
+    }else if(key.getSize() == 256){
+      keyMaterial = new byte[32];
+    }
     key.getKey(keyMaterial,(short)0);
     //print("KeyMaterial Dec", keyMaterial);
     //print("Authdata Dec", authData, authDataStart, authDataLen);
