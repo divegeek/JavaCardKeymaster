@@ -297,10 +297,13 @@ bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, 
 
 bool CborConverter::addVerificationToken(Array& array, const VerificationToken&
         verificationToken) {
+    std::vector<uint8_t> encodedParamsVerified;
     Array vToken;
     vToken.add(verificationToken.challenge);
     vToken.add(verificationToken.timestamp);
-    addKeyparameters(vToken, verificationToken.parametersVerified);
+    //addKeyparameters(vToken, verificationToken.parametersVerified);
+    /* TODO Need to get proper encodedParamsVerified */
+    vToken.add(std::move(encodedParamsVerified));
     vToken.add(static_cast<uint64_t>(verificationToken.securityLevel));
     vToken.add((std::vector<uint8_t>(verificationToken.mac)));
     array.add(std::move(vToken));

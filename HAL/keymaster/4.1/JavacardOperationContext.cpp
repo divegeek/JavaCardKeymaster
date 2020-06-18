@@ -67,6 +67,7 @@ ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, KeyPurpos
 ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, OperationInfo& operInfo) {
     OperationData data;
     data.info = operInfo;
+    memset((void*)&(data.data), 0x00, sizeof(data.data));
     operationTable[operationHandle] = data;
     return ErrorCode::OK;
 }
