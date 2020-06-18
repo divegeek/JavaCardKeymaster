@@ -27,6 +27,7 @@
 #include <keymaster/keymaster_configuration.h>
 #include <keymaster/contexts/pure_soft_keymaster_context.h>
 #include <keymaster/android_keymaster.h>
+#include <JavacardOperationContext.h>
 
 namespace keymaster {
 namespace V4_1 {
@@ -84,12 +85,18 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     Return<V41ErrorCode> deviceLocked(bool passwordOnly, const VerificationToken& verificationToken) override;
     Return<V41ErrorCode> earlyBootEnded() override;
 
+    //Helper methods.
+    bool getBootParamsInitialized() { return setUpBootParams; }
+    void setBootParams(bool flag) { setUpBootParams = flag; }
+
 protected:
     CborConverter cborConverter_;
     std::unique_ptr<se_transport::TransportFactory> pTransportFactory;
 	
 private:
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
+    std::unique_ptr<OperationContext> oprCtx_;
+    bool setUpBootParams;
 };
 
 }  // namespace javacard

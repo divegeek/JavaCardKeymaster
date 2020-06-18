@@ -297,22 +297,26 @@ bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, 
 
 bool CborConverter::addVerificationToken(Array& array, const VerificationToken&
         verificationToken) {
-    array.add(verificationToken.challenge);
-    array.add(verificationToken.timestamp);
-    addKeyparameters(array, verificationToken.parametersVerified);
-    array.add(static_cast<uint64_t>(verificationToken.securityLevel));
-    array.add((std::vector<uint8_t>(verificationToken.mac)));
+    Array vToken;
+    vToken.add(verificationToken.challenge);
+    vToken.add(verificationToken.timestamp);
+    addKeyparameters(vToken, verificationToken.parametersVerified);
+    vToken.add(static_cast<uint64_t>(verificationToken.securityLevel));
+    vToken.add((std::vector<uint8_t>(verificationToken.mac)));
+    array.add(std::move(vToken));
     return true;
 }
 
 bool CborConverter::addHardwareAuthToken(Array& array, const HardwareAuthToken&
         authToken) {
-    array.add(authToken.challenge);
-    array.add(authToken.userId);
-    array.add(authToken.authenticatorId);
-    array.add(static_cast<uint64_t>(authToken.authenticatorType));
-    array.add(authToken.timestamp);
-    array.add((std::vector<uint8_t>(authToken.mac)));
+    Array hwAuthToken;
+    hwAuthToken.add(authToken.challenge);
+    hwAuthToken.add(authToken.userId);
+    hwAuthToken.add(authToken.authenticatorId);
+    hwAuthToken.add(static_cast<uint64_t>(authToken.authenticatorType));
+    hwAuthToken.add(authToken.timestamp);
+    hwAuthToken.add((std::vector<uint8_t>(authToken.mac)));
+    array.add(std::move(hwAuthToken));
     return true;
 }
 
