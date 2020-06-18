@@ -29,6 +29,7 @@ import com.android.javacard.keymaster.KMEnumArrayTag;
 import com.android.javacard.keymaster.KMEnumTag;
 import com.android.javacard.keymaster.KMError;
 import com.android.javacard.keymaster.KMHardwareAuthToken;
+import com.android.javacard.keymaster.KMHmacSharingParameters;
 import com.android.javacard.keymaster.KMInteger;
 import com.android.javacard.keymaster.KMIntegerTag;
 import com.android.javacard.keymaster.KMKeyCharacteristics;
@@ -692,6 +693,91 @@ public class KMVTSTest {
     Assert.assertEquals(error, KMError.OK);
     return ret;
   }
+
+  @Test
+  public void testComputeHmacParams(){
+    init();
+    short params1 = KMHmacSharingParameters.instance();
+    KMHmacSharingParameters.cast(params1).setSeed(KMByteBlob.instance((short)0));
+    short num = KMByteBlob.instance((short)32);
+    cryptoProvider.newRandomNumber(
+      KMByteBlob.cast(num).getBuffer(),
+      KMByteBlob.cast(num).getStartOff(),
+      KMByteBlob.cast(num).length());
+    KMHmacSharingParameters.cast(params1).setNonce(num);
+    short params2 = KMHmacSharingParameters.instance();
+    KMHmacSharingParameters.cast(params2).setSeed(KMByteBlob.instance((short)0));
+    num = KMByteBlob.instance((short)32);
+    cryptoProvider.newRandomNumber(
+      KMByteBlob.cast(num).getBuffer(),
+      KMByteBlob.cast(num).getStartOff(),
+      KMByteBlob.cast(num).length());
+    KMHmacSharingParameters.cast(params2).setNonce(num);
+    short arr = KMArray.instance((short)2);
+    KMArray.cast(arr).add((short)0, params1);
+    KMArray.cast(arr).add((short)1,params2);
+    short arrPtr = KMArray.instance((short)1);
+    KMArray.cast(arrPtr).add((short)0,arr);
+    CommandAPDU apdu = encodeApdu((byte)0x19, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    Assert.assertEquals(0x9000, response.getSW());
+    short ret = KMArray.instance((short) 2);
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    KMArray.cast(ret).add((short)1, KMByteBlob.exp());
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    ret = decoder.decode(ret, respBuf, (short) 0, len);
+    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    Assert.assertEquals(0x9000, response.getSW());
+    Assert.assertEquals(error, KMError.OK);
+
+    cleanUp();
+  }
+  @Test
+  public void testGetHmacSharingParams(){
+    init();
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1C, 0x40, 0x00);
+    //print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    KMDecoder dec = new KMDecoder();
+    short ret = KMArray.instance((short) 2);
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    short inst = KMHmacSharingParameters.exp();
+    KMArray.cast(ret).add((short) 1, inst);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    ret = decoder.decode(ret, respBuf, (short) 0, len);
+    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    KMHmacSharingParameters params = KMHmacSharingParameters.cast(KMArray.cast(ret).get((short)1));
+    short seed = params.getSeed();
+    short nonce = params.getNonce();
+    Assert.assertTrue(KMByteBlob.cast(seed).length() == 0);
+    Assert.assertTrue(KMByteBlob.cast(nonce).length() == 32);
+    //print(seed);
+    //print(nonce);
+    Assert.assertEquals(error, KMError.OK);
+    cleanUp();
+  }
+  public short[] getHmacSharingParams(){
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1C, 0x40, 0x00);
+    //print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    KMDecoder dec = new KMDecoder();
+    short ret = KMArray.instance((short) 2);
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    short inst = KMHmacSharingParameters.exp();
+    KMArray.cast(ret).add((short) 1, inst);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    ret = decoder.decode(ret, respBuf, (short) 0, len);
+    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    KMHmacSharingParameters params = KMHmacSharingParameters.cast(KMArray.cast(ret).get((short)1));
+    short seed = params.getSeed();
+    short nonce = params.getNonce();
+    return new short[]{seed, nonce};
+  }
+
   @Test
   public void testImportWrappedKey(){
     init();
@@ -1280,8 +1366,10 @@ public class KMVTSTest {
       (short)0,null,false
     );
     keyBlobPtr = KMArray.cast(ret).get((short)2);
+    short len = KMByteBlob.cast(keyBlobPtr).length();
+    short start = KMByteBlob.cast(keyBlobPtr).getStartOff();
     short equal = Util.arrayCompare(plainData,(short)0,KMByteBlob.cast(keyBlobPtr).getBuffer(),
-      KMByteBlob.cast(keyBlobPtr).getStartOff(),(short)plainData.length);
+      (short)(start+len-plainData.length),(short)plainData.length);
     Assert.assertTrue(equal == 0);
   }
 
@@ -1585,6 +1673,16 @@ public class KMVTSTest {
       ret = respBuf[1];
     }
     return ret;
+  }
+  private void print(short blob){
+    print(KMByteBlob.cast(blob).getBuffer(),KMByteBlob.cast(blob).getStartOff(),KMByteBlob.cast(blob).length());
+  }
+  private void print(byte[] buf, short start, short length){
+    StringBuilder sb = new StringBuilder();
+    for(int i = start; i < (start+length); i++){
+      sb.append(String.format(" 0x%02X", buf[i])) ;
+    }
+    System.out.println(sb.toString());
   }
 
 }

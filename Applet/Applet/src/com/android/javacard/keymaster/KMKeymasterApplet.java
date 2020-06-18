@@ -167,24 +167,29 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     setBootParamsDone = false;
     byte[] buf =
         JCSystem.makeTransientByteArray(
-            repository.HMAC_SEED_NONCE_SIZE, JCSystem.CLEAR_ON_DESELECT);
+          (short)32, JCSystem.CLEAR_ON_DESELECT);
     keymasterState = KMKeymasterApplet.INSTALL_STATE;
     data = JCSystem.makeTransientShortArray((short) DATA_ARRAY_SIZE, JCSystem.CLEAR_ON_RESET);
     repository = new KMRepository();
     tmpVariables =
         JCSystem.makeTransientShortArray((short) TMP_VARIABLE_ARRAY_SIZE, JCSystem.CLEAR_ON_RESET);
     Util.arrayCopyNonAtomic(
-        cryptoProvider.getTrueRandomNumber(repository.HMAC_SEED_NONCE_SIZE),
+        cryptoProvider.getTrueRandomNumber(repository.MASTER_KEY_SIZE),
         (short) 0,
         buf,
         (short) 0,
-        repository.HMAC_SEED_NONCE_SIZE);
-    repository.initMasterKey(buf, repository.HMAC_SEED_NONCE_SIZE);
-    cryptoProvider.newRandomNumber(buf, (short) 0, repository.HMAC_SEED_NONCE_SIZE);
+        repository.MASTER_KEY_SIZE);
+    repository.initMasterKey(buf, repository.MASTER_KEY_SIZE);
+    cryptoProvider.newRandomNumber(buf, (short) 0, repository.SHARED_SECRET_KEY_SIZE);
     // TODO remove this when key agreement protocol is implemented.
-    repository.initHmacKey(buf, repository.HMAC_SEED_NONCE_SIZE);
+    repository.initHmacSharedSecretKey(buf, repository.SHARED_SECRET_KEY_SIZE);
+    // TODO currently hmac nonce is generated once when installing the applet. Remove this once boot
+    //  singnal reception is incorporated in the design.
     cryptoProvider.newRandomNumber(buf, (short) 0, repository.HMAC_SEED_NONCE_SIZE);
-    repository.initHmacSeed(buf, repository.HMAC_SEED_NONCE_SIZE);
+    repository.initHmacNonce(buf, (short)0, repository.HMAC_SEED_NONCE_SIZE);
+    // TODO Confirm before removing seed generation.
+    //cryptoProvider.newRandomNumber(buf, (short) 0, repository.HMAC_SEED_NONCE_SIZE);
+    //repository.initHmacSeed(buf, repository.HMAC_SEED_NONCE_SIZE);
     KMType.initialize();
     encoder = new KMEncoder();
     decoder = new KMDecoder();
@@ -514,22 +519,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void processGetHmacSharingParamCmd(APDU apdu) {
     // No Arguments
     byte[] scratchPad = apdu.getBuffer();
-    // Create blob containing seed
-    tmpVariables[0] =
-        KMByteBlob.instance(repository.getHmacSeed(), (short) 0, repository.HMAC_SEED_NONCE_SIZE);
-    // Create blob containing nonce
-    cryptoProvider.newRandomNumber(scratchPad, (short) 0, repository.HMAC_SEED_NONCE_SIZE);
-    tmpVariables[1] = KMByteBlob.instance(scratchPad, (short) 0, repository.HMAC_SEED_NONCE_SIZE);
     // Create HMAC Sharing Parameters
     tmpVariables[2] = KMHmacSharingParameters.instance();
-    KMHmacSharingParameters.cast(tmpVariables[2]).setNonce(tmpVariables[1]);
-    KMHmacSharingParameters.cast(tmpVariables[2]).setSeed(tmpVariables[0]);
+    KMHmacSharingParameters.cast(tmpVariables[2]).setNonce(
+      KMByteBlob.instance(repository.getHmacNonce(), (short) 0,
+      repository.HMAC_SEED_NONCE_SIZE));
+    KMHmacSharingParameters.cast(tmpVariables[2]).setSeed(KMByteBlob.instance((short)0));
     // prepare the response
     tmpVariables[3] = KMArray.instance((short) 2);
     KMArray.cast(tmpVariables[3]).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(tmpVariables[3]).add((short) 1, tmpVariables[2]);
     // Encode the response
-    bufferLength = encoder.encode(tmpVariables[0], buffer, bufferStartOffset);
+    bufferLength = encoder.encode(tmpVariables[3], buffer, bufferStartOffset);
     sendOutgoing(apdu);
   }
 
@@ -584,14 +585,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Receive the incoming request fully from the master into buffer.
     receiveIncoming(apdu);
     byte[] scratchPad = apdu.getBuffer();
-    tmpVariables[1] = KMArray.instance((short) 1);
-    tmpVariables[2] = KMKeyParameters.exp();
-    tmpVariables[3] = KMHmacSharingParameters.exp();
-    KMArray.cast(tmpVariables[1]).add((short) 0, KMArray.exp(tmpVariables[3])); // Vector of hmac params
-    KMArray.cast(tmpVariables[1]).add((short) 1, tmpVariables[2]); // Key Params
+    tmpVariables[1] = KMHmacSharingParameters.exp();
+    tmpVariables[0] = KMArray.exp(tmpVariables[1]);
+    tmpVariables[2] = KMArray.instance((short)1);
+    KMArray.cast(tmpVariables[2]).add((short) 0, tmpVariables[0]); // Vector of hmac params
     // Decode the arguments
-    tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
-    data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 1);
+    tmpVariables[2] = decoder.decode(tmpVariables[2], buffer, bufferStartOffset, bufferLength);
     data[HMAC_SHARING_PARAMS] = KMArray.cast(tmpVariables[2]).get((short) 0);
     // Concatenate HMAC Params
     tmpVariables[0] = 0;
@@ -604,7 +603,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       tmpVariables[3] = KMHmacSharingParameters.cast(tmpVariables[2]).getSeed();
       tmpVariables[4] = KMByteBlob.cast(tmpVariables[3]).length();
       // if seed is present
-      if (tmpVariables[4] == HMAC_SEED_SIZE /*32*/) {
+      if (tmpVariables[4] == repository.HMAC_SEED_NONCE_SIZE) {
         // then copy that to scratchPad
         Util.arrayCopyNonAtomic(
             KMByteBlob.cast(tmpVariables[3]).getBuffer(),
@@ -618,7 +617,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       tmpVariables[3] = KMHmacSharingParameters.cast(tmpVariables[2]).getNonce();
       tmpVariables[4] = KMByteBlob.cast(tmpVariables[3]).length();
       // if nonce is not present
-      if (tmpVariables[4] != HMAC_NONCE_SIZE /*32*/) {
+      if (tmpVariables[4] != repository.HMAC_SEED_NONCE_SIZE) {
         KMException.throwIt(KMError.INVALID_ARGUMENT);
       }
       // copy nonce to scratchPad
@@ -634,7 +633,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // ckdf to derive hmac key - scratch pad has the context
     HMACKey key =
         cryptoProvider.cmacKdf(
-            repository.getHmacKey(), ckdfLable , scratchPad, (short) 0, tmpVariables[5]);
+            repository.getSharedKey(), ckdfLable , scratchPad, (short) 0, tmpVariables[5]);
     tmpVariables[5] = key.getKey(scratchPad, (short) 0);
     repository.initComputedHmac(scratchPad, (short) 0, tmpVariables[5]);
     // Generate sharingKey verification

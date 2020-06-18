@@ -480,7 +480,11 @@ public class KMJcardSimulator implements KMCryptoProvider {
     key.setExponent(secret,secretStart,secretLength);
     key.setModulus(modBuffer, modOff, modLength);
     rsaCipher.init(key,Cipher.MODE_DECRYPT);
-    return new KMCipherImpl(rsaCipher);
+    KMCipherImpl inst = new KMCipherImpl(rsaCipher);
+    inst.setCipherAlgorithm(cipherAlg);
+    inst.setMode(Cipher.MODE_DECRYPT);
+    inst.setPaddingAlgorithm(padding);
+    return inst;
   }
 
   @Override
@@ -574,9 +578,10 @@ public class KMJcardSimulator implements KMCryptoProvider {
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
         break;
     }
-    KMCipher cipher = new KMCipherImpl(symmCipher);
+    KMCipherImpl cipher = new KMCipherImpl(symmCipher);
     cipher.setCipherAlgorithm(cipherAlg);
     cipher.setPaddingAlgorithm(padding);
+    cipher.setMode(mode);
     return cipher;
   }
 
@@ -598,6 +603,7 @@ public class KMJcardSimulator implements KMCryptoProvider {
     if(secretLength == 32){
       len = KeyBuilder.LENGTH_AES_256;
     }
+
     return new KMCipherImpl(null);
   }
 
@@ -733,7 +739,11 @@ public class KMJcardSimulator implements KMCryptoProvider {
     key.setExponent(exponent,(short)0,(short)3);
     key.setModulus(modBuffer, modOff, modLength);
     rsaCipher.init(key,Cipher.MODE_ENCRYPT);
-    return new KMCipherImpl(rsaCipher);
+    KMCipherImpl inst = new KMCipherImpl(rsaCipher);
+    inst.setCipherAlgorithm(cipherAlg);
+    inst.setMode(Cipher.MODE_ENCRYPT);
+    inst.setPaddingAlgorithm(padding);
+    return inst;
   }
 
   @Override

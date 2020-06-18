@@ -26,7 +26,9 @@ public class KMRepository {
   public static final short HEAP_SIZE = 10000;
   public static final short MAX_BLOB_STORAGE = 32;
   public static final short AES_GCM_AUTH_TAG_LENGTH = 12;
-  public static final short HMAC_SEED_NONCE_SIZE = 16;
+  public static final short MASTER_KEY_SIZE = 16;
+  public static final short SHARED_SECRET_KEY_SIZE = 16;
+  public static final short HMAC_SEED_NONCE_SIZE = 32;
   public static final short MAX_OPS = 4;
   public static final short COMPUTED_HMAC_KEY_SIZE = 32;
   // Boot params constants
@@ -36,7 +38,7 @@ public class KMRepository {
   private static KMRepository repository;
   private byte[] masterKey;
   private byte[] hmacSeed;
-  private byte[] hmacKey;
+  private byte[] sharedKey;
   private byte[] computedHmacKey;
   private byte[] hmacNonce;
   private byte[] heap;
@@ -100,41 +102,49 @@ public class KMRepository {
   }
   public void initMasterKey(byte[] key, short len) {
     if (masterKey == null) {
-      masterKey = new byte[len];
+      masterKey = new byte[MASTER_KEY_SIZE];
+      if(len != MASTER_KEY_SIZE) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
       Util.arrayCopy(key, (short) 0, masterKey, (short) 0, len);
     }
   }
 
-  public void initHmacKey(byte[] key, short len) {
-    if (hmacKey == null) {
-      hmacKey = new byte[len];
-      Util.arrayCopy(key, (short) 0, hmacKey, (short) 0, len);
+  public void initHmacSharedSecretKey(byte[] key, short len) {
+    if (sharedKey == null) {
+      sharedKey = new byte[SHARED_SECRET_KEY_SIZE];
     }
+    if(len != SHARED_SECRET_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    Util.arrayCopy(key, (short) 0, sharedKey, (short) 0, len);
   }
 
-  public void initHmacSeed(byte[] seed, short len) {
-    if (hmacSeed == null) {
-      hmacSeed = new byte[len];
-      Util.arrayCopy(seed, (short) 0, hmacSeed, (short) 0, len);
-    }
-  }
 
   public void initComputedHmac(byte[] key, short start, short len) {
     if (computedHmacKey == null) {
-      computedHmacKey = new byte[len];
-      Util.arrayCopy(key, (short) 0, computedHmacKey, start, len);
+      computedHmacKey = new byte[COMPUTED_HMAC_KEY_SIZE];
     }
+    if(len != COMPUTED_HMAC_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    Util.arrayCopy(key, (short) 0, computedHmacKey, start, len);
   }
 
   public void initHmacNonce(byte[] nonce, short offset, short len) {
     if (hmacNonce == null) {
-      hmacNonce = new byte[len];
-    } else if (len != hmacNonce.length) {
+      hmacNonce = new byte[HMAC_SEED_NONCE_SIZE];
+    }
+    if (len != HMAC_SEED_NONCE_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
-    Util.arrayCopy(nonce, (short) 0, hmacSeed, (short) 0, len);
+    Util.arrayCopy(nonce, (short) 0, hmacNonce, (short) 0, len);
   }
-
+  /* TODO according to hal specs seed should always be empty.
+      Confirm this before removing the code as it is also specified that keymasterdevice with storage
+      must store and return the seed.
+  public void initHmacSeed(byte[] seed, short len) {
+    if (hmacSeed == null) {
+      hmacSeed = new byte[HMAC_SEED_NONCE_SIZE];
+    }
+    if(len != HMAC_SEED_NONCE_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    Util.arrayCopy(seed, (short) 0, hmacSeed, (short) 0, len);
+  }
+*/
   public void onUninstall() {
     // TODO change this
     Util.arrayFillNonAtomic(masterKey, (short) 0, (short) masterKey.length, (byte) 0);
@@ -171,8 +181,8 @@ public class KMRepository {
     return hmacSeed;
   }
 
-  public byte[] getHmacKey() {
-    return hmacKey;
+  public byte[] getSharedKey() {
+    return sharedKey;
   }
 
   public byte[] getHmacNonce() {
