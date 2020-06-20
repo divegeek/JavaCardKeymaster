@@ -15,14 +15,11 @@
  ** limitations under the License.
  */
 
-#include <iostream>
 #include <climits>
 #include <cppbor.h>
 #include <cppbor_parse.h>
 #include <CborConverter.h>
 #include <Transport.h>
-#include <android-base/logging.h>
-#include <keymaster/key_blob_utils/integrity_assured_key_blob.h>
 #include <keymaster/key_blob_utils/software_keyblobs.h>
 #include <keymaster/android_keymaster_utils.h>
 #include <keymaster/wrapped_key.h>
@@ -30,6 +27,7 @@
 
 #include <JavacardKeymaster4Device.h>
 #include <java_card_soft_keymaster_context.h>
+#include <CommonUtils.h>
 
 //#define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v0.1"
 //#define JAVACARD_KEYMASTER_AUTHOR    "Android Open Source Project"
@@ -70,145 +68,40 @@ enum class Instruction {
     INS_EARLY_BOOT_ENDED_CMD = 0x26,
 };
 
-inline ErrorCode legacy_enum_conversion(const keymaster_error_t value) {
-    return static_cast<ErrorCode>(value);
-}
+ErrorCode prepareCborArrayFromRawKey(const hidl_vec<KeyParameter>& keyParams, const hidl_vec<uint8_t>& blob, cppbor::Array&
+        array) {
+    ErrorCode errorCode = ErrorCode::OK;
+    AuthorizationSet paramSet;
+    keymaster_algorithm_t algorithm;
 
-inline keymaster_purpose_t legacy_enum_conversion(const KeyPurpose value) {
-    return static_cast<keymaster_purpose_t>(value);
-}
+    paramSet.Reinitialize(KmParamSet(keyParams));
+    paramSet.GetTagValue(TAG_ALGORITHM, &algorithm);
 
-inline keymaster_key_format_t legacy_enum_conversion(const KeyFormat value) {
-    return static_cast<keymaster_key_format_t>(value);
-}
-
-inline keymaster_tag_t legacy_enum_conversion(const Tag value) {
-    return keymaster_tag_t(value);
-}
-
-inline Tag legacy_enum_conversion(const keymaster_tag_t value) {
-    return Tag(value);
-}
-
-inline keymaster_tag_type_t typeFromTag(const keymaster_tag_t tag) {
-    return keymaster_tag_get_type(tag);
-}
-
-keymaster_key_param_set_t hidlKeyParams2Km(const hidl_vec<KeyParameter>& keyParams) {
-    keymaster_key_param_set_t set;
-
-    set.params = new keymaster_key_param_t[keyParams.size()];
-    set.length = keyParams.size();
-
-    for (size_t i = 0; i < keyParams.size(); ++i) {
-        auto tag = legacy_enum_conversion(keyParams[i].tag);
-        switch (typeFromTag(tag)) {
-            case KM_ENUM:
-            case KM_ENUM_REP:
-                set.params[i] = keymaster_param_enum(tag, keyParams[i].f.integer);
-                break;
-            case KM_UINT:
-            case KM_UINT_REP:
-                set.params[i] = keymaster_param_int(tag, keyParams[i].f.integer);
-                break;
-            case KM_ULONG:
-            case KM_ULONG_REP:
-                set.params[i] = keymaster_param_long(tag, keyParams[i].f.longInteger);
-                break;
-            case KM_DATE:
-                set.params[i] = keymaster_param_date(tag, keyParams[i].f.dateTime);
-                break;
-            case KM_BOOL:
-                if (keyParams[i].f.boolValue)
-                    set.params[i] = keymaster_param_bool(tag);
-                else
-                    set.params[i].tag = KM_TAG_INVALID;
-                break;
-            case KM_BIGNUM:
-            case KM_BYTES:
-                set.params[i] =
-                    keymaster_param_blob(tag, &keyParams[i].blob[0], keyParams[i].blob.size());
-                break;
-            case KM_INVALID:
-            default:
-                set.params[i].tag = KM_TAG_INVALID;
-                /* just skip */
-                break;
+    if(KM_ALGORITHM_RSA == algorithm) {
+        std::vector<uint8_t> privExp;
+        std::vector<uint8_t> modulus;
+        if(ErrorCode::OK != (errorCode = rsaRawKeyFromPKCS8(std::vector<uint8_t>(blob), privExp, modulus))) {
+            return errorCode;
         }
-    }
-
-    return set;
-}
-
-class KmParamSet : public keymaster_key_param_set_t {
-    public:
-        explicit KmParamSet(const hidl_vec<KeyParameter>& keyParams)
-            : keymaster_key_param_set_t(hidlKeyParams2Km(keyParams)) {}
-        KmParamSet(KmParamSet&& other) : keymaster_key_param_set_t{other.params, other.length} {
-            other.length = 0;
-            other.params = nullptr;
+        array.add(privExp);
+        array.add(modulus);
+    } else if(KM_ALGORITHM_EC == algorithm) {
+        std::vector<uint8_t> privKey;
+        std::vector<uint8_t> pubKey;
+        EcCurve curve;
+        if(ErrorCode::OK != (errorCode = ecRawKeyFromPKCS8(std::vector<uint8_t>(blob), privKey, pubKey, curve))) {
+            return errorCode;
         }
-        KmParamSet(const KmParamSet&) = delete;
-        ~KmParamSet() { delete[] params; }
-};
-
-static inline hidl_vec<KeyParameter> kmParamSet2Hidl(const keymaster_key_param_set_t& set) {
-    hidl_vec<KeyParameter> result;
-    if (set.length == 0 || set.params == nullptr)
-        return result;
-
-    result.resize(set.length);
-    keymaster_key_param_t* params = set.params;
-    for (size_t i = 0; i < set.length; ++i) {
-        auto tag = params[i].tag;
-        result[i].tag = legacy_enum_conversion(tag);
-        switch (typeFromTag(tag)) {
-        case KM_ENUM:
-        case KM_ENUM_REP:
-            result[i].f.integer = params[i].enumerated;
-            break;
-        case KM_UINT:
-        case KM_UINT_REP:
-            result[i].f.integer = params[i].integer;
-            break;
-        case KM_ULONG:
-        case KM_ULONG_REP:
-            result[i].f.longInteger = params[i].long_integer;
-            break;
-        case KM_DATE:
-            result[i].f.dateTime = params[i].date_time;
-            break;
-        case KM_BOOL:
-            result[i].f.boolValue = params[i].boolean;
-            break;
-        case KM_BIGNUM:
-        case KM_BYTES:
-            result[i].blob.setToExternal(const_cast<unsigned char*>(params[i].blob.data),
-                                         params[i].blob.data_length);
-            break;
-        case KM_INVALID:
-        default:
-            params[i].tag = KM_TAG_INVALID;
-            /* just skip */
-            break;
-        }
+        array.add(privKey);
+        array.add(pubKey);
+        array.add(static_cast<uint32_t>(curve));
+    } else {
+        return ErrorCode::UNSUPPORTED_ALGORITHM;
     }
-    return result;
+    return errorCode;
 }
 
-inline hidl_vec<uint8_t> kmBuffer2hidlVec(const ::keymaster::Buffer& buf) {
-    hidl_vec<uint8_t> result;
-    result.setToExternal(const_cast<unsigned char*>(buf.peek_read()), buf.available_read());
-    return result;
-}
-
-static inline void blob2Vec(const uint8_t *from, size_t size, std::vector<uint8_t>& to) {
-    for(int i = 0; i < size; ++i) {
-        to.push_back(from[i]);
-    }
-}
-
-static inline ErrorCode parseWrappedKey(const hidl_vec<uint8_t>& wrappedKeyData, std::vector<uint8_t>& iv, std::vector<uint8_t>& transitKey,
+ErrorCode parseWrappedKey(const hidl_vec<uint8_t>& wrappedKeyData, std::vector<uint8_t>& iv, std::vector<uint8_t>& transitKey,
 std::vector<uint8_t>& secureKey, std::vector<uint8_t>& tag, hidl_vec<KeyParameter>& authList, KeyFormat&
 keyFormat, std::vector<uint8_t>& wrappedKeyDescription) {
     KeymasterBlob kmIv;
@@ -509,53 +402,61 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
     return Void();
 }
 
-Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& keyData, importKey_cb _hidl_cb) {
-    keymaster_error_t error = KM_ERROR_UNKNOWN_ERROR;
-    hidl_vec<uint8_t> inKey;
-    KeymasterKeyBlob key_material;
+Return<ErrorCode> JavacardKeymaster4Device::provision(const hidl_vec<KeyParameter>& keyParams, const hidl_vec<uint8_t>&
+keyData) {
+    cppbor::Array array;
+    cppbor::Array subArray;
+    std::unique_ptr<Item> item;
+    hidl_vec<uint8_t> keyBlob;
+    std::vector<uint8_t> cborOutData;
+    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+    KeyCharacteristics keyCharacteristics;
 
-    if (keyFormat == KeyFormat::PKCS8) {
-        ImportKeyRequest request;
-        request.key_description.Reinitialize(KmParamSet(keyParams));
-        request.key_format = legacy_enum_conversion(keyFormat);
-        request.SetKeyMaterial(keyData.data(), keyData.size());
-
-        ImportKeyResponse response;
-        softKm_->ImportKey(request, &response);
-
-        KeyCharacteristics resultCharacteristics;
-        hidl_vec<uint8_t> resultKeyBlob;
-        error = response.error;
-        if (response.error == KM_ERROR_OK) {
-            key_material = KeymasterKeyBlob(response.key_blob);
-            inKey.setToExternal(const_cast<uint8_t*>(key_material.key_material), key_material.key_material_size);
-        }
-        if(error != KM_ERROR_OK) {
-	        KeyCharacteristics resultCharacteristics;
-	        hidl_vec<uint8_t> resultKeyBlob;
-	        _hidl_cb(legacy_enum_conversion(error), resultKeyBlob, resultCharacteristics);
-	        return Void();
-        }
-    } else if (keyFormat == KeyFormat::RAW) {
-        //convert keyData to keyMaterial
-        inKey = keyData;
-    } else {
-        KeyCharacteristics resultCharacteristics;
-        hidl_vec<uint8_t> resultKeyBlob;
-        _hidl_cb(legacy_enum_conversion(KM_ERROR_UNSUPPORTED_KEY_FORMAT), resultKeyBlob, resultCharacteristics);
-        return Void();
+    if(ErrorCode::OK != (errorCode = prepareCborArrayFromRawKey(keyParams, keyData, subArray))) {
+        return errorCode;
     }
+    cborConverter_.addKeyparameters(array, keyParams);
+    array.add(std::move(subArray));
+    std::vector<uint8_t> cborData = array.encode();
 
+    errorCode = sendData(this, pTransportFactory, Instruction::INS_PROVISION_CMD, cborData, cborOutData);
+
+    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                true);
+    }
+    return errorCode;
+}
+
+Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& keyData, importKey_cb _hidl_cb) {
 	cppbor::Array array;
 	std::unique_ptr<Item> item;
 	hidl_vec<uint8_t> keyBlob;
 	std::vector<uint8_t> cborOutData;
 	ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
 	KeyCharacteristics keyCharacteristics;
+    cppbor::Array subArray;
 
+    if(keyFormat != KeyFormat::PKCS8 && keyFormat != KeyFormat::RAW) {
+        _hidl_cb(ErrorCode::UNSUPPORTED_KEY_FORMAT, keyBlob, keyCharacteristics);
+        return Void();
+    }
 	cborConverter_.addKeyparameters(array, keyParams);
-	array.add(static_cast<uint64_t>(KeyFormat::RAW)); //PKCS8 is already converted to RAW
-	array.add(std::vector<uint8_t>(inKey));
+	array.add(static_cast<uint64_t>(KeyFormat::RAW)); //javacard accepts only RAW.
+    if (keyFormat == KeyFormat::PKCS8) {
+        /* Convert PKCS8 to RAW */
+        if(ErrorCode::OK != (errorCode = prepareCborArrayFromRawKey(keyParams, keyData, subArray))) {
+            _hidl_cb(errorCode, keyBlob, keyCharacteristics);
+            return Void();
+        }
+        std::vector<uint8_t> encodedArray = subArray.encode();
+        cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
+        array.add(bstr);
+    } else {
+        array.add(std::vector<uint8_t>(keyData));
+    }
+
 	std::vector<uint8_t> cborData = array.encode();
 
 	errorCode = sendData(this, pTransportFactory, Instruction::INS_IMPORT_KEY_CMD, cborData, cborOutData);

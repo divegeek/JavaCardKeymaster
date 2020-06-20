@@ -85,6 +85,10 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     Return<V41ErrorCode> deviceLocked(bool passwordOnly, const VerificationToken& verificationToken) override;
     Return<V41ErrorCode> earlyBootEnded() override;
 
+    //Provision Method
+    Return<ErrorCode> provision(const hidl_vec<KeyParameter>& keyParams, const hidl_vec<uint8_t>&
+    keyData);
+
     //Helper methods.
     bool getBootParamsInitialized() { return setUpBootParams; }
     void setBootParams(bool flag) { setUpBootParams = flag; }
