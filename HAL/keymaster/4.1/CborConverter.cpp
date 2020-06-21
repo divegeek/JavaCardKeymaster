@@ -77,7 +77,7 @@ bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, con
     bool ret = false;
     std::unique_ptr<Item> arrayItem(nullptr);
     getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
         return ret;
 
     if (!getKeyParameters(arrayItem, 0, keyCharacteristics.softwareEnforced)) {
@@ -229,7 +229,7 @@ bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const
     std::unique_ptr<Item> arrayItem(nullptr);
 
     getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
         return ret;
     const Array* arr = arrayItem.get()->asArray();
     size_t arrSize = arr->size();
@@ -246,7 +246,7 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
     bool ret = false;
     std::unique_ptr<Item> strItem(nullptr);
     getItemAtPos(item, pos, strItem);
-    if ((strItem == nullptr) && (MajorType::BSTR != getType(strItem)))
+    if ((strItem == nullptr) || (MajorType::BSTR != getType(strItem)))
         return ret;
 
     const Bstr* bstr = strItem.get()->asBstr();
@@ -260,7 +260,7 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
     bool ret = false;
     std::unique_ptr<Item> strItem(nullptr);
     getItemAtPos(item, pos, strItem);
-    if ((strItem == nullptr) && (MajorType::BSTR != getType(strItem)))
+    if ((strItem == nullptr) || (MajorType::BSTR != getType(strItem)))
         return ret;
 
     const Bstr* bstr = strItem.get()->asBstr();
@@ -280,7 +280,7 @@ bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, 
     //2. First item in the array seed; second item in the array is nonce.
 
     getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
         return ret;
 
     //Seed
@@ -383,7 +383,7 @@ bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const ui
     std::unique_ptr<Item> mapItem(nullptr);
     std::vector<KeyParameter> params;
     getItemAtPos(item, pos, mapItem);
-    if ((mapItem == nullptr) && (MajorType::MAP != getType(mapItem)))
+    if ((mapItem == nullptr) || (MajorType::MAP != getType(mapItem)))
         return ret;
     const Map* map = mapItem.get()->asMap();
     size_t mapSize = map->size();

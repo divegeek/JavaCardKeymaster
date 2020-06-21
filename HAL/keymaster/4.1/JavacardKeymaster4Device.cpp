@@ -890,21 +890,30 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
 }
 
 Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
-    cppbor::Array array;
-    std::unique_ptr<Item> item;
-    std::vector<uint8_t> cborOutData;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+    AbortOperationRequest request;
+    request.op_handle = operationHandle;
 
-    /* Convert input data to cbor format */
-    array.add(operationHandle);
-    std::vector<uint8_t> cborData = array.encode();
+    AbortOperationResponse response;
+    softKm_->AbortOperation(request, &response);
 
-    errorCode = sendData(this, pTransportFactory, Instruction::INS_ABORT_OPERATION_CMD, cborData, cborOutData);
+    errorCode = legacy_enum_conversion(response.error);
+    if (response.error == KM_ERROR_INVALID_OPERATION_HANDLE) {
+        cppbor::Array array;
+        std::unique_ptr<Item> item;
+        std::vector<uint8_t> cborOutData;
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                true);
+        /* Convert input data to cbor format */
+        array.add(operationHandle);
+        std::vector<uint8_t> cborData = array.encode();
+
+        errorCode = sendData(this, pTransportFactory, Instruction::INS_ABORT_OPERATION_CMD, cborData, cborOutData);
+
+        if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+            //Skip last 2 bytes in cborData, it contains status.
+            std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                    true);
+        }
     }
     /* Delete the entry on this operationHandle */
     oprCtx_->clearOperationData(operationHandle);

@@ -112,10 +112,17 @@ keymaster_error_t JavaCardSoftKeymasterContext::LoadKey(const keymaster_algorith
         pkey = RSA_fromMaterial(tmp, temp_size);
     } else if(algorithm == KM_ALGORITHM_EC) {
         keymaster_ec_curve_t ec_curve = KM_EC_CURVE_P_256;
+        uint32_t keySize;
         if (!hw_enforced.GetTagValue(TAG_EC_CURVE, &ec_curve) &&
             !sw_enforced.GetTagValue(TAG_EC_CURVE, &ec_curve)) {
-            return KM_ERROR_INVALID_ARGUMENT;
-        }//TODO also get ec_curve based on key size
+            if(!hw_enforced.GetTagValue(TAG_KEY_SIZE, &keySize) &&
+                !sw_enforced.GetTagValue(TAG_KEY_SIZE, &keySize)) {
+                return KM_ERROR_INVALID_ARGUMENT;
+            }
+            error = EcKeySizeToCurve(keySize, &ec_curve);
+            if(error != KM_ERROR_OK)
+                return error;
+        }
         pkey = EC_fromMaterial(tmp, temp_size, ec_curve);
     }
     if (!pkey)
@@ -176,11 +183,11 @@ keymaster_error_t JavaCardSoftKeymasterContext::ParseKeyBlob(const KeymasterKeyB
     }
     std::tie(item, errorCode) = cc.decodeData(cborKey, false);
     if (item != nullptr) {
-        std::vector<uint8_t> temp;
-        cc.getBinaryArray(item, 4, temp);
-
-        key_material = {temp.data(), temp.size()};
-        temp.clear();
+        std::vector<uint8_t> temp(0);
+        if(cc.getBinaryArray(item, 4, temp)) {
+            key_material = {temp.data(), temp.size()};
+            temp.clear();
+        }
         KeyCharacteristics keyCharacteristics;
         cc.getKeyCharacteristics(item, 3, keyCharacteristics);
 
