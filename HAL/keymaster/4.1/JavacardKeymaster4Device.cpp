@@ -111,11 +111,12 @@ keyFormat, std::vector<uint8_t>& wrappedKeyDescription) {
     AuthorizationSet authSet;
     keymaster_key_format_t kmKeyFormat;
     KeymasterBlob kmWrappedKeyDescription;
-    KeymasterKeyBlob kmWrappedKeyData;
 
-    kmWrappedKeyData.key_material = dup_buffer(wrappedKeyData.data(), wrappedKeyData.size());
+    size_t keyDataLen = wrappedKeyData.size();
+    uint8_t *keyData = dup_buffer(wrappedKeyData.data(), keyDataLen);
+    keymaster_key_blob_t keyMaterial = {keyData, keyDataLen};
 
-    keymaster_error_t error = parse_wrapped_key(kmWrappedKeyData, &kmIv, &kmTransitKey,
+    keymaster_error_t error = parse_wrapped_key(KeymasterKeyBlob(keyMaterial), &kmIv, &kmTransitKey,
                                                 &kmSecureKey, &kmTag, &authSet,
                                                 &kmKeyFormat, &kmWrappedKeyDescription);
     if (error != KM_ERROR_OK) return legacy_enum_conversion(error);
@@ -416,7 +417,9 @@ keyData) {
         return errorCode;
     }
     cborConverter_.addKeyparameters(array, keyParams);
-    array.add(std::move(subArray));
+    std::vector<uint8_t> encodedArray = subArray.encode();
+    cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
+    array.add(bstr);
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(this, pTransportFactory, Instruction::INS_PROVISION_CMD, cborData, cborOutData);
@@ -494,15 +497,16 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
         _hidl_cb(errorCode, keyBlob, keyCharacteristics);
         return Void();
     }
-    array.add(transitKey);
-    array.add(iv);
-    array.add(static_cast<uint64_t>(keyFormat));
     cborConverter_.addKeyparameters(array, authList);
+    array.add(static_cast<uint64_t>(keyFormat));
     array.add(secureKey);
     array.add(tag);
+    array.add(iv);
+    array.add(transitKey);
     array.add(std::vector<uint8_t>(wrappingKeyBlob));
     array.add(std::vector<uint8_t>(maskingKey));
     cborConverter_.addKeyparameters(array, unwrappingParams);
+    array.add(std::vector<uint8_t>(wrappedKeyDescription));
     array.add(passwordSid);
     array.add(biometricSid); /* TODO if biometricSid optional if user not sent this don't encode this cbor format */
     std::vector<uint8_t> cborData = array.encode();
