@@ -99,8 +99,8 @@ public interface KMCryptoProvider {
                                  byte[] secret, short secretStart, short secretLength);
   Signature createHmacSignerVerifier(short purpose, short msgDigestAlg,
                                      byte[] secret, short secretStart, short secretLength);
-  KMCipher createGCMCipher(short mode, byte[] secret, short secretStart, short secretLength,
-                         byte[] ivBuffer, short ivStart, short ivLength);
+  KMCipher createAesGcmCipher(short mode, short tagLen, byte[] secret, short secretStart, short secretLength,
+                              byte[] ivBuffer, short ivStart, short ivLength);
   void delete(KMCipher cipher);
   void delete(Signature signature);
   void delete(Key key);

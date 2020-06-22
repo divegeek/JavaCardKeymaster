@@ -14,6 +14,7 @@ public abstract class KMCipher {
   public static final short ALG_DES_ECB_NOPAD = 5;
   public static final short ALG_AES_BLOCK_128_CBC_NOPAD= 13;
   public static final short ALG_AES_BLOCK_128_ECB_NOPAD = 14;
+  public static final short ALG_AES_GCM = -13;
   public static final short MODE_ENCRYPT = 2;
   public static final short MODE_DECRYPT = 1;
   public static final short PAD_PKCS1 = 7;
@@ -23,6 +24,8 @@ public abstract class KMCipher {
   public abstract short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i);
 
   public abstract short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i);
+
+  public abstract void updateAAD(byte[] buffer, short startOff, short length);
 
   public abstract short getPaddingAlgorithm();
 

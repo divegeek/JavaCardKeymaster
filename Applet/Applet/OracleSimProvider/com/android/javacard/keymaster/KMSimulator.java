@@ -398,7 +398,7 @@ public class KMSimulator implements KMCryptoProvider {
   }
 
   @Override
-  public KMCipher createGCMCipher(short mode, byte[] secret, short secretStart, short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
+  public KMCipher createAesGcmCipher(short mode, short tagLen, byte[] secret, short secretStart, short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
     return null;
   }
 

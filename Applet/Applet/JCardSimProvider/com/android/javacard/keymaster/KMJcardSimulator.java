@@ -597,14 +597,59 @@ public class KMJcardSimulator implements KMCryptoProvider {
   }
 
   @Override
-  public KMCipher createGCMCipher(short mode, byte[] secret, short secretStart, short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
-    //TODO
-    short len = KeyBuilder.LENGTH_AES_128;
-    if(secretLength == 32){
-      len = KeyBuilder.LENGTH_AES_256;
+  public KMCipher createAesGcmCipher(short mode, short tagLen, byte[] secret, short secretStart, short secretLength,
+                                     byte[] ivBuffer, short ivStart, short ivLength) {
+    if(secretLength != 16 && secretLength != 32){
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if(ivLength != AES_GCM_NONCE_LENGTH){
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if(mode != KMCipher.MODE_ENCRYPT && mode != KMCipher.MODE_DECRYPT){
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
 
-    return new KMCipherImpl(null);
+    //Create the sun jce compliant aes key
+    byte[] keyMaterial = new byte[secretLength];
+    Util.arrayCopyNonAtomic(secret,secretStart,keyMaterial,(short)0,secretLength);
+    //print("KeyMaterial Enc", keyMaterial);
+    //print("Authdata Enc", authData, authDataStart, authDataLen);
+    java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,keyMaterial.length, "AES");
+    // Create the cipher
+    javax.crypto.Cipher cipher = null;
+    try {
+      cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding", "SunJCE");
+    } catch (NoSuchAlgorithmException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    } catch (NoSuchProviderException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (NoSuchPaddingException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    // Copy nonce
+    byte[] iv = new byte[AES_GCM_NONCE_LENGTH];
+    Util.arrayCopyNonAtomic(ivBuffer,ivStart,iv,(short)0,AES_GCM_NONCE_LENGTH);
+    // Init Cipher
+    GCMParameterSpec spec = new GCMParameterSpec(tagLen, iv,(short)0,AES_GCM_NONCE_LENGTH);
+    try {
+      if(mode == KMCipher.MODE_ENCRYPT)mode = javax.crypto.Cipher.ENCRYPT_MODE;
+      else mode = javax.crypto.Cipher.DECRYPT_MODE;
+      cipher.init(mode, aesKey, spec);
+    } catch (InvalidKeyException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (InvalidAlgorithmParameterException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    }
+    KMCipherImpl ret = new KMCipherImpl(cipher);
+    ret.setCipherAlgorithm(KMCipher.ALG_AES_GCM);
+    ret.setMode(mode);
+    ret.setPaddingAlgorithm((short)0);
+    return ret;
   }
 
   @Override

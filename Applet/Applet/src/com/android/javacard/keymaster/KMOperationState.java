@@ -42,10 +42,15 @@ public class KMOperationState {
   private boolean authPerOperationReqd;
   private boolean secureUserIdReqd;
   private boolean authTimeoutValidated;
+  private boolean aesGcmUpdateAllowed;
+  private boolean aesBlockSaved;
+  private byte[] aesBlock;
+  private short macLength;
 
   public KMOperationState(){
     authTime = new byte[8];
     key = new byte[256];
+    aesBlock = new byte[KMKeymasterApplet.AES_BLOCK_SIZE];
     reset();
   }
 
@@ -78,6 +83,9 @@ public class KMOperationState {
     trustedConfirmation = false;
     hmacSigner = null;
     authTimeoutValidated = false;
+    aesGcmUpdateAllowed = false;
+    aesBlockSaved = false;
+    macLength = 0;
   }
   //TODO make this random number
   public short getOpHandleCounter() {
@@ -187,5 +195,36 @@ public class KMOperationState {
 
   public void setDigest(byte digest) {
     this.digest = digest;
+  }
+
+  public boolean isAesGcmUpdateAllowed(){
+    return aesGcmUpdateAllowed;
+  }
+  public void setAesGcmUpdateComplete(){
+    aesGcmUpdateAllowed = false;
+  }
+  public void setAesGcmUpdateStart(){
+    aesGcmUpdateAllowed = true;
+  }
+  public byte[] getAesBlock(){
+    return aesBlock;
+  }
+
+  public void setAesBlock(byte[] buf, short start, short length){
+    if(aesBlock.length != length) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    Util.arrayCopy(buf,start,aesBlock, (short)0, length);
+    aesBlockSaved = true;
+  }
+
+  public boolean isAesBlockSaved() {
+    return aesBlockSaved;
+  }
+
+  public void setMacLength(short length) {
+    macLength = length;
+  }
+
+  public short getMacLength() {
+    return macLength;
   }
 }

@@ -36,6 +36,9 @@ public class KMCipherImpl extends KMCipher{
   public short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i) {
     return cipher.update(buffer,startOff,length,scratchPad,i);
   }
+  @Override
+  public void updateAAD(byte[] buffer, short startOff, short length) {
+  }
 
   @Override
   public short getPaddingAlgorithm() {

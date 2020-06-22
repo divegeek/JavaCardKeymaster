@@ -693,6 +693,57 @@ public class KMVTSTest {
     Assert.assertEquals(error, KMError.OK);
     return ret;
   }
+  public short generateAesGcmKey(short keysize, byte[] clientId, byte[] appData) {
+    short tagCount = 8;
+    if(clientId != null) tagCount++;
+    if(appData != null) tagCount++;
+    short arrPtr = KMArray.instance(tagCount);
+    short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
+    short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16(keysize));
+    short macLength = KMIntegerTag.instance(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, KMInteger.uint_16((short)96));
+    short byteBlob = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.GCM);
+    short blockModeTag = KMEnumArrayTag.instance(KMType.BLOCK_MODE, byteBlob);
+    byteBlob = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.PADDING_NONE);
+    short paddingMode = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
+    byteBlob = KMByteBlob.instance((short)2);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.ENCRYPT);
+    KMByteBlob.cast(byteBlob).add((short)1, KMType.DECRYPT);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
+    short tagIndex = 0;
+    KMArray.cast(arrPtr).add(tagIndex++, boolTag);
+    KMArray.cast(arrPtr).add(tagIndex++, macLength);
+    KMArray.cast(arrPtr).add(tagIndex++, keySize);
+    KMArray.cast(arrPtr).add(tagIndex++, blockModeTag);
+    KMArray.cast(arrPtr).add(tagIndex++, paddingMode);
+    KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, KMType.AES));
+    KMArray.cast(arrPtr).add(tagIndex++, purpose);
+    KMArray.cast(arrPtr).add(tagIndex++, KMBoolTag.instance(KMType.CALLER_NONCE));
+    if(clientId != null)KMArray.cast(arrPtr).add(tagIndex++,
+      KMByteTag.instance(KMType.APPLICATION_ID, KMByteBlob.instance(clientId,(short)0,(short)clientId.length)));
+    if(appData != null)KMArray.cast(arrPtr).add(tagIndex++,
+      KMByteTag.instance(KMType.APPLICATION_DATA, KMByteBlob.instance(appData,(short)0,(short)appData.length)));
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    arrPtr = KMArray.instance((short)1);
+    KMArray arg = KMArray.cast(arrPtr);
+    arg.add((short) 0, keyParams);
+    CommandAPDU apdu = encodeApdu((byte)0x10, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    short ret = KMArray.instance((short) 3);
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    KMArray.cast(ret).add((short)1, KMByteBlob.exp());
+    short inst = KMKeyCharacteristics.exp();
+    KMArray.cast(ret).add((short) 2, inst);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    ret = decoder.decode(ret, respBuf, (short) 0, len);
+    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    Assert.assertEquals(0x9000, response.getSW());
+    Assert.assertEquals(error, KMError.OK);
+    return ret;
+  }
 
   @Test
   public void testComputeHmacParams(){
@@ -811,7 +862,7 @@ public class KMVTSTest {
       KMByteBlob.instance(wrappingKeyBlob,(short)0, (short)wrappingKeyBlob.length),
       KMType.ENCRYPT,
       KMKeyParameters.instance(inParams),
-      (short)0,null,false
+      (short)0,null,false,false
     );
     keyBlobPtr = KMArray.cast(ret).get((short)2);
     byte[] encTransportKey = new byte[KMByteBlob.cast(keyBlobPtr).length()];
@@ -1030,7 +1081,12 @@ public class KMVTSTest {
     return ret;
   }
 
-
+  @Test
+  public void testWithAesGcmWithUpdate(){
+    init();
+    testEncryptDecryptWithAesDes(KMType.AES, KMType.GCM, KMType.PADDING_NONE,true);
+    cleanUp();
+  }
   @Test
   public void testWithAesEcbPkcs7WithUpdate(){
     init();
@@ -1301,8 +1357,14 @@ public class KMVTSTest {
 
   public void testEncryptDecryptWithAesDes(byte alg, byte blockMode, byte padding, boolean update){
     short aesDesKeyArr;
+    boolean aesGcmFlag = false;
     if(alg == KMType.AES){
-      aesDesKeyArr = generateAesDesKey(alg, (short)128,null, null);
+      if(blockMode == KMType.GCM){
+        aesDesKeyArr = generateAesGcmKey((short)128,null,null);
+        aesGcmFlag = true;
+      } else {
+        aesDesKeyArr = generateAesDesKey(alg, (short) 128, null, null);
+      }
     } else{
       aesDesKeyArr = generateAesDesKey(alg, (short)168,null, null);
     }
@@ -1320,7 +1382,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.ENCRYPT,
       KMKeyParameters.instance(inParams),
-      (short)0,null,update
+      (short)0,null,update, aesGcmFlag
       );
     inParams = getAesDesParams(alg,blockMode, padding, nonce);
     keyBlobPtr = KMArray.cast(ret).get((short)2);
@@ -1331,7 +1393,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.DECRYPT,
       KMKeyParameters.instance(inParams),
-      (short)0,null,update
+      (short)0,null,update, aesGcmFlag
     );
     keyBlobPtr = KMArray.cast(ret).get((short)2);
     short equal = Util.arrayCompare(plainData,(short)0,KMByteBlob.cast(keyBlobPtr).getBuffer(),
@@ -1352,7 +1414,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.ENCRYPT,
       KMKeyParameters.instance(inParams),
-      (short)0,null,false
+      (short)0,null,false, false
     );
     inParams = getRsaParams(digest, padding);
     keyBlobPtr = KMArray.cast(ret).get((short)2);
@@ -1363,7 +1425,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.DECRYPT,
       KMKeyParameters.instance(inParams),
-      (short)0,null,false
+      (short)0,null,false,false
     );
     keyBlobPtr = KMArray.cast(ret).get((short)2);
     short len = KMByteBlob.cast(keyBlobPtr).length();
@@ -1387,7 +1449,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.SIGN,
       KMKeyParameters.instance(inParams),
-      (short)0,null,update
+      (short)0,null,update,false
     );
     inParams = getRsaParams(digest, padding);
     keyBlobPtr = KMArray.cast(ret).get((short)2);
@@ -1398,7 +1460,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.VERIFY,
       KMKeyParameters.instance(inParams),
-      (short)0,signatureData,update
+      (short)0,signatureData,update,false
     );
     short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
     Assert.assertEquals(error, KMError.OK);
@@ -1418,7 +1480,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.SIGN,
       KMKeyParameters.instance(inParams),
-      (short)0,null,update
+      (short)0,null,update,false
     );
     inParams = getEcParams(digest);
     keyBlobPtr = KMArray.cast(ret).get((short)2);
@@ -1429,7 +1491,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.VERIFY,
       KMKeyParameters.instance(inParams),
-      (short)0,signatureData,update
+      (short)0,signatureData,update,false
     );
     short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
     Assert.assertEquals(error, KMError.OK);
@@ -1448,7 +1510,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.SIGN,
       KMKeyParameters.instance(inParams),
-      (short)0,null,update
+      (short)0,null,update,false
     );
     inParams = getHmacParams(digest);
     keyBlobPtr = KMArray.cast(ret).get((short)2);
@@ -1459,7 +1521,7 @@ public class KMVTSTest {
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.VERIFY,
       KMKeyParameters.instance(inParams),
-      (short)0,signatureData,update
+      (short)0,signatureData,update,false
     );
     short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
     Assert.assertEquals(error, KMError.OK);
@@ -1467,7 +1529,25 @@ public class KMVTSTest {
 
   private short getAesDesParams(byte alg, byte blockMode, byte padding, byte[] nonce) {
     short inParams;
-    if(blockMode == KMType.ECB){
+    if(blockMode == KMType.GCM){
+      inParams = KMArray.instance((short)5);
+      short byteBlob = KMByteBlob.instance((short)1);
+      KMByteBlob.cast(byteBlob).add((short)0, blockMode);
+      KMArray.cast(inParams).add((short)0, KMEnumArrayTag.instance(KMType.BLOCK_MODE, byteBlob));
+      byteBlob = KMByteBlob.instance((short)1);
+      KMByteBlob.cast(byteBlob).add((short)0, padding);
+      KMArray.cast(inParams).add((short)1, KMEnumArrayTag.instance(KMType.PADDING, byteBlob));
+      short nonceLen = 12;
+      byteBlob = KMByteBlob.instance(nonce,(short)0, nonceLen);
+      KMArray.cast(inParams).add((short)2, KMByteTag.instance(KMType.NONCE, byteBlob));
+      short macLen = KMInteger.uint_16((short)128);
+      macLen = KMIntegerTag.instance(KMType.UINT_TAG,KMType.MAC_LENGTH,macLen);
+      KMArray.cast(inParams).add((short)3, macLen);
+      byte[] authData = "AuthData".getBytes();
+      short associatedData = KMByteBlob.instance(authData,(short)0,(short)authData.length);
+      associatedData = KMByteTag.instance(KMType.ASSOCIATED_DATA,associatedData);
+      KMArray.cast(inParams).add((short)4, associatedData);
+    }else if(blockMode == KMType.ECB){
       inParams = KMArray.instance((short)2);
       short byteBlob = KMByteBlob.instance((short)1);
       KMByteBlob.cast(byteBlob).add((short)0, blockMode);
@@ -1526,7 +1606,8 @@ public class KMVTSTest {
       short inParams,
       short hwToken,
       byte[] signature,
-      boolean updateFlag) {
+      boolean updateFlag,
+      boolean aesGcmFlag) {
     short beginResp = begin(keyPurpose, keyBlob, inParams, hwToken);
     short opHandle = KMArray.cast(beginResp).get((short) 2);
     opHandle = KMInteger.cast(opHandle).getShort();
@@ -1534,9 +1615,18 @@ public class KMVTSTest {
     short ret = KMType.INVALID_VALUE;
     byte[] outputData = new byte[128];
     short len=0;
+    inParams = 0;
     if (updateFlag) {
       dataPtr = KMByteBlob.instance(data, (short) 0, (short) 16);
-      ret = update(KMInteger.uint_16(opHandle), dataPtr, (short) 0, (short) 0, (short) 0);
+      if(aesGcmFlag){
+        byte[] authData = "AuthData".getBytes();
+        short associatedData = KMByteBlob.instance(authData,(short)0,(short)authData.length);
+        associatedData = KMByteTag.instance(KMType.ASSOCIATED_DATA,associatedData);
+        inParams = KMArray.instance((short)1);
+        KMArray.cast(inParams).add((short)0, associatedData);
+        inParams = KMKeyParameters.instance(inParams);
+      }
+      ret = update(KMInteger.uint_16(opHandle), dataPtr, inParams, (short) 0, (short) 0);
       dataPtr = KMArray.cast(ret).get((short) 3);
       if (KMByteBlob.cast(dataPtr).length() > 0) {
         Util.arrayCopyNonAtomic(
