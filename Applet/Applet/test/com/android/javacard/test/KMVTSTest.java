@@ -35,6 +35,7 @@ import com.android.javacard.keymaster.KMIntegerTag;
 import com.android.javacard.keymaster.KMKeyCharacteristics;
 import com.android.javacard.keymaster.KMKeyParameters;
 import com.android.javacard.keymaster.KMKeymasterApplet;
+import com.android.javacard.keymaster.KMRepository;
 import com.android.javacard.keymaster.KMType;
 import com.android.javacard.keymaster.KMVerificationToken;
 import com.licel.jcardsim.smartcardio.CardSimulator;
@@ -44,6 +45,7 @@ import javacard.framework.Util;
 import javacard.security.AESKey;
 import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
+import javacard.security.HMACKey;
 import javacard.security.KeyPair;
 import javacard.security.RSAPrivateKey;
 import javacard.security.RSAPublicKey;
@@ -358,6 +360,159 @@ public class KMVTSTest {
   }
 
   @Test
+  public void testDeviceLocked(){
+    init();
+    byte[] hmacKey = new byte[32];
+    cryptoProvider.newRandomNumber(hmacKey,(short)0,(short)32);
+    KMRepository.instance().initComputedHmac(hmacKey,(short)0,(short)32);
+    // generate aes key with unlocked_device_required
+    short aesKey = generateAesDesKey(KMType.AES,(short)128,null,null, true);
+    short keyBlobPtr = KMArray.cast(aesKey).get((short)1);
+    byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
+      KMByteBlob.cast(keyBlobPtr).getStartOff(),
+      keyBlob,(short)0, (short)keyBlob.length);
+    // encrypt something
+    short inParams = getAesDesParams(KMType.AES, KMType.ECB, KMType.PKCS7, null);
+    byte[] plainData= "Hello World 123!".getBytes();
+    short ret = processMessage(plainData,
+      KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
+      KMType.ENCRYPT,
+      KMKeyParameters.instance(inParams),
+      (short)0,null,false, false
+    );
+    keyBlobPtr = KMArray.cast(ret).get((short)2);
+    byte[] cipherData = new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
+      cipherData,(short)0, (short)cipherData.length);
+    // create verification token
+    short verToken = KMVerificationToken.instance();
+    KMVerificationToken.cast(verToken).setTimestamp(KMInteger.uint_16((short)1));
+    verToken = signVerificationToken(verToken);
+    // device locked request
+    deviceLock(verToken);
+    // decrypt should fail
+    inParams = getAesDesParams(KMType.AES, KMType.ECB, KMType.PKCS7, null);
+    short beginResp = begin(KMType.DECRYPT,
+      KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),  KMKeyParameters.instance(inParams), (short)0);
+    Assert.assertEquals(beginResp,KMError.DEVICE_LOCKED);
+    short hwToken = KMHardwareAuthToken.instance();
+    KMHardwareAuthToken.cast(hwToken).setTimestamp(KMInteger.uint_16((byte)2));
+    KMHardwareAuthToken.cast(hwToken).setHwAuthenticatorType(KMEnum.instance(KMType.USER_AUTH_TYPE, (byte)KMType.PASSWORD));
+    inParams = getAesDesParams(KMType.AES, KMType.ECB, KMType.PKCS7, null);
+    hwToken = signHwToken(hwToken);
+      ret = processMessage(cipherData,
+      KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
+      KMType.DECRYPT,
+      KMKeyParameters.instance(inParams),hwToken,null,false, false
+    );
+    ret = KMArray.cast(ret).get((short)0);
+    Assert.assertEquals(KMInteger.cast(ret).getShort(), KMError.OK);
+  cleanUp();
+  }
+
+  private short signHwToken(short hwToken){
+    short len = 0;
+    byte[] scratchPad = new byte[256];
+    // add 0
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
+    len = 1;
+    // concatenate challenge - 8 bytes
+    short ptr = KMHardwareAuthToken.cast(hwToken).getChallenge();
+    KMInteger.cast(ptr)
+      .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate user id - 8 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getUserId();
+    KMInteger.cast(ptr)
+      .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate authenticator id - 8 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getAuthenticatorId();
+    KMInteger.cast(ptr)
+      .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate authenticator type - 4 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getHwAuthenticatorType();
+    scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
+    len += 4;
+    // concatenate timestamp -8 bytes
+    ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
+    KMInteger.cast(ptr)
+      .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // hmac the data
+    HMACKey key =
+      cryptoProvider.createHMACKey(
+        KMRepository.instance().getComputedHmacKey(),
+        (short) 0,
+        (short) KMRepository.instance().getComputedHmacKey().length);
+    byte[] mac = new byte[32];
+    len =
+      cryptoProvider.hmacSign(key, scratchPad, (short) 0, len,
+        mac,
+        (short)0);
+    KMHardwareAuthToken.cast(hwToken).setMac(KMByteBlob.instance(mac,(short)0,(short)mac.length));
+    return hwToken;
+  }
+  private void deviceLock(short verToken) {
+    short req = KMArray.instance((short)2);
+    KMArray.cast(req).add((short)0, KMInteger.uint_8((byte)1));
+    KMArray.cast(req).add((short)1, verToken);
+    CommandAPDU apdu = encodeApdu((byte)0x25,req);
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    short ret = KMArray.instance((short) 1);
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    byte[] respBuf = response.getBytes();
+    Assert.assertEquals(respBuf[0],KMError.OK);
+  }
+
+  private short signVerificationToken(short verToken) {
+    byte[] scratchPad = new byte[256];
+    byte[] authVer = "Auth Verification".getBytes();
+    print(authVer,(short)0,(short)authVer.length);
+    // concatenation length will be 37 + length of verified parameters list  - which is typically empty
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
+    short params = KMVerificationToken.cast(verToken).getParametersVerified();
+    // Add "Auth Verification" - 17 bytes.
+    Util.arrayCopy(authVer,(short)0, scratchPad, (short)0, (short)authVer.length);
+    short len = (short)authVer.length;
+    // concatenate challenge - 8 bytes
+    short ptr = KMVerificationToken.cast(verToken).getChallenge();
+    KMInteger.cast(ptr)
+      .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate timestamp -8 bytes
+    ptr = KMVerificationToken.cast(verToken).getTimestamp();
+    KMInteger.cast(ptr)
+      .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    len += 8;
+    // concatenate security level - 4 bytes
+    ptr = KMVerificationToken.cast(verToken).getSecurityLevel();
+    scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
+    len += 4;
+    // concatenate Parameters verified - blob of encoded data.
+    ptr = KMVerificationToken.cast(verToken).getParametersVerified();
+    if (KMByteBlob.cast(ptr).length() != 0) {
+      len += KMByteBlob.cast(ptr).getValues(scratchPad, (short) 0);
+    }
+    // hmac the data
+    HMACKey key =
+      cryptoProvider.createHMACKey(
+        KMRepository.instance().getComputedHmacKey(),
+        (short) 0,
+        (short) KMRepository.instance().getComputedHmacKey().length);
+    ptr = KMVerificationToken.cast(verToken).getMac();
+    byte[] mac = new byte[32];
+    len =
+      cryptoProvider.hmacSign(key, scratchPad, (short) 0, len,
+        mac,
+        (short)0);
+    KMVerificationToken.cast(verToken).setMac(KMByteBlob.instance(mac,(short)0,(short)mac.length));
+    return verToken;
+  }
+
+  @Test
   public void testEcImportKeySuccess() {
     init();
     KeyPair ecKeyPair = cryptoProvider.createECKeyPair();
@@ -381,10 +536,9 @@ public class KMVTSTest {
     KMArray.cast(arrPtr).add((short)4, KMEnumTag.instance(KMType.ALGORITHM, KMType.EC));
     short keyParams = KMKeyParameters.instance(arrPtr);
     short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.RAW);// Note: VTS uses PKCS8
-    short keyBlob = KMArray.instance((short)3);
+    short keyBlob = KMArray.instance((short)2);
     KMArray.cast(keyBlob).add((short)0, privBlob);
     KMArray.cast(keyBlob).add((short)1, pubBlob);
-    KMArray.cast(keyBlob).add((short)2, ecCurve);
     byte[] blob = new byte[128];
     len = encoder.encode(keyBlob,blob,(short)0);
     keyBlob = KMByteBlob.instance(blob, (short)0, len);
@@ -642,10 +796,11 @@ public class KMVTSTest {
     Assert.assertEquals(error, KMError.OK);
     return ret;
   }
-  public short generateAesDesKey(byte alg, short keysize, byte[] clientId, byte[] appData) {
+  public short generateAesDesKey(byte alg, short keysize, byte[] clientId, byte[] appData, boolean unlockReqd) {
     short tagCount = 7;
     if(clientId != null) tagCount++;
     if(appData != null) tagCount++;
+    if(unlockReqd)tagCount++;
     short arrPtr = KMArray.instance(tagCount);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
     short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16(keysize));
@@ -669,6 +824,7 @@ public class KMVTSTest {
     KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, alg));
     KMArray.cast(arrPtr).add(tagIndex++, purpose);
     KMArray.cast(arrPtr).add(tagIndex++, KMBoolTag.instance(KMType.CALLER_NONCE));
+    if(unlockReqd)KMArray.cast(arrPtr).add(tagIndex++, KMBoolTag.instance(KMType.UNLOCKED_DEVICE_REQUIRED));
     if(clientId != null)KMArray.cast(arrPtr).add(tagIndex++,
       KMByteTag.instance(KMType.APPLICATION_ID, KMByteBlob.instance(clientId,(short)0,(short)clientId.length)));
     if(appData != null)KMArray.cast(arrPtr).add(tagIndex++,
@@ -1335,7 +1491,7 @@ public class KMVTSTest {
   @Test
   public void testAbortOperation(){
     init();
-    short aesDesKeyArr = generateAesDesKey(KMType.AES, (short)128,null, null);;
+    short aesDesKeyArr = generateAesDesKey(KMType.AES, (short)128,null, null, false);;
     short keyBlobPtr = KMArray.cast(aesDesKeyArr).get((short)1);
     byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
     Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
@@ -1363,10 +1519,10 @@ public class KMVTSTest {
         aesDesKeyArr = generateAesGcmKey((short)128,null,null);
         aesGcmFlag = true;
       } else {
-        aesDesKeyArr = generateAesDesKey(alg, (short) 128, null, null);
+        aesDesKeyArr = generateAesDesKey(alg, (short) 128, null, null, false);
       }
     } else{
-      aesDesKeyArr = generateAesDesKey(alg, (short)168,null, null);
+      aesDesKeyArr = generateAesDesKey(alg, (short)168,null, null, false);
     }
     short keyBlobPtr = KMArray.cast(aesDesKeyArr).get((short)1);
     byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
@@ -1682,10 +1838,15 @@ public class KMVTSTest {
     KMArray.cast(ret).add((short)2, KMInteger.exp());
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
+    if(len > 5){
     ret = decoder.decode(ret, respBuf, (short) 0, len);
     short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
     Assert.assertEquals(error, KMError.OK);
-    return ret;
+    return ret;}else{
+      if(len == 3) return respBuf[0];
+      if(len == 4) return respBuf[1];
+      return Util.getShort(respBuf,(short)0);
+    }
   }
 
   public short finish(short operationHandle, short data, byte[] signature, short inParams, short hwToken, short verToken) {

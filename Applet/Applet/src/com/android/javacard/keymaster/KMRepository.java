@@ -36,8 +36,8 @@ public class KMRepository {
   public static final byte BOOT_HASH_MAX_SIZE = 32;
   // Repository attributes
   private static KMRepository repository;
+  public boolean deviceUnlockPasswordOnly;
   private byte[] masterKey;
-  private byte[] hmacSeed;
   private byte[] sharedKey;
   private byte[] computedHmacKey;
   private byte[] hmacNonce;
@@ -56,6 +56,7 @@ public class KMRepository {
   public boolean verifiedBootFlag;
   public boolean selfSignedBootFlag;
   public boolean deviceLockedFlag;
+  public byte[] deviceLockedTimestamp;
 
   public static KMRepository instance() {
     return repository;
@@ -83,6 +84,10 @@ public class KMRepository {
       ((KMOperationState)operationStateTable[index]).reset();
       index++;
     }
+    deviceLockedFlag = false;
+    deviceLockedTimestamp = new byte[8];
+    deviceUnlockPasswordOnly = false;
+    Util.arrayFillNonAtomic(deviceLockedTimestamp,(short)0,(short)8,(byte)0);
     repository = this;
   }
 
@@ -175,10 +180,6 @@ public class KMRepository {
 
   public byte[] getHeap() {
     return heap;
-  }
-
-  public byte[] getHmacSeed() {
-    return hmacSeed;
   }
 
   public byte[] getSharedKey() {

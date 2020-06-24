@@ -97,6 +97,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_ABORT_OPERATION_CMD = 0x22;
   private static final byte INS_PROVISION_CMD = 0x23;
   private static final byte INS_SET_BOOT_PARAMS_CMD = 0x24;
+  private static final byte INS_DEVICE_LOCKED_CMD = 0x25;
+  private static final byte INS_EARLY_BOOT_ENDED_CMD = 0x26;
+
   // Data Dictionary items
   public static final byte DATA_ARRAY_SIZE = 30;
   public static final byte TMP_VARIABLE_ARRAY_SIZE = 20;
@@ -276,7 +279,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
     }
     // Validate whether INS can be supported
-    if (!(apduIns >= INS_GENERATE_KEY_CMD && apduIns <= INS_SET_BOOT_PARAMS_CMD)) {
+    if (!(apduIns >= INS_GENERATE_KEY_CMD && apduIns <= INS_EARLY_BOOT_ENDED_CMD)) {
       ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
     }
     // Validate if INS is provision command if applet is in FIRST_SELECT_STATE.
@@ -358,6 +361,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_SET_BOOT_PARAMS_CMD:
           processSetBootParamsCmd(apdu);
           break;
+        case INS_DEVICE_LOCKED_CMD:
+          processDeviceLockedCmd(apdu);
+          break;
+        case INS_EARLY_BOOT_ENDED_CMD:
+          processEarlyBootEndedCmd(apdu);
+          break;
         default:
           ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
@@ -375,6 +384,37 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       repository.clean();
     }
   }
+
+  private void processEarlyBootEndedCmd(APDU apdu) {
+    KMException.throwIt(KMError.UNIMPLEMENTED);
+  }
+
+  private void processDeviceLockedCmd(APDU apdu) {
+    receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
+    tmpVariables[0] = KMArray.instance((short) 2);
+    KMArray.cast(tmpVariables[0]).add((short) 0, KMInteger.exp());
+    tmpVariables[1] = KMVerificationToken.exp();
+    KMArray.cast(tmpVariables[0]).add((short) 1, tmpVariables[1]);
+    // Decode the arguments
+    tmpVariables[0] = decoder.decode(tmpVariables[0], buffer, bufferStartOffset, bufferLength);
+    tmpVariables[1] = KMArray.cast(tmpVariables[0]).get((short) 0);
+    tmpVariables[1] = KMInteger.cast(tmpVariables[1]).getByte();
+    data[VERIFICATION_TOKEN] = KMArray.cast(tmpVariables[0]).get((short)1);
+    validateVerificationToken(data[VERIFICATION_TOKEN],scratchPad);
+    short verTime = KMVerificationToken.cast(data[VERIFICATION_TOKEN]).getTimestamp();
+    short lastDeviceLockedTime = KMInteger.uint_64(repository.deviceLockedTimestamp, (short)0);
+    if(KMInteger.compare(verTime,lastDeviceLockedTime) > 0){
+      Util.arrayFillNonAtomic(scratchPad,(short)0, (short)8, (byte)0);
+      KMInteger.cast(verTime).getValue(scratchPad,(short)0,(short)8);
+      repository.deviceLockedFlag = true;
+      if(tmpVariables[1] == 0x01) repository.deviceUnlockPasswordOnly = true;
+      else repository.deviceUnlockPasswordOnly = false;
+      Util.arrayCopy(scratchPad,(short)0,repository.deviceLockedTimestamp,(short)0,(short)repository.deviceLockedTimestamp.length);
+    }
+    sendError(apdu,KMError.OK);
+  }
+
   private void resetData(){
     short index = 0;
     while (index < data.length){
@@ -1460,7 +1500,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void authorizeUpdateFinishOperation(KMOperationState op, byte[] scratchPad) {
-    // User Authentication
+    // If one time user Authentication is required
     if (op.isSecureUserIdReqd() && !op.isAuthTimeoutValidated()) {
         validateVerificationToken(op, data[VERIFICATION_TOKEN], scratchPad);
         tmpVariables[0] = KMInteger.uint_64(op.getAuthTime(), (short) 0);
@@ -1472,12 +1512,41 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
         }
         op.setAuthTimeoutValidated(true);
-    } else if(op.isAuthPerOperationReqd()){ // Auth per operation
+    } else if(op.isAuthPerOperationReqd()){ // If Auth per operation is required
       tmpVariables[0] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getChallenge();
       if (KMInteger.compare(data[OP_HANDLE], tmpVariables[0]) != 0) {
         KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
       }
-      authorizeHwAuthToken(scratchPad);
+      authenticateUser(scratchPad);
+    }
+  }
+
+  private void authorizeDeviceUnlock(short hwToken) {
+    // If device is locked and key characteristics requires unlocked device then check whether
+    // HW auth token has correct timestamp.
+    short ptr =
+        KMKeyParameters.findTag(
+            KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED, data[HW_PARAMETERS]);
+    if (ptr != KMType.INVALID_VALUE && repository.deviceLockedFlag) {
+      if (hwToken == KMType.INVALID_VALUE) KMException.throwIt(KMError.DEVICE_LOCKED);
+      ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
+      // Check if the current auth time stamp is greater then device locked time stamp
+      if (KMInteger.compare(ptr, KMInteger.uint_64(repository.deviceLockedTimestamp, (short) 0))
+          <= 0) {
+        KMException.throwIt(KMError.DEVICE_LOCKED);
+      }
+      // Now check if the device unlock requires password only authentication and whether
+      // auth token is generated through password authentication or not.
+      if (repository.deviceUnlockPasswordOnly) {
+        ptr = KMHardwareAuthToken.cast(hwToken).getHwAuthenticatorType();
+        ptr = KMEnum.cast(ptr).getVal();
+        if (((byte) ptr & KMType.PASSWORD) == 0) {
+          KMException.throwIt(KMError.DEVICE_LOCKED);
+        }
+      }
+      // Unlock the device
+      repository.deviceLockedFlag = false;
+      Util.arrayFillNonAtomic(repository.deviceLockedTimestamp, (short) 0, (short) 8, (byte) 0);
     }
   }
 
@@ -1489,15 +1558,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (KMByteBlob.cast(ptr).length() == 0) {
       return;
     }
+    validateVerificationToken(verToken, scratchPad);
     // validate operation handle.
     ptr = KMVerificationToken.cast(verToken).getChallenge();
     if(op.getHandle() != KMInteger.cast(ptr).getShort()){
       KMException.throwIt(KMError.VERIFICATION_FAILED);
     }
-    // concatenation length will be 37 + length of verified parameters list.
+  }
+
+  private void validateVerificationToken(short verToken, byte[] scratchPad) {
+    short ptr = KMVerificationToken.cast(verToken).getMac();
+    short len = 0;
+    // If mac length is zero then token is empty.
+    if (KMByteBlob.cast(ptr).length() == 0) {
+      return;
+    }
+    // concatenation length will be 37 + length of verified parameters list  - which is typically empty
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
     short params = KMVerificationToken.cast(verToken).getParametersVerified();
-    Util.arrayFillNonAtomic(scratchPad, (short) 0,
-      (short) (37+KMByteBlob.cast(params).length()), (byte) 0);
+
     // Add "Auth Verification" - 17 bytes.
     Util.arrayCopy(authVerification,(short)0, scratchPad, (short)0, (short)authVerification.length);
     len = (short)authVerification.length;
@@ -1517,8 +1596,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += 4;
     // concatenate Parameters verified - blob of encoded data.
     ptr = KMVerificationToken.cast(verToken).getParametersVerified();
-    len += KMByteBlob.cast(ptr).getValues(scratchPad, (short)0);
-    len += 4;
+    if (KMByteBlob.cast(ptr).length() != 0) {
+      len += KMByteBlob.cast(ptr).getValues(scratchPad, (short) 0);
+    }
     // hmac the data
     HMACKey key =
       cryptoProvider.createHMACKey(
@@ -1875,7 +1955,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizePadding(op);
     authorizeBlockModeAndMacLength(op);
     authorizeKeyUsageForCount();
+    if(!validateHwToken(data[HW_TOKEN],scratchPad)){
+      data[HW_TOKEN] = KMType.INVALID_VALUE;
+    }
     authorizeUserSecureIdAuthTimeout(op, scratchPad);
+    authorizeDeviceUnlock(data[HW_TOKEN]);
     // Authorize Caller Nonce - if caller nonce absent in key char and nonce present in
     // key params then fail if it is not a Decrypt operation
     data[IV] = KMType.INVALID_VALUE;
@@ -2136,17 +2220,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMKeyParameters.findTag(KMType.UINT_TAG, KMType.AUTH_TIMEOUT, data[HW_PARAMETERS]);
       if (tmpVariables[0] != KMType.INVALID_VALUE) {
         // check if hw token is empty - mac should not be empty.
-        tmpVariables[1] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getMac();
-        if (KMByteBlob.cast(tmpVariables[1]).length() == 0) {
-          KMException.throwIt(KMError.INVALID_MAC_LENGTH);
-        }
+        if(data[HW_TOKEN] == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_MAC_LENGTH);
         authTime = KMIntegerTag.cast(tmpVariables[0]).getValue();
-        authorizeHwAuthToken(scratchPad);
+        // authenticate user
+        authenticateUser(scratchPad);
+        // set the one time auth
         op.setOneTimeAuthReqd(true);
+        // set the authentication time stamp in operation state
         authTime = addIntegers(authTime, KMHardwareAuthToken.cast(data[HW_TOKEN]).getTimestamp());
         op.setAuthTime(KMInteger.cast(authTime).getBuffer(), KMInteger.cast(authTime).getStartOff());
-        op.setAuthTimeoutValidated(false); // auth time validation will happen in update or finish
-      } else { // auth per operation required
+        // auth time validation will happen in update or finish
+        op.setAuthTimeoutValidated(false);
+      } else {
+        // auth per operation required
         op.setOneTimeAuthReqd(false);
         op.setAuthPerOperationReqd(true);
       }
@@ -2154,8 +2240,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
 
-  private void authorizeHwAuthToken(byte[] scratchPad) {
-    validateHwToken(data[HW_TOKEN], scratchPad);
+  private void authenticateUser(byte[] scratchPad) {
     tmpVariables[0] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getUserId();
     if (KMInteger.cast(tmpVariables[0]).isZero()) {
       tmpVariables[0] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getAuthenticatorId();
@@ -2176,16 +2261,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
-  private void validateHwToken(short hwToken, byte[] scratchPad) {
+  private boolean validateHwToken(short hwToken, byte[] scratchPad) {
     // CBOR Encoding is always big endian
     short ptr = KMHardwareAuthToken.cast(hwToken).getMac();
     short len = 0;
     // If mac length is zero then token is empty.
     if (KMByteBlob.cast(ptr).length() == 0) {
-      return;
+      return false;
     }
     // add 0
-    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 37, (byte) 0);
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
     len = 1;
     // concatenate challenge - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getChallenge();
@@ -2194,12 +2279,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += 8;
     // concatenate user id - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getUserId();
-    KMInteger.cast(tmpVariables[0])
+    KMInteger.cast(ptr)
         .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
     len += 8;
     // concatenate authenticator id - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getAuthenticatorId();
-    KMInteger.cast(tmpVariables[0])
+    KMInteger.cast(ptr)
         .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
     len += 8;
     // concatenate authenticator type - 4 bytes
@@ -2208,7 +2293,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += 4;
     // concatenate timestamp -8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
-    KMInteger.cast(tmpVariables[0])
+    KMInteger.cast(ptr)
         .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
     len += 8;
     // hmac the data
@@ -2223,9 +2308,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(ptr).getBuffer(),
         KMByteBlob.cast(ptr).getStartOff(),
         KMByteBlob.cast(ptr).length());
-    if(!verified){
-      KMException.throwIt(KMError.VERIFICATION_FAILED);
-    }
+    return verified;
 /*
     len =
         cryptoProvider.hmac(key, scratchPad, (short) 0, len, scratchPad, (short) (len + 1) );
@@ -2371,10 +2454,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void importECKeys(byte[] scratchPad) {
     // Decode key material
-    tmpVariables[0] = KMArray.instance((short) 3);
+    tmpVariables[0] = KMArray.instance((short) 2);
     KMArray.cast(tmpVariables[0]).add((short) 0, KMByteBlob.exp()); // secret
     KMArray.cast(tmpVariables[0]).add((short) 1, KMByteBlob.exp()); // public key
-    KMArray.cast(tmpVariables[0]).add((short) 2, KMEnumTag.exp()); // curve
     tmpVariables[0] =
         decoder.decode(
             tmpVariables[0],
@@ -2383,12 +2465,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).length());
     data[SECRET] = KMArray.cast(tmpVariables[0]).get((short) 0);
     data[PUB_KEY] = KMArray.cast(tmpVariables[0]).get((short) 1);
-    tmpVariables[1] = KMArray.cast(tmpVariables[0]).get((short) 2);
-    tmpVariables[1] = KMEnumTag.cast(tmpVariables[1]).getValue();
-    // curve must be P_256
-    if (tmpVariables[1] != KMType.P_256) {
-      KMException.throwIt(KMError.UNSUPPORTED_EC_CURVE);
-    }
     // initialize 256 bit p256 key for given private key and public key.
     ECPrivateKey ecKey =
         cryptoProvider.createEcKey(
@@ -2413,8 +2489,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // check the curve if present in key parameters.
     tmpVariables[3] = KMEnumTag.getValue(KMType.ECCURVE, data[KEY_PARAMETERS]);
     if (tmpVariables[3] != KMType.INVALID_VALUE) {
-      if (tmpVariables[3] != tmpVariables[1]) {
-        KMException.throwIt(KMError.IMPORT_PARAMETER_MISMATCH);
+      if (tmpVariables[3] != KMType.P_256) {
+        KMException.throwIt(KMError.UNSUPPORTED_EC_CURVE);
       }
     } else {
       // add the curve to scratchPad

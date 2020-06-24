@@ -658,14 +658,13 @@ public class KMFrameworkTest {
     ec192KeyPair.genKeyPair();
     byte[] secret = new byte[24];
     byte[] pubKey = new byte[52];
-    short keyBlob = KMArray.instance((short)3);
+    short keyBlob = KMArray.instance((short)2);
     ECPrivateKey key1 = (ECPrivateKey) ec192KeyPair.getPrivate();
     ECPublicKey key2 = (ECPublicKey) ec192KeyPair.getPublic();
     short len = key1.getS(secret, (short)0);
     KMArray.cast(keyBlob).add((short)0, KMByteBlob.instance(secret,(short)0,len));
     len = key2.getW(pubKey, (short)0);
     KMArray.cast(keyBlob).add((short)1, KMByteBlob.instance(pubKey,(short)0,len));
-    KMArray.cast(keyBlob).add((short)2, KMEnumTag.instance(KMType.ECCURVE, KMType.P_256));
     KMEncoder encoder = new KMEncoder();
     byte[] blob = new byte[256];
     len = encoder.encode(keyBlob,blob,(short)0);

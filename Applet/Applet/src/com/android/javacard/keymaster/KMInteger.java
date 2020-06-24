@@ -119,6 +119,11 @@ public class KMInteger extends KMType {
   }
 
   public void getValue(byte[] dest, short destOff, short length){
+    if(length < length()) KMException.throwIt(KMError.UNKNOWN_ERROR);
+    if(length > length()) {
+      length = length();
+      destOff +=length;
+    }
     Util.arrayCopyNonAtomic(heap, (short)(instPtr+TLV_HEADER_SIZE), dest, destOff, length);
   }
   public void setValue(byte[] src, short srcOff){
