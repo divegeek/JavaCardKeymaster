@@ -156,10 +156,13 @@ keymaster_error_t JavaCardSoftKeymasterContext::ParseKeyBlob(const KeymasterKeyB
     AuthorizationSet hw_enforced;
     AuthorizationSet sw_enforced;
     KeymasterKeyBlob key_material;
-    keymaster_error_t error;
+    keymaster_error_t error = KM_ERROR_OK;
 
     auto constructKey = [&, this] () mutable -> keymaster_error_t {
         keymaster_algorithm_t algorithm;
+        if(error != KM_ERROR_OK) {
+            return error;
+        }
         if (!hw_enforced.GetTagValue(TAG_ALGORITHM, &algorithm) &&
             !sw_enforced.GetTagValue(TAG_ALGORITHM, &algorithm)) {
             return KM_ERROR_INVALID_ARGUMENT;
@@ -193,6 +196,8 @@ keymaster_error_t JavaCardSoftKeymasterContext::ParseKeyBlob(const KeymasterKeyB
 
         sw_enforced.Reinitialize(KmParamSet(keyCharacteristics.softwareEnforced));
         hw_enforced.Reinitialize(KmParamSet(keyCharacteristics.hardwareEnforced));
+    } else {
+        error =  KM_ERROR_INVALID_KEY_BLOB;
     }
     return constructKey();
 }

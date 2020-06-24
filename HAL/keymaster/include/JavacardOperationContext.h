@@ -96,9 +96,11 @@ private:
                              opr, out))) {
                  return errorCode;
              }
+             if(finish || out.size() > 0) {
 
-             if(ErrorCode::OK != (errorCode = cb(out, finish))) {
-                 return errorCode;
+                 if(ErrorCode::OK != (errorCode = cb(out, finish))) {
+                     return errorCode;
+                 }
              }
          } else {
              /* Asymmetric */

@@ -54,7 +54,7 @@ class CborConverter
             const uint8_t* pos;
             std::unique_ptr<Item> item(nullptr);
             std::string message;
-            T errorCode = T::UNKNOWN_ERROR;
+            T errorCode = T::OK;
 
             std::tie(item, pos, message) = parse(response);
 

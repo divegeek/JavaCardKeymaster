@@ -95,7 +95,6 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
 
 protected:
     CborConverter cborConverter_;
-    std::unique_ptr<se_transport::TransportFactory> pTransportFactory;
 	
 private:
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
