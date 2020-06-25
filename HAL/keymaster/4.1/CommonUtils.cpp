@@ -144,16 +144,16 @@ ErrorCode getEcCurve(const EC_GROUP *group, EcCurve& ecCurve) {
 
 ErrorCode ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>
 publicKey, EcCurve& ecCurve) {
-    UniquePtr<EVP_PKEY, EVP_PKEY_Delete> pkey;
-    keymaster_key_blob_t key_material = {pkcs8Blob.data(), pkcs8Blob.size()};
-    KeymasterKeyBlob blob(key_material);
     ErrorCode errorCode = ErrorCode::INVALID_KEY_BLOB;
+    EVP_PKEY *pkey = nullptr;
+    const uint8_t *data = pkcs8Blob.data();
 
-    keymaster_error_t error = KeyMaterialToEvpKey(KM_KEY_FORMAT_PKCS8, blob, KM_ALGORITHM_EC, &pkey);
-    if(error != KM_ERROR_OK) {
-       return legacy_enum_conversion(error);
+    d2i_PrivateKey(EVP_PKEY_EC, &pkey, &data, pkcs8Blob.size());
+    if(!pkey) {
+        return legacy_enum_conversion(TranslateLastOpenSslError());
     }
-    UniquePtr<EC_KEY, EC_KEY_Delete> ec_key(EVP_PKEY_get1_EC_KEY(pkey.get()));
+
+    UniquePtr<EC_KEY, EC_KEY_Delete> ec_key(EVP_PKEY_get1_EC_KEY(pkey));
     if(!ec_key.get())
         return legacy_enum_conversion(TranslateLastOpenSslError());
 
@@ -181,6 +181,7 @@ publicKey, EcCurve& ecCurve) {
     EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED, pubKey.get(), pubKeyLen, NULL);
     publicKey.insert(publicKey.begin(), pubKey.get(), pubKey.get()+pubKeyLen);
 
+    EVP_PKEY_free(pkey);
     return ErrorCode::OK;
 }
 
@@ -188,15 +189,15 @@ ErrorCode rsaRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<
 pubModulus) {
     ErrorCode errorCode = ErrorCode::INVALID_KEY_BLOB;
     const BIGNUM *n=NULL, *e=NULL, *d=NULL;
-    UniquePtr<EVP_PKEY, EVP_PKEY_Delete> pkey;
-    keymaster_key_blob_t key_material = {pkcs8Blob.data(), pkcs8Blob.size()};
-    KeymasterKeyBlob blob(key_material);
+    EVP_PKEY *pkey = nullptr;
+    const uint8_t *data = pkcs8Blob.data();
 
-    keymaster_error_t error = KeyMaterialToEvpKey(KM_KEY_FORMAT_PKCS8, blob, KM_ALGORITHM_RSA, &pkey);
-    if(error != KM_ERROR_OK) {
-       return legacy_enum_conversion(error);
+    d2i_PrivateKey(EVP_PKEY_RSA, &pkey, &data, pkcs8Blob.size());
+    if(!pkey) {
+        return legacy_enum_conversion(TranslateLastOpenSslError());
     }
-    UniquePtr<RSA, RsaKey::RSA_Delete> rsa_key(EVP_PKEY_get1_RSA(pkey.get()));
+
+    UniquePtr<RSA, RsaKey::RSA_Delete> rsa_key(EVP_PKEY_get1_RSA(pkey));
     if(!rsa_key.get()) {
         return legacy_enum_conversion(TranslateLastOpenSslError());
     }
@@ -217,7 +218,7 @@ pubModulus) {
     } else {
         return errorCode;
     }
-
+    EVP_PKEY_free(pkey);
     return ErrorCode::OK;
 }
 

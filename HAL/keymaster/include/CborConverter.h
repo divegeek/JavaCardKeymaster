@@ -138,7 +138,7 @@ class CborConverter
          * Get the list of binary arrays at the given position from the item pointer.
          */
         bool getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
-                ::android::hardware::hidl_vec<::android::hardware::hidl_vec<uint8_t>>& data);
+                std::vector<std::vector<uint8_t>>& data);
 
         /**
          * Add VerificationToken value to the Array item.
