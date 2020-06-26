@@ -470,7 +470,7 @@ public class KMVTSTest {
   private short signVerificationToken(short verToken) {
     byte[] scratchPad = new byte[256];
     byte[] authVer = "Auth Verification".getBytes();
-    print(authVer,(short)0,(short)authVer.length);
+    //print(authVer,(short)0,(short)authVer.length);
     // concatenation length will be 37 + length of verified parameters list  - which is typically empty
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
     short params = KMVerificationToken.cast(verToken).getParametersVerified();
@@ -560,6 +560,7 @@ public class KMVTSTest {
     ret = decoder.decode(ret, respBuf, (short) 0, len);
     short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
     short keyBlobLength = KMByteBlob.cast(KMArray.cast(ret).get((short)1)).length();
+    short blobArr = extractKeyBlobArray(KMArray.cast(ret).get((short)1));
     short keyCharacteristics = KMArray.cast(ret).get((short)2);
     short hwParams = KMKeyCharacteristics.cast(keyCharacteristics).getHardwareEnforced();
     short swParams = KMKeyCharacteristics.cast(keyCharacteristics).getSoftwareEnforced();
@@ -578,6 +579,26 @@ public class KMVTSTest {
     tag = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ORIGIN, hwParams);
     Assert.assertEquals(KMEnumTag.cast(tag).getValue(), KMType.IMPORTED);
     cleanUp();
+  }
+
+  private short extractKeyBlobArray(short keyBlob) {
+    short ret = KMArray.instance((short) 5);
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_SECRET, KMByteBlob.exp());
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, KMByteBlob.exp());
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_NONCE, KMByteBlob.exp());
+    short ptr = KMKeyCharacteristics.exp();
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_KEYCHAR, ptr);
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_PUB_KEY, KMByteBlob.exp());
+    ret =
+      decoder.decodeArray(
+        ret,
+        KMByteBlob.cast(keyBlob).getBuffer(),
+        KMByteBlob.cast(keyBlob).getStartOff(),
+        KMByteBlob.cast(keyBlob).length());
+    short len = KMArray.cast(ret).length();
+    ptr = KMArray.cast(ret).get((short)4);
+//    print(KMByteBlob.cast(ptr).getBuffer(),KMByteBlob.cast(ptr).getStartOff(),KMByteBlob.cast(ptr).length());
+    return ret;
   }
 
   @Test
@@ -1829,7 +1850,7 @@ public class KMVTSTest {
     }
     KMArray.cast(arrPtr).add((short)3, hwToken);
     CommandAPDU apdu = encodeApdu((byte)0x1F, arrPtr);
-    // print(commandAPDU.getBytes());
+    //print(apdu.getBytes(),(short)0,(short)apdu.getBytes().length);
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
     short outParams = KMKeyParameters.exp();
@@ -1925,6 +1946,7 @@ public class KMVTSTest {
     }
     return ret;
   }
+
   private void print(short blob){
     print(KMByteBlob.cast(blob).getBuffer(),KMByteBlob.cast(blob).getStartOff(),KMByteBlob.cast(blob).length());
   }
@@ -1936,4 +1958,34 @@ public class KMVTSTest {
     System.out.println(sb.toString());
   }
 
+
+/*
+  @Test
+  public void testApdu(){
+    init();
+    byte[] cmd = {(byte)0x80,0x11,0x40,0x00,0x00,0x00,0x4C,(byte)0x83,(byte)0xA5,0x1A,0x70,0x00,0x01,(byte)0xF7,0x01,0x1A,0x10,
+      0x00,0x00,0x02,0x03,0x1A,0x30,0x00,0x00,0x03,0x19,0x01,0x00,0x1A,0x20,0x00,0x00,0x01,0x42,0x02,
+      0x03,0x1A,0x20,0x00,0x00,0x05,0x41,0x04,0x03,0x58,0x24,(byte)0x82,0x58,0x20,0x73,0x7C,0x2E,(byte)0xCD,
+      0x7B,(byte)0x8D,0x19,0x40,(byte)0xBF,0x29,0x30,(byte)0xAA,(byte)0x9B,0x4E,
+      (byte)0xD3,(byte)0xFF,(byte)0x94,0x1E,(byte)0xED,0x09,0x36,0x6B,
+      (byte)0xC0,0x32,(byte)0x99,(byte)0x98,0x64,(byte)0x81,(byte)0xF3,(byte)0xA4,(byte)0xD8,0x59,0x40};
+    CommandAPDU cmdApdu = new CommandAPDU(cmd);
+    ResponseAPDU resp = simulator.transmitCommand(cmdApdu);
+    short ret = KMArray.instance((short) 3);
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    KMArray.cast(ret).add((short)1, KMByteBlob.exp());
+    short inst = KMKeyCharacteristics.exp();
+    KMArray.cast(ret).add((short) 2, inst);
+    byte[] respBuf = resp.getBytes();
+    short len = (short) respBuf.length;
+    ret = decoder.decode(ret, respBuf, (short) 0, len);
+    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    short keyBlobLength = KMByteBlob.cast(KMArray.cast(ret).get((short)1)).length();
+    short blobArr = extractKeyBlobArray(KMArray.cast(ret).get((short)1));
+    short keyCharacteristics = KMArray.cast(ret).get((short)2);
+    short hwParams = KMKeyCharacteristics.cast(keyCharacteristics).getHardwareEnforced();
+    short swParams = KMKeyCharacteristics.cast(keyCharacteristics).getSoftwareEnforced();
+    cleanUp();
+  }
+ */
 }

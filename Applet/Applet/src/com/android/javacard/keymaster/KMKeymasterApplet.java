@@ -371,20 +371,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
     } catch (KMException exception) {
-      if(data[OP_HANDLE] != KMType.INVALID_VALUE){
-        KMOperationState op = repository.findOperation(KMInteger.cast(data[OP_HANDLE]).getShort());
-        if(op != null){
-          repository.releaseOperation(op);
-        }
-      }
+      freeOperations();
       sendError(apdu, exception.reason);
       exception.clear();
-    } finally {
+    } catch(ISOException exp){
+      freeOperations();
+    }finally{
       resetData();
       repository.clean();
     }
   }
 
+  private void freeOperations(){
+    if(data[OP_HANDLE] != KMType.INVALID_VALUE){
+      KMOperationState op = repository.findOperation(KMInteger.cast(data[OP_HANDLE]).getShort());
+      if(op != null){
+        repository.releaseOperation(op);
+      }
+    }
+  }
   private void processEarlyBootEndedCmd(APDU apdu) {
     KMException.throwIt(KMError.UNIMPLEMENTED);
   }
@@ -1316,6 +1321,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[OP_HANDLE] = KMType.INVALID_VALUE;
     if (op.getPurpose() == KMType.ENCRYPT) {
       purpose = KMCipher.MODE_ENCRYPT;
+      if (data[IV] == KMType.INVALID_VALUE) {
+        data[IV] = KMByteBlob.instance((short) 16);
+        cryptoProvider.newRandomNumber(
+          KMByteBlob.cast(data[IV]).getBuffer(),
+          KMByteBlob.cast(data[IV]).getStartOff(),
+          KMByteBlob.cast(data[IV]).length());
+      }
     } else {
       purpose = KMCipher.MODE_DECRYPT;
     }
@@ -2057,6 +2069,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         if (op.getAlgorithm() == KMType.AES) {
           if (op.getBlockMode() == KMType.CBC) {
             alg = KMCipher.ALG_AES_BLOCK_128_CBC_NOPAD;
+            if (data[IV] == KMType.INVALID_VALUE) {
+              data[IV] = KMByteBlob.instance((short) 16);
+              cryptoProvider.newRandomNumber(
+                  KMByteBlob.cast(data[IV]).getBuffer(),
+                  KMByteBlob.cast(data[IV]).getStartOff(),
+                  KMByteBlob.cast(data[IV]).length());
+              }
           } else if (op.getBlockMode() == KMType.ECB) {
             alg = KMCipher.ALG_AES_BLOCK_128_ECB_NOPAD;
             data[IV] = KMType.INVALID_VALUE;
