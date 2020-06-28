@@ -144,7 +144,7 @@ class CborConverter
          * Add VerificationToken value to the Array item.
          */
         bool addVerificationToken(Array& array, const VerificationToken&
-                verificationToken);
+                verificationToken, std::vector<uint8_t>& encodedParamsVerified);
 
         /**
          * Get the ErrorCode value at the give position from the item pointer.

@@ -23,6 +23,8 @@
 #include <keymaster/key_blob_utils/software_keyblobs.h>
 #include <keymaster/android_keymaster_utils.h>
 #include <keymaster/wrapped_key.h>
+#include <keymaster/attestation_record.h>
+#include <keymaster/km_openssl/openssl_err.h>
 #include <openssl/aes.h>
 
 #include <JavacardKeymaster4Device.h>
@@ -45,6 +47,10 @@ namespace javacard {
 
 static std::unique_ptr<se_transport::TransportFactory> pTransportFactory = nullptr;
 constexpr size_t kOperationTableSize = 16;
+
+struct KM_AUTH_LIST_Delete {
+    void operator()(KM_AUTH_LIST* p) { KM_AUTH_LIST_free(p); }
+};
 
 enum class Instruction {
     INS_GENERATE_KEY_CMD = 0x10,
@@ -78,6 +84,38 @@ static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFacto
                     android::base::GetBoolProperty("ro.kernel.qemu", false)));
     }
     return pTransportFactory;
+}
+
+ErrorCode encodeParametersVerified(const VerificationToken& verificationToken, std::vector<uint8_t> asn1ParamsVerified) {
+    if (verificationToken.parametersVerified.size() > 0) {
+        AuthorizationSet paramSet;
+        KeymasterBlob derBlob;
+        UniquePtr<KM_AUTH_LIST, KM_AUTH_LIST_Delete> kmAuthList(KM_AUTH_LIST_new());
+
+        paramSet.Reinitialize(KmParamSet(verificationToken.parametersVerified));
+
+        auto err = build_auth_list(paramSet, kmAuthList.get());
+        if (err != KM_ERROR_OK) {
+            return legacy_enum_conversion(err);
+        }
+        int len = i2d_KM_AUTH_LIST(kmAuthList.get(), nullptr);
+        if (len < 0) {
+            return legacy_enum_conversion(TranslateLastOpenSslError());
+        }
+
+        if (!derBlob.Reset(len)) {
+            return legacy_enum_conversion(KM_ERROR_MEMORY_ALLOCATION_FAILED);
+        }
+
+        uint8_t* p = derBlob.writable_data();
+        len = i2d_KM_AUTH_LIST(kmAuthList.get(), &p);
+        if (len < 0) {
+            return legacy_enum_conversion(TranslateLastOpenSslError());
+        }
+        asn1ParamsVerified.insert(asn1ParamsVerified.begin(), p, p+len);
+        derBlob.release();
+    }
+    return ErrorCode::OK;
 }
 
 ErrorCode prepareCborArrayFromRawKey(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& blob, cppbor::Array&
@@ -860,13 +898,18 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
             cppbor::Array array;
             std::unique_ptr<Item> item;
             std::vector<uint8_t> cborOutData;
+            std::vector<uint8_t> asn1ParamsVerified;
+
+            if(ErrorCode::OK != (errorCode = encodeParametersVerified(verificationToken, asn1ParamsVerified))) {
+                return errorCode;
+            }
 
             // Convert input data to cbor format
             array.add(operationHandle);
             cborConverter_.addKeyparameters(array, inParams);
             array.add(data);
             cborConverter_.addHardwareAuthToken(array, authToken);
-            cborConverter_.addVerificationToken(array, verificationToken);
+            cborConverter_.addVerificationToken(array, verificationToken, asn1ParamsVerified);
             std::vector<uint8_t> cborData = array.encode();
 
             errorCode = sendData(Instruction::INS_UPDATE_OPERATION_CMD, cborData, cborOutData);
@@ -932,6 +975,11 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
             std::unique_ptr<Item> item;
             std::vector<uint8_t> cborOutData;
             int keyParamPos, outputPos;
+            std::vector<uint8_t> asn1ParamsVerified;
+
+            if(ErrorCode::OK != (errorCode = encodeParametersVerified(verificationToken, asn1ParamsVerified))) {
+                return errorCode;
+            }
 
             // Convert input data to cbor format
             array.add(operationHandle);
@@ -948,7 +996,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
                 outputPos = 3;
             }
             cborConverter_.addHardwareAuthToken(array, authToken);
-            cborConverter_.addVerificationToken(array, verificationToken);
+            cborConverter_.addVerificationToken(array, verificationToken, asn1ParamsVerified);
             std::vector<uint8_t> cborData = array.encode();
 
             errorCode = sendData(ins, cborData, cborOutData);
@@ -1013,14 +1061,20 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
     std::unique_ptr<Item> item;
     std::vector<uint8_t> cborOutData;
     ::android::hardware::keymaster::V4_1::ErrorCode errorCode = ::android::hardware::keymaster::V4_1::ErrorCode::UNKNOWN_ERROR;
+    std::vector<uint8_t> asn1ParamsVerified;
+    ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
+
+    if(ErrorCode::OK != (ret = encodeParametersVerified(verificationToken, asn1ParamsVerified))) {
+        return errorCode;
+    }
 
     /* Convert input data to cbor format */
     array.add(passwordOnly);
-    cborConverter_.addVerificationToken(array, verificationToken);
+    cborConverter_.addVerificationToken(array, verificationToken, asn1ParamsVerified);
     std::vector<uint8_t> cborData = array.encode();
 
     /* TODO DeviceLocked command handled inside HAL */
-    ErrorCode ret = sendData(Instruction::INS_DEVICE_LOCKED_CMD, cborData, cborOutData);
+    ret = sendData(Instruction::INS_DEVICE_LOCKED_CMD, cborData, cborOutData);
 
     if((ret == ErrorCode::OK) && (cborOutData.size() > 2)) {
         //Skip last 2 bytes in cborData, it contains status.
