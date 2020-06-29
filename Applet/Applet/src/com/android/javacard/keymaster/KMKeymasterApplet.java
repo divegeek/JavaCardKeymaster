@@ -1043,8 +1043,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           // Fill the scratch pad with zero
           Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
           if(op.getPadding() == KMType.PADDING_NONE){
-              // Length cannot be greater then key size - we restrict this to 255 that ensures
-            // that it will never be greater then numerical value of the key also.
+              // Length cannot be greater then key size according to jcard sim
               if(len >= 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
  /*             // If Length is same as key size then
               // compare the data with key value - date should be less then key value.
@@ -1357,6 +1356,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           // However as there is no padding we can treat signing as a RSA decryption operation.
           if(op.getDigest() == KMType.DIGEST_NONE && op.getPadding() == KMType.PADDING_NONE){
             if(op.getPurpose() == KMType.SIGN){
+              /*
             // Length cannot be greater then key size
             if(len > op.getKeySize()) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
             // If Length is same as key size then
@@ -1370,20 +1370,24 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               if(tmpVariables[0] >= 0){
                 KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
               }
-            }
+            }*/
             }else{//Verify
               if(len != 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
             }
-            // Fill the scratch pad with zero
+/*            // Fill the scratch pad with zero
             Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
             // Everything is fine so copy input data to scratchpad.
             Util.arrayCopyNonAtomic(
               KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
               KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
               scratchPad, (short)(256 - len),len);
-            len = (short)256;
+            len = (short)256;*/
+            Util.arrayCopyNonAtomic(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+              scratchPad, (short)0,len);
           }else if (op.getDigest() == KMType.DIGEST_NONE && op.getPadding() == KMType.RSA_PKCS1_1_5_SIGN) {
-            // If PKCS1 padding and no digest - then 0x01||0x00||PS||0x00 on left such that PS >= 8 bytes
+    /*        // If PKCS1 padding and no digest - then 0x01||0x00||PS||0x00 on left such that PS >= 8 bytes
             // Data Length should be atleast 11 less then the key size - which is 256 bytes
             if(len > (short)(op.getKeySize() - 11)){
               KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
@@ -1403,7 +1407,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
               KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
               scratchPad, (short)(tmpVariables[0]+3),len);
-            len = op.getKeySize(); // this will be 256
+            len = op.getKeySize(); // this will be 256*/
+            Util.arrayCopyNonAtomic(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+              scratchPad, (short)0,len);
+
           }else if(op.getDigest()==KMType.SHA2_256 &&
             (op.getPadding() == KMType.RSA_PKCS1_1_5_SIGN ||op.getPadding() == KMType.RSA_PSS)){
             // Normal case with PKCS1 or PSS padding and with Digest SHA256

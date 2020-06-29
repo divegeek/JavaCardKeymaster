@@ -1389,20 +1389,20 @@ public class KMVTSTest {
     cleanUp();
   }
 
-  /*
+
   // TODO Signing with no digest is not supported by crypto provider or javacard
   @Test
-  public void testSignVerifyWithRsaNoneNoPad(){
+  public void testSignWithRsaNoneNoPad(){
     init();
-    testSignVerifyWithRsa(KMType.DIGEST_NONE, KMType.RSA_PKCS1_1_5_SIGN);
+    testSignVerifyWithRsa(KMType.DIGEST_NONE, KMType.PADDING_NONE,false, false);
     cleanUp();
   }
   @Test
-  public void testSignVerifyWithRsaNonePkcs1(){
+  public void testSignWithRsaNonePkcs1(){
     init();
-    testSignVerifyWithRsa(KMType.DIGEST_NONE, KMType.RSA_PKCS1_1_5_SIGN);
+    testSignVerifyWithRsa(KMType.DIGEST_NONE, KMType.RSA_PKCS1_1_5_SIGN,false, false);
     cleanUp();
-  }*/
+  }
 
   @Test
   public void testSignVerifyWithHmacSHA256WithUpdate(){
@@ -1432,19 +1432,19 @@ public class KMVTSTest {
   @Test
   public void testSignVerifyWithRsaSHA256Pkcs1(){
     init();
-    testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN,false);
+    testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN,false, true);
     cleanUp();
   }
   @Test
   public void testSignVerifyWithRsaSHA256Pss(){
     init();
-    testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PSS,false);
+    testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PSS,false, true);
     cleanUp();
   }
   @Test
   public void testSignVerifyWithRsaSHA256Pkcs1WithUpdate(){
     init();
-    testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN,true);
+    testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN,true, true);
     cleanUp();
   }
 
@@ -1511,7 +1511,7 @@ public class KMVTSTest {
   @Test
   public void testSignVerifyWithRsaSHA256PssWithUpdate(){
     init();
-    testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PSS,true);
+    testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PSS,true, true);
     cleanUp();
   }
   @Test
@@ -1617,7 +1617,7 @@ public class KMVTSTest {
     Assert.assertTrue(equal == 0);
   }
 
-  public void testSignVerifyWithRsa(byte digest, byte padding, boolean update){
+  public void testSignVerifyWithRsa(byte digest, byte padding, boolean update, boolean verifyFlag){
     short rsaKeyArr = generateRsaKey(null, null);
     short keyBlobPtr = KMArray.cast(rsaKeyArr).get((short)1);
     byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
@@ -1638,6 +1638,10 @@ public class KMVTSTest {
     byte[] signatureData = new byte[KMByteBlob.cast(keyBlobPtr).length()];
     Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
       signatureData,(short)0, (short)signatureData.length);
+    if(verifyFlag == false) {
+      Assert.assertEquals(signatureData.length,256);
+      return;
+    }
     ret = processMessage(plainData,
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.VERIFY,
