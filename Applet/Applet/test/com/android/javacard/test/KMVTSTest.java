@@ -633,9 +633,10 @@ public class KMVTSTest {
     if(appData != null) tagCount++;
     short arrPtr = KMArray.instance(tagCount);
     short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)2048));
-    short byteBlob = KMByteBlob.instance((short)2);
+    short byteBlob = KMByteBlob.instance((short)3);
     KMByteBlob.cast(byteBlob).add((short)0, KMType.DIGEST_NONE);
     KMByteBlob.cast(byteBlob).add((short)1, KMType.SHA2_256);
+    KMByteBlob.cast(byteBlob).add((short)2, KMType.SHA1);
     short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
     byteBlob = KMByteBlob.instance((short)5);
     KMByteBlob.cast(byteBlob).add((short)0, KMType.RSA_PKCS1_1_5_ENCRYPT);
@@ -1362,15 +1363,19 @@ public class KMVTSTest {
     cleanUp();
   }
 
-  //TODO currently cannot test OAEP SHA256 based encryption/decryption as it is not supported by
-  // crypto provider
-/*  @Test
+  @Test
   public void testWithRsa256Oaep(){
     init();
     testEncryptDecryptWithRsa(KMType.SHA2_256, KMType.RSA_OAEP);
     cleanUp();
   }
-*/
+  @Test
+  public void testWithRsaSha1Oaep(){
+    init();
+    testEncryptDecryptWithRsa(KMType.SHA1, KMType.RSA_OAEP);
+    cleanUp();
+  }
+
   @Test
   public void testWithRsaNonePkcs1(){
     init();

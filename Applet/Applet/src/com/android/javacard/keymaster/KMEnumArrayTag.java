@@ -194,7 +194,7 @@ public class KMEnumArrayTag extends KMTag {
       switch (alg) {
         case KMType.EC:
         case KMType.RSA:
-          if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256) return false;
+          if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256 && digest != KMType.SHA1) return false;
           break;
         case KMType.HMAC:
           if (digest != KMType.SHA2_256) return false;

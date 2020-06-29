@@ -16,10 +16,17 @@
 
 package com.android.javacard.keymaster;
 
+import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.interfaces.RSAKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.RSAPrivateKeySpec;
+import java.security.spec.RSAPublicKeySpec;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
@@ -45,6 +52,8 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.ShortBufferException;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.OAEPParameterSpec;
+import javax.crypto.spec.PSource;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
@@ -471,9 +480,10 @@ public class KMJcardSimulator implements KMCryptoProvider {
   public KMCipher createRsaDecipher(short padding, byte[] secret, short secretStart,
                                     short secretLength, byte[] modBuffer, short modOff, short modLength) {
     byte cipherAlg = Cipher.ALG_RSA_NOPAD;
-    //TODO implement OAEP algorithm using SunJCE.
-    if(padding == KMCipher.PAD_PKCS1_OAEP_SHA256) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
+    // TODO implement OAEP algorithm using SunJCE.
+    if (padding == KMCipher.PAD_PKCS1_OAEP_SHA256 || padding == KMCipher.PAD_PKCS1_OAEP) {
+      return createRsaOAEP256Cipher(Cipher.MODE_DECRYPT,(byte)padding,secret,secretStart,secretLength,modBuffer,modOff,modLength);
+    }else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
     else cipherAlg = Cipher.ALG_RSA_NOPAD;
     Cipher rsaCipher = Cipher.getInstance(cipherAlg,false);
     RSAPrivateKey key = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_2048, false);
@@ -487,20 +497,111 @@ public class KMJcardSimulator implements KMCryptoProvider {
     return inst;
   }
 
+  private KMCipher createRsaOAEP256Cipher(byte mode,byte padding,
+                                      byte[] secret, short secretStart, short secretLen,
+                                      byte[] modBuffer, short modOff, short modLength) {
+    // Convert byte arrays into keys
+    byte[] exp = null;
+    byte[] mod = new byte[modLength];
+    if (secret != null) {
+      exp = new byte[secretLen];
+      Util.arrayCopyNonAtomic(secret, secretStart, exp, (short) 0, secretLen);
+    }else{
+      exp = new byte[]{0x01,0x00,0x01};
+    }
+    Util.arrayCopyNonAtomic(modBuffer,modOff,mod,(short)0,modLength);
+    String modString = toHexString(mod);
+    String expString = toHexString(exp);
+    BigInteger modInt = new BigInteger(modString,16);
+    BigInteger expInt = new BigInteger(expString,16);
+    javax.crypto.Cipher rsaCipher = null;
+    try{
+      KeyFactory kf = KeyFactory.getInstance("RSA");
+      // Create cipher with oaep padding
+      OAEPParameterSpec oaepSpec = null;
+      if(padding == KMCipher.PAD_PKCS1_OAEP_SHA256){
+        oaepSpec= new OAEPParameterSpec("SHA-256", "MGF1",
+          MGF1ParameterSpec.SHA1, PSource.PSpecified.DEFAULT);
+      }else{
+        oaepSpec= new OAEPParameterSpec("SHA1", "MGF1",
+          MGF1ParameterSpec.SHA1, PSource.PSpecified.DEFAULT);
+      }
+      rsaCipher = javax.crypto.Cipher.getInstance("RSA/ECB/OAEPPadding", "SunJCE");
+      if (mode == KMCipher.MODE_ENCRYPT){
+        RSAPublicKeySpec pubSpec = new RSAPublicKeySpec(modInt, expInt);
+        java.security.interfaces.RSAPublicKey pubKey = (java.security.interfaces.RSAPublicKey) kf.generatePublic(pubSpec);
+        rsaCipher.init(javax.crypto.Cipher.ENCRYPT_MODE, pubKey, oaepSpec);
+      } else {
+        RSAPrivateKeySpec privSpec = new RSAPrivateKeySpec(modInt, expInt);
+        java.security.interfaces.RSAPrivateKey privKey = (java.security.interfaces.RSAPrivateKey) kf.generatePrivate(privSpec);
+        rsaCipher.init(javax.crypto.Cipher.DECRYPT_MODE, privKey, oaepSpec);
+      }
+    } catch (NoSuchAlgorithmException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    } catch (InvalidKeySpecException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    } catch (InvalidKeyException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (InvalidAlgorithmParameterException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    } catch (NoSuchPaddingException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    } catch (NoSuchProviderException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    }
+    KMCipherImpl ret = new KMCipherImpl(rsaCipher);
+    ret.setCipherAlgorithm(KMCipher.CIPHER_RSA);
+    ret.setPaddingAlgorithm(padding);
+    ret.setMode(mode);
+    return ret;
+  }
+  private String toHexString(byte[] num){
+    StringBuilder sb = new StringBuilder();
+    for(int i = 0; i < num.length; i++){
+      sb.append(String.format("%02X", num[i])) ;
+      }
+    return sb.toString();
+  }
   @Override
-  public Signature createRsaSigner(short msgDigestAlg, short padding, byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength) {
+  public Signature createRsaSigner(short msgDigestAlg, short padding, byte[] secret,
+                                   short secretStart, short secretLength, byte[] modBuffer,
+                                   short modOff, short modLength) {
     short alg = Signature.ALG_RSA_SHA_256_PKCS1;
-    if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    else if(padding == KMCipher.PAD_NOPAD) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    else if(padding == KMCipher.PAD_PKCS1_PSS) alg = Signature.ALG_RSA_SHA_256_PKCS1_PSS;
-    else if(padding == KMCipher.PAD_PKCS1) alg = Signature.ALG_RSA_SHA_256_PKCS1;
-    else CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    if (padding == KMCipher.PAD_NOPAD ||
+      (padding == KMCipher.PAD_PKCS1 && msgDigestAlg == MessageDigest.ALG_NULL)) {
+      return createNoDigestSigner(padding,secret, secretStart, secretLength,
+        modBuffer, modOff, modLength);
+    }
+    else if (padding == KMCipher.PAD_PKCS1_PSS) alg = Signature.ALG_RSA_SHA_256_PKCS1_PSS;
+    else if (padding == KMCipher.PAD_PKCS1) {
+      alg = Signature.ALG_RSA_SHA_256_PKCS1;
+    }else CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
     Signature rsaSigner = Signature.getInstance((byte)alg, false);
     RSAPrivateKey key = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_2048, false);
     key.setExponent(secret,secretStart,secretLength);
     key.setModulus(modBuffer, modOff, modLength);
     rsaSigner.init(key,Signature.MODE_SIGN);
     return rsaSigner;
+  }
+
+  private Signature createNoDigestSigner(short padding,
+                                         byte[] secret, short secretStart, short secretLength,
+                                         byte[] modBuffer, short modOff, short modLength) {
+    Cipher rsaCipher = Cipher.getInstance(Cipher.ALG_RSA_NOPAD,false);
+    RSAPrivateKey key = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE,
+      KeyBuilder.LENGTH_RSA_2048, false);
+    key.setExponent(secret,secretStart,secretLength);
+    key.setModulus(modBuffer, modOff, modLength);
+    rsaCipher.init(key,Cipher.MODE_DECRYPT);
+    KMRsa2048NoDigestSignature inst = new KMRsa2048NoDigestSignature(rsaCipher,(byte)padding,
+      modBuffer,modOff,modLength);
+    return inst;
   }
 
   @Override
@@ -773,10 +874,9 @@ public class KMJcardSimulator implements KMCryptoProvider {
   @Override
   public KMCipher createRsaCipher(short padding, byte[] modBuffer, short modOff, short modLength) {
     byte cipherAlg = Cipher.ALG_RSA_NOPAD;
-    //TODO implement OAEP algorithm using SunJCE.
-    //TODO for no pad the buffer length must be 255 max.
-    if(padding == KMCipher.PAD_PKCS1_OAEP_SHA256) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
+    if (padding == KMCipher.PAD_PKCS1_OAEP_SHA256 || padding == KMCipher.PAD_PKCS1_OAEP) {
+      return createRsaOAEP256Cipher(Cipher.MODE_ENCRYPT,(byte)padding,null,(short)0,(short)0,modBuffer,modOff,modLength);
+    }else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
     else cipherAlg = Cipher.ALG_RSA_NOPAD;
     Cipher rsaCipher = Cipher.getInstance(cipherAlg,false);
     RSAPublicKey key = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
@@ -790,6 +890,7 @@ public class KMJcardSimulator implements KMCryptoProvider {
     inst.setPaddingAlgorithm(padding);
     return inst;
   }
+
 
   @Override
   public Signature createRsaVerifier(short msgDigestAlg, short padding, byte[] modBuffer, short modOff, short modLength) {
@@ -820,6 +921,7 @@ public class KMJcardSimulator implements KMCryptoProvider {
     ecVerifier.init(key,Signature.MODE_VERIFY);
     return ecVerifier;
   }
+
   /*
   private static void print (String lab, byte[] b, short s, short l){
     byte[] i = new byte[l];

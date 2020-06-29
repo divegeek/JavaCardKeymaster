@@ -1354,15 +1354,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case KMType.RSA:
           data[OUTPUT_DATA] = KMByteBlob.instance((short)256);
           // No digest and no padding - This case is not supported in javacard api
-          // TODO confirm whether this case should be handled as it cannot be supported or tested
+          // However as there is no padding we can treat signing as a RSA decryption operation.
           if(op.getDigest() == KMType.DIGEST_NONE && op.getPadding() == KMType.PADDING_NONE){
             if(op.getPurpose() == KMType.SIGN){
             // Length cannot be greater then key size
-            if(len > 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+            if(len > op.getKeySize()) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
             // If Length is same as key size then
-            // compare the data with key value - date should be less then key value.
-            if(len == 256) {
-              // TODO the assumption is that private key exponent value is considered here.
+            // compare the data with key value - data should be less then key value.
+            if(len == op.getKeySize()) {
               tmpVariables[0]= op.getKey(scratchPad,(short)0);
               tmpVariables[0] = Util.arrayCompare(
                 KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
@@ -1383,37 +1382,40 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
               scratchPad, (short)(256 - len),len);
             len = (short)256;
-          }
-          // If PKCS1 padding and no digest - then 0x01||0x00||PS||0x00 on left such that PS = 8 bytes
-          // TODO confirm whether this case should be handled as it cannot be supported or tested
-          if (op.getDigest() == KMType.DIGEST_NONE && op.getPadding() == KMType.RSA_PKCS1_1_5_SIGN) {
-            // Length cannot be greater then 256 -11 = 245 bytes
-            if(len > 245){
+          }else if (op.getDigest() == KMType.DIGEST_NONE && op.getPadding() == KMType.RSA_PKCS1_1_5_SIGN) {
+            // If PKCS1 padding and no digest - then 0x01||0x00||PS||0x00 on left such that PS >= 8 bytes
+            // Data Length should be atleast 11 less then the key size - which is 256 bytes
+            if(len > (short)(op.getKeySize() - 11)){
               KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
             }
-            // Fill the scratch pad with zero
+            // Fill the scratch pad with pkcs1 padding zero according to RFC 2313 section 8.1
+            // Signing is done using private key.
             Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
             scratchPad[0] = 0x00;
             scratchPad[1] = 0x01;
-            cryptoProvider.newRandomNumber(scratchPad, (short)2, (short)8);
-            scratchPad[10] = 0x00;
+            //cryptoProvider.newRandomNumber(scratchPad, (short)2, (short)8);
+            // We fill in 0xFF as PS following the javacard pkcs1 padding example.
+            tmpVariables[0] = (short)(op.getKeySize()-len-3);
+            Util.arrayFillNonAtomic(scratchPad,(short)2,tmpVariables[0],(byte)0xFF);
+            scratchPad[(short)(tmpVariables[0]+2)] = 0x00;
             //copy the rest of the data on scratch pad.
             Util.arrayCopyNonAtomic(
               KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
               KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
-              scratchPad, (short)11,len);
-            len += (short)11;
-          }
-          // Normal case with PKCS1 or PSS padding and with Digest SHA256
-          if(op.getDigest()==KMType.SHA2_256 &&
+              scratchPad, (short)(tmpVariables[0]+3),len);
+            len = op.getKeySize(); // this will be 256
+          }else if(op.getDigest()==KMType.SHA2_256 &&
             (op.getPadding() == KMType.RSA_PKCS1_1_5_SIGN ||op.getPadding() == KMType.RSA_PSS)){
-          // Fill the scratch pad with zero
+            // Normal case with PKCS1 or PSS padding and with Digest SHA256
+            // Fill the scratch pad with zero
           Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256, (byte)0);
           // Copy the data on the scratch pad.
           Util.arrayCopyNonAtomic(
             KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
             KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
             scratchPad, (short)0,len);
+          }else{
+           KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
           }
           if(op.getPurpose() == KMType.SIGN){
           // len of signature will be 256 bytes
@@ -1795,6 +1797,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if(op == null) KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
     data[OP_HANDLE] = op.getHandle();
     op.setPurpose(tmpVariables[0]);
+    op.setKeySize(KMByteBlob.cast(data[SECRET]).length());
     authorizeAndBeginOperation(op, scratchPad);
     switch (op.getPurpose()){
       case KMType.SIGN:
@@ -2020,10 +2023,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         // TODO remove this later
       case KMType.RSA:
         if (op.getPadding() == KMType.RSA_PKCS1_1_5_ENCRYPT) padding = KMCipher.PAD_PKCS1;
-        else if(op.getPadding() == KMType.RSA_OAEP){
+        else if(op.getPadding() == KMType.RSA_OAEP && op.getDigest() == KMType.SHA2_256){
           padding = KMCipher.PAD_PKCS1_OAEP_SHA256;
-        }
-        else padding = KMCipher.PAD_NOPAD;
+        } else if (op.getPadding() == KMType.RSA_OAEP && op.getDigest() == KMType.SHA1) {
+          padding = KMCipher.PAD_PKCS1_OAEP;
+        } else padding = KMCipher.PAD_NOPAD;
         try {
           if(purpose == KMCipher.MODE_DECRYPT){
           op.setKey(

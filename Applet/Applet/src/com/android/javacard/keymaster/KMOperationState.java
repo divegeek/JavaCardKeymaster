@@ -26,13 +26,13 @@ public class KMOperationState {
   private byte padding;
   private byte blockMode;
   private byte digest;
-
+  private short purpose;
+  private short keySize;
   private boolean active;
   private boolean trustedConfirmation;
   private boolean cipherOperation;
   // TODO This should be 64 bits
   private  short handle;
-  private short purpose;
   private KMCipher cipher;
   private Signature hmacSigner; // used for trusted confirmation.
   private Signature signer;
@@ -53,6 +53,15 @@ public class KMOperationState {
     aesBlock = new byte[KMKeymasterApplet.AES_BLOCK_SIZE];
     reset();
   }
+
+  public short getKeySize() {
+    return keySize;
+  }
+
+  public void setKeySize(short keySize) {
+    this.keySize = keySize;
+  }
+
 
   public void setTrustedConfirmationSigner(Signature hmacSigner){
     this.hmacSigner = hmacSigner;

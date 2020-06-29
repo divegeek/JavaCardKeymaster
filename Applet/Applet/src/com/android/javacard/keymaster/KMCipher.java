@@ -2,6 +2,7 @@ package com.android.javacard.keymaster;
 
 public abstract class KMCipher {
   public static final byte CIPHER_RSA = 7;
+  public static final short PAD_PKCS1_OAEP = 9;
   public static final short PAD_PKCS1_OAEP_SHA224 = 13;
   public static final byte PAD_PKCS1_OAEP_SHA256 = 14;
   public static final short PAD_PKCS1_OAEP_SHA384 = 15;

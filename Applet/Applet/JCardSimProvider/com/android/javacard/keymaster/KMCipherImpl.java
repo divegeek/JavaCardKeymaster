@@ -23,7 +23,21 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i){
-    if(cipherAlg == KMCipher.ALG_AES_GCM){
+    if(cipherAlg == KMCipher.CIPHER_RSA &&
+      (paddingAlg == KMCipher.PAD_PKCS1_OAEP_SHA256||paddingAlg == KMCipher.PAD_PKCS1_OAEP)){
+      try {
+        return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
+      } catch (ShortBufferException e) {
+        e.printStackTrace();
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      } catch (IllegalBlockSizeException e) {
+        e.printStackTrace();
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      } catch (BadPaddingException e) {
+        e.printStackTrace();
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      }
+    }else if(cipherAlg == KMCipher.ALG_AES_GCM){
       try {
         return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
       } catch (AEADBadTagException e) {
