@@ -82,6 +82,7 @@ static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFacto
     if(pTransportFactory == nullptr) {
         pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
                     android::base::GetBoolProperty("ro.kernel.qemu", false)));
+        pTransportFactory->openConnection();
     }
     return pTransportFactory;
 }
@@ -395,7 +396,6 @@ JavacardKeymaster4Device::JavacardKeymaster4Device(): softKm_(new ::keymaster::A
             }(),
             kOperationTableSize)), oprCtx_(new OperationContext()) {
 
-    getTransportFactoryInstance()->openConnection();
 }
 
 JavacardKeymaster4Device::~JavacardKeymaster4Device() {}
@@ -811,6 +811,12 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     hidl_vec<KeyParameter> outParams;
     uint64_t operationHandle = 0;
+    hidl_vec<KeyParameter> resultParams;
+
+    if(keyBlob.size() == 0) {
+        _hidl_cb(ErrorCode::INVALID_ARGUMENT, resultParams, operationHandle);
+        return Void();
+    }
 
     if (KeyPurpose::ENCRYPT == purpose || KeyPurpose::VERIFY == purpose) {
         BeginOperationRequest request;
@@ -821,7 +827,6 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
         BeginOperationResponse response;
         softKm_->BeginOperation(request, &response);
 
-        hidl_vec<KeyParameter> resultParams;
         if (response.error == KM_ERROR_OK) {
             resultParams = kmParamSet2Hidl(response.output_params);
         }

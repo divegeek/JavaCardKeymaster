@@ -142,7 +142,7 @@ ErrorCode getEcCurve(const EC_GROUP *group, EcCurve& ecCurve) {
     return ErrorCode::OK;
 }
 
-ErrorCode ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>
+ErrorCode ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>&
 publicKey, EcCurve& ecCurve) {
     ErrorCode errorCode = ErrorCode::INVALID_KEY_BLOB;
     EVP_PKEY *pkey = nullptr;

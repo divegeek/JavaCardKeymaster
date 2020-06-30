@@ -77,7 +77,7 @@ hidl_vec<KeyParameter> kmParamSet2Hidl(const keymaster_key_param_set_t& set);
 ErrorCode rsaRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& privateExp, std::vector<uint8_t>&
 pubModulus);
 
-ErrorCode ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>
+ErrorCode ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>&
 publicKey, EcCurve& eccurve);
 
 class KmParamSet : public keymaster_key_param_set_t {

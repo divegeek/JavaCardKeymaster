@@ -111,7 +111,7 @@ keymaster_error_t JavaCardSoftKeymasterContext::LoadKey(const keymaster_algorith
     if(algorithm == KM_ALGORITHM_RSA) {
         pkey = RSA_fromMaterial(tmp, temp_size);
     } else if(algorithm == KM_ALGORITHM_EC) {
-        keymaster_ec_curve_t ec_curve = KM_EC_CURVE_P_256;
+        keymaster_ec_curve_t ec_curve;
         uint32_t keySize;
         if (!hw_enforced.GetTagValue(TAG_EC_CURVE, &ec_curve) &&
             !sw_enforced.GetTagValue(TAG_EC_CURVE, &ec_curve)) {
