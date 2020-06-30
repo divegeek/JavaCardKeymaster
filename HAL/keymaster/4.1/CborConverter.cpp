@@ -209,9 +209,9 @@ bool CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&
             {
                 KeyParameter keyParam;
                 keyParam.tag = static_cast<Tag>(key);
-                if(!getBinaryArray(pair.second, 0, keyParam.blob)) {
-                    return ret;
-                }
+                const Bstr* bstr = pair.second.get()->asBstr();
+                if(bstr == nullptr) return ret;
+                keyParam.blob = bstr->value();
                 keyParams.push_back(std::move(keyParam));
                 return true;
             }
