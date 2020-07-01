@@ -853,10 +853,13 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     cborConverter_.addHardwareAuthToken(array, authToken);
     std::vector<uint8_t> cborData = array.encode();
 
-    /* Store the operationInfo */
+    /* keyCharacteristics.hardwareEnforced is required to store algorithm, digest and padding values in operationInfo
+     * structure. To retrieve keyCharacteristics.hardwareEnforced, parse the keyBlob.
+     */
+     /* TODO if keyBlob is corrupted it crashes in cbor */
     std::tie(blobItem, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(keyBlob), false);
 
-    if(blobItem == NULL) {
+    if(blobItem == nullptr) {
         _hidl_cb(errorCode, outParams, operationHandle);
         return Void();
     }
@@ -870,10 +873,8 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
             cborConverter_.getKeyParameters(item, 1, outParams);
             cborConverter_.getUint64(item, 2, operationHandle);
             /* Store the operationInfo */
-            if (blobItem != nullptr) {
-                cborConverter_.getKeyCharacteristics(blobItem, 3, keyCharacteristics);
-                oprCtx_->setOperationInfo(operationHandle, purpose, keyCharacteristics.hardwareEnforced);
-            }
+            cborConverter_.getKeyCharacteristics(blobItem, 3, keyCharacteristics);
+            oprCtx_->setOperationInfo(operationHandle, purpose, keyCharacteristics.hardwareEnforced);
         }
     }
     _hidl_cb(errorCode, outParams, operationHandle);
@@ -945,8 +946,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
         }
     }
     if(ErrorCode::OK != errorCode) {
-        /* Delete the entry on this operationHandle */
-        oprCtx_->clearOperationData(operationHandle);
+        abort(operationHandle);
     }
     _hidl_cb(errorCode, inputConsumed, outParams, output);
     return Void();
@@ -1027,8 +1027,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
             output = tempOut;
         }
     }
-    /* Delete the entry on this operationHandle */
-    oprCtx_->clearOperationData(operationHandle);
+    abort(operationHandle);
     _hidl_cb(errorCode, outParams, output);
     return Void();
 }
