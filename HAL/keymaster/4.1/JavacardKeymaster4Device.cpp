@@ -258,6 +258,10 @@ ErrorCode initiateProvision() {
     std::string model("HD1121");
     AuthorizationSet authSet(AuthorizationSetBuilder()
             .Authorization(TAG_ALGORITHM, KM_ALGORITHM_RSA)
+            .Authorization(TAG_PADDING, KM_PAD_RSA_PKCS1_1_5_SIGN)
+            .Authorization(TAG_DIGEST, KM_DIGEST_SHA_2_256)
+            .Authorization(TAG_KEY_SIZE, 2048)
+            .Authorization(TAG_PURPOSE, static_cast<keymaster_purpose_t>(0x7F)) /* The value 0x7F is not present in types.hal */
             .Authorization(TAG_ATTESTATION_ID_BRAND, brand.data(), brand.size())
             .Authorization(TAG_ATTESTATION_ID_DEVICE, device.data(), device.size())
             .Authorization(TAG_ATTESTATION_ID_PRODUCT, product.data(), product.size())
