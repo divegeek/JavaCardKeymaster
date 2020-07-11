@@ -19,16 +19,6 @@
 
 #include <keymaster/contexts/pure_soft_keymaster_context.h>
 
-#include <memory>
-#include <string>
-
-#include <keymaster/keymaster_context.h>
-#include <keymaster/attestation_record.h>
-#include <keymaster/km_openssl/software_random_source.h>
-#include <keymaster/km_openssl/soft_keymaster_enforcement.h>
-#include <keymaster/soft_key_factory.h>
-#include <keymaster/random_source.h>
-
 namespace keymaster {
 
 class SoftKeymasterKeyRegistrations;
@@ -53,13 +43,6 @@ class JavaCardSoftKeymasterContext : public keymaster::PureSoftKeymasterContext 
     keymaster_error_t ParseKeyBlob(const KeymasterKeyBlob& blob,
                                    const AuthorizationSet& additional_params,
                                    UniquePtr<Key>* key) const override;
-    /*********************************************************************************************
-     * Implement SoftwareKeyBlobMaker
-     */
-    keymaster_error_t CreateKeyBlob(const AuthorizationSet& auths, keymaster_key_origin_t origin,
-                                    const KeymasterKeyBlob& key_material, KeymasterKeyBlob* blob,
-                                    AuthorizationSet* hw_enforced,
-                                    AuthorizationSet* sw_enforced) const override;
 
 };
 

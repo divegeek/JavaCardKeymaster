@@ -77,7 +77,7 @@ bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, con
     bool ret = false;
     std::unique_ptr<Item> arrayItem(nullptr);
     getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
         return ret;
 
     if (!getKeyParameters(arrayItem, 0, keyCharacteristics.softwareEnforced)) {
@@ -209,9 +209,9 @@ bool CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&
             {
                 KeyParameter keyParam;
                 keyParam.tag = static_cast<Tag>(key);
-                if(!getBinaryArray(pair.second, 0, keyParam.blob)) {
-                    return ret;
-                }
+                const Bstr* bstr = pair.second.get()->asBstr();
+                if(bstr == nullptr) return ret;
+                keyParam.blob = bstr->value();
                 keyParams.push_back(std::move(keyParam));
                 return true;
             }
@@ -223,19 +223,22 @@ bool CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&
     return ret;
 }
 
+
 bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
-        ::android::hardware::hidl_vec<::android::hardware::hidl_vec<uint8_t>>& data) {
+        std::vector<std::vector<uint8_t>>& data) {
     bool ret = false;
     std::unique_ptr<Item> arrayItem(nullptr);
 
     getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
         return ret;
     const Array* arr = arrayItem.get()->asArray();
     size_t arrSize = arr->size();
     for (int i = 0; i < arrSize; i++) {
-        if (!getBinaryArray(arrayItem, i, data[i]))
+        std::vector<uint8_t> temp;
+        if (!getBinaryArray(arrayItem, i, temp))
             return ret;
+        data.push_back(std::move(temp));
     }
     ret = true; // success
     return ret;
@@ -246,7 +249,7 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
     bool ret = false;
     std::unique_ptr<Item> strItem(nullptr);
     getItemAtPos(item, pos, strItem);
-    if ((strItem == nullptr) && (MajorType::BSTR != getType(strItem)))
+    if ((strItem == nullptr) || (MajorType::BSTR != getType(strItem)))
         return ret;
 
     const Bstr* bstr = strItem.get()->asBstr();
@@ -260,7 +263,7 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
     bool ret = false;
     std::unique_ptr<Item> strItem(nullptr);
     getItemAtPos(item, pos, strItem);
-    if ((strItem == nullptr) && (MajorType::BSTR != getType(strItem)))
+    if ((strItem == nullptr) || (MajorType::BSTR != getType(strItem)))
         return ret;
 
     const Bstr* bstr = strItem.get()->asBstr();
@@ -280,7 +283,7 @@ bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, 
     //2. First item in the array seed; second item in the array is nonce.
 
     getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) && (MajorType::ARRAY != getType(arrayItem)))
+    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
         return ret;
 
     //Seed
@@ -296,13 +299,10 @@ bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, 
 }
 
 bool CborConverter::addVerificationToken(Array& array, const VerificationToken&
-        verificationToken) {
-    std::vector<uint8_t> encodedParamsVerified;
+        verificationToken, std::vector<uint8_t>& encodedParamsVerified) {
     Array vToken;
     vToken.add(verificationToken.challenge);
     vToken.add(verificationToken.timestamp);
-    //addKeyparameters(vToken, verificationToken.parametersVerified);
-    /* TODO Need to get proper encodedParamsVerified */
     vToken.add(std::move(encodedParamsVerified));
     vToken.add(static_cast<uint64_t>(verificationToken.securityLevel));
     vToken.add((std::vector<uint8_t>(verificationToken.mac)));
@@ -383,7 +383,7 @@ bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const ui
     std::unique_ptr<Item> mapItem(nullptr);
     std::vector<KeyParameter> params;
     getItemAtPos(item, pos, mapItem);
-    if ((mapItem == nullptr) && (MajorType::MAP != getType(mapItem)))
+    if ((mapItem == nullptr) || (MajorType::MAP != getType(mapItem)))
         return ret;
     const Map* map = mapItem.get()->asMap();
     size_t mapSize = map->size();

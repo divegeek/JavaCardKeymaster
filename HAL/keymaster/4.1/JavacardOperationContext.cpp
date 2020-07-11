@@ -189,20 +189,20 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
             auto end = first + MAX_ALLOWED_INPUT_SIZE;
             std::vector<uint8_t> newInput(first, end);
             if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, newInput.data(), newInput.size(),
-                Operation::Finish, cb))) {
+                Operation::Update, cb))) {
                 return errorCode;
             }
         }
         if(extraData > 0) {
             std::vector<uint8_t> finalInput(input.cend()-extraData, input.cend());
             if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, finalInput.data(), finalInput.size(), 
-                Operation::Finish, cb))) {
+                Operation::Update, cb))) {
                 return errorCode;
             }
         }
     } else {
         if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, input.data(), input.size(), 
-            Operation::Finish, cb))) {
+            Operation::Update, cb))) {
             return errorCode;
         }
     }
@@ -221,7 +221,7 @@ ErrorCode OperationContext::internalUpdate(uint64_t operHandle, uint8_t* input, 
     int inputConsumed=0;
     bool dataSendToSE = true;
     int blockSize = 0;
-    BufferedData data = operationTable[operHandle].data;
+    BufferedData& data = operationTable[operHandle].data;
     int bufIndex = data.buf_len;
 
     if(Algorithm::AES == operationTable[operHandle].info.alg) {

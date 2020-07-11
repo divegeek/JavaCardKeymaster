@@ -54,7 +54,7 @@ class CborConverter
             const uint8_t* pos;
             std::unique_ptr<Item> item(nullptr);
             std::string message;
-            T errorCode = T::UNKNOWN_ERROR;
+            T errorCode = T::OK;
 
             std::tie(item, pos, message) = parse(response);
 
@@ -138,13 +138,13 @@ class CborConverter
          * Get the list of binary arrays at the given position from the item pointer.
          */
         bool getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
-                ::android::hardware::hidl_vec<::android::hardware::hidl_vec<uint8_t>>& data);
+                std::vector<std::vector<uint8_t>>& data);
 
         /**
          * Add VerificationToken value to the Array item.
          */
         bool addVerificationToken(Array& array, const VerificationToken&
-                verificationToken);
+                verificationToken, std::vector<uint8_t>& encodedParamsVerified);
 
         /**
          * Get the ErrorCode value at the give position from the item pointer.
