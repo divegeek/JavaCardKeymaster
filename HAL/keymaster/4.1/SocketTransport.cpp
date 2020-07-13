@@ -21,7 +21,8 @@
 #include "Transport.h"
 
 #define PORT    8080
-#define IPADDR  "10.9.40.24"
+//#define IPADDR  "10.9.40.24"
+#define IPADDR  "192.168.0.5"
 #define MAX_RECV_BUFFER_SIZE 2048
 
 namespace se_transport {

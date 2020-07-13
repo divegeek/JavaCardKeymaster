@@ -2,10 +2,6 @@
     <hal format="hidl">
         <name>android.hardware.keymaster</name>
         <transport>hwbinder</transport>
-        <version>4.1</version>
-        <interface>
-        <name>IKeymasterDevice</name>
-            <instance>default</instance>
-        </interface>
+	<fqname>@4.1::IKeymasterDevice/javacard</fqname>
     </hal>
 </manifest>
