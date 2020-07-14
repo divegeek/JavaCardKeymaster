@@ -31,6 +31,10 @@
 #include <java_card_soft_keymaster_context.h>
 #include <CommonUtils.h>
 #include <android-base/logging.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+#include <openssl/bio.h>
+#include <openssl/asn1.h>
 
 #define APDU_CLS 0x80
 #define APDU_P1  0x40
@@ -85,6 +89,109 @@ static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFacto
         pTransportFactory->openConnection();
     }
     return pTransportFactory;
+}
+
+static inline bool readDataFromFile(const char *filename, std::vector<uint8_t>& data) {
+    FILE *fp;
+    bool ret = true;
+    fp = fopen(filename, "rb");
+    if(fp == NULL) {
+        LOG(ERROR) << "Failed to open file: " << filename;
+        return false;
+    }
+    fseek(fp, 0L, SEEK_END);
+    long int filesize = ftell(fp);
+    rewind(fp);
+    std::unique_ptr<uint8_t[]> buf(new uint8_t[filesize]);
+    if( 0 == fread(buf.get(), filesize, 1, fp)) {
+        LOG(ERROR) << "No Content in the file: " << filename;
+        ret = false;
+    }
+    if(true == ret) {
+        data.insert(data.begin(), buf.get(), buf.get() + filesize);
+    }
+    fclose(fp);
+    return ret;
+}
+
+
+
+static inline X509* parseDerCertificate(const char* filename) {
+    X509 *x509 = NULL;
+    std::vector<uint8_t> certData;
+
+    /* Read the Root certificate */
+    if(!readDataFromFile(filename, certData)) {
+        LOG(ERROR) << " Failed to read the Root certificate";
+        return NULL;
+    }
+    /* Create BIO instance from certificate data */
+    BIO *bio = BIO_new_mem_buf(certData.data(), certData.size());
+    if(bio == NULL) {
+        LOG(ERROR) << " Failed to create BIO from buffer.";
+        return NULL;
+    }
+    /* Create X509 instance from BIO */
+    x509 = d2i_X509_bio(bio, NULL);
+    if(x509 == NULL) {
+        LOG(ERROR) << " Failed to get X509 instance from BIO.";
+        return NULL;
+    }
+    BIO_free(bio);
+    return x509;
+}
+
+static inline void getDerSubjectName(X509* x509, std::vector<uint8_t>& subject) {
+    uint8_t *subjectDer = NULL;
+    X509_NAME* asn1Subject = X509_get_subject_name(x509);
+    if(asn1Subject == NULL) {
+        LOG(ERROR) << " Failed to read the subject.";
+        return;
+    }
+    /* Convert X509_NAME to der encoded subject */
+    int len = i2d_X509_NAME(asn1Subject, &subjectDer);
+    if (len < 0) {
+        LOG(ERROR) << " Failed to get readable name from X509_NAME.";
+        return;
+    }
+    subject.insert(subject.begin(), subjectDer, subjectDer+len);
+}
+
+static inline void getAuthorityKeyIdentifier(X509* x509, std::vector<uint8_t>& authKeyId) {
+    long xlen;
+    int tag, xclass;
+
+    int loc = X509_get_ext_by_NID(x509, NID_authority_key_identifier, -1);
+    X509_EXTENSION *ext = X509_get_ext(x509, loc);
+    if(ext == NULL) {
+        LOG(ERROR) << " Failed to read authority key identifier.";
+        return;
+    }
+
+    ASN1_OCTET_STRING *asn1AuthKeyId = X509_EXTENSION_get_data(ext);
+    const uint8_t *strAuthKeyId = ASN1_STRING_get0_data(asn1AuthKeyId);
+    int strAuthKeyIdLen = ASN1_STRING_length(asn1AuthKeyId);
+    int ret = ASN1_get_object(&strAuthKeyId, &xlen, &tag, &xclass, strAuthKeyIdLen);
+    if (ret == 0x80 || strAuthKeyId == NULL) {
+        LOG(ERROR) << "Failed to get the auth key identifier from ASN1 sequence.";
+        return;
+    }
+    authKeyId.insert(authKeyId.begin(), strAuthKeyId, strAuthKeyId + xlen);
+}
+
+static inline void getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate) {
+    const ASN1_TIME* notAfter = X509_get0_notAfter(x509);
+    if(notAfter == NULL) {
+        LOG(ERROR) << " Failed to read expiry time.";
+        return;
+    }
+    int strNotAfterLen = ASN1_STRING_length(notAfter);
+    const uint8_t *strNotAfter = ASN1_STRING_get0_data(notAfter);
+    if(strNotAfter == NULL) {
+        LOG(ERROR) << " Failed to read expiry time from ASN1 string.";
+        return;
+    }
+    notAfterDate.insert(notAfterDate.begin(), strNotAfter, strNotAfter + strNotAfterLen);
 }
 
 ErrorCode encodeParametersVerified(const VerificationToken& verificationToken, std::vector<uint8_t> asn1ParamsVerified) {
@@ -223,29 +330,6 @@ uint16_t getStatus(std::vector<uint8_t>& inputData) {
     return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
 }
 
-bool readDataFromFile(const char *filename, std::vector<uint8_t>& data) {
-    FILE *fp;
-    bool ret = true;
-    fp = fopen(filename, "rb");
-    if(fp == NULL) {
-        LOG(ERROR) << "Failed to open file: " << filename;
-        return false;
-    }
-    fseek(fp, 0L, SEEK_END);
-    long int filesize = ftell(fp);
-    rewind(fp);
-    std::unique_ptr<uint8_t[]> buf(new uint8_t[filesize]);
-    if( 0 == fread(buf.get(), filesize, 1, fp)) {
-        LOG(ERROR) << "No Content in the file: " << filename;
-        ret = false;
-    }
-    if(true == ret) {
-        data.insert(data.begin(), buf.get(), buf.get() + filesize);
-    }
-    fclose(fp);
-    return ret;
-}
-
 ErrorCode initiateProvision() {
     /* This is just a reference implemenation */
     std::string brand("Google");
@@ -329,16 +413,38 @@ keyData) {
     Instruction ins = Instruction::INS_PROVISION_CMD;
     std::vector<uint8_t> response;
     CborConverter cborConverter;
+    X509 *x509 = NULL;
+    std::vector<uint8_t> subject;
+    std::vector<uint8_t> authorityKeyIdentifier;
+    std::vector<uint8_t> notAfter;
 
     if(ErrorCode::OK != (errorCode = prepareCborArrayFromRawKey(keyParams, keyFormat, keyData, subArray))) {
         return errorCode;
     }
+    /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
+    /* Get X509 certificate instance for the root certificate.*/
+    if(NULL == (x509 = parseDerCertificate(ROOT_RSA_CERT))) {
+        return errorCode;
+    }
+    /* Get subject in DER */
+    getDerSubjectName(x509, subject);
+    /* Get AuthorityKeyIdentifier */
+    getAuthorityKeyIdentifier(x509, authorityKeyIdentifier);
+    /* Get Expirty Time */
+    getNotAfter(x509, notAfter);
+    /*Free X509 */
+    X509_free(x509);
+
     /* construct cbor */
     cborConverter.addKeyparameters(array, keyParams);
     array.add(static_cast<uint32_t>(keyFormat));
     std::vector<uint8_t> encodedArray = subArray.encode();
     cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
     array.add(bstr);
+    /* TODO Add in the order in which javacard is expecting */
+    array.add(subject);
+    array.add(authorityKeyIdentifier);
+    array.add(notAfter);
     std::vector<uint8_t> cborData = array.encode();
 
     if(ErrorCode::OK != (errorCode = constructApduMessage(ins, cborData, apdu)))
