@@ -572,7 +572,7 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
     cppbor::Array innerArray;
     for(size_t i = 0; i < params.size(); ++i) {
         innerArray.add(static_cast<std::vector<uint8_t>>(params[i].seed));
-        for(size_t j = 0; i < params[j].nonce.size(); j++) {
+        for(size_t j = 0; j < params[i].nonce.size(); j++) {
             tempVec.push_back(params[i].nonce[j]);
         }
         innerArray.add(tempVec);
