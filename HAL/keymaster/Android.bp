@@ -15,11 +15,11 @@
 
 
 cc_binary {
-    name: "keymaster@4.1-javacard.service",
+    name: "android.hardware.keymaster@4.1-javacard.service",
     relative_install_path: "hw",
     vendor: true,
-    init_rc: ["4.1/keymaster@4.1-javacard.service.rc"],
-    vintf_fragments: ["4.1/keymaster@4.1-javacard.service.xml"],
+    init_rc: ["4.1/android.hardware.keymaster@4.1-javacard.service.rc"],
+    vintf_fragments: ["4.1/android.hardware.keymaster@4.1-javacard.service.xml"],
     srcs: [
         "4.1/service.cpp",
         "4.1/JavacardKeymaster4Device.cpp",

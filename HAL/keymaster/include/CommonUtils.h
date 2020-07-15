@@ -70,6 +70,12 @@ inline void blob2Vec(const uint8_t *from, size_t size, std::vector<uint8_t>& to)
     }
 }
 
+inline hidl_vec<uint8_t> kmBlob2hidlVec(const keymaster_blob_t& blob) {
+    hidl_vec<uint8_t> result;
+    result.setToExternal(const_cast<unsigned char*>(blob.data), blob.data_length);
+    return result;
+}
+
 keymaster_key_param_set_t hidlKeyParams2Km(const hidl_vec<KeyParameter>& keyParams);
 
 hidl_vec<KeyParameter> kmParamSet2Hidl(const keymaster_key_param_set_t& set);

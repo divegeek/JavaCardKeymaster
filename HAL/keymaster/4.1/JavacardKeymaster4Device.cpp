@@ -36,6 +36,9 @@
 #include <openssl/bio.h>
 #include <openssl/asn1.h>
 
+#define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v0.1"
+#define JAVACARD_KEYMASTER_AUTHOR    "Android Open Source Project"
+
 #define APDU_CLS 0x80
 #define APDU_P1  0x40
 #define APDU_P2  0x00
@@ -441,10 +444,11 @@ keyData) {
     std::vector<uint8_t> encodedArray = subArray.encode();
     cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
     array.add(bstr);
-    /* TODO Add in the order in which javacard is expecting */
-    array.add(subject);
-    array.add(authorityKeyIdentifier);
-    array.add(notAfter);
+    /* TODO Once javacard provision is ready for testing uncomment below code and add in the order in which javacard is
+     * expecting. */
+    //array.add(subject);
+    //array.add(authorityKeyIdentifier);
+    //array.add(notAfter);
     std::vector<uint8_t> cborData = array.encode();
 
     if(ErrorCode::OK != (errorCode = constructApduMessage(ins, cborData, apdu)))
@@ -512,7 +516,10 @@ JavacardKeymaster4Device::~JavacardKeymaster4Device() {}
 
 // Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
-    //_hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
+    /* TODO temporary fix: when network connection is not available getHardwareInfo fails*/
+    _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
+    return Void();
+#if 0
 	std::vector<uint8_t> resp;
 	std::vector<uint8_t> input;
 	std::unique_ptr<Item> item;
@@ -538,9 +545,23 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
     }
     _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
     return Void();
+#endif
 }
 
 Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingParameters_cb _hidl_cb) {
+    /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
+     * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to getHmacSharing
+     * parameters.
+     */
+    auto response = softKm_->GetHmacSharingParameters();
+    ::android::hardware::keymaster::V4_0::HmacSharingParameters params;
+    params.seed.setToExternal(const_cast<uint8_t*>(response.params.seed.data),
+                              response.params.seed.data_length);
+    static_assert(sizeof(response.params.nonce) == params.nonce.size(), "Nonce sizes don't match");
+    memcpy(params.nonce.data(), response.params.nonce, params.nonce.size());
+    _hidl_cb(legacy_enum_conversion(response.error), params);
+    return Void();
+#if 0
     std::vector<uint8_t> cborData;
 	std::vector<uint8_t> input;
     std::unique_ptr<Item> item;
@@ -559,9 +580,33 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
     }
     _hidl_cb(errorCode, hmacSharingParameters);
     return Void();
+#endif
 }
 
 Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacSharingParameters>& params, computeSharedHmac_cb _hidl_cb) {
+    /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
+     * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to
+     * computeSharedHmac.
+     */
+    ComputeSharedHmacRequest request;
+    request.params_array.params_array = new keymaster::HmacSharingParameters[params.size()];
+    request.params_array.num_params = params.size();
+    for (size_t i = 0; i < params.size(); ++i) {
+        request.params_array.params_array[i].seed = {params[i].seed.data(), params[i].seed.size()};
+        static_assert(sizeof(request.params_array.params_array[i].nonce) ==
+                          decltype(params[i].nonce)::size(),
+                      "Nonce sizes don't match");
+        memcpy(request.params_array.params_array[i].nonce, params[i].nonce.data(),
+               params[i].nonce.size());
+    }
+
+    auto response = softKm_->ComputeSharedHmac(request);
+    hidl_vec<uint8_t> sharing_check;
+    if (response.error == KM_ERROR_OK) sharing_check = kmBlob2hidlVec(response.sharing_check);
+
+    _hidl_cb(legacy_enum_conversion(response.error), sharing_check);
+    return Void();
+#if 0
     cppbor::Array array;
     std::unique_ptr<Item> item;
 	std::vector<uint8_t> cborOutData;
@@ -595,6 +640,7 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
     }
     _hidl_cb(errorCode, sharingCheck);
     return Void();
+#endif
 }
 
 Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t operationHandle, const hidl_vec<KeyParameter>& parametersToVerify, const HardwareAuthToken& authToken, verifyAuthorization_cb _hidl_cb) {
