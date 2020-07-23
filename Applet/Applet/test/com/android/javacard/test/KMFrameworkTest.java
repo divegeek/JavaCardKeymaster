@@ -46,12 +46,41 @@ import javacard.security.Key;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
 import javacard.security.RSAPrivateKey;
+import javacard.security.RSAPublicKey;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import org.junit.Assert;
 import org.junit.Test;
 
 public class KMFrameworkTest {
+  private static final byte[] X509Issuer = {
+    0x30, 0x76, 0x31, 0x0B, 0x30, 0x09, 0x06, 0x03, 0x55, 0x04, 0x06, 0x13, 0x02, 0x55, 0x53, 0x31,
+    0x13, 0x30, 0x11, 0x06, 0x03, 0x55, 0x04, 0x08, 0x0C, 0x0A, 0x43, 0x61, 0x6C, 0x69, 0x66, 0x6F,
+    0x72, 0x6E, 0x69, 0x61, 0x31, 0x15, 0x30, 0x13, 0x06, 0x03, 0x55, 0x04, 0x0A, 0x0C, 0x0C, 0x47,
+    0x6F, 0x6F, 0x67, 0x6C, 0x65, 0x2C, 0x20, 0x49, 0x6E, 0x63, 0x2E, 0x31, 0x10, 0x30, 0x0E, 0x06,
+    0x03, 0x55, 0x04, 0x0B, 0x0C, 0x07, 0x41, 0x6E, 0x64, 0x72, 0x6F, 0x69, 0x64, 0x31, 0x29, 0x30,
+    0x27, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0C, 0x20, 0x41, 0x6E, 0x64, 0x72, 0x6F, 0x69, 0x64, 0x20,
+    0x53, 0x6F, 0x66, 0x74, 0x77, 0x61, 0x72, 0x65, 0x20, 0x41, 0x74, 0x74, 0x65, 0x73, 0x74, 0x61,
+    0x74, 0x69, 0x6F, 0x6E, 0x20, 0x4B, 0x65, 0x79
+  };
+  // AttestationApplicationId ::= SEQUENCE {
+  //     *     packageInfoRecords SET OF PackageInfoRecord,
+  //     *     signatureDigests   SET OF OCTET_STRING,
+  //     * }
+  //     *
+  //     * PackageInfoRecord ::= SEQUENCE {
+  //     *     packageName        OCTET_STRING,
+  //     *     version            INTEGER,
+  //     * }
+  private static final byte[] attAppId = {0x30, 0x10, 0x31, 0x0B, 0x30, 0x04, 0x05, 'A', 'B', 'C',
+    'D', 'E', 0x02, 0x01, 0x01, 0x31, 0x02, 0x04, 0x00};
+  private static final byte[] attChallenge = {'c','h','a','l','l','e','n','g','e'};
+  private static final byte[] expiryTime = {0x32,0x30,0x35,0x37,0x30,0x31,0x30,0x31,0x30,0x30,0x30,0x30,0x30,0x30,0x5A};
+  private static final byte[] authKeyId = {1,2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8,9,1,2};
+
+
+
+
   private short status;
   private short keyCharacteristics;
   private short keyBlob;
@@ -93,6 +122,7 @@ public class KMFrameworkTest {
     testGetKeyCharacteristics(simulator);
     // Delete i.e. uninstall applet
     simulator.deleteApplet(appletAID1);
+
   }
 
   private void testEncodeDecode() {
@@ -160,7 +190,9 @@ public class KMFrameworkTest {
   }
 
   public void testProvisionCmd(CardSimulator simulator){
-      byte[] buf = new byte[1024];
+
+/*
+    byte[] buf = new byte[1024];
       // test provision command
       short cmd = makeProvisionCmd();
       KMEncoder enc = new KMEncoder();
@@ -169,7 +201,95 @@ public class KMFrameworkTest {
       //print(commandAPDU.getBytes());;
       ResponseAPDU response = simulator.transmitCommand(commandAPDU);
       Assert.assertEquals(0x9000, response.getSW());
+      */
+    KMCryptoProvider cryptoProvider = KMCryptoProviderImpl.instance();
+    KMEncoder encoder = new KMEncoder();
+    KeyPair rsaKeyPair = cryptoProvider.createRsaKeyPair();
+    byte[] pub = new byte[4];
+    short len = ((RSAPublicKey)rsaKeyPair.getPublic()).getExponent(pub,(short)1);
+    byte[] priv = new byte[256];
+    byte[] mod = new byte[256];
+    len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getModulus(mod,(short)0);
+    len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getExponent(priv,(short)0);
+    short arrPtr = KMArray.instance((short)15);
+    short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
+    short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)2048));
+    short byteBlob = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.SHA2_256);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
+    short rsaPubExpTag = KMIntegerTag.instance(KMType.ULONG_TAG,KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pub, (short)0));
+    short byteBlob1 = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob1).add((short)0, KMType.RSA_PKCS1_1_5_SIGN);
+    short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob1);
+    short byteBlob2 = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob2).add((short)0, KMType.ATTEST_KEY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob2);
+    KMArray.cast(arrPtr).add((short)0, boolTag);
+    KMArray.cast(arrPtr).add((short)1, keySize);
+    KMArray.cast(arrPtr).add((short)2, digest);
+    KMArray.cast(arrPtr).add((short)3, rsaPubExpTag);
+    KMArray.cast(arrPtr).add((short)4, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
+    KMArray.cast(arrPtr).add((short)5, padding);
+    KMArray.cast(arrPtr).add((short)6, purpose);
+    byte[] buf = "Attestation Id".getBytes();
+    //Attestatation Ids.
+    KMArray.cast(arrPtr).add((short)7, KMByteTag.instance(KMType.ATTESTATION_ID_BRAND,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)8, KMByteTag.instance(KMType.ATTESTATION_ID_PRODUCT,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)9, KMByteTag.instance(KMType.ATTESTATION_ID_DEVICE,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)10, KMByteTag.instance(KMType.ATTESTATION_ID_MODEL,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)11, KMByteTag.instance(KMType.ATTESTATION_ID_IMEI,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)12, KMByteTag.instance(KMType.ATTESTATION_ID_MEID,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)13, KMByteTag.instance(KMType.ATTESTATION_ID_MANUFACTURER,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)14, KMByteTag.instance(KMType.ATTESTATION_ID_SERIAL,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.RAW);// Note: VTS uses PKCS8
+    short keyBlob = KMArray.instance((short)2);
+    KMArray.cast(keyBlob).add((short)0, KMByteBlob.instance(priv,(short)0,(short)256));
+    KMArray.cast(keyBlob).add((short)1, KMByteBlob.instance(mod,(short)0,(short)256));
+    byte[] blob = new byte[620];
+    len = encoder.encode(keyBlob,blob,(short)0);
+    keyBlob = KMByteBlob.instance(blob, (short)0, len);
+    arrPtr = KMArray.instance((short)6);
+    KMArray arg = KMArray.cast(arrPtr);
+    arg.add((short) 0, keyParams);
+    arg.add((short)1, keyFormatPtr);
+    arg.add((short)2, keyBlob);
+    short byteBlob3 = KMByteBlob.instance(X509Issuer, (short)0, (short)X509Issuer.length);
+    arg.add((short)3, byteBlob3);
+    short byteBlob4 = KMByteBlob.instance(expiryTime, (short)0, (short)expiryTime.length);
+    arg.add((short)4, byteBlob4);
+    short byteBlob5 = KMByteBlob.instance(authKeyId, (short)0, (short)authKeyId.length);
+    arg.add((short)5, byteBlob5);
+    CommandAPDU apdu = encodeApdu((byte)0x23, arrPtr);
+    //print(apdu.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    Assert.assertEquals(0x9000, response.getSW());
   }
+  private CommandAPDU encodeApdu(byte ins, short cmd){
+    byte[] buf = new byte[2048];
+    buf[0] = (byte)0x80;
+    buf[1] = ins;
+    buf[2] = (byte)0x40;
+    buf[3] = (byte)0x00;
+    buf[4] = 0;
+    KMEncoder encoder = new KMEncoder();
+    short len = encoder.encode(cmd, buf, (short) 7);
+    Util.setShort(buf, (short)5, len);
+    byte[] apdu = new byte[7+len];
+    Util.arrayCopyNonAtomic(buf,(short)0,apdu,(short)0,(short)(7+len));
+    //CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x10, 0x40, 0x00, buf, 0, actualLen);
+    return new CommandAPDU(apdu);
+  }
+
+
   public void testSetBootParams(CardSimulator simulator){
     byte[] buf = new byte[1024];
     // test provision command
@@ -180,6 +300,7 @@ public class KMFrameworkTest {
     //print(commandAPDU.getBytes());;
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     Assert.assertEquals(0x9000, response.getSW());
+
   }
 
   public void testGenerateRsaKey(CardSimulator simulator){
@@ -476,11 +597,12 @@ public class KMFrameworkTest {
     StringBuilder sb = new StringBuilder();
     for(int i = 0; i < cmdApdu.length; i++){
       sb.append(String.format(" 0x%02X", cmdApdu[i])) ;
-      if(((i-1)%38 == 0) && ((i-1) >0)){
+/*      if(((i-1)%38 == 0) && ((i-1) >0)){
         sb.append(";\n");
       }
-    }
+*/    }
     System.out.println(sb.toString());
+    System.out.println(cmdApdu.length);
   }
 
   private short makeProvisionCmd() {

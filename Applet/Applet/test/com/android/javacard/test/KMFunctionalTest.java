@@ -54,14 +54,39 @@ import javax.smartcardio.ResponseAPDU;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class KMVTSTest {
+public class KMFunctionalTest {
+  private static final byte[] X509Issuer = {
+    0x30, 0x76, 0x31, 0x0B, 0x30, 0x09, 0x06, 0x03, 0x55, 0x04, 0x06, 0x13, 0x02, 0x55, 0x53, 0x31,
+    0x13, 0x30, 0x11, 0x06, 0x03, 0x55, 0x04, 0x08, 0x0C, 0x0A, 0x43, 0x61, 0x6C, 0x69, 0x66, 0x6F,
+    0x72, 0x6E, 0x69, 0x61, 0x31, 0x15, 0x30, 0x13, 0x06, 0x03, 0x55, 0x04, 0x0A, 0x0C, 0x0C, 0x47,
+    0x6F, 0x6F, 0x67, 0x6C, 0x65, 0x2C, 0x20, 0x49, 0x6E, 0x63, 0x2E, 0x31, 0x10, 0x30, 0x0E, 0x06,
+    0x03, 0x55, 0x04, 0x0B, 0x0C, 0x07, 0x41, 0x6E, 0x64, 0x72, 0x6F, 0x69, 0x64, 0x31, 0x29, 0x30,
+    0x27, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0C, 0x20, 0x41, 0x6E, 0x64, 0x72, 0x6F, 0x69, 0x64, 0x20,
+    0x53, 0x6F, 0x66, 0x74, 0x77, 0x61, 0x72, 0x65, 0x20, 0x41, 0x74, 0x74, 0x65, 0x73, 0x74, 0x61,
+    0x74, 0x69, 0x6F, 0x6E, 0x20, 0x4B, 0x65, 0x79
+  };
+  // AttestationApplicationId ::= SEQUENCE {
+  //     *     packageInfoRecords SET OF PackageInfoRecord,
+  //     *     signatureDigests   SET OF OCTET_STRING,
+  //     * }
+  //     *
+  //     * PackageInfoRecord ::= SEQUENCE {
+  //     *     packageName        OCTET_STRING,
+  //     *     version            INTEGER,
+  //     * }
+  private static final byte[] attAppId = {0x30, 0x10, 0x31, 0x0B, 0x30, 0x04, 0x05, 'A', 'B', 'C',
+    'D', 'E', 0x02, 0x01, 0x01, 0x31, 0x02, 0x04, 0x00};
+  private static final byte[] attChallenge = {'c','h','a','l','l','e','n','g','e'};
+  private static final byte[] expiryTime = {0x32,0x30,0x35,0x37,0x30,0x31,0x30,0x31,0x30,0x30,0x30,0x30,0x30,0x30,0x5A};
+  private static final byte[] authKeyId = {1,2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8,9,1,2};
+
   private KMCryptoProvider sim;
   private CardSimulator simulator;
   private KMEncoder encoder;
   private KMDecoder decoder;
   private KMCryptoProvider cryptoProvider;
 
-  public KMVTSTest(){
+  public KMFunctionalTest(){
     cryptoProvider = KMCryptoProviderImpl.instance();
     sim = KMCryptoProviderImpl.instance();
     simulator = new CardSimulator();
@@ -113,8 +138,9 @@ public class KMVTSTest {
 
   }
 
+  //TODO change this
   private void provisionCmd(CardSimulator simulator) {
-    // Argument 1
+/*    // Argument 1
     short arrPtr = KMArray.instance((short) 1);
     KMArray vals = KMArray.cast(arrPtr);
     vals.add((short) 0, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
@@ -134,6 +160,75 @@ public class KMVTSTest {
     arg.add((short) 1, keyFormatPtr);
     arg.add((short) 2, keyBlobPtr);
     CommandAPDU apdu = encodeApdu((byte)0x23, argPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    Assert.assertEquals(0x9000, response.getSW());
+*/
+    KeyPair rsaKeyPair = cryptoProvider.createRsaKeyPair();
+    byte[] pub = new byte[4];
+    short len = ((RSAPublicKey)rsaKeyPair.getPublic()).getExponent(pub,(short)1);
+    byte[] priv = new byte[256];
+    byte[] mod = new byte[256];
+    len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getModulus(mod,(short)0);
+    len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getExponent(priv,(short)0);
+    short arrPtr = KMArray.instance((short)15);
+    short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
+    short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)2048));
+    short byteBlob = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.SHA2_256);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
+    short rsaPubExpTag = KMIntegerTag.instance(KMType.ULONG_TAG,KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pub, (short)0));
+    short byteBlob1 = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob1).add((short)0, KMType.RSA_PKCS1_1_5_SIGN);
+    short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob1);
+    short byteBlob2 = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob2).add((short)0, KMType.ATTEST_KEY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob2);
+    KMArray.cast(arrPtr).add((short)0, boolTag);
+    KMArray.cast(arrPtr).add((short)1, keySize);
+    KMArray.cast(arrPtr).add((short)2, digest);
+    KMArray.cast(arrPtr).add((short)3, rsaPubExpTag);
+    KMArray.cast(arrPtr).add((short)4, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
+    KMArray.cast(arrPtr).add((short)5, padding);
+    KMArray.cast(arrPtr).add((short)6, purpose);
+    byte[] buf = "Attestation Id".getBytes();
+    //Attestatation Ids.
+    KMArray.cast(arrPtr).add((short)7, KMByteTag.instance(KMType.ATTESTATION_ID_BRAND,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)8, KMByteTag.instance(KMType.ATTESTATION_ID_PRODUCT,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)9, KMByteTag.instance(KMType.ATTESTATION_ID_DEVICE,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)10, KMByteTag.instance(KMType.ATTESTATION_ID_MODEL,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)11, KMByteTag.instance(KMType.ATTESTATION_ID_IMEI,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)12, KMByteTag.instance(KMType.ATTESTATION_ID_MEID,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)13, KMByteTag.instance(KMType.ATTESTATION_ID_MANUFACTURER,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short)14, KMByteTag.instance(KMType.ATTESTATION_ID_SERIAL,
+      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.RAW);// Note: VTS uses PKCS8
+    short keyBlob = KMArray.instance((short)2);
+    KMArray.cast(keyBlob).add((short)0, KMByteBlob.instance(priv,(short)0,(short)256));
+    KMArray.cast(keyBlob).add((short)1, KMByteBlob.instance(mod,(short)0,(short)256));
+    byte[] blob = new byte[620];
+    len = encoder.encode(keyBlob,blob,(short)0);
+    keyBlob = KMByteBlob.instance(blob, (short)0, len);
+    arrPtr = KMArray.instance((short)6);
+    KMArray arg = KMArray.cast(arrPtr);
+    arg.add((short) 0, keyParams);
+    arg.add((short)1, keyFormatPtr);
+    arg.add((short)2, keyBlob);
+    short byteBlob3 = KMByteBlob.instance(X509Issuer, (short)0, (short)X509Issuer.length);
+    arg.add((short)3, byteBlob3);
+    short byteBlob4 = KMByteBlob.instance(expiryTime, (short)0, (short)expiryTime.length);
+    arg.add((short)4, byteBlob4);
+    short byteBlob5 = KMByteBlob.instance(authKeyId, (short)0, (short)authKeyId.length);
+    arg.add((short)5, byteBlob5);
+    CommandAPDU apdu = encodeApdu((byte)0x23, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
@@ -628,7 +723,8 @@ public class KMVTSTest {
   }
 
   private short generateRsaKey(byte[] clientId, byte[] appData){
-    short tagCount = 7;
+    byte[] activeAndCreationDateTime = {0,0,0x01,0x73,0x51,0x7C,(byte)0xCC,0x00};
+    short tagCount = 11;
     if(clientId != null) tagCount++;
     if(appData != null) tagCount++;
     short arrPtr = KMArray.instance(tagCount);
@@ -657,16 +753,75 @@ public class KMVTSTest {
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
     short tagIndex = 0;
     KMArray.cast(arrPtr).add(tagIndex++, purpose);
+    KMArray.cast(arrPtr).add(tagIndex++, KMBoolTag.instance(KMType.INCLUDE_UNIQUE_ID));
+    KMArray.cast(arrPtr).add(tagIndex++, KMBoolTag.instance(KMType.RESET_SINCE_ID_ROTATION));
     KMArray.cast(arrPtr).add(tagIndex++, boolTag);
     KMArray.cast(arrPtr).add(tagIndex++, keySize);
     KMArray.cast(arrPtr).add(tagIndex++, digest);
     KMArray.cast(arrPtr).add(tagIndex++, rsaPubExpTag);
     KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
     KMArray.cast(arrPtr).add(tagIndex++, padding);
+    short dateTag = KMInteger.uint_64(activeAndCreationDateTime,(short)0);
+    KMArray.cast(arrPtr).add(tagIndex++, KMIntegerTag.instance(KMType.DATE_TAG,KMType.ACTIVE_DATETIME,dateTag));
+    KMArray.cast(arrPtr).add(tagIndex++, KMIntegerTag.instance(KMType.DATE_TAG,KMType.CREATION_DATETIME,dateTag));
+
     if(clientId != null)KMArray.cast(arrPtr).add(tagIndex++,
       KMByteTag.instance(KMType.APPLICATION_ID, KMByteBlob.instance(clientId,(short)0,(short)clientId.length)));
     if(appData != null)KMArray.cast(arrPtr).add(tagIndex++,
       KMByteTag.instance(KMType.APPLICATION_DATA, KMByteBlob.instance(appData,(short)0,(short)appData.length)));
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    arrPtr = KMArray.instance((short)1);
+    KMArray arg = KMArray.cast(arrPtr);
+    arg.add((short) 0, keyParams);
+    CommandAPDU apdu = encodeApdu((byte)0x10, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    Assert.assertEquals(0x9000, response.getSW());
+    short ret = KMArray.instance((short) 3);
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    KMArray.cast(ret).add((short)1, KMByteBlob.exp());
+    short inst = KMKeyCharacteristics.exp();
+    KMArray.cast(ret).add((short) 2, inst);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    ret = decoder.decode(ret, respBuf, (short) 0, len);
+    return ret;
+  }
+
+  private short generateAttestationKey(){
+    // 15th July 2020 00.00.00
+    byte[] activeAndCreationDateTime = {0,0,0x01,0x73,0x51,0x7C,(byte)0xCC,0x00};
+    short tagCount = 11;
+    short arrPtr = KMArray.instance(tagCount);
+    short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)2048));
+    short byteBlob = KMByteBlob.instance((short)3);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.DIGEST_NONE);
+    KMByteBlob.cast(byteBlob).add((short)1, KMType.SHA2_256);
+    KMByteBlob.cast(byteBlob).add((short)2, KMType.SHA1);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
+    byteBlob = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.RSA_PKCS1_1_5_SIGN);
+    short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
+    byteBlob = KMByteBlob.instance((short)1);
+    KMByteBlob.cast(byteBlob).add((short)0, KMType.ATTEST_KEY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
+    byte[] pub = {0,1,0,1};
+    short rsaPubExpTag = KMIntegerTag.instance(KMType.ULONG_TAG,KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pub, (short)0));
+    short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
+    short tagIndex = 0;
+    KMArray.cast(arrPtr).add(tagIndex++, purpose);
+    KMArray.cast(arrPtr).add(tagIndex++, boolTag);
+    KMArray.cast(arrPtr).add(tagIndex++, KMBoolTag.instance(KMType.INCLUDE_UNIQUE_ID));
+    KMArray.cast(arrPtr).add(tagIndex++, KMBoolTag.instance(KMType.RESET_SINCE_ID_ROTATION));
+    KMArray.cast(arrPtr).add(tagIndex++, boolTag);
+    KMArray.cast(arrPtr).add(tagIndex++, keySize);
+    KMArray.cast(arrPtr).add(tagIndex++, digest);
+    KMArray.cast(arrPtr).add(tagIndex++, rsaPubExpTag);
+    KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
+    KMArray.cast(arrPtr).add(tagIndex++, padding);
+    short dateTag = KMInteger.uint_64(activeAndCreationDateTime,(short)0);
+    KMArray.cast(arrPtr).add(tagIndex++, KMIntegerTag.instance(KMType.ULONG_TAG,KMType.ACTIVE_DATETIME,dateTag));
+    KMArray.cast(arrPtr).add(tagIndex++, KMIntegerTag.instance(KMType.ULONG_TAG,KMType.CREATION_DATETIME,dateTag));
     short keyParams = KMKeyParameters.instance(arrPtr);
     arrPtr = KMArray.instance((short)1);
     KMArray arg = KMArray.cast(arrPtr);
@@ -1449,6 +1604,56 @@ public class KMVTSTest {
   }
 
   @Test
+  public void testProvisionSuccess(){
+    AID appletAID1 = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID1, KMKeymasterApplet.class);
+    // Select applet
+    simulator.selectApplet(appletAID1);
+    // provision attest key
+    provisionCmd(simulator);
+    cleanUp();
+  }
+  
+  @Test
+  public void testAttestKeySuccess(){
+    init();
+    short key = generateRsaKey(null,null);
+    short keyBlobPtr = KMArray.cast(key).get((short)1);
+    byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(
+      KMByteBlob.cast(keyBlobPtr).getBuffer(),
+      KMByteBlob.cast(keyBlobPtr).getStartOff(),
+      keyBlob,(short)0, (short)keyBlob.length);
+    short arrPtr = KMArray.instance((short)2);
+    KMArray.cast(arrPtr).add((short)0, KMByteTag.instance(KMType.ATTESTATION_APPLICATION_ID,
+      KMByteBlob.instance(attAppId,(short)0,(short)attAppId.length)));
+    KMArray.cast(arrPtr).add((short)1, KMByteTag.instance(KMType.ATTESTATION_CHALLENGE,
+      KMByteBlob.instance(attChallenge,(short)0,(short)attChallenge.length)));
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    short args = KMArray.instance((short)2);
+    KMArray.cast(args).add((short)0, KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
+    KMArray.cast(args).add((short)1, keyParams);
+    CommandAPDU apdu = encodeApdu((byte)0x14, args);
+    //print(apdu.getBytes(),(short)0,(short)apdu.getBytes().length);
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    short ret = KMArray.instance((short) 2);
+    short arrBlobs = KMArray.instance((short)1);
+    KMArray.cast(arrBlobs).add((short)0, KMByteBlob.exp());
+    KMArray.cast(ret).add((short)0, KMInteger.exp());
+    KMArray.cast(ret).add((short)1, arrBlobs);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+   //(respBuf,(short)0,(short)respBuf.length);
+    ret = decoder.decode(ret, respBuf, (short) 0, len);
+    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    Assert.assertEquals(error, KMError.OK);
+    arrBlobs = KMArray.cast(ret).get((short)1);
+    short cert  = KMArray.cast(arrBlobs).get((short)0);
+    //printCert(KMByteBlob.cast(cert).getBuffer(),KMByteBlob.cast(cert).getStartOff(),KMByteBlob.cast(cert).length());
+    cleanUp();
+  }
+
+  @Test
   public void testUpgradeKey(){
     init();
     short ret = generateHmacKey(null, null);
@@ -1479,6 +1684,7 @@ public class KMVTSTest {
     Assert.assertEquals(KMInteger.cast(osPatch).getShort(), 2);
     cleanUp();
   }
+
   private short upgradeKey(short keyBlobPtr, byte[] clientId, byte[] appData){
     short tagCount = 0;
     short clientIdTag = 0;
@@ -1531,7 +1737,6 @@ public class KMVTSTest {
     opHandle = KMInteger.cast(opHandle).getShort();
     abort(KMInteger.uint_16(opHandle));
     short dataPtr = KMByteBlob.instance(plainData, (short) 0, (short) plainData.length);
-    ret = KMType.INVALID_VALUE;
     ret = update(KMInteger.uint_16(opHandle), dataPtr, (short) 0, (short) 0, (short) 0);
     Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE,ret);
     cleanUp();
@@ -1963,6 +2168,13 @@ public class KMVTSTest {
     StringBuilder sb = new StringBuilder();
     for(int i = start; i < (start+length); i++){
       sb.append(String.format(" 0x%02X", buf[i])) ;
+    }
+    System.out.println(sb.toString());
+  }
+  private void printCert(byte[] buf, short start, short length){
+    StringBuilder sb = new StringBuilder();
+    for(int i = start; i < (start+length); i++){
+      sb.append(String.format("%02X", buf[i])) ;
     }
     System.out.println(sb.toString());
   }

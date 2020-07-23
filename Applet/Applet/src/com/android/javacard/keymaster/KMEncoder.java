@@ -19,7 +19,6 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
-import javacard.framework.SystemException;
 import javacard.framework.Util;
 
 public class KMEncoder {
@@ -82,6 +81,30 @@ public class KMEncoder {
     return (short)(this.startOff - startOff);
   }
 
+  //array{KMError.OK,Array{KMByteBlobs}}
+  public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength) {
+    this.buffer = certBuffer;
+    this.startOff = certStart;
+    this.length = (short)(certStart+1);
+    //Array header - 2 elements i.e. 1 byte
+    this.startOff--;
+    // Error.Ok - 1 byte
+    this.startOff--;
+    //Array header - 2 elements i.e. 1 byte
+    this.startOff--;
+    // Cert Byte blob - typically 2 bytes length i.e. 3 bytes header
+    this.startOff -= 2;
+    if(certLength >= SHORT_PAYLOAD) {
+     this.startOff--;
+    }
+    bufferStart = startOff;
+    if(this.startOff < bufferStart) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    writeMajorTypeWithLength(ARRAY_TYPE,(short)2); // Array of 2 elements
+    writeByte(UINT_TYPE); // Error.OK
+    writeMajorTypeWithLength(ARRAY_TYPE,(short)1); // Array of 1 element
+    writeMajorTypeWithLength(BYTES_TYPE, certLength); // Cert Byte Blob of length
+    return bufferStart;
+  }
 
   public short encodeError(short err, byte[] buffer, short startOff, short length) {
     this.buffer = buffer;
@@ -332,4 +355,15 @@ public class KMEncoder {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
+  /*
+  private static void print(byte[] buf, short start, short length){
+    StringBuilder sb = new StringBuilder();
+    for(int i = start; i < (start+length); i++){
+      sb.append(String.format("%02X", buf[i])) ;
+      //if((i-start)%16 == 0 && (i-start) != 0) sb.append(String.format("\n"));
+    }
+    System.out.println(sb.toString());
+  }
+
+   */
 }

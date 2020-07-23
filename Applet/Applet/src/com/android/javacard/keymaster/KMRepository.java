@@ -23,6 +23,7 @@ import javacard.framework.Util;
 
 public class KMRepository {
   //TODO make the sizes configurable
+  public static final short INVALID_VALUE = (short) 0x8000;
   public static final short HEAP_SIZE = 10000;
   public static final short MAX_BLOB_STORAGE = 32;
   public static final short AES_GCM_AUTH_TAG_LENGTH = 12;
@@ -31,6 +32,35 @@ public class KMRepository {
   public static final short HMAC_SEED_NONCE_SIZE = 32;
   public static final short MAX_OPS = 4;
   public static final short COMPUTED_HMAC_KEY_SIZE = 32;
+  public static final short ATT_ID_HEAP_SIZE = 160;
+  public static final short CERT_DATA_MEM_SIZE = 256;
+  // Key Attestation related constants
+  public static final byte ATT_ID_TABLE_SIZE = 8;
+  public static final byte ATT_ID_HEADER_SIZE = 3;
+  public static final short ATT_KEY_MOD_SIZE = 256;
+  public static final short ATT_KEY_EXP_SIZE = 256;
+  public static final byte ATT_ID_OFFSET = 0x02;
+  public static final byte ATT_ID_LENGTH = 0x01;
+  public static final byte ATT_ID_TAG = 0x00;
+  public static final byte ATT_ID_BRAND = 0x00;
+  public static final byte ATT_ID_DEVICE = 0x01;
+  public static final byte ATT_ID_PRODUCT = 0x02;
+  public static final byte ATT_ID_SERIAL = 0x03;
+  public static final byte ATT_ID_IMEI = 0x04;
+  public static final byte ATT_ID_MEID = 0x05;
+  public static final byte ATT_ID_MANUFACTURER = 0x06;
+  public static final byte ATT_ID_MODEL = 0x07;
+  final short[] attIdTags ={
+    KMType.ATTESTATION_ID_BRAND,
+    KMType.ATTESTATION_ID_DEVICE,
+    KMType.ATTESTATION_ID_PRODUCT,
+    KMType.ATTESTATION_ID_SERIAL,
+    KMType.ATTESTATION_ID_IMEI,
+    KMType.ATTESTATION_ID_MEID,
+    KMType.ATTESTATION_ID_MANUFACTURER,
+    KMType.ATTESTATION_ID_MODEL};
+  public byte[] attestCertIssuer;
+  public byte[] attestCertAuthKeyId;
   // Boot params constants
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
@@ -41,10 +71,18 @@ public class KMRepository {
   private byte[] sharedKey;
   private byte[] computedHmacKey;
   private byte[] hmacNonce;
+  // Volatile memory heap
   private byte[] heap;
-  private Object[] operationStateTable;
   private short heapIndex;
+
+  //Attesation Id Table;
+  private Object[] attIdTable;
+
+  // Operation State Table
+  private Object[] operationStateTable;
+
   // boot parameters
+  //TODO change the following into private
   public Object[] authTagRepo;
   public short keyBlobCount;
   public byte[] osVersion;
@@ -57,6 +95,20 @@ public class KMRepository {
   public boolean selfSignedBootFlag;
   public boolean deviceLockedFlag;
   public byte[] deviceLockedTimestamp;
+  // attestation
+  private byte[] attKeyModulus;
+  private byte[] attKeyExponent;
+  private byte[] attIdMem;
+  private short attIdMemIndex;
+  // attestation cert data
+  private byte[] certData;
+  private short issuer;
+  private short issuerLen;
+  private short certExpiryTime;
+  private short certExpiryTimeLen;
+  private short authKeyId;
+  private short authKeyIdLen;
+  private short certDataIndex;
 
   public static KMRepository instance() {
     return repository;
@@ -64,6 +116,10 @@ public class KMRepository {
 
   public KMRepository() {
     heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
+    heapIndex = 0;
+    attIdMem = new byte[ATT_ID_HEAP_SIZE];
+    attIdMemIndex = 0;
+
     authTagRepo = new Object[MAX_BLOB_STORAGE];
     short index = 0;
     while (index < MAX_BLOB_STORAGE) {
@@ -73,6 +129,7 @@ public class KMRepository {
       ((KMAuthTag) authTagRepo[index]).usageCount = 0;
       index++;
     }
+
     osVersion = new byte[4];
     osPatch = new byte[4];
     verifiedBootKey = new byte[BOOT_KEY_MAX_SIZE];
@@ -88,6 +145,19 @@ public class KMRepository {
     deviceLockedTimestamp = new byte[8];
     deviceUnlockPasswordOnly = false;
     Util.arrayFillNonAtomic(deviceLockedTimestamp,(short)0,(short)8,(byte)0);
+
+    attKeyModulus = new byte[ATT_KEY_MOD_SIZE];
+    attKeyExponent = new byte[ATT_KEY_EXP_SIZE];
+    attIdTable = new Object[ATT_ID_TABLE_SIZE];
+    index = 0;
+    while(index < ATT_ID_TABLE_SIZE){
+      attIdTable[index] = new short[ATT_ID_HEADER_SIZE];
+      ((short[])attIdTable[index])[ATT_ID_TAG] = attIdTags[index];
+      ((short[])attIdTable[index])[ATT_ID_LENGTH] = 0;
+      index++;
+    }
+    certData = new byte[CERT_DATA_MEM_SIZE];
+    certDataIndex = 0;
     repository = this;
   }
 
@@ -314,5 +384,127 @@ public class KMRepository {
       index++;
     }
     return null;
+  }
+
+  public void persistAttestationKey(short mod, short exp) {
+    JCSystem.beginTransaction();
+    if(KMByteBlob.cast(mod).length() != ATT_KEY_MOD_SIZE) KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+    Util.arrayCopy(
+      KMByteBlob.cast(mod).getBuffer(),
+      KMByteBlob.cast(mod).getStartOff(),
+      attKeyModulus,
+      (short)0,
+      KMByteBlob.cast(mod).length());
+
+    if(KMByteBlob.cast(exp).length() != ATT_KEY_EXP_SIZE) KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+    Util.arrayCopy(
+      KMByteBlob.cast(exp).getBuffer(),
+      KMByteBlob.cast(exp).getStartOff(),
+      attKeyExponent,
+      (short)0,
+      KMByteBlob.cast(exp).length());
+    JCSystem.commitTransaction();
+  }
+
+  public byte[] getAttKeyModulus() {
+    return attKeyModulus;
+  }
+
+  public byte[] getAttKeyExponent() {
+    return attKeyExponent;
+  }
+
+  public void persistAttId(byte id, byte[] buf, short start, short len){
+    JCSystem.beginTransaction();
+    short[] attId = (short[])attIdTable[id];
+    attId[ATT_ID_OFFSET] = allocAttIdMemory(len);
+    attId[ATT_ID_LENGTH] = len;
+    Util.arrayCopy(buf,start, attIdMem,attId[ATT_ID_OFFSET],len);
+    JCSystem.commitTransaction();
+  }
+
+  public short getAttId(byte id, byte[] buf, short start){
+    short[] attId = (short[])attIdTable[id];
+    Util.arrayCopy(attIdMem,attId[ATT_ID_OFFSET],buf,start,attId[ATT_ID_LENGTH]);
+    return attId[ATT_ID_LENGTH];
+  }
+
+  public short getAttIdOffset(byte id){
+    short[] attId = (short[])attIdTable[id];
+    return attId[ATT_ID_OFFSET];
+  }
+
+  public byte[] getAttIdBuffer(byte id){
+    return attIdMem;
+  }
+
+  public short getAttIdLen(byte id){
+    short[] attId = (short[])attIdTable[id];
+    return attId[ATT_ID_LENGTH];
+  }
+  public short getAttIdTag(byte id){
+    short[] attId = (short[])attIdTable[id];
+    return attId[ATT_ID_TAG];
+  }
+
+  private short allocAttIdMemory(short len){
+    if (((short) (attIdMemIndex + len)) > attIdMem.length) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    attIdMemIndex += len;
+    return (short) (attIdMemIndex - len);
+  }
+
+  public short getIssuer() {
+    return issuer;
+  }
+
+  public void setIssuer(byte[] buf, short start, short len) {
+    this.issuer = allocCertData(len);
+    this.issuerLen = len;
+    Util.arrayCopy(buf,start,certData, issuer,len);
+  }
+
+  public short getIssuerLen() {
+    return issuerLen;
+  }
+
+  public short getCertExpiryTime() {
+    return certExpiryTime;
+  }
+
+  public void setCertExpiryTime(byte[] buf, short start, short len) {
+    this.certExpiryTime = allocCertData(len);
+    this.certExpiryTimeLen = len;
+    Util.arrayCopy(buf,start,certData, certExpiryTime,len);
+  }
+
+  public short getCertExpiryTimeLen() {
+    return certExpiryTimeLen;
+  }
+
+
+  public short getAuthKeyId() {
+    return authKeyId;
+  }
+
+  public void setAuthKeyId(byte[] buf, short start, short len) {
+    this.authKeyId = allocCertData(len);
+    this.authKeyIdLen = len;
+    Util.arrayCopy(buf,start,certData,authKeyId,len);
+  }
+
+  public short getAuthKeyIdLen() {
+    return authKeyIdLen;
+  }
+  public byte[] getCertDataBuffer(){
+    return certData;
+  }
+  private short allocCertData(short len){
+    if (((short) (certDataIndex + len)) > certData.length) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    certDataIndex += len;
+    return (short) (certDataIndex - len);
   }
 }

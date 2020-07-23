@@ -35,7 +35,7 @@ public abstract class KMType {
   public static final byte HW_AUTH_TOKEN_TYPE = 0x08;
   public static final byte VERIFICATION_TOKEN_TYPE = 0x09;
   public static final byte HMAC_SHARING_PARAM_TYPE = 0x0A;
-
+  public static final byte X509_CERT = 0x0B;
   // Tag Types
   public static final short INVALID_TAG = 0x0000;
   public static final short ENUM_TAG = 0x1000;
@@ -112,8 +112,10 @@ public abstract class KMType {
 
   // Verified Boot State
   public static final short VERIFIED_BOOT_STATE = (short) 0xF003;
+  public static final byte VERIFIED_BOOT = 0x00;
   public static final byte SELF_SIGNED_BOOT = 0x01;
-  public static final byte VERIFIED_BOOT = 0x02;
+  public static final byte UNVERIFIED_BOOT = 0x02;
+  public static final byte FAILED_BOOT = 0x03;
 
   // Verified Boot Key
   public static final short VERIFIED_BOOT_KEY = (short) 0xF004;
@@ -140,7 +142,7 @@ public abstract class KMType {
   public static final short BLOCK_MODE = 0x0004;
   public static final byte ECB = 0x01;
   public static final byte CBC = 0x02;
-  public static final byte CTR = 0x04;
+  public static final byte CTR = 0x03;
   public static final byte GCM = 0x20;
 
   // Digest

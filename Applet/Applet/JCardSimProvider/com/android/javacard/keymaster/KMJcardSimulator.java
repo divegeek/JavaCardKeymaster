@@ -335,16 +335,18 @@ public class KMJcardSimulator implements KMCryptoProvider {
       short authTagLen) {
   //Create the sun jce compliant aes key
     byte[] keyMaterial = new byte[16];
+    short keySize = 16;
     if(key.getSize() == 128){
       keyMaterial = new byte[16];
     }else if(key.getSize() == 256){
       keyMaterial = new byte[32];
+      keySize = 16;
     }
     key.getKey(keyMaterial,(short)0);
     //print("KeyMaterial Dec", keyMaterial);
     //print("Authdata Dec", authData, authDataStart, authDataLen);
 
-    java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,(short)16, "AES");
+    java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,(short)keySize, "AES");
     // Create the cipher
   javax.crypto.Cipher cipher = null;
   try {
@@ -366,7 +368,7 @@ public class KMJcardSimulator implements KMCryptoProvider {
   byte[] iv = new byte[AES_GCM_NONCE_LENGTH];
   Util.arrayCopyNonAtomic(nonce,nonceStart,iv,(short)0,AES_GCM_NONCE_LENGTH);
   // Init Cipher
-  GCMParameterSpec spec = new GCMParameterSpec(AES_GCM_TAG_LENGTH * 8, nonce,nonceStart,AES_GCM_NONCE_LENGTH);
+  GCMParameterSpec spec = new GCMParameterSpec(authTagLen * 8, nonce,nonceStart,AES_GCM_NONCE_LENGTH);
   try {
   cipher.init(javax.crypto.Cipher.DECRYPT_MODE, aesKey, spec);
   } catch (InvalidKeyException e) {
@@ -381,9 +383,9 @@ public class KMJcardSimulator implements KMCryptoProvider {
   Util.arrayCopyNonAtomic(authData,authDataStart,aad,(short)0,authDataLen);
   cipher.updateAAD(aad);
   // Append the auth tag at the end of data
-    byte[] inputBuf = new byte[(short)(encSecretLen + AES_GCM_TAG_LENGTH)];
+    byte[] inputBuf = new byte[(short)(encSecretLen + authTagLen)];
     Util.arrayCopyNonAtomic(encSecret,encSecretStart,inputBuf,(short)0,encSecretLen);
-    Util.arrayCopyNonAtomic(authTag,authTagStart,inputBuf,encSecretLen,AES_GCM_TAG_LENGTH);
+    Util.arrayCopyNonAtomic(authTag,authTagStart,inputBuf,encSecretLen,authTagLen);
   // Decrypt
     short len = 0;
     byte[] outputBuf = new byte[cipher.getOutputSize((short)inputBuf.length)];
