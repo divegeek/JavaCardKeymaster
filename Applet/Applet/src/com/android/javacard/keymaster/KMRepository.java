@@ -109,6 +109,7 @@ public class KMRepository {
   private short authKeyId;
   private short authKeyIdLen;
   private short certDataIndex;
+  private boolean attIdSupported;
 
   public static KMRepository instance() {
     return repository;
@@ -149,6 +150,7 @@ public class KMRepository {
     attKeyModulus = new byte[ATT_KEY_MOD_SIZE];
     attKeyExponent = new byte[ATT_KEY_EXP_SIZE];
     attIdTable = new Object[ATT_ID_TABLE_SIZE];
+    attIdSupported = false;
     index = 0;
     while(index < ATT_ID_TABLE_SIZE){
       attIdTable[index] = new short[ATT_ID_HEADER_SIZE];
@@ -420,6 +422,7 @@ public class KMRepository {
     attId[ATT_ID_OFFSET] = allocAttIdMemory(len);
     attId[ATT_ID_LENGTH] = len;
     Util.arrayCopy(buf,start, attIdMem,attId[ATT_ID_OFFSET],len);
+    attIdSupported = true;
     JCSystem.commitTransaction();
   }
 
@@ -455,6 +458,22 @@ public class KMRepository {
     return (short) (attIdMemIndex - len);
   }
 
+  public void deleteAttIds(){
+    JCSystem.beginTransaction();
+    Util.arrayFillNonAtomic(attIdMem,(short)0,(short)attIdMem.length,(byte)0);
+    short index = 0;
+    while(index < ATT_ID_TABLE_SIZE){
+      short[] attId = (short[])attIdTable[index];
+      attId[ATT_ID_OFFSET] = 0;
+      attId[ATT_ID_LENGTH] = 0;
+      index++;
+    }
+    attIdSupported = false;
+    JCSystem.commitTransaction();
+  }
+  public boolean isAttIdSupported(){
+    return attIdSupported;
+  }
   public short getIssuer() {
     return issuer;
   }

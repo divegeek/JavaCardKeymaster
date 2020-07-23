@@ -462,13 +462,16 @@ public class KMX509Certificate {
           KMByteBlob.cast(attAppId).getStartOff(),
           KMByteBlob.cast(attAppId).length());
     }
+    if(!repo.isAttIdSupported()) return;
     byte index = 0;
     while (index < repo.ATT_ID_TABLE_SIZE) {
-      pushBytesTag(
-          repo.getAttIdTag(index),
-          repo.getAttIdBuffer(index),
-          repo.getAttIdOffset(index),
-          repo.getAttIdLen(index));
+      if (repo.getAttIdLen(index) != 0) {
+        pushBytesTag(
+            repo.getAttIdTag(index),
+            repo.getAttIdBuffer(index),
+            repo.getAttIdOffset(index),
+            repo.getAttIdLen(index));
+      }
       index++;
     }
   }

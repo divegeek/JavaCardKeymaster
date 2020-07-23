@@ -1363,7 +1363,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return result;
   }
 
-  private void processDestroyAttIdsCmd(APDU apdu) {}
+  private void processDestroyAttIdsCmd(APDU apdu) {
+    repository.deleteAttIds();
+    sendError(apdu, KMError.OK);
+  }
 
   private void processVerifyAuthorizationCmd(APDU apdu) {
     sendError(apdu, KMError.UNIMPLEMENTED);

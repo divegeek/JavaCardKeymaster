@@ -1685,6 +1685,16 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
+  @Test
+  public void testDestroyAttIds(){
+    init();
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1A, 0x40, 0x00);
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    byte[] respBuf = response.getBytes();
+    Assert.assertEquals(respBuf[0], 0);
+    cleanUp();
+  }
+
   private short upgradeKey(short keyBlobPtr, byte[] clientId, byte[] appData){
     short tagCount = 0;
     short clientIdTag = 0;
