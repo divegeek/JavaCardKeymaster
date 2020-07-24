@@ -862,7 +862,8 @@ public class KMFunctionalTest {
     cleanUp();
   }
   public short generateEcKey(byte[] clientId, byte[] appData) {
-    short tagCount = 5;
+    byte[] activeAndCreationDateTime = {0,0,0x01,0x73,0x51,0x7C,(byte)0xCC,0x00};
+    short tagCount = 6;
     if(clientId != null) tagCount++;
     if(appData != null) tagCount++;
     short arrPtr = KMArray.instance(tagCount);
@@ -882,6 +883,8 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add(tagIndex++, keySize);
     KMArray.cast(arrPtr).add(tagIndex++, digest);
     KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, KMType.EC));
+    short dateTag = KMInteger.uint_64(activeAndCreationDateTime,(short)0);
+    KMArray.cast(arrPtr).add(tagIndex++, KMIntegerTag.instance(KMType.DATE_TAG,KMType.CREATION_DATETIME,dateTag));
     if(clientId != null)KMArray.cast(arrPtr).add(tagIndex++,
       KMByteTag.instance(KMType.APPLICATION_ID, KMByteBlob.instance(clientId,(short)0,(short)clientId.length)));
     if(appData != null)KMArray.cast(arrPtr).add(tagIndex++,
@@ -1190,7 +1193,7 @@ public class KMFunctionalTest {
     Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
       KMByteBlob.cast(keyBlobPtr).getStartOff(),
       wrappingKeyBlob,(short)0, (short)wrappingKeyBlob.length);
-    short inParams = getRsaParams(KMType.DIGEST_NONE, KMType.RSA_PKCS1_1_5_ENCRYPT);
+    short inParams = getRsaParams(KMType.SHA2_256, KMType.RSA_OAEP);
     short ret = processMessage(maskedTransportKey,
       KMByteBlob.instance(wrappingKeyBlob,(short)0, (short)wrappingKeyBlob.length),
       KMType.ENCRYPT,
@@ -1613,9 +1616,8 @@ public class KMFunctionalTest {
     provisionCmd(simulator);
     cleanUp();
   }
-  
   @Test
-  public void testAttestKeySuccess(){
+  public void testAttestRsaKey(){
     init();
     short key = generateRsaKey(null,null);
     short keyBlobPtr = KMArray.cast(key).get((short)1);
@@ -1624,6 +1626,34 @@ public class KMFunctionalTest {
       KMByteBlob.cast(keyBlobPtr).getBuffer(),
       KMByteBlob.cast(keyBlobPtr).getStartOff(),
       keyBlob,(short)0, (short)keyBlob.length);
+    testAttestKey(keyBlob);
+    cleanUp();
+  }
+
+  @Test
+  public void testAttestEcKey(){
+    init();
+    short key = generateEcKey(null,null);
+    short keyBlobPtr = KMArray.cast(key).get((short)1);
+    byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(
+      KMByteBlob.cast(keyBlobPtr).getBuffer(),
+      KMByteBlob.cast(keyBlobPtr).getStartOff(),
+      keyBlob,(short)0, (short)keyBlob.length);
+    testAttestKey(keyBlob);
+    cleanUp();
+  }
+
+  public void testAttestKey(byte[] keyBlob){
+    /*
+    short key = generateRsaKey(null,null);
+    short keyBlobPtr = KMArray.cast(key).get((short)1);
+    byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(
+      KMByteBlob.cast(keyBlobPtr).getBuffer(),
+      KMByteBlob.cast(keyBlobPtr).getStartOff(),
+      keyBlob,(short)0, (short)keyBlob.length);
+     */
     short arrPtr = KMArray.instance((short)2);
     KMArray.cast(arrPtr).add((short)0, KMByteTag.instance(KMType.ATTESTATION_APPLICATION_ID,
       KMByteBlob.instance(attAppId,(short)0,(short)attAppId.length)));
@@ -1650,7 +1680,6 @@ public class KMFunctionalTest {
     arrBlobs = KMArray.cast(ret).get((short)1);
     short cert  = KMArray.cast(arrBlobs).get((short)0);
     //printCert(KMByteBlob.cast(cert).getBuffer(),KMByteBlob.cast(cert).getStartOff(),KMByteBlob.cast(cert).length());
-    cleanUp();
   }
 
   @Test

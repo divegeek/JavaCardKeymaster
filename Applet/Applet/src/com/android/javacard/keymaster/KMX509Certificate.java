@@ -29,6 +29,10 @@ public class KMX509Certificate {
   private static final byte[] rsaEncryption = {
     0x06, 0x09, 0x2A, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xF7, 0x0D, 0x01, 0x01, 0x01
   };
+  // ecPublicKey -  1.2.840.10045.2.1
+  private static final byte[] eccPubKey = {0x06,0x07,0x2A,(byte)0x86,0x48,(byte)0xCE,0x3D,0x02,0x01};
+  // prime256v1 curve - 1.2.840.10045.3.1.7
+  private static final byte[] prime256v1 = {0x06,0x08,0x2A,(byte)0x86,0x48,(byte)0xCE,0x3D,0x03,0x01,0x07};
   // Key Usage Extn - 2.5.29.15
   private static final byte[] keyUsageExtn = {0x06, 0x03, 0x55, 0x1D, 0x0F};
   // Android Extn - 1.3.6.1.4.1.11129.2.1.17
@@ -160,7 +164,8 @@ public class KMX509Certificate {
       short notAfter,
       short pubKey,
       short attChallenge,
-      short attAppId) {
+      short attAppId,
+      boolean rsaCert) {
     init();
     stack = KMByteBlob.cast(buf).getBuffer();
     start = KMByteBlob.cast(buf).getStartOff();
@@ -181,19 +186,23 @@ public class KMX509Certificate {
     //signatureOffset = pushSignature(null, (short) 0, (short) 256);
     pushAlgorithmId(X509SignAlgIdentifier);
     tbsLength = stackPtr;
-    pushTbsCert();
+    pushTbsCert(rsaCert);
     tbsOffset = stackPtr;
     tbsLength = (short)(tbsLength - tbsOffset);
     pushSequenceHeader((short)(last-stackPtr));
-//    print(stack, stackPtr, (short)(last - stackPtr));
+    //print(stack, stackPtr, (short)(last - stackPtr));
     certStart = stackPtr;
   }
 
-  private static void pushTbsCert() {
+  private static void pushTbsCert(boolean rsaCert) {
     short last = stackPtr;
     pushExtensions();
     // subject public key info
-    pushRsaSubjectKeyInfo();
+    if (rsaCert) {
+      pushRsaSubjectKeyInfo();
+    }else{
+      pushEccSubjectKeyInfo();
+    }
     // subject
     pushBytes(X509Subject, (short) 0, (short) X509Subject.length);
     pushValidity();
@@ -289,6 +298,23 @@ public class KMX509Certificate {
     pushRsaEncryption();
     pushSequenceHeader((short) (last - stackPtr));
   }
+  // SEQUENCE{SEQUENCE{ecPubKey, prime256v1}, bitString{pubKey}}
+  private static void pushEccSubjectKeyInfo() {
+    short last = stackPtr;
+    pushBytes(
+      KMByteBlob.cast(pubKey).getBuffer(),
+      KMByteBlob.cast(pubKey).getStartOff(),
+      KMByteBlob.cast(pubKey).length());
+    pushBitStringHeader((byte)0x00,KMByteBlob.cast(pubKey).length());
+    pushEcDsa();
+    pushSequenceHeader((short) (last - stackPtr));
+  }
+  private static void pushEcDsa(){
+    short last = stackPtr;
+    pushBytes(prime256v1,(short)0,(short)prime256v1.length);
+    pushBytes(eccPubKey,(short)0,(short)eccPubKey.length);
+    pushSequenceHeader((short)(last - stackPtr));
+  }
   private static void pushRsaEncryption(){
     short last = stackPtr;
     pushNullHeader();
@@ -309,10 +335,15 @@ public class KMX509Certificate {
     short last = stackPtr;
     pushHWParams();
     pushSWParams();
-    pushOctetString(
-        KMByteBlob.cast(uniqueId).getBuffer(),
-        KMByteBlob.cast(uniqueId).getStartOff(),
-        KMByteBlob.cast(uniqueId).length());
+    if (uniqueId != 0) {
+      pushOctetString(
+          KMByteBlob.cast(uniqueId).getBuffer(),
+          KMByteBlob.cast(uniqueId).getStartOff(),
+          KMByteBlob.cast(uniqueId).length());
+    }else{
+      pushOctetStringHeader((short)0);
+    }
+
     pushOctetString(
         KMByteBlob.cast(attChallenge).getBuffer(),
         KMByteBlob.cast(attChallenge).getStartOff(),
@@ -712,14 +743,12 @@ public class KMX509Certificate {
     return stack;
   }
 
-/*  private static void print(byte[] buf, short start, short length){
+ /* private static void print(byte[] buf, short start, short length){
     StringBuilder sb = new StringBuilder();
     for(int i = start; i < (start+length); i++){
       sb.append(String.format("%02X", buf[i])) ;
       //if((i-start)%16 == 0 && (i-start) != 0) sb.append(String.format("\n"));
     }
     System.out.println(sb.toString());
-  }
-
- */
+  }*/
 }

@@ -992,8 +992,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // create rsa decipher
     KMCipher cipher =
       cryptoProvider.createRsaDecipher(
-        KMCipher.PAD_PKCS1, // TODO remove this when KMCipher.PAD_PKCS1_OAEP_SHA256 is supported
-    	//KMCipher.PAD_PKCS1_OAEP_SHA256,
+        //KMCipher.PAD_PKCS1, // TODO remove this when KMCipher.PAD_PKCS1_OAEP_SHA256 is supported
+    	KMCipher.PAD_PKCS1_OAEP_SHA256,
         KMByteBlob.cast(data[SECRET]).getBuffer(),
         KMByteBlob.cast(data[SECRET]).getStartOff(),
         KMByteBlob.cast(data[SECRET]).length(),
@@ -1098,6 +1098,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if(tmpVariables[0] != KMType.RSA && tmpVariables[0] != KMType.EC){
       KMException.throwIt(KMError.INCOMPATIBLE_ALGORITHM);
     }
+    boolean rsaCert = true;
+    if(tmpVariables[0] == KMType.EC) rsaCert = false;
     // Save attestation application id - must be present.
     tmpVariables[0] = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.ATTESTATION_APPLICATION_ID,data[KEY_PARAMETERS]);
     if(tmpVariables[0] == KMType.INVALID_VALUE){
@@ -1154,7 +1156,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // create X509 certificate.
     KMX509Certificate.encodeCert(tmpVariables[3]/*buf*/, data[KEY_CHARACTERISTICS]/*key char*/,
     tmpVariables[0]/*unique Id*/,tmpVariables[1]/*start*/,tmpVariables[2]/*end*/,
-        data[PUB_KEY]/*pub key/modulus*/,tmpVariables[5],tmpVariables[4]);
+        data[PUB_KEY]/*pub key/modulus*/,tmpVariables[5],tmpVariables[4], rsaCert);
 
     // Now sign the cert
     // Create signer
@@ -3556,7 +3558,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[1] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    if (!(tmpVariables[1] >= 64 && tmpVariables[1] <= 512 && tmpVariables[1] % 8 == 0)) {
+    if (((short) (tmpVariables[1] % 8) != 0) ||
+      (tmpVariables[1] < (short) 64)||
+      tmpVariables[1] > (short)512) {
       KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
     }
   }
