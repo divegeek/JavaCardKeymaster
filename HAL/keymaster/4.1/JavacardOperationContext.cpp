@@ -20,7 +20,7 @@
 #define MAX_ALLOWED_INPUT_SIZE 512
 #define AES_BLOCK_SIZE          16
 #define DES_BLOCK_SIZE           8
-#define RSA_INPUT_MSG_LEN      245 /*(256-11)*/
+#define RSA_INPUT_MSG_LEN      256
 #define EC_INPUT_MSG_LEN        32
 #define MAX_RSA_BUFFER_SIZE    256
 #define MAX_EC_BUFFER_SIZE      32

@@ -229,7 +229,7 @@ ErrorCode encodeParametersVerified(const VerificationToken& verificationToken, s
     return ErrorCode::OK;
 }
 
-ErrorCode prepareCborArrayFromRawKey(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& blob, cppbor::Array&
+ErrorCode prepareCborArrayFromKeyData(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& blob, cppbor::Array&
         array) {
     ErrorCode errorCode = ErrorCode::OK;
     AuthorizationSet paramSet;
@@ -421,7 +421,7 @@ keyData) {
     std::vector<uint8_t> authorityKeyIdentifier;
     std::vector<uint8_t> notAfter;
 
-    if(ErrorCode::OK != (errorCode = prepareCborArrayFromRawKey(keyParams, keyFormat, keyData, subArray))) {
+    if(ErrorCode::OK != (errorCode = prepareCborArrayFromKeyData(keyParams, keyFormat, keyData, subArray))) {
         return errorCode;
     }
     /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
@@ -440,15 +440,13 @@ keyData) {
 
     /* construct cbor */
     cborConverter.addKeyparameters(array, keyParams);
-    array.add(static_cast<uint32_t>(keyFormat));
+    array.add(static_cast<uint32_t>(KeyFormat::RAW));
     std::vector<uint8_t> encodedArray = subArray.encode();
     cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
     array.add(bstr);
-    /* TODO Once javacard provision is ready for testing uncomment below code and add in the order in which javacard is
-     * expecting. */
-    //array.add(subject);
-    //array.add(authorityKeyIdentifier);
-    //array.add(notAfter);
+    array.add(subject);
+    array.add(notAfter);
+    array.add(authorityKeyIdentifier);
     std::vector<uint8_t> cborData = array.encode();
 
     if(ErrorCode::OK != (errorCode = constructApduMessage(ins, cborData, apdu)))
@@ -732,7 +730,7 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
     }
 	cborConverter_.addKeyparameters(array, keyParams);
 	array.add(static_cast<uint32_t>(KeyFormat::RAW)); //javacard accepts only RAW.
-    if(ErrorCode::OK != (errorCode = prepareCborArrayFromRawKey(keyParams, keyFormat, keyData, subArray))) {
+    if(ErrorCode::OK != (errorCode = prepareCborArrayFromKeyData(keyParams, keyFormat, keyData, subArray))) {
         _hidl_cb(errorCode, keyBlob, keyCharacteristics);
         return Void();
     }
