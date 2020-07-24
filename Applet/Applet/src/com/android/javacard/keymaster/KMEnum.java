@@ -89,7 +89,7 @@ public class KMEnum extends KMType {
               ISO18033_2_KDF2_SHA1,
               ISO18033_2_KDF2_SHA256
             },
-            new byte[] {SELF_SIGNED_BOOT, VERIFIED_BOOT},
+            new byte[] {SELF_SIGNED_BOOT, VERIFIED_BOOT, UNVERIFIED_BOOT, FAILED_BOOT},
             new byte[] {DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
             new byte[] {USER_AUTH_NONE,PASSWORD,FINGERPRINT, BOTH},
             new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
