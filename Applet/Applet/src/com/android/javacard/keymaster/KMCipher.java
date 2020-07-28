@@ -21,6 +21,7 @@ public abstract class KMCipher {
   public static final short PAD_PKCS1 = 7;
   public static final short AES_BLOCK_SIZE = 16;
   public static final short DES_BLOCK_SIZE = 8;
+  public static final short ALG_AES_CTR = -16;
 
   public abstract short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i);
 

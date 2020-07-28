@@ -984,9 +984,10 @@ public class KMFunctionalTest {
     short arrPtr = KMArray.instance(tagCount);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
     short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16(keysize));
-    short byteBlob = KMByteBlob.instance((short)2);
+    short byteBlob = KMByteBlob.instance((short)3);
     KMByteBlob.cast(byteBlob).add((short)0, KMType.ECB);
     KMByteBlob.cast(byteBlob).add((short)1, KMType.CBC);
+    KMByteBlob.cast(byteBlob).add((short)2, KMType.CTR);
     short blockModeTag = KMEnumArrayTag.instance(KMType.BLOCK_MODE, byteBlob);
     byteBlob = KMByteBlob.instance((short)2);
     KMByteBlob.cast(byteBlob).add((short)0, KMType.PKCS7);
@@ -1429,6 +1430,21 @@ public class KMFunctionalTest {
     testEncryptDecryptWithAesDes(KMType.AES, KMType.ECB, KMType.PKCS7,true);
     cleanUp();
   }
+
+  @Test
+  public void testWithAesCtrNoPadWithUpdate(){
+    init();
+    testEncryptDecryptWithAesDes(KMType.AES, KMType.CTR, KMType.PADDING_NONE,true);
+    cleanUp();
+  }
+
+  @Test
+  public void testWithAesCtrNoPad(){
+    init();
+    testEncryptDecryptWithAesDes(KMType.AES, KMType.CTR, KMType.PADDING_NONE,false);
+    cleanUp();
+  }
+
   @Test
   public void testWithAesEcbNoPadWithUpdate(){
     init();

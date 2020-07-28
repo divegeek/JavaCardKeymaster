@@ -52,6 +52,7 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.ShortBufferException;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 import javax.crypto.spec.SecretKeySpec;
@@ -677,6 +678,8 @@ public class KMJcardSimulator implements KMCryptoProvider {
         symmCipher = Cipher.getInstance((byte)cipherAlg, false);
         symmCipher.init(key, (byte) mode);
         break;
+      case KMCipher.ALG_AES_CTR: // uses SUNJCE
+        return createAesCtrCipherNoPad(mode, secret,secretStart,secretLength,ivBuffer,ivStart,ivLength);
       default://This should never happen
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
         break;
@@ -686,6 +689,57 @@ public class KMJcardSimulator implements KMCryptoProvider {
     cipher.setPaddingAlgorithm(padding);
     cipher.setMode(mode);
     return cipher;
+  }
+
+  private KMCipher createAesCtrCipherNoPad(short mode, byte[] secret, short secretStart, short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
+    if(secretLength != 16 && secretLength != 32){
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if(ivLength != 16){
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if(mode != KMCipher.MODE_ENCRYPT && mode != KMCipher.MODE_DECRYPT){
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+
+    //Create the sun jce compliant aes key
+    byte[] keyMaterial = new byte[secretLength];
+    Util.arrayCopyNonAtomic(secret,secretStart,keyMaterial,(short)0,secretLength);
+    java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,keyMaterial.length, "AES");
+    // Create the cipher
+    javax.crypto.Cipher cipher = null;
+    try {
+      cipher = javax.crypto.Cipher.getInstance("AES/CTR/NoPadding", "SunJCE");
+    } catch (NoSuchAlgorithmException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    } catch (NoSuchProviderException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (NoSuchPaddingException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    // Copy nonce
+    byte[] iv = new byte[ivLength];
+    Util.arrayCopyNonAtomic(ivBuffer,ivStart,iv,(short)0,ivLength);
+    // Init Cipher
+    IvParameterSpec ivSpec = new IvParameterSpec(iv);
+    try {
+      if(mode == KMCipher.MODE_ENCRYPT)cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, aesKey, ivSpec);
+      else cipher.init(javax.crypto.Cipher.DECRYPT_MODE, aesKey, ivSpec);
+    } catch (InvalidKeyException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (InvalidAlgorithmParameterException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    }
+    KMCipherImpl ret = new KMCipherImpl(cipher);
+    ret.setCipherAlgorithm(KMCipher.ALG_AES_CTR);
+    ret.setMode(mode);
+    ret.setPaddingAlgorithm((short)0);
+    return ret;
   }
 
   @Override

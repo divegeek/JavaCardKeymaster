@@ -1303,7 +1303,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] = KMKeyParameters.findTag(KMType.DATE_TAG,KMType.CREATION_DATETIME,data[SW_PARAMETERS]);
     if(tmpVariables[0] == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_TAG);
     tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
-    tmpVariables[0] = countTemporalCount(tmpVariables[0]); // just a short count
+    tmpVariables[0] = countTemporalCount(tmpVariables[0], scratchPad); // just a short count
     Util.setShort(scratchPad,(short)0,tmpVariables[0]);
     tmpVariables[1] = (short)2;
 
@@ -1341,27 +1341,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return tmpVariables[0];
   }
 
-  private short countTemporalCount(short time){
-    //2592000000 milliseconds - 1 month.
-    byte[] buf = new byte[24];
+  private short countTemporalCount(short time, byte[] scratchPad){
+    Util.arrayFillNonAtomic(scratchPad,(short)0,(short)24, (byte)0);
     short result = 0;
-    short remainder = KMByteBlob.instance((short)8);
-    short divisor = KMByteBlob.instance(oneMonthMsec,(short)0,(short)8);
-    if(KMInteger.cast(time).length() < 8){
-      time = KMByteBlob.instance(
-        KMInteger.cast(time).getBuffer(),
-        (short)(KMInteger.cast(time).getStartOff()+8-KMInteger.cast(time).length()),
-        KMInteger.cast(time).length());
-    }
-    Util.arrayCopyNonAtomic(KMInteger.cast(time).getBuffer(),KMInteger.cast(time).getStartOff(),buf,(short)0, (short)8 );
-    Util.arrayCopyNonAtomic(oneMonthMsec,(short)0,buf,(short)8, (short)8 );
-
-    result = divide(KMInteger.cast(time).getBuffer(),
+    Util.arrayCopyNonAtomic(KMInteger.cast(time).getBuffer(),
       KMInteger.cast(time).getStartOff(),
-      KMByteBlob.cast(divisor).getStartOff(),
-      KMByteBlob.cast(remainder).getStartOff());
-/*    byte[] buf = {1,0,0,0,0,0,0,1, 0,5,0,0,0,0,0,0, 0,0,0,0,0,0,0,0};
-    short result = divide(buf, (short)0, (short)8, (short)16);*/
+      scratchPad,(short)(8-KMInteger.cast(time).length()),
+      KMInteger.cast(time).length());
+    Util.arrayCopyNonAtomic(oneMonthMsec,(short)0,scratchPad,(short)8,(short)8);
+    result = divide(scratchPad, (short)0,(short)8,(short)16);
     return result;
   }
 
@@ -2396,10 +2384,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         if (macLen == KMType.INVALID_VALUE) {
           KMException.throwIt(KMError.MISSING_MAC_LENGTH);
         }
-        if (macLen != 256 ||
-          macLen < KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[HW_PARAMETERS])) {
+        if (macLen < KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[HW_PARAMETERS]) ||
+        macLen > getMacSize(op.getDigest())) {
           KMException.throwIt(KMError.INVALID_MAC_LENGTH);
         }
+        op.setMacLength(macLen);
         break;
       default:
         break;
@@ -2407,6 +2396,24 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     op.setBlockMode((byte) param);
   }
 
+  private short getMacSize(byte digest){
+    switch (digest){
+      case KMType.SHA1:
+        return 160;
+      case KMType.SHA2_224:
+        return 224;
+      case KMType.SHA2_384:
+        return 384;
+      case KMType.SHA2_256:
+        return 256;
+      case KMType.SHA2_512:
+        return 512;
+      case KMType.MD5:
+        return 128;
+      default:
+        return 0;
+    }
+  }
   private void authorizeAndBeginOperation(KMOperationState op, byte[] scratchPad) {
     authorizeAlgorithm(op);
     authorizePurpose(op);
@@ -2527,16 +2534,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           } else if (op.getBlockMode() == KMType.ECB) {
             alg = KMCipher.ALG_AES_BLOCK_128_ECB_NOPAD;
             data[IV] = KMType.INVALID_VALUE;
-          } else {
-            // data[CIPHER_ALGORITHM] = Cipher.CIPHER_AES_CTR; // Not supported in 3.0.5
-            // TODO change this once we can test.
+          } else if (op.getBlockMode() == KMType.CTR){
+            alg = KMCipher.ALG_AES_CTR;
+            if (data[IV] == KMType.INVALID_VALUE) {
+              data[IV] = KMByteBlob.instance((short) 16);
+              cryptoProvider.newRandomNumber(
+                KMByteBlob.cast(data[IV]).getBuffer(),
+                KMByteBlob.cast(data[IV]).getStartOff(),
+                KMByteBlob.cast(data[IV]).length());
+            }
+          }else{
             KMException.throwIt(KMError.UNSUPPORTED_BLOCK_MODE);
           }
         } else if (op.getAlgorithm() == KMType.DES) {
           if (op.getBlockMode() == KMType.CBC) {
             alg = KMCipher.ALG_DES_CBC_NOPAD;
             if(data[IV] == KMType.INVALID_VALUE){
-              data[IV] = KMByteBlob.instance((short)16);
+              data[IV] = KMByteBlob.instance((short)16); // TODO 8 bytes in length
               cryptoProvider.newRandomNumber(
                 KMByteBlob.cast(data[IV]).getBuffer(),
                 KMByteBlob.cast(data[IV]).getStartOff(),
@@ -2544,9 +2558,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               );
             }
 
-          } else {
+          } else if (op.getBlockMode() == KMType.ECB){
             alg = KMCipher.ALG_DES_ECB_NOPAD;
             data[IV] = KMType.INVALID_VALUE;
+          }else{
+            KMException.throwIt(KMError.UNSUPPORTED_BLOCK_MODE);
           }
         } else {
           KMException.throwIt(KMError.INCOMPATIBLE_ALGORITHM);

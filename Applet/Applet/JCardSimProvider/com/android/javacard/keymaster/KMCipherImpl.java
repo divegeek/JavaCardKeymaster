@@ -52,7 +52,21 @@ public class KMCipherImpl extends KMCipher{
       } catch (BadPaddingException e) {
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    } else {
+    } else if(cipherAlg == KMCipher.ALG_AES_CTR){
+      try {
+        return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
+      } catch (ShortBufferException e) {
+        e.printStackTrace();
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      } catch (IllegalBlockSizeException e) {
+        e.printStackTrace();
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      } catch (BadPaddingException e) {
+        e.printStackTrace();
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      }
+    }
+    else{
       short len = cipher.doFinal(buffer, startOff, length, scratchPad, i);
       // JCard Sim removes leading zeros during decryption in case of no padding - we add that back.
       if (cipherAlg == Cipher.ALG_RSA_NOPAD && mode == Cipher.MODE_DECRYPT && len < 256) {
@@ -79,14 +93,14 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i) {
-    if(cipherAlg == KMCipher.ALG_AES_GCM){
+    if(cipherAlg == KMCipher.ALG_AES_GCM || cipherAlg == KMCipher.ALG_AES_CTR){
       try {
         return (short)sunCipher.update(buffer,startOff,length,scratchPad,i);
       } catch (ShortBufferException e) {
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    } else {
+    } else{
       return cipher.update(buffer, startOff, length, scratchPad, i);
     }
     return KMType.INVALID_VALUE;
