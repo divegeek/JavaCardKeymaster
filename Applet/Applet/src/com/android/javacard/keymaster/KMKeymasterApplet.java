@@ -2290,6 +2290,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     op.setAlgorithm((byte)alg);
   }
   private void authorizePurpose(KMOperationState op){
+	switch(op.getAlgorithm()) {
+	  case KMType.EC:
+	  case KMType.HMAC:
+		if(op.getPurpose() == KMType.ENCRYPT || op.getPurpose() == KMType.DECRYPT)
+		  KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
+        break;
+      default:
+    	break;
+	}
     if(!KMEnumArrayTag.contains(KMType.PURPOSE,op.getPurpose(),data[HW_PARAMETERS])){
       KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
     }
@@ -2358,6 +2367,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if(param != KMType.INVALID_VALUE){
       if(KMEnumArrayTag.cast(param).length() != 1) KMException.throwIt(KMError.INVALID_ARGUMENT);
       param = KMEnumArrayTag.cast(param).get((short)0);
+    }
+    if (KMType.AES == op.getAlgorithm() || KMType.DES == op.getAlgorithm()) {
+      if(!KMEnumArrayTag.contains(KMType.BLOCK_MODE, param, data[HW_PARAMETERS])){
+        KMException.throwIt(KMError.INCOMPATIBLE_BLOCK_MODE);
+      }
     }
     short macLen =
       KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAC_LENGTH, data[KEY_PARAMETERS]);
