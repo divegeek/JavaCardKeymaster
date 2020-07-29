@@ -1896,7 +1896,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           len = op.getSignerVerifier().sign(KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
             KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),len,scratchPad,
             (short)0);
-            data[OUTPUT_DATA] = KMByteBlob.instance(scratchPad,(short)0, len);
+          // Copy only signature of mac length size.
+            data[OUTPUT_DATA] = KMByteBlob.instance(scratchPad,(short)0, (short) (op.getMacLength() / 8));
           }else{
             if(!op.getSignerVerifier().verify(
               KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
@@ -2386,7 +2387,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
         if (macLen < KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[HW_PARAMETERS]) ||
         macLen > getMacSize(op.getDigest())) {
-          KMException.throwIt(KMError.INVALID_MAC_LENGTH);
+          KMException.throwIt(KMError.UNSUPPORTED_MAC_LENGTH);
         }
         op.setMacLength(macLen);
         break;
