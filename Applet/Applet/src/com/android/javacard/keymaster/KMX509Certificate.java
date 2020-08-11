@@ -362,26 +362,52 @@ public class KMX509Certificate {
 
   private static void pushSWParams() {
     short last = stackPtr;
-    pushParams(swParams);
+    //ATTESTATION_APPLICATION_ID 709 is softwareenforced.
+    short[] tagIds = {709, 706,705,704,703,702,701,601,600,509,508,507,506,505,
+	                  504, 503, 402,401,400,303,200,10,6,5,3,2,1
+                     };
+    byte index = 0;
+    do {
+      if(tagIds[index] == KMType.ATTESTATION_APPLICATION_ID) {
+    	pushAttIds(tagIds[index]);
+    	continue;
+      }
+      pushParams(swParams, tagIds[index]);
+    }while(++index < tagIds.length);
     pushSequenceHeader((short) (last - stackPtr));
   }
 
   private static void pushHWParams() {
     short last = stackPtr;
-    pushAttIds();
-    pushRoT();
-    pushParams(hwParams);
+    //Attestation ids are not included. As per VTS attestation ids are not supported currenlty.
+    short[] tagIds = {706,705,704,703,702,701,601,600,509,508,507,506,505,
+			          504, 503, 402,401,400,303,200,10,6,5,3,2,1
+	                 };
+    byte index = 0;
+    do {
+      if(pushAttIds(tagIds[index])) continue;
+      if(tagIds[index] == KMType.ROOT_OF_TRUST) {
+    	  pushRoT();
+    	  continue;
+      }
+      if(pushParams(hwParams,tagIds[index])) continue;
+    } while (++index < tagIds.length);
     pushSequenceHeader((short) (last - stackPtr));
   }
 
-  private static void pushParams(short params) {
+  private static boolean pushParams(short params, short tagId) {
     short index = 0;
     short arr = KMKeyParameters.cast(params).getVals();
     short len = KMArray.cast(arr).length();
     while (index < len) {
-      pushTag(KMArray.cast(arr).get(index));
+      short tag = KMArray.cast(arr).get(index);
+      if(tagId == KMTag.getKey(tag)) {
+        pushTag(tag);
+        return true;
+      }
       index++;
     }
+    return false;
   }
 
   private static void pushTag(short tag) {
@@ -485,26 +511,31 @@ public class KMX509Certificate {
     pushByte((byte) 0x01);
   }
   // All Attestation Id tags are byte tags/octet strings
-  private static void pushAttIds() {
-    if (attAppId != 0) {
+  private static boolean pushAttIds(short tagId) {
+    if (attAppId != 0 && KMType.ATTESTATION_APPLICATION_ID == tagId) {
       pushBytesTag(
           KMType.ATTESTATION_APPLICATION_ID,
           KMByteBlob.cast(attAppId).getBuffer(),
           KMByteBlob.cast(attAppId).getStartOff(),
           KMByteBlob.cast(attAppId).length());
+      return true;
     }
-    if(!repo.isAttIdSupported()) return;
+    if(!repo.isAttIdSupported()) return true;
     byte index = 0;
     while (index < repo.ATT_ID_TABLE_SIZE) {
       if (repo.getAttIdLen(index) != 0) {
-        pushBytesTag(
-            repo.getAttIdTag(index),
-            repo.getAttIdBuffer(index),
-            repo.getAttIdOffset(index),
-            repo.getAttIdLen(index));
+    	if(tagId == repo.getAttIdTag(index)) {
+          pushBytesTag(
+              repo.getAttIdTag(index),
+              repo.getAttIdBuffer(index),
+              repo.getAttIdOffset(index),
+              repo.getAttIdLen(index));
+          return true;
+    	}
       }
       index++;
     }
+    return false;
   }
 
   // Only SET of INTEGERS supported are padding, digest, purpose and blockmode

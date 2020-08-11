@@ -10,16 +10,20 @@ import javax.crypto.ShortBufferException;
 
 
 public class KMCipherImpl extends KMCipher{
-  Cipher cipher;
-  javax.crypto.Cipher sunCipher;
-  short cipherAlg;
-  short paddingAlg;
-  short mode;
-  boolean verificationFlag;
+  private Cipher cipher;
+  private javax.crypto.Cipher sunCipher;
+  private short cipherAlg;
+  private short paddingAlg;
+  private short mode;
+  private boolean verificationFlag;
+  public static short aes_gcm_decrypt_final_data = 0x00;
+
   KMCipherImpl(Cipher c){
     cipher = c;
   }
-  KMCipherImpl(javax.crypto.Cipher c){sunCipher = c;}
+  KMCipherImpl(javax.crypto.Cipher c){
+    sunCipher = c;
+  }
 
   @Override
   public short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i){
@@ -39,6 +43,15 @@ public class KMCipherImpl extends KMCipher{
       }
     }else if(cipherAlg == KMCipher.ALG_AES_GCM){
       try {
+        /*
+    	  if (mode == javax.crypto.Cipher.DECRYPT_MODE) {
+    	    short acutalLen = (short)sunCipher.getOutputSize(length);
+    	    aes_gcm_decrypt_final_data = KMByteBlob.instance(acutalLen);
+    	    return (short)sunCipher.doFinal(buffer,startOff,length,
+    	    		KMByteBlob.cast(aes_gcm_decrypt_final_data).getBuffer(),
+    	    		KMByteBlob.cast(aes_gcm_decrypt_final_data).getStartOff());
+    	  }
+      */
         return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
       } catch (AEADBadTagException e) {
         e.printStackTrace();
@@ -93,6 +106,7 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i) {
+    short len = 0;
     if(cipherAlg == KMCipher.ALG_AES_GCM || cipherAlg == KMCipher.ALG_AES_CTR){
       try {
         return (short)sunCipher.update(buffer,startOff,length,scratchPad,i);
@@ -108,7 +122,16 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public void updateAAD(byte[] buffer, short startOff, short length) {
+	  try {
     sunCipher.updateAAD(buffer,startOff,length);
+	  } catch (IllegalArgumentException e) {
+		  e.printStackTrace();
+		  CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+	  } catch (IllegalStateException e) {
+		  CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+	  } catch (UnsupportedOperationException e) {
+		  CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+	  }
   }
 
   @Override
@@ -127,5 +150,23 @@ public class KMCipherImpl extends KMCipher{
 
   public void setMode(short mode) {
     this.mode = mode;
+  }
+
+  @Override
+  public short getCipherProvider() {
+	  return KMCipher.SUN_JCE;
+  }
+
+  @Override
+  public short getAesGcmOutputSize(short len, short macLength) {
+    if (sunCipher != null) {
+      return (short) sunCipher.getOutputSize(len);
+    } else {
+      if (mode == KMType.ENCRYPT) {
+        return (short) (len + macLength);
+      } else {
+        return (short) (len - macLength);
+      }
+    }
   }
 }
