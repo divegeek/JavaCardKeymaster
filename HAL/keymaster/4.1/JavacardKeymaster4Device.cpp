@@ -16,6 +16,7 @@
  */
 
 #include <climits>
+#include <time.h>
 #include <cppbor.h>
 #include <cppbor_parse.h>
 #include <CborConverter.h>
@@ -28,7 +29,7 @@
 #include <openssl/aes.h>
 
 #include <JavacardKeymaster4Device.h>
-#include <java_card_soft_keymaster_context.h>
+#include <JavacardSoftKeymasterContext.h>
 #include <CommonUtils.h>
 #include <android-base/logging.h>
 #include <openssl/x509.h>
@@ -53,7 +54,7 @@ namespace V4_1 {
 namespace javacard {
 
 static std::unique_ptr<se_transport::TransportFactory> pTransportFactory = nullptr;
-constexpr size_t kOperationTableSize = 16;
+constexpr size_t kOperationTableSize = 4;
 
 struct KM_AUTH_LIST_Delete {
     void operator()(KM_AUTH_LIST* p) { KM_AUTH_LIST_free(p); }
@@ -117,7 +118,25 @@ static inline bool readDataFromFile(const char *filename, std::vector<uint8_t>& 
     return ret;
 }
 
+static inline bool findTag(const hidl_vec<KeyParameter>& params, Tag tag) {
+    size_t size = params.size();
+    for(size_t i = 0; i < size; ++i) {
+        if(tag == params[i].tag)
+            return true;
+    }
+    return false;
+}
 
+static inline bool getTag(const hidl_vec<KeyParameter>& params, Tag tag, KeyParameter& param) {
+    size_t size = params.size();
+    for(size_t i = 0; i < size; ++i) {
+        if(tag == params[i].tag) {
+            param = params[i];
+            return true;
+        }
+    }
+    return false;
+}
 
 static inline X509* parseDerCertificate(const char* filename) {
     X509 *x509 = NULL;
@@ -197,7 +216,7 @@ static inline void getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate) {
     notAfterDate.insert(notAfterDate.begin(), strNotAfter, strNotAfter + strNotAfterLen);
 }
 
-ErrorCode encodeParametersVerified(const VerificationToken& verificationToken, std::vector<uint8_t> asn1ParamsVerified) {
+ErrorCode encodeParametersVerified(const VerificationToken& verificationToken, std::vector<uint8_t>& asn1ParamsVerified) {
     if (verificationToken.parametersVerified.size() > 0) {
         AuthorizationSet paramSet;
         KeymasterBlob derBlob;
@@ -421,12 +440,13 @@ keyData) {
     std::vector<uint8_t> authorityKeyIdentifier;
     std::vector<uint8_t> notAfter;
 
-    if(ErrorCode::OK != (errorCode = prepareCborArrayFromKeyData(keyParams, keyFormat, keyData, subArray))) {
-        return errorCode;
-    }
     /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
     /* Get X509 certificate instance for the root certificate.*/
     if(NULL == (x509 = parseDerCertificate(ROOT_RSA_CERT))) {
+        return errorCode;
+    }
+
+    if(ErrorCode::OK != (errorCode = prepareCborArrayFromKeyData(keyParams, keyFormat, keyData, subArray))) {
         return errorCode;
     }
     /* Get subject in DER */
@@ -695,9 +715,19 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
     std::vector<uint8_t> cborOutData;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     KeyCharacteristics keyCharacteristics;
+    hidl_vec<KeyParameter> updatedParams(keyParams);
+
+    if(!findTag(keyParams, Tag::CREATION_DATETIME) &&
+        !findTag(keyParams, Tag::ACTIVE_DATETIME)) {
+        //Add CREATION_DATETIME in HAL, as secure element is not having clock.
+        size_t size = keyParams.size();
+        updatedParams.resize(size+1);
+        updatedParams[size].tag = Tag::CREATION_DATETIME;
+        updatedParams[size].f.dateTime = java_time(time(nullptr));
+    }
 
     /* Convert to cbor format */
-    cborConverter_.addKeyparameters(array, keyParams);
+    cborConverter_.addKeyparameters(array, updatedParams);
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(Instruction::INS_GENERATE_KEY_CMD, cborData, cborOutData);
@@ -831,7 +861,20 @@ Return<void> JavacardKeymaster4Device::getKeyCharacteristics(const hidl_vec<uint
     return Void();
 }
 
-Return<void> JavacardKeymaster4Device::exportKey(KeyFormat exportFormat, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<uint8_t>& /*clientId*/, const hidl_vec<uint8_t>& /*appData*/, exportKey_cb _hidl_cb) {
+Return<void> JavacardKeymaster4Device::exportKey(KeyFormat exportFormat, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<uint8_t>& clientId, const hidl_vec<uint8_t>& appData, exportKey_cb _hidl_cb) {
+    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+    hidl_vec<uint8_t> resultKeyBlob;
+
+    //Check if keyblob is corrupted
+    getKeyCharacteristics(keyBlob, clientId, appData,
+           [&](ErrorCode error, KeyCharacteristics /*keyCharacteristics*/) {
+               errorCode = error;
+           });
+
+    if(errorCode != ErrorCode::OK) {
+        _hidl_cb(errorCode, resultKeyBlob);
+        return Void();
+    }
 
     ExportKeyRequest request;
     request.key_format = legacy_enum_conversion(exportFormat);
@@ -840,7 +883,10 @@ Return<void> JavacardKeymaster4Device::exportKey(KeyFormat exportFormat, const h
     ExportKeyResponse response;
     softKm_->ExportKey(request, &response);
 
-    hidl_vec<uint8_t> resultKeyBlob;
+    if(response.error == KM_ERROR_INCOMPATIBLE_ALGORITHM) {
+        //Symmetric Keys cannot be exported.
+        response.error = KM_ERROR_UNSUPPORTED_KEY_FORMAT;
+    }
     if (response.error == KM_ERROR_OK) {
         resultKeyBlob.setToExternal(response.key_data, response.key_data_length);
     }
@@ -918,7 +964,6 @@ Return<ErrorCode> JavacardKeymaster4Device::deleteKey(const hidl_vec<uint8_t>& k
 
     array.add(std::vector<uint8_t>(keyBlob));
     std::vector<uint8_t> cborData = array.encode();
-
     errorCode = sendData(Instruction::INS_DELETE_KEY_CMD, cborData, cborOutData);
 
     if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
@@ -995,6 +1040,7 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     std::unique_ptr<Item> item;
     std::unique_ptr<Item> blobItem = nullptr;
     KeyCharacteristics keyCharacteristics;
+    KeyParameter param;
 
     /* Convert input data to cbor format */
     array.add(static_cast<uint64_t>(purpose));
@@ -1013,6 +1059,11 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
         _hidl_cb(errorCode, outParams, operationHandle);
         return Void();
     }
+    cborConverter_.getKeyCharacteristics(blobItem, 3, keyCharacteristics);
+    if(!getTag(keyCharacteristics.hardwareEnforced, Tag::ALGORITHM, param)) {
+        _hidl_cb(ErrorCode::UNSUPPORTED_ALGORITHM, outParams, operationHandle);
+        return Void();
+    }
     errorCode = sendData(Instruction::INS_BEGIN_OPERATION_CMD, cborData, cborOutData);
 
     if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
@@ -1023,8 +1074,7 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
             cborConverter_.getKeyParameters(item, 1, outParams);
             cborConverter_.getUint64(item, 2, operationHandle);
             /* Store the operationInfo */
-            cborConverter_.getKeyCharacteristics(blobItem, 3, keyCharacteristics);
-            oprCtx_->setOperationInfo(operationHandle, purpose, keyCharacteristics.hardwareEnforced);
+            oprCtx_->setOperationInfo(operationHandle, purpose, param.f.algorithm, inParams);
         }
     }
     _hidl_cb(errorCode, outParams, operationHandle);
@@ -1059,6 +1109,15 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
             std::unique_ptr<Item> item;
             std::vector<uint8_t> cborOutData;
             std::vector<uint8_t> asn1ParamsVerified;
+            // For symmetic ciphers only block aligned data is send to javacard Applet to reduce the number of calls to
+            //javacard. If the input message is less than block size then it is buffered inside the HAL. so in case if
+            // after buffering there is no data to send to javacard don't call javacard applet.
+            //For AES GCM operations, even though the input length is 0(which is not block aligned), if there is
+            //ASSOCIATED_DATA present in KeyParameters. Then we need to make a call to javacard Applet.
+            if(data.size() == 0 && !findTag(inParams, Tag::ASSOCIATED_DATA)) {
+                //Return OK, since this is not error case.
+                return ErrorCode::OK;
+            }
 
             if(ErrorCode::OK != (errorCode = encodeParametersVerified(verificationToken, asn1ParamsVerified))) {
                 return errorCode;
@@ -1121,6 +1180,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
         output = kmBuffer2hidlVec(response.output);
     } else if (response.error == KM_ERROR_INVALID_OPERATION_HANDLE) {
         std::vector<uint8_t> tempOut;
+        bool aadTag = false;
         /* OperationContext calls this below sendDataCallback callback function. This callback
          * may be called multiple times if the input data is larger than MAX_ALLOWED_INPUT_SIZE.
          * This callback function decides whether to call update/finish instruction based on the
@@ -1140,16 +1200,34 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
                 return errorCode;
             }
 
+            //In case if there is ASSOCIATED_DATA present in the keyparams, then make sure it is either passed with
+            //update call or finish call. Don't send ASSOCIATED_DATA in both update and finish calls. aadTag is used to
+            //check if ASSOCIATED_DATA is already sent in update call. If addTag is true then skip ASSOCIATED_DATA from
+            //keyparams.
             // Convert input data to cbor format
             array.add(operationHandle);
-            cborConverter_.addKeyparameters(array, inParams);
-            array.add(data);
             if(finish) {
+                std::vector<KeyParameter> finishParams;
+                if(aadTag) {
+                    for(int i = 0; i < inParams.size(); i++) {
+                        if(inParams[i].tag != Tag::ASSOCIATED_DATA)
+                            finishParams.push_back(inParams[i]);
+                    }
+                } else {
+                    finishParams = inParams;
+                }
+                cborConverter_.addKeyparameters(array, finishParams);
+                array.add(data);
                 array.add(std::vector<uint8_t>(signature));
                 ins = Instruction::INS_FINISH_OPERATION_CMD;
                 keyParamPos = 1;
                 outputPos = 2;
             } else {
+                if(findTag(inParams, Tag::ASSOCIATED_DATA)) {
+                    aadTag = true;
+                }
+                cborConverter_.addKeyparameters(array, inParams);
+                array.add(data);
                 ins = Instruction::INS_UPDATE_OPERATION_CMD;
                 keyParamPos = 2;
                 outputPos = 3;

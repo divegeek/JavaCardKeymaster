@@ -47,6 +47,9 @@ inline ErrorCode hidlParamSet2OperatinInfo(const hidl_vec<KeyParameter>& params,
             case Tag::PADDING:
                 info.pad = static_cast<PaddingMode>(param.f.integer);
                 break;
+            case Tag::BLOCK_MODE:
+                info.mode = static_cast<BlockMode>(param.f.integer);
+                break;
             default:
                 continue;
         }
@@ -54,31 +57,17 @@ inline ErrorCode hidlParamSet2OperatinInfo(const hidl_vec<KeyParameter>& params,
     return ErrorCode::OK;
 }
 
-ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, KeyPurpose purpose, const hidl_vec<KeyParameter>& params) {
+ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, KeyPurpose purpose, Algorithm alg, const hidl_vec<KeyParameter>& params) {
     ErrorCode errorCode = ErrorCode::OK;
-    OperationInfo info;
-    if(ErrorCode::OK != (errorCode = hidlParamSet2OperatinInfo(params, info))) {
+    OperationData data;
+    if(ErrorCode::OK != (errorCode = hidlParamSet2OperatinInfo(params, data.info))) {
         return errorCode;
     }
-    info.purpose = purpose;
-    return setOperationInfo(operationHandle, info);
-}
-
-ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, OperationInfo& operInfo) {
-    OperationData data;
-    data.info = operInfo;
+    data.info.purpose = purpose;
+    data.info.alg = alg;
     memset((void*)&(data.data), 0x00, sizeof(data.data));
     operationTable[operationHandle] = data;
     return ErrorCode::OK;
-}
-
-ErrorCode OperationContext::getOperationInfo(uint64_t operHandle, OperationInfo& operInfo) {
-    auto itr = operationTable.find(operHandle);
-    if(itr != operationTable.end()) {
-        operInfo = itr->second.info;
-        return ErrorCode::OK;
-    }
-    return ErrorCode::INVALID_OPERATION_HANDLE;
 }
 
 ErrorCode OperationContext::clearOperationData(uint64_t operHandle) {
@@ -91,11 +80,8 @@ ErrorCode OperationContext::clearOperationData(uint64_t operHandle) {
 
 ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr, const std::vector<uint8_t>& actualInput, std::vector<uint8_t>& input) {
     ErrorCode errorCode = ErrorCode::OK;
-    OperationData oprData;
 
-    if(ErrorCode::OK != (errorCode = getOperationData(operHandle, oprData))) {
-        return errorCode;
-    }
+    OperationData& oprData = operationTable[operHandle];
 
     if(KeyPurpose::SIGN == oprData.info.purpose) {
         if(Algorithm::RSA == oprData.info.alg && Digest::NONE == oprData.info.digest) {
@@ -121,14 +107,20 @@ ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr
     }
 
     if(opr == Operation::Finish) {
-
-        if(oprData.info.pad == PaddingMode::NONE && oprData.info.alg == Algorithm::AES) {
-            if(((oprData.data.buf_len+actualInput.size()) % AES_BLOCK_SIZE) != 0)
-                return ErrorCode::INVALID_INPUT_LENGTH;
-        }
-        if(oprData.info.pad == PaddingMode::NONE && oprData.info.alg == Algorithm::TRIPLE_DES) {
-            if(((oprData.data.buf_len+actualInput.size()) % DES_BLOCK_SIZE) != 0)
-                return ErrorCode::INVALID_INPUT_LENGTH;
+        //If it is observed in finish operation that buffered data + input data exceeds the MAX_ALLOWED_INPUT_SIZE then
+        //combine both the data in a single buffer. This helps in making sure that no data is left out in the buffer after
+        //finish opertion.
+        if((oprData.data.buf_len+actualInput.size()) > MAX_ALLOWED_INPUT_SIZE) {
+            size_t i = 0;
+            for(; i < oprData.data.buf_len; ++i) {
+                input.push_back(oprData.data.buf[i]);
+            }
+            input.insert(input.end(), actualInput.begin(), actualInput.end());
+            //As buffered data is already consumed earse the buffer.
+            if(oprData.data.buf_len != 0) {
+                memset(oprData.data.buf, 0x00, sizeof(oprData.data.buf));
+                oprData.data.buf_len = 0;
+            }
         }
     }
     input = actualInput;
@@ -177,7 +169,7 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
     std::vector<uint8_t> input;
 
     /* Validate the input data */
-    if(ErrorCode::OK != (errorCode = validateInputData(operHandle, Operation::Update, actualInput, input))) {
+    if(ErrorCode::OK != (errorCode = validateInputData(operHandle, Operation::Finish, actualInput, input))) {
         return errorCode;
     }
 
@@ -196,30 +188,23 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
         if(extraData > 0) {
             std::vector<uint8_t> finalInput(input.cend()-extraData, input.cend());
             if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, finalInput.data(), finalInput.size(), 
-                Operation::Update, cb))) {
+                Operation::Finish, cb, true))) {
                 return errorCode;
             }
         }
     } else {
         if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, input.data(), input.size(), 
-            Operation::Update, cb))) {
+            Operation::Finish, cb, true))) {
             return errorCode;
         }
-    }
-
-    /* Send if any buffered data is remaining or to call finish */
-    if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, nullptr, 0,
-                    Operation::Finish, cb, true))) {
-        return errorCode;
     }
     return errorCode;
 }
 
-ErrorCode OperationContext::internalUpdate(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>& out) {
-    int dataToSELen=0;
-    /*Length of the data consumed from input */
-    int inputConsumed=0;
-    bool dataSendToSE = true;
+/* This function is called for only symmetric operations */
+ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>& out) {
+    int dataToSELen = 0;
+    int inputConsumed = 0;/*Length of the data consumed from input */
     int blockSize = 0;
     BufferedData& data = operationTable[operHandle].data;
     int bufIndex = data.buf_len;
@@ -230,34 +215,36 @@ ErrorCode OperationContext::internalUpdate(uint64_t operHandle, uint8_t* input, 
         blockSize = DES_BLOCK_SIZE;
     }
 
-    if(data.buf_len > 0) {
-        if(opr == Operation::Finish) {
-            //Copy the buffer to be send to SE.
-            for(int i = 0; i < data.buf_len; i++)
-            {
-                out.push_back(data.buf[i]);
-            }
-            dataToSELen = data.buf_len + input_len;
-        } else {
-            if (data.buf_len + input_len >= blockSize) {
-                dataToSELen = data.buf_len + input_len;
-                //Copy the buffer to be send to SE.
-                for(int i = 0; i < data.buf_len; i++)
-                {
-                    out.push_back(data.buf[i]);
-                }
-            } else {
-                dataSendToSE = false;
-            }     
+    if(opr == Operation::Finish) {
+        //Copy the buffer to be send to SE.
+        for(int i = 0; i < data.buf_len; i++)
+        {
+            out.push_back(data.buf[i]);
         }
+        dataToSELen = data.buf_len + input_len;
     } else {
-        dataToSELen = input_len;
+        /*Update */
+        //Calculate the block sized length on combined input of both buffered data and input data.
+        uint32_t blockAlignedLen = ((data.buf_len + input_len)/blockSize) * blockSize;
+        //For symmetric ciphers, decryption operation and PKCS7 madding mode save last 16 bytes of block and send this
+        //block in finish operation. This is done to make sure that there will be always a 16 bytes data to finish
+        //operation so that javacard Applet may remove PKCS7 padding if any.
+        if(((operationTable[operHandle].info.alg == Algorithm::AES) || 
+                    (operationTable[operHandle].info.alg == Algorithm::TRIPLE_DES)) &&
+                (operationTable[operHandle].info.pad == PaddingMode::PKCS7) &&
+                (operationTable[operHandle].info.purpose == KeyPurpose::DECRYPT)) {
+            if(blockAlignedLen >= blockSize) blockAlignedLen -= blockSize;
+        }
+        //Copy data to be send to SE from buffer, only if atleast a minimum block aligned size is available.
+        if(blockAlignedLen >= blockSize) {
+            for(size_t pos = 0; pos < data.buf_len; pos++) {
+                out.push_back(data.buf[pos]);
+            }
+        }
+        dataToSELen = blockAlignedLen;
     }
 
-    if(dataSendToSE) {
-        if(opr == Operation::Update) {
-            dataToSELen = (dataToSELen/blockSize) * blockSize;
-        }
+    if(dataToSELen > 0) {
         inputConsumed = dataToSELen - data.buf_len;
 
         //Copy the buffer to be send to SE.
@@ -281,6 +268,83 @@ ErrorCode OperationContext::internalUpdate(uint64_t operHandle, uint8_t* input, 
     }
     return ErrorCode::OK;
 }
+
+ErrorCode OperationContext::handleInternalUpdate(uint64_t operHandle, uint8_t* data, size_t len, Operation opr,
+        sendDataToSE_cb cb, bool finish) {
+    ErrorCode errorCode = ErrorCode::OK;
+    std::vector<uint8_t> out;
+
+    if(Algorithm::AES == operationTable[operHandle].info.alg ||
+            Algorithm::TRIPLE_DES == operationTable[operHandle].info.alg) {
+        /*Symmetric */
+        if(ErrorCode::OK != (errorCode = getBlockAlignedData(operHandle, data, len,
+                        opr, out))) {
+            return errorCode;
+        }
+        //Call the callback under these condition
+        //1. if it is a finish operation.
+        //2. if there is some data to be send to Javacard.(either update or finish operation).
+        //3. if the operation is GCM Mode. Even though there is no data to be send there could be AAD data to be sent to
+        //javacard.
+        if(finish || out.size() > 0 || BlockMode::GCM == operationTable[operHandle].info.mode) {
+            if(ErrorCode::OK != (errorCode = cb(out, finish))) {
+                return errorCode;
+            }
+        }
+    } else {
+        /* Asymmetric */
+        if(operationTable[operHandle].info.purpose == KeyPurpose::DECRYPT ||
+                operationTable[operHandle].info.digest == Digest::NONE) {
+            //In case of Decrypt operation or Sign operation with no digest case, buffer the data in
+            //update call and send it to SE in finish call.
+            if(finish) {
+                //If finish flag is true all the data has to be sent to javacard.
+                size_t i = 0;
+                for(; i < operationTable[operHandle].data.buf_len; ++i) {
+                    out.push_back(operationTable[operHandle].data.buf[i]);
+                }
+                for(i = 0; i < len; ++i) {
+                    out.push_back(data[i]);
+                }
+                //As buffered data is already consumed earse the buffer.
+                if(operationTable[operHandle].data.buf_len != 0) {
+                    memset(operationTable[operHandle].data.buf, 0x00, sizeof(operationTable[operHandle].data.buf));
+                    operationTable[operHandle].data.buf_len = 0;
+                }
+                if(ErrorCode::OK != (errorCode = cb(out, finish))) {
+                    return errorCode;
+                }
+            } else {
+                //For strongbox keymaster, in NoDigest case the length of the input message for RSA should be more than
+                //256 and for EC it should not be more than 32. This validation is already happening in
+                //validateInputData function. Just for safety sake we are checking the length to MAX_BUF_SIZE.
+                if(operationTable[operHandle].data.buf_len <= MAX_BUF_SIZE) {
+                    size_t bufIndex = operationTable[operHandle].data.buf_len;
+                    size_t pos = 0;
+                    for(; (pos < len) && (pos < (MAX_BUF_SIZE-bufIndex)); pos++)
+                    {
+                        operationTable[operHandle].data.buf[bufIndex+pos] = data[pos];
+                    }
+                    operationTable[operHandle].data.buf_len += pos;
+                }
+            }
+        } else { /* With Digest */
+            for(size_t j=0; j < len; ++j)
+            {
+                out.push_back(data[j]);
+            }
+            //if len=0, then no need to call the callback, since there is no information to be send to javacard,
+            // but if finish flag is true irrespective of length the callback should be called.
+            if(len != 0 || finish) {
+                if(ErrorCode::OK != (errorCode = cb(out, finish))) {
+                    return errorCode;
+                }
+            }
+        }
+    }
+    return errorCode;
+}
+
 
 }  // namespace javacard
 }  // namespace V4_1

@@ -24,7 +24,7 @@ cc_binary {
         "4.1/service.cpp",
         "4.1/JavacardKeymaster4Device.cpp",
         "4.1/CborConverter.cpp",
-        "4.1/java_card_soft_keymaster_context.cpp",
+        "4.1/JavacardSoftKeymasterContext.cpp",
         "4.1/JavacardOperationContext.cpp",
         "4.1/CommonUtils.cpp",
     ],
@@ -55,7 +55,7 @@ cc_library {
     srcs: [
         "4.1/JavacardKeymaster4Device.cpp",
         "4.1/CborConverter.cpp",
-        "4.1/java_card_soft_keymaster_context.cpp",
+        "4.1/JavacardSoftKeymasterContext.cpp",
         "4.1/JavacardOperationContext.cpp",
         "4.1/CommonUtils.cpp",
     ],

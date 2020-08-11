@@ -19,10 +19,11 @@
 #include <android-base/logging.h>
 #include <vector>
 #include "Transport.h"
+#include <errno.h>
 
 #define PORT    8080
-//#define IPADDR  "10.9.40.24"
-#define IPADDR  "192.168.0.5"
+#define IPADDR  "10.9.40.24"
+//#define IPADDR  "192.168.0.5"
 #define MAX_RECV_BUFFER_SIZE 2048
 
 namespace se_transport {
@@ -70,7 +71,12 @@ bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::v
     }
 
 	if (0 > send(mSocket, inData, inLen , 0 )) {
-        LOG(ERROR) << "Failed to send data over socket.";
+        LOG(ERROR) << "Failed to send data over socket err: " << errno;
+        if (ECONNRESET == errno) {
+            //Connection reset. Try open socket and then sendData.
+            socketStatus = false;
+            return sendData(inData, inLen, output);
+        }
         return false;
     }
 	ssize_t valRead = read( mSocket , buffer, MAX_RECV_BUFFER_SIZE);
