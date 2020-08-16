@@ -534,36 +534,37 @@ JavacardKeymaster4Device::~JavacardKeymaster4Device() {}
 
 // Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
-    /* TODO temporary fix: when network connection is not available getHardwareInfo fails*/
-    _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
-    return Void();
-#if 0
-	std::vector<uint8_t> resp;
-	std::vector<uint8_t> input;
-	std::unique_ptr<Item> item;
-	uint64_t securityLevel = static_cast<uint64_t>(SecurityLevel::STRONGBOX);
-	hidl_string jcKeymasterName;
-	hidl_string jcKeymasterAuthor;
+    // When socket is not connected return hardware info parameters from HAL itself.
+    if(!getTransportFactoryInstance()->isConnected()) {
+        _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
+        return Void();
+    } else {
+        std::vector<uint8_t> resp;
+        std::vector<uint8_t> input;
+        std::unique_ptr<Item> item;
+        uint64_t securityLevel = static_cast<uint64_t>(SecurityLevel::STRONGBOX);
+        hidl_string jcKeymasterName;
+        hidl_string jcKeymasterAuthor;
 
-    ErrorCode ret = sendData(Instruction::INS_GET_HW_INFO_CMD, input, resp);
+        ErrorCode ret = sendData(Instruction::INS_GET_HW_INFO_CMD, input, resp);
 
-    if((ret == ErrorCode::OK) && (resp.size() > 2)) {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, ret) = cborConverter_.decodeData(std::vector<uint8_t>(resp.begin(), resp.end()-2),
-                true);
-        if (item != nullptr) {
-            std::vector<uint8_t> temp;
-            cborConverter_.getUint64(item, 0, securityLevel); //SecurityLevel
-            cborConverter_.getBinaryArray(item, 1, temp);
-            jcKeymasterName = std::string(temp.begin(), temp.end());
-            temp.clear();
-            cborConverter_.getBinaryArray(item, 2, temp);
-            jcKeymasterAuthor = std::string(temp.begin(), temp.end());
+        if((ret == ErrorCode::OK) && (resp.size() > 2)) {
+            //Skip last 2 bytes in cborData, it contains status.
+            std::tie(item, ret) = cborConverter_.decodeData(std::vector<uint8_t>(resp.begin(), resp.end()-2),
+                    true);
+            if (item != nullptr) {
+                std::vector<uint8_t> temp;
+                if(!cborConverter_.getUint64(item, 0, securityLevel) ||
+                        !cborConverter_.getBinaryArray(item, 1, jcKeymasterName) ||
+                        !cborConverter_.getBinaryArray(item, 2, jcKeymasterAuthor)) {
+                    _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
+                    return Void();
+                }
+            }
         }
+        _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
+        return Void();
     }
-    _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
-    return Void();
-#endif
 }
 
 Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingParameters_cb _hidl_cb) {
@@ -571,34 +572,36 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
      * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to getHmacSharing
      * parameters.
      */
-    auto response = softKm_->GetHmacSharingParameters();
-    ::android::hardware::keymaster::V4_0::HmacSharingParameters params;
-    params.seed.setToExternal(const_cast<uint8_t*>(response.params.seed.data),
-                              response.params.seed.data_length);
-    static_assert(sizeof(response.params.nonce) == params.nonce.size(), "Nonce sizes don't match");
-    memcpy(params.nonce.data(), response.params.nonce, params.nonce.size());
-    _hidl_cb(legacy_enum_conversion(response.error), params);
-    return Void();
-#if 0
-    std::vector<uint8_t> cborData;
-	std::vector<uint8_t> input;
-    std::unique_ptr<Item> item;
-    HmacSharingParameters hmacSharingParameters;
-    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+    if(!getTransportFactoryInstance()->isConnected()) {
+        auto response = softKm_->GetHmacSharingParameters();
+        ::android::hardware::keymaster::V4_0::HmacSharingParameters params;
+        params.seed.setToExternal(const_cast<uint8_t*>(response.params.seed.data),
+                response.params.seed.data_length);
+        static_assert(sizeof(response.params.nonce) == params.nonce.size(), "Nonce sizes don't match");
+        memcpy(params.nonce.data(), response.params.nonce, params.nonce.size());
+        _hidl_cb(legacy_enum_conversion(response.error), params);
+        return Void();
+    } else {
+        std::vector<uint8_t> cborData;
+        std::vector<uint8_t> input;
+        std::unique_ptr<Item> item;
+        HmacSharingParameters hmacSharingParameters;
+        ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
 
-    errorCode = sendData(Instruction::INS_GET_HMAC_SHARING_PARAM_CMD, input, cborData);
+        errorCode = sendData(Instruction::INS_GET_HMAC_SHARING_PARAM_CMD, input, cborData);
 
-    if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborData.begin(), cborData.end()-2),
-                true);
-        if (item != nullptr) {
-            cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters); //HmacSharingParameters.
+        if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
+            //Skip last 2 bytes in cborData, it contains status.
+            std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborData.begin(), cborData.end()-2),
+                    true);
+            if (item != nullptr) {
+                if(!cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters))
+                    errorCode = ErrorCode::UNKNOWN_ERROR;
+            }
         }
+        _hidl_cb(errorCode, hmacSharingParameters);
+        return Void();
     }
-    _hidl_cb(errorCode, hmacSharingParameters);
-    return Void();
-#endif
 }
 
 Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacSharingParameters>& params, computeSharedHmac_cb _hidl_cb) {
@@ -606,59 +609,63 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
      * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to
      * computeSharedHmac.
      */
-    ComputeSharedHmacRequest request;
-    request.params_array.params_array = new keymaster::HmacSharingParameters[params.size()];
-    request.params_array.num_params = params.size();
-    for (size_t i = 0; i < params.size(); ++i) {
-        request.params_array.params_array[i].seed = {params[i].seed.data(), params[i].seed.size()};
-        static_assert(sizeof(request.params_array.params_array[i].nonce) ==
-                          decltype(params[i].nonce)::size(),
-                      "Nonce sizes don't match");
-        memcpy(request.params_array.params_array[i].nonce, params[i].nonce.data(),
-               params[i].nonce.size());
-    }
-
-    auto response = softKm_->ComputeSharedHmac(request);
-    hidl_vec<uint8_t> sharing_check;
-    if (response.error == KM_ERROR_OK) sharing_check = kmBlob2hidlVec(response.sharing_check);
-
-    _hidl_cb(legacy_enum_conversion(response.error), sharing_check);
-    return Void();
-#if 0
-    cppbor::Array array;
-    std::unique_ptr<Item> item;
-	std::vector<uint8_t> cborOutData;
-    hidl_vec<uint8_t> sharingCheck;
-
-    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    std::vector<uint8_t> tempVec;
-    cppbor::Array innerArray;
-    for(size_t i = 0; i < params.size(); ++i) {
-        innerArray.add(static_cast<std::vector<uint8_t>>(params[i].seed));
-        for(size_t j = 0; j < params[i].nonce.size(); j++) {
-            tempVec.push_back(params[i].nonce[j]);
+    if(!getTransportFactoryInstance()->isConnected()) {
+        ComputeSharedHmacRequest request;
+        request.params_array.params_array = new keymaster::HmacSharingParameters[params.size()];
+        request.params_array.num_params = params.size();
+        for (size_t i = 0; i < params.size(); ++i) {
+            request.params_array.params_array[i].seed = {params[i].seed.data(), params[i].seed.size()};
+            static_assert(sizeof(request.params_array.params_array[i].nonce) ==
+                    decltype(params[i].nonce)::size(),
+                    "Nonce sizes don't match");
+            memcpy(request.params_array.params_array[i].nonce, params[i].nonce.data(),
+                    params[i].nonce.size());
         }
-        innerArray.add(tempVec);
-        tempVec.clear();
-    }
-    array.add(std::move(innerArray));
-    std::vector<uint8_t> cborData = array.encode();
 
-    errorCode = sendData(Instruction::INS_COMPUTE_SHARED_HMAC_CMD, cborData, cborOutData);
+        auto response = softKm_->ComputeSharedHmac(request);
+        hidl_vec<uint8_t> sharing_check;
+        if (response.error == KM_ERROR_OK) sharing_check = kmBlob2hidlVec(response.sharing_check);
 
-    if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                true);
-        if (item != nullptr) {
-            std::vector<uint8_t> bstr;
-            cborConverter_.getBinaryArray(item, 1, bstr);
-            sharingCheck.setToExternal(bstr.data(), bstr.size());
+        _hidl_cb(legacy_enum_conversion(response.error), sharing_check);
+        return Void();
+    } else {
+        cppbor::Array array;
+        std::unique_ptr<Item> item;
+        std::vector<uint8_t> cborOutData;
+        hidl_vec<uint8_t> sharingCheck;
+
+        ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+        std::vector<uint8_t> tempVec;
+        cppbor::Array innerArray;
+        for(size_t i = 0; i < params.size(); ++i) {
+            innerArray.add(static_cast<std::vector<uint8_t>>(params[i].seed));
+            for(size_t j = 0; j < params[i].nonce.size(); j++) {
+                tempVec.push_back(params[i].nonce[j]);
+            }
+            innerArray.add(tempVec);
+            tempVec.clear();
         }
+        array.add(std::move(innerArray));
+        std::vector<uint8_t> cborData = array.encode();
+
+        errorCode = sendData(Instruction::INS_COMPUTE_SHARED_HMAC_CMD, cborData, cborOutData);
+
+        if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
+            //Skip last 2 bytes in cborData, it contains status.
+            std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                    true);
+            if (item != nullptr) {
+                std::vector<uint8_t> bstr;
+                if(!cborConverter_.getBinaryArray(item, 1, bstr)) {
+                    errorCode = ErrorCode::UNKNOWN_ERROR;
+                } else {
+                    sharingCheck.setToExternal(bstr.data(), bstr.size());
+                }
+            }
+        }
+        _hidl_cb(errorCode, sharingCheck);
+        return Void();
     }
-    _hidl_cb(errorCode, sharingCheck);
-    return Void();
-#endif
 }
 
 Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t operationHandle, const hidl_vec<KeyParameter>& parametersToVerify, const HardwareAuthToken& authToken, verifyAuthorization_cb _hidl_cb) {
@@ -681,7 +688,8 @@ Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t operationHan
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            cborConverter_.getVerificationToken(item, 1, verificationToken);
+            if(!cborConverter_.getVerificationToken(item, 1, verificationToken))
+                errorCode = ErrorCode::UNKNOWN_ERROR;
         }
     }
     _hidl_cb(errorCode, verificationToken);
@@ -737,8 +745,14 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            cborConverter_.getBinaryArray(item, 1, keyBlob);
-            cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
+            if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
+               !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+                //Clear the buffer.
+                keyBlob.setToExternal(nullptr, 0);
+                keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
+                keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
+                errorCode = ErrorCode::UNKNOWN_ERROR;
+            }
         }
     }
     _hidl_cb(errorCode, keyBlob, keyCharacteristics);
@@ -777,8 +791,14 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
 		std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
 				true);
 		if (item != nullptr) {
-			cborConverter_.getBinaryArray(item, 1, keyBlob);
-			cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
+            if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
+               !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+                //Clear the buffer.
+                keyBlob.setToExternal(nullptr, 0);
+                keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
+                keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
+                errorCode = ErrorCode::UNKNOWN_ERROR;
+            }
 		}
 	}
 	_hidl_cb(errorCode, keyBlob, keyCharacteristics);
@@ -826,12 +846,17 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            cborConverter_.getBinaryArray(item, 1, keyBlob);
-            cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics);
+            if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
+               !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+                //Clear the buffer.
+                keyBlob.setToExternal(nullptr, 0);
+                keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
+                keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
+                errorCode = ErrorCode::UNKNOWN_ERROR;
+            }
         }
     }
     _hidl_cb(errorCode, keyBlob, keyCharacteristics);
-
     return Void();
 }
 
@@ -854,7 +879,11 @@ Return<void> JavacardKeymaster4Device::getKeyCharacteristics(const hidl_vec<uint
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            cborConverter_.getKeyCharacteristics(item, 1, keyCharacteristics);
+            if(!cborConverter_.getKeyCharacteristics(item, 1, keyCharacteristics)) {
+                keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
+                keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
+                errorCode = ErrorCode::UNKNOWN_ERROR;
+            }
         }
     }
     _hidl_cb(errorCode, keyCharacteristics);
@@ -915,16 +944,19 @@ Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToA
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            cborConverter_.getMultiBinaryArray(item, 1, temp);
-        }
-        if(readDataFromFile(ROOT_RSA_CERT, rootCert)) {
-            temp.push_back(std::move(rootCert));
-            certChain.resize(temp.size());
-            for(int i = 0; i < temp.size(); i++) {
-                certChain[i] = temp[i];
+            if(!cborConverter_.getMultiBinaryArray(item, 1, temp)) {
+                errorCode = ErrorCode::UNKNOWN_ERROR;
+            } else {
+                if(readDataFromFile(ROOT_RSA_CERT, rootCert)) {
+                    temp.push_back(std::move(rootCert));
+                    certChain.resize(temp.size());
+                    for(int i = 0; i < temp.size(); i++) {
+                        certChain[i] = temp[i];
+                    }
+                } else {
+                    LOG(ERROR) << "No root certificate found";
+                }
             }
-        } else {
-            LOG(ERROR) << "No root certificate found";
         }
     }
     _hidl_cb(errorCode, certChain);
@@ -949,7 +981,8 @@ Return<void> JavacardKeymaster4Device::upgradeKey(const hidl_vec<uint8_t>& keyBl
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
         if (item != nullptr) {
-            cborConverter_.getBinaryArray(item, 1, upgradedKeyBlob);
+            if(!cborConverter_.getBinaryArray(item, 1, upgradedKeyBlob))
+                errorCode = ErrorCode::UNKNOWN_ERROR;
         }
     }
     _hidl_cb(errorCode, upgradedKeyBlob);
@@ -1055,26 +1088,27 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
      /* TODO if keyBlob is corrupted it crashes in cbor */
     std::tie(blobItem, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(keyBlob), false);
 
-    if(blobItem == nullptr) {
-        _hidl_cb(errorCode, outParams, operationHandle);
-        return Void();
-    }
-    cborConverter_.getKeyCharacteristics(blobItem, 3, keyCharacteristics);
-    if(!getTag(keyCharacteristics.hardwareEnforced, Tag::ALGORITHM, param)) {
-        _hidl_cb(ErrorCode::UNSUPPORTED_ALGORITHM, outParams, operationHandle);
-        return Void();
-    }
-    errorCode = sendData(Instruction::INS_BEGIN_OPERATION_CMD, cborData, cborOutData);
-
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-            true);
-        if (item != nullptr) {
-            cborConverter_.getKeyParameters(item, 1, outParams);
-            cborConverter_.getUint64(item, 2, operationHandle);
-            /* Store the operationInfo */
-            oprCtx_->setOperationInfo(operationHandle, purpose, param.f.algorithm, inParams);
+    if(blobItem != nullptr) {
+        errorCode = ErrorCode::UNKNOWN_ERROR;
+        if(cborConverter_.getKeyCharacteristics(blobItem, 3, keyCharacteristics) &&
+                getTag(keyCharacteristics.hardwareEnforced, Tag::ALGORITHM, param)) {
+            errorCode = sendData(Instruction::INS_BEGIN_OPERATION_CMD, cborData, cborOutData);
+            if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+                //Skip last 2 bytes in cborData, it contains status.
+                std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                        true);
+                if (item != nullptr) {
+                    if(!cborConverter_.getKeyParameters(item, 1, outParams) ||
+                            !cborConverter_.getUint64(item, 2, operationHandle)) {
+                        errorCode = ErrorCode::UNKNOWN_ERROR;
+                        outParams.setToExternal(nullptr, 0);
+                        operationHandle = 0;
+                    } else {
+                        /* Store the operationInfo */
+                        oprCtx_->setOperationInfo(operationHandle, purpose, param.f.algorithm, inParams);
+                    }
+                }
+            }
         }
     }
     _hidl_cb(errorCode, outParams, operationHandle);
@@ -1140,9 +1174,16 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
                 if (item != nullptr) {
                     /*Ignore inputConsumed from javacard SE since HAL consumes all the input */
                     //cborConverter_.getUint64(item, 1, inputConsumed);
-                    if(outParams.size() == 0)
-                        cborConverter_.getKeyParameters(item, 2, outParams);
-                    cborConverter_.getBinaryArray(item, 3, tempOut);
+                    //This callback function may gets called multiple times so parse and get the outParams only once.
+                    //Otherwise there can be chance of duplicate entries in outParams. Use tempOut to collect all the
+                    //cipher text and finally copy it to the output. getBinaryArray function appends the new cipher text
+                    //at the end of the tempOut(std::vector<uint8_t>).
+                    if((outParams.size() == 0 && !cborConverter_.getKeyParameters(item, 2, outParams)) ||
+                       !cborConverter_.getBinaryArray(item, 3, tempOut)) {
+                        outParams.setToExternal(nullptr, 0);
+                        tempOut.clear();
+                        errorCode = ErrorCode::UNKNOWN_ERROR;
+                    }
                 }
             }
             return errorCode;
@@ -1203,7 +1244,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
             //In case if there is ASSOCIATED_DATA present in the keyparams, then make sure it is either passed with
             //update call or finish call. Don't send ASSOCIATED_DATA in both update and finish calls. aadTag is used to
             //check if ASSOCIATED_DATA is already sent in update call. If addTag is true then skip ASSOCIATED_DATA from
-            //keyparams.
+            //keyparams in finish call.
             // Convert input data to cbor format
             array.add(operationHandle);
             if(finish) {
@@ -1243,9 +1284,17 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
                 std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                         true);
                 if (item != nullptr) {
-                    if(outParams.size() == 0)
-                        cborConverter_.getKeyParameters(item, keyParamPos, outParams);
-                    cborConverter_.getBinaryArray(item, outputPos, tempOut);
+                    //There is a change that this finish callback may gets called multiple times if the input data size
+                    //is larger the MAX_ALLOWED_INPUT_SIZE (Refer OperationContext) so parse and get the outParams only
+                    //once. Otherwise there can be chance of duplicate entries in outParams. Use tempOut to collect all
+                    //the cipher text and finally copy it to the output. getBinaryArray function appends the new cipher
+                    //text at the end of the tempOut(std::vector<uint8_t>).
+                    if((outParams.size() == 0 && !cborConverter_.getKeyParameters(item, keyParamPos, outParams)) ||
+                       !cborConverter_.getBinaryArray(item, outputPos, tempOut)) {
+                        outParams.setToExternal(nullptr, 0);
+                        tempOut.clear();
+                        errorCode = ErrorCode::UNKNOWN_ERROR;
+                    }
                 }
             }
             return errorCode;

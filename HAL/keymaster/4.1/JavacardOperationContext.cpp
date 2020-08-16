@@ -111,8 +111,7 @@ ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr
         //combine both the data in a single buffer. This helps in making sure that no data is left out in the buffer after
         //finish opertion.
         if((oprData.data.buf_len+actualInput.size()) > MAX_ALLOWED_INPUT_SIZE) {
-            size_t i = 0;
-            for(; i < oprData.data.buf_len; ++i) {
+            for(size_t i = 0; i < oprData.data.buf_len; ++i) {
                 input.push_back(oprData.data.buf[i]);
             }
             input.insert(input.end(), actualInput.begin(), actualInput.end());
@@ -226,7 +225,7 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* in
         /*Update */
         //Calculate the block sized length on combined input of both buffered data and input data.
         uint32_t blockAlignedLen = ((data.buf_len + input_len)/blockSize) * blockSize;
-        //For symmetric ciphers, decryption operation and PKCS7 madding mode save last 16 bytes of block and send this
+        //For symmetric ciphers, decryption operation and PKCS7 padding mode save last 16 bytes of block and send this
         //block in finish operation. This is done to make sure that there will be always a 16 bytes data to finish
         //operation so that javacard Applet may remove PKCS7 padding if any.
         if(((operationTable[operHandle].info.alg == Algorithm::AES) || 

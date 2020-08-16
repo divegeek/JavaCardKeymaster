@@ -71,12 +71,15 @@ bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::v
     }
 
 	if (0 > send(mSocket, inData, inLen , 0 )) {
-        LOG(ERROR) << "Failed to send data over socket err: " << errno;
-        if (ECONNRESET == errno) {
+        static int connectionResetCnt = 0; /* To avoid loop */
+        if (ECONNRESET == errno && connectionResetCnt == 0) {
             //Connection reset. Try open socket and then sendData.
             socketStatus = false;
+            connectionResetCnt++;
             return sendData(inData, inLen, output);
         }
+        LOG(ERROR) << "Failed to send data over socket err: " << errno;
+        connectionResetCnt = 0;
         return false;
     }
 	ssize_t valRead = read( mSocket , buffer, MAX_RECV_BUFFER_SIZE);
@@ -96,7 +99,6 @@ bool SocketTransport::closeConnection() {
 }
 
 bool SocketTransport::isConnected() {
-    //TODO
     return socketStatus;
 }
 

@@ -20,7 +20,6 @@
 
 #include <iostream>
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
-#include <android-base/logging.h>
 
 #define MAX_BUF_SIZE 256
 
