@@ -535,19 +535,19 @@ JavacardKeymaster4Device::~JavacardKeymaster4Device() {}
 // Methods from IKeymasterDevice follow.
 Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_cb) {
     // When socket is not connected return hardware info parameters from HAL itself.
-    if(!getTransportFactoryInstance()->isConnected()) {
+    std::vector<uint8_t> resp;
+    std::vector<uint8_t> input;
+    std::unique_ptr<Item> item;
+    uint64_t securityLevel = static_cast<uint64_t>(SecurityLevel::STRONGBOX);
+    hidl_string jcKeymasterName;
+    hidl_string jcKeymasterAuthor;
+
+    ErrorCode ret = sendData(Instruction::INS_GET_HW_INFO_CMD, input, resp);
+    if(ret == ErrorCode::SECURE_HW_COMMUNICATION_FAILED) {
+        //Socket not connected.
         _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
         return Void();
     } else {
-        std::vector<uint8_t> resp;
-        std::vector<uint8_t> input;
-        std::unique_ptr<Item> item;
-        uint64_t securityLevel = static_cast<uint64_t>(SecurityLevel::STRONGBOX);
-        hidl_string jcKeymasterName;
-        hidl_string jcKeymasterAuthor;
-
-        ErrorCode ret = sendData(Instruction::INS_GET_HW_INFO_CMD, input, resp);
-
         if((ret == ErrorCode::OK) && (resp.size() > 2)) {
             //Skip last 2 bytes in cborData, it contains status.
             std::tie(item, ret) = cborConverter_.decodeData(std::vector<uint8_t>(resp.begin(), resp.end()-2),
@@ -572,7 +572,14 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
      * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to getHmacSharing
      * parameters.
      */
-    if(!getTransportFactoryInstance()->isConnected()) {
+    std::vector<uint8_t> cborData;
+    std::vector<uint8_t> input;
+    std::unique_ptr<Item> item;
+    HmacSharingParameters hmacSharingParameters;
+    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+
+    errorCode = sendData(Instruction::INS_GET_HMAC_SHARING_PARAM_CMD, input, cborData);
+    if(errorCode == ErrorCode::SECURE_HW_COMMUNICATION_FAILED) {
         auto response = softKm_->GetHmacSharingParameters();
         ::android::hardware::keymaster::V4_0::HmacSharingParameters params;
         params.seed.setToExternal(const_cast<uint8_t*>(response.params.seed.data),
@@ -582,21 +589,14 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
         _hidl_cb(legacy_enum_conversion(response.error), params);
         return Void();
     } else {
-        std::vector<uint8_t> cborData;
-        std::vector<uint8_t> input;
-        std::unique_ptr<Item> item;
-        HmacSharingParameters hmacSharingParameters;
-        ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-
-        errorCode = sendData(Instruction::INS_GET_HMAC_SHARING_PARAM_CMD, input, cborData);
-
         if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
             //Skip last 2 bytes in cborData, it contains status.
             std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborData.begin(), cborData.end()-2),
                     true);
             if (item != nullptr) {
-                if(!cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters))
+                if(!cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters)) {
                     errorCode = ErrorCode::UNKNOWN_ERROR;
+                }
             }
         }
         _hidl_cb(errorCode, hmacSharingParameters);
@@ -609,7 +609,29 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
      * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to
      * computeSharedHmac.
      */
-    if(!getTransportFactoryInstance()->isConnected()) {
+    cppbor::Array array;
+    std::unique_ptr<Item> item;
+    std::vector<uint8_t> cborOutData;
+    hidl_vec<uint8_t> sharingCheck;
+
+    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+    std::vector<uint8_t> tempVec;
+    cppbor::Array outerArray;
+    for(size_t i = 0; i < params.size(); ++i) {
+        cppbor::Array innerArray;
+        innerArray.add(static_cast<std::vector<uint8_t>>(params[i].seed));
+        for(size_t j = 0; j < params[i].nonce.size(); j++) {
+            tempVec.push_back(params[i].nonce[j]);
+        }
+        innerArray.add(tempVec);
+        tempVec.clear();
+        outerArray.add(std::move(innerArray));
+    }
+    array.add(std::move(outerArray));
+    std::vector<uint8_t> cborData = array.encode();
+
+    errorCode = sendData(Instruction::INS_COMPUTE_SHARED_HMAC_CMD, cborData, cborOutData);
+    if(errorCode == ErrorCode::SECURE_HW_COMMUNICATION_FAILED) {
         ComputeSharedHmacRequest request;
         request.params_array.params_array = new keymaster::HmacSharingParameters[params.size()];
         request.params_array.num_params = params.size();
@@ -628,28 +650,8 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
 
         _hidl_cb(legacy_enum_conversion(response.error), sharing_check);
         return Void();
+
     } else {
-        cppbor::Array array;
-        std::unique_ptr<Item> item;
-        std::vector<uint8_t> cborOutData;
-        hidl_vec<uint8_t> sharingCheck;
-
-        ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-        std::vector<uint8_t> tempVec;
-        cppbor::Array innerArray;
-        for(size_t i = 0; i < params.size(); ++i) {
-            innerArray.add(static_cast<std::vector<uint8_t>>(params[i].seed));
-            for(size_t j = 0; j < params[i].nonce.size(); j++) {
-                tempVec.push_back(params[i].nonce[j]);
-            }
-            innerArray.add(tempVec);
-            tempVec.clear();
-        }
-        array.add(std::move(innerArray));
-        std::vector<uint8_t> cborData = array.encode();
-
-        errorCode = sendData(Instruction::INS_COMPUTE_SHARED_HMAC_CMD, cborData, cborOutData);
-
         if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
             //Skip last 2 bytes in cborData, it contains status.
             std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
@@ -659,13 +661,14 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
                 if(!cborConverter_.getBinaryArray(item, 1, bstr)) {
                     errorCode = ErrorCode::UNKNOWN_ERROR;
                 } else {
-                    sharingCheck.setToExternal(bstr.data(), bstr.size());
+                    sharingCheck = bstr;
                 }
             }
         }
         _hidl_cb(errorCode, sharingCheck);
         return Void();
     }
+
 }
 
 Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t operationHandle, const hidl_vec<KeyParameter>& parametersToVerify, const HardwareAuthToken& authToken, verifyAuthorization_cb _hidl_cb) {

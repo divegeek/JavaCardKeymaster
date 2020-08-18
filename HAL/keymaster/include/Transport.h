@@ -79,7 +79,7 @@ public:
 class SocketTransport : public ITransport {
 
 public:
-    SocketTransport() : socketStatus(false) {
+    SocketTransport() : mSocket(-1), socketStatus(false) {
     }
     /**
      * Creates a socket instance and connects to the provided server IP and port.
