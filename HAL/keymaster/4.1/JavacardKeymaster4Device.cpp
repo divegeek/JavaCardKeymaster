@@ -300,8 +300,8 @@ keyFormat, std::vector<uint8_t>& wrappedKeyDescription) {
     keymaster_key_blob_t keyMaterial = {keyData, keyDataLen};
 
     keymaster_error_t error = parse_wrapped_key(KeymasterKeyBlob(keyMaterial), &kmIv, &kmTransitKey,
-                                                &kmSecureKey, &kmTag, &authSet,
-                                                &kmKeyFormat, &kmWrappedKeyDescription);
+            &kmSecureKey, &kmTag, &authSet,
+            &kmKeyFormat, &kmWrappedKeyDescription);
     if (error != KM_ERROR_OK) return legacy_enum_conversion(error);
     blob2Vec(kmIv.data, kmIv.data_length, iv);
     blob2Vec(kmTransitKey.key_material, kmTransitKey.key_material_size, transitKey);
@@ -348,7 +348,7 @@ ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData
 }
 
 uint16_t getStatus(std::vector<uint8_t>& inputData) {
-	//Last two bytes are the status SW0SW1
+    //Last two bytes are the status SW0SW1
     return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
 }
 
@@ -391,7 +391,7 @@ Return<ErrorCode> setBootParams() {
     std::vector<uint8_t> verifiedBootKeyHash(32, 0);
 
     return JavacardKeymaster4Device::setBootParams(GetOsVersion(), GetOsPatchlevel(), verifiedBootKey, verifiedBootKeyHash,
-    KM_VERIFIED_BOOT_UNVERIFIED, 0/*deviceLocked*/);
+            KM_VERIFIED_BOOT_UNVERIFIED, 0/*deviceLocked*/);
 }
 
 ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response) {
@@ -425,7 +425,7 @@ ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<ui
 }
 
 ErrorCode JavacardKeymaster4Device::provision(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>&
-keyData) {
+        keyData) {
     cppbor::Array array;
     cppbor::Array subArray;
     std::unique_ptr<Item> item;
@@ -489,7 +489,7 @@ keyData) {
 }
 
 ErrorCode JavacardKeymaster4Device::setBootParams(uint32_t osVersion, uint32_t osPatchLevel, const std::vector<uint8_t>& verifiedBootKey,
-std::vector<uint8_t>& verifiedBootKeyHash, keymaster_verified_boot_t kmVerifiedBoot, bool deviceLocked) {
+        std::vector<uint8_t>& verifiedBootKeyHash, keymaster_verified_boot_t kmVerifiedBoot, bool deviceLocked) {
     cppbor::Array array;
     std::vector<uint8_t> apdu;
     std::vector<uint8_t> response;
@@ -729,7 +729,7 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
     hidl_vec<KeyParameter> updatedParams(keyParams);
 
     if(!findTag(keyParams, Tag::CREATION_DATETIME) &&
-        !findTag(keyParams, Tag::ACTIVE_DATETIME)) {
+            !findTag(keyParams, Tag::ACTIVE_DATETIME)) {
         //Add CREATION_DATETIME in HAL, as secure element is not having clock.
         size_t size = keyParams.size();
         updatedParams.resize(size+1);
@@ -749,7 +749,7 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
                 true);
         if (item != nullptr) {
             if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
-               !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+                    !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
                 //Clear the buffer.
                 keyBlob.setToExternal(nullptr, 0);
                 keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
@@ -763,20 +763,20 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
 }
 
 Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>& keyData, importKey_cb _hidl_cb) {
-	cppbor::Array array;
-	std::unique_ptr<Item> item;
-	hidl_vec<uint8_t> keyBlob;
-	std::vector<uint8_t> cborOutData;
-	ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-	KeyCharacteristics keyCharacteristics;
+    cppbor::Array array;
+    std::unique_ptr<Item> item;
+    hidl_vec<uint8_t> keyBlob;
+    std::vector<uint8_t> cborOutData;
+    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+    KeyCharacteristics keyCharacteristics;
     cppbor::Array subArray;
 
     if(keyFormat != KeyFormat::PKCS8 && keyFormat != KeyFormat::RAW) {
         _hidl_cb(ErrorCode::UNSUPPORTED_KEY_FORMAT, keyBlob, keyCharacteristics);
         return Void();
     }
-	cborConverter_.addKeyparameters(array, keyParams);
-	array.add(static_cast<uint32_t>(KeyFormat::RAW)); //javacard accepts only RAW.
+    cborConverter_.addKeyparameters(array, keyParams);
+    array.add(static_cast<uint32_t>(KeyFormat::RAW)); //javacard accepts only RAW.
     if(ErrorCode::OK != (errorCode = prepareCborArrayFromKeyData(keyParams, keyFormat, keyData, subArray))) {
         _hidl_cb(errorCode, keyBlob, keyCharacteristics);
         return Void();
@@ -785,27 +785,27 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
     cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
     array.add(bstr);
 
-	std::vector<uint8_t> cborData = array.encode();
+    std::vector<uint8_t> cborData = array.encode();
 
-	errorCode = sendData(Instruction::INS_IMPORT_KEY_CMD, cborData, cborOutData);
+    errorCode = sendData(Instruction::INS_IMPORT_KEY_CMD, cborData, cborOutData);
 
-	if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
-		//Skip last 2 bytes in cborData, it contains status.
-		std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-				true);
-		if (item != nullptr) {
+    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                true);
+        if (item != nullptr) {
             if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
-               !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+                    !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
                 //Clear the buffer.
                 keyBlob.setToExternal(nullptr, 0);
                 keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
                 keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
                 errorCode = ErrorCode::UNKNOWN_ERROR;
             }
-		}
-	}
-	_hidl_cb(errorCode, keyBlob, keyCharacteristics);
-	return Void();
+        }
+    }
+    _hidl_cb(errorCode, keyBlob, keyCharacteristics);
+    return Void();
 }
 
 Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>& wrappedKeyData, const hidl_vec<uint8_t>& wrappingKeyBlob, const hidl_vec<uint8_t>& maskingKey, const hidl_vec<KeyParameter>& unwrappingParams, uint64_t passwordSid, uint64_t biometricSid, importWrappedKey_cb _hidl_cb) {
@@ -824,7 +824,7 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
     std::vector<uint8_t> wrappedKeyDescription;
 
     if(ErrorCode::OK != (errorCode = parseWrappedKey(wrappedKeyData, iv, transitKey, secureKey,
-                                        tag, authList, keyFormat, wrappedKeyDescription))) {
+                    tag, authList, keyFormat, wrappedKeyDescription))) {
         _hidl_cb(errorCode, keyBlob, keyCharacteristics);
         return Void();
     }
@@ -850,7 +850,7 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
                 true);
         if (item != nullptr) {
             if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
-               !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+                    !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
                 //Clear the buffer.
                 keyBlob.setToExternal(nullptr, 0);
                 keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
@@ -899,9 +899,9 @@ Return<void> JavacardKeymaster4Device::exportKey(KeyFormat exportFormat, const h
 
     //Check if keyblob is corrupted
     getKeyCharacteristics(keyBlob, clientId, appData,
-           [&](ErrorCode error, KeyCharacteristics /*keyCharacteristics*/) {
-               errorCode = error;
-           });
+            [&](ErrorCode error, KeyCharacteristics /*keyCharacteristics*/) {
+            errorCode = error;
+            });
 
     if(errorCode != ErrorCode::OK) {
         _hidl_cb(errorCode, resultKeyBlob);
@@ -1088,7 +1088,7 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     /* keyCharacteristics.hardwareEnforced is required to store algorithm, digest and padding values in operationInfo
      * structure. To retrieve keyCharacteristics.hardwareEnforced, parse the keyBlob.
      */
-     /* TODO if keyBlob is corrupted it crashes in cbor */
+    /* TODO if keyBlob is corrupted it crashes in cbor */
     std::tie(blobItem, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(keyBlob), false);
 
     if(blobItem != nullptr) {
@@ -1182,7 +1182,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
                     //cipher text and finally copy it to the output. getBinaryArray function appends the new cipher text
                     //at the end of the tempOut(std::vector<uint8_t>).
                     if((outParams.size() == 0 && !cborConverter_.getKeyParameters(item, 2, outParams)) ||
-                       !cborConverter_.getBinaryArray(item, 3, tempOut)) {
+                            !cborConverter_.getBinaryArray(item, 3, tempOut)) {
                         outParams.setToExternal(nullptr, 0);
                         tempOut.clear();
                         errorCode = ErrorCode::UNKNOWN_ERROR;
@@ -1293,7 +1293,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
                     //the cipher text and finally copy it to the output. getBinaryArray function appends the new cipher
                     //text at the end of the tempOut(std::vector<uint8_t>).
                     if((outParams.size() == 0 && !cborConverter_.getKeyParameters(item, keyParamPos, outParams)) ||
-                       !cborConverter_.getBinaryArray(item, outputPos, tempOut)) {
+                            !cborConverter_.getBinaryArray(item, outputPos, tempOut)) {
                         outParams.setToExternal(nullptr, 0);
                         tempOut.clear();
                         errorCode = ErrorCode::UNKNOWN_ERROR;
