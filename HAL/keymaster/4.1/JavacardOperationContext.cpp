@@ -35,8 +35,8 @@ enum class Operation {
 };
 
 inline ErrorCode hidlParamSet2OperatinInfo(const hidl_vec<KeyParameter>& params, OperationInfo& info) {
-	for(int i = 0; i < params.size(); i++) {
-		const KeyParameter &param = params[i];
+    for(int i = 0; i < params.size(); i++) {
+        const KeyParameter &param = params[i];
         switch(param.tag) {
             case Tag::ALGORITHM:
                 info.alg = static_cast<Algorithm>(param.f.integer);
@@ -53,11 +53,12 @@ inline ErrorCode hidlParamSet2OperatinInfo(const hidl_vec<KeyParameter>& params,
             default:
                 continue;
         }
-	}
+    }
     return ErrorCode::OK;
 }
 
-ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, KeyPurpose purpose, Algorithm alg, const hidl_vec<KeyParameter>& params) {
+ErrorCode OperationContext::setOperationInfo(uint64_t operationHandle, KeyPurpose purpose, Algorithm alg,
+        const hidl_vec<KeyParameter>& params) {
     ErrorCode errorCode = ErrorCode::OK;
     OperationData data;
     if(ErrorCode::OK != (errorCode = hidlParamSet2OperatinInfo(params, data.info))) {
@@ -78,7 +79,8 @@ ErrorCode OperationContext::clearOperationData(uint64_t operHandle) {
         return ErrorCode::OK;
 }
 
-ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr, const std::vector<uint8_t>& actualInput, std::vector<uint8_t>& input) {
+ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr,
+        const std::vector<uint8_t>& actualInput, std::vector<uint8_t>& input) {
     ErrorCode errorCode = ErrorCode::OK;
 
     OperationData& oprData = operationTable[operHandle];
@@ -126,7 +128,8 @@ ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr
     return errorCode;
 }
 
-ErrorCode OperationContext::update(uint64_t operHandle, const std::vector<uint8_t>& actualInput, sendDataToSE_cb cb) {
+ErrorCode OperationContext::update(uint64_t operHandle, const std::vector<uint8_t>& actualInput,
+        sendDataToSE_cb cb) {
     ErrorCode errorCode = ErrorCode::OK;
     std::vector<uint8_t> input;
 
@@ -143,20 +146,20 @@ ErrorCode OperationContext::update(uint64_t operHandle, const std::vector<uint8_
             auto end = first + MAX_ALLOWED_INPUT_SIZE;
             std::vector<uint8_t> newInput(first, end);
             if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, newInput.data(), newInput.size(),
-                Operation::Update, cb))) {
+                            Operation::Update, cb))) {
                 return errorCode;
             }
         }
         if(extraData > 0) {
             std::vector<uint8_t> finalInput(input.cend()-extraData, input.cend());
             if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, finalInput.data(), finalInput.size(), 
-                Operation::Update, cb))) {
+                            Operation::Update, cb))) {
                 return errorCode;
             }
         }
     } else {
         if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, input.data(), input.size(), 
-            Operation::Update, cb))) {
+                        Operation::Update, cb))) {
             return errorCode;
         }
     }
@@ -180,20 +183,20 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
             auto end = first + MAX_ALLOWED_INPUT_SIZE;
             std::vector<uint8_t> newInput(first, end);
             if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, newInput.data(), newInput.size(),
-                Operation::Update, cb))) {
+                            Operation::Update, cb))) {
                 return errorCode;
             }
         }
         if(extraData > 0) {
             std::vector<uint8_t> finalInput(input.cend()-extraData, input.cend());
             if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, finalInput.data(), finalInput.size(), 
-                Operation::Finish, cb, true))) {
+                            Operation::Finish, cb, true))) {
                 return errorCode;
             }
         }
     } else {
         if(ErrorCode::OK != (errorCode = handleInternalUpdate(operHandle, input.data(), input.size(), 
-            Operation::Finish, cb, true))) {
+                        Operation::Finish, cb, true))) {
             return errorCode;
         }
     }
@@ -201,7 +204,8 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
 }
 
 /* This function is called for only symmetric operations */
-ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>& out) {
+ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* input, size_t input_len,
+        Operation opr, std::vector<uint8_t>& out) {
     int dataToSELen = 0;
     int inputConsumed = 0;/*Length of the data consumed from input */
     int blockSize = 0;
