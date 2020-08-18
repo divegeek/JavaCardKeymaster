@@ -13,12 +13,18 @@
 // limitations under the License.
 //
 
-cc_library {
-    name: "libJavacardKeymaster41",
+
+cc_binary {
+    name: "android.hardware.keymaster@4.1-javacard.service",
+    relative_install_path: "hw",
+    vendor: true,
+    init_rc: ["4.1/android.hardware.keymaster@4.1-javacard.service.rc"],
+    vintf_fragments: ["4.1/android.hardware.keymaster@4.1-javacard.service.xml"],
     srcs: [
+        "4.1/service.cpp",
         "4.1/JavacardKeymaster4Device.cpp",
         "4.1/CborConverter.cpp",
-        "4.1/java_card_soft_keymaster_context.cpp",
+        "4.1/JavacardSoftKeymasterContext.cpp",
         "4.1/JavacardOperationContext.cpp",
         "4.1/CommonUtils.cpp",
     ],
@@ -33,14 +39,45 @@ cc_library {
         "libutils",
         "libhardware",
         "libhidlbase",
-	"libsoftkeymasterdevice",
+        "libsoftkeymasterdevice",
         "libkeymaster_messages",
-	"libkeymaster_portable",
+        "libkeymaster_portable",
         "libcppbor_external",
         "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
         "libjc_transport",
-	"libcrypto",
+        "libcrypto",
+    ],
+}
+
+cc_library {
+    name: "libJavacardKeymaster41",
+    srcs: [
+        "4.1/JavacardKeymaster4Device.cpp",
+        "4.1/CborConverter.cpp",
+        "4.1/JavacardSoftKeymasterContext.cpp",
+        "4.1/JavacardOperationContext.cpp",
+        "4.1/CommonUtils.cpp",
+    ],
+    local_include_dirs: [
+        "include",
+    ],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libdl",
+        "libbase",
+        "libutils",
+        "libhardware",
+        "libhidlbase",
+	    "libsoftkeymasterdevice",
+        "libkeymaster_messages",
+	    "libkeymaster_portable",
+        "libcppbor_external",
+        "android.hardware.keymaster@4.1",
+        "android.hardware.keymaster@4.0",
+        "libjc_transport",
+	    "libcrypto",
     ],
 }
 
@@ -48,6 +85,9 @@ cc_library {
     name: "libjc_transport",
     host_supported: true,
     vendor_available: true,
+    vndk: {
+        enabled: true,
+    },
 
     srcs: [
         "4.1/SocketTransport.cpp",
