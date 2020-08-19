@@ -93,6 +93,11 @@ class CborConverter
         /**
          * Get the Binary string at the given position from the item pointer.
          */
+        bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, ::android::hardware::hidl_string& value);
+
+        /**
+         * Get the Binary string at the given position from the item pointer.
+         */
         bool getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& value);
 
         /**

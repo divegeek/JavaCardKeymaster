@@ -245,7 +245,7 @@ bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const
 }
 
 bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
-::android::hardware::hidl_vec<uint8_t>& value) {
+        ::android::hardware::hidl_vec<uint8_t>& value) {
     bool ret = false;
     std::unique_ptr<Item> strItem(nullptr);
     getItemAtPos(item, pos, strItem);
@@ -258,6 +258,19 @@ bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint
     return ret;
 }
 
+bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
+        ::android::hardware::hidl_string& value) {
+    std::vector<uint8_t> vec;
+    std::string str;
+    if(!getBinaryArray(item, pos, vec)) {
+        return false;
+    }
+    for(auto ch : vec) {
+        str += ch;
+    }
+    value = str;
+    return true;
+}
 
 bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& value) {
     bool ret = false;

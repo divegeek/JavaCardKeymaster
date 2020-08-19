@@ -34,117 +34,117 @@ using ::android::hardware::keymaster::V4_0::KeyPurpose;
 using ::android::hardware::keymaster::V4_0::Digest;
 using ::android::hardware::keymaster::V4_0::PaddingMode;
 using ::android::hardware::keymaster::V4_0::KeyParameter;
+using ::android::hardware::keymaster::V4_0::BlockMode;
 using ::android::hardware::keymaster::V4_0::Tag;
 
+/**
+ * Callback function to send data back to the caller.
+ */
 using sendDataToSE_cb = std::function<ErrorCode(std::vector<uint8_t>& data, bool finish)>;
 
 enum class Operation;
 
+/**
+ * This struct is used to store the buffered data.
+ */
 struct BufferedData {
     uint8_t buf[MAX_BUF_SIZE];
     size_t buf_len;
 };
 
+/**
+ * This struct is used to store the operation info.
+ */
 struct OperationInfo {
     Algorithm alg;
     KeyPurpose purpose;
     Digest digest;
     PaddingMode pad;
+    BlockMode mode;
 };
 
+/**
+ * OperationContext uses this struct to store the buffered data and the correspoding operation info.
+ */
 struct OperationData {
     OperationInfo info;
     BufferedData data;
 };
 
+/**
+ * This class manages the data that is send for any crypto operation.
+ *
+ * For Symmetric operations, update function sends only block aligned data and stores the remaining data in the buffer
+ * so at any point the buffer may contain data ranging from 0 to a maximum of block size, where as finish function sends
+ * all the data (input data + buffered data) to the caller and clears the buffer. To support PKCS#7 padding removal,
+ * the last block size from the input is always buffered in update operation and this last block is sent in finish
+ * operation.
+ *
+ * For Asymmetric operations, if the operation is with Digest then the input data is not buffered, where as if the
+ * operation is with no Digest then update function buffers the input data and finish function extracts the data from
+ * buffer and sends to the caller. Update and finish functions does validation on the input data based on the algorithm.
+ *
+ * In General, the maximum allowed input data that is sent is limited to MAX_ALLOWED_INPUT_SIZE. If the input data
+ * exceeds this limit each update or finish function divides the input data into chunks of MAX_ALLOWED_INPUT_SIZE and
+ * sends each chunk back to the caller through update callback.
+ */
 class OperationContext {
 
 public:
     OperationContext(){}
     ~OperationContext() {}
-    ErrorCode setOperationInfo(uint64_t operationHandle, OperationInfo& oeprInfo);
-    ErrorCode setOperationInfo(uint64_t operationHandle, KeyPurpose purpose, const hidl_vec<KeyParameter>& params);
-    ErrorCode getOperationInfo(uint64_t operHandle, OperationInfo& operInfo);
+    /**
+     * In Begin operation caller has to call this function to store the operation data corresponding to the operation
+     * handle.
+     */
+    ErrorCode setOperationInfo(uint64_t operationHandle, KeyPurpose purpose, Algorithm alg, const hidl_vec<KeyParameter>& params);
+    /**
+     * This function clears the operation data from the map. Caller has to call this function once the operation is done
+     * or if there is any error while processing the operation.
+     */
     ErrorCode clearOperationData(uint64_t operationHandle);
+    /**
+     * This function validaes the input data based on the algorithm and does process on the data to either store it or
+     * send back to the caller. The data is sent using sendDataTOSE_cb callback.
+     */
     ErrorCode update(uint64_t operHandle, const std::vector<uint8_t>& input, sendDataToSE_cb cb);
+    /**
+     * This function validaes the input data based on the algorithm and send all the input data along with buffered data
+     * to the caller. The data is sent using sendDataTOSE_cb callback.
+     */
     ErrorCode finish(uint64_t operHandle, const std::vector<uint8_t>& input, sendDataToSE_cb cb);
 
 private:
+    /**
+     * This is used to store the operation related info and the buffered data. Key is the operation handle and the value
+     * is OperationData.
+     */
     std::map<uint64_t, OperationData> operationTable;
 
-    inline ErrorCode getOperationData(uint64_t operHandle, OperationData& oprData) {
-        auto itr = operationTable.find(operHandle);
-        if(itr != operationTable.end()) {
-            oprData = itr->second;
-            return ErrorCode::OK;
-        }
-        return ErrorCode::INVALID_OPERATION_HANDLE;
-    }
+    /* Helper functions */
 
+    /**
+     * This fucntion validates the input data based on the algorithm and the operation info parameters. This function
+     * also does a processing on the input data if either the algorithm is EC or if it is a Finish operation. For EC
+     * operations it truncates the input data if it exceeds 32 bytes for No Digest case. In case of finish operations
+     * this function combines both the buffered data and input data if both exceeds MAX_ALLOWED_INPUT_SIZE.
+     */
     ErrorCode validateInputData(uint64_t operHandle, Operation opr, const std::vector<uint8_t>& actualInput,
-    std::vector<uint8_t>& input);
-    ErrorCode internalUpdate(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>&
-    out);
-     ErrorCode handleInternalUpdate(uint64_t operHandle, uint8_t* data, size_t len, Operation opr,
-             sendDataToSE_cb cb, bool finish=false) {
-         ErrorCode errorCode = ErrorCode::OK;
-         std::vector<uint8_t> out;
+            std::vector<uint8_t>& input);
+    /**
+     * This function is used for Symmetric operations. It extracts the block sized data from the input and buffers the
+     * reamining data for update calls only. For finish calls it extracts all the buffered data combines it with
+     * input data.
+     */
+    ErrorCode getBlockAlignedData(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>&
+            out);
+    /**
+     * This function sends the data back to the caller using callback functions. It does some processing on input data
+     * for Asymmetic operations.
+     */
+    ErrorCode handleInternalUpdate(uint64_t operHandle, uint8_t* data, size_t len, Operation opr,
+        sendDataToSE_cb cb, bool finish=false);
 
-         if(Algorithm::AES == operationTable[operHandle].info.alg ||
-                 Algorithm::TRIPLE_DES == operationTable[operHandle].info.alg) {
-             if(ErrorCode::OK != (errorCode = internalUpdate(operHandle, data, len,
-                             opr, out))) {
-                 return errorCode;
-             }
-             if(finish || out.size() > 0) {
-
-                 if(ErrorCode::OK != (errorCode = cb(out, finish))) {
-                     return errorCode;
-                 }
-             }
-         } else {
-             /* Asymmetric */
-             if(operationTable[operHandle].info.purpose == KeyPurpose::DECRYPT ||
-                 operationTable[operHandle].info.digest == Digest::NONE) {
-                 /* In case of Decrypt, sign with no digest cases buffer the data in
-                  * update call and send data to SE in finish call.
-                  */
-                 if(finish) {
-                     for(size_t i = 0; i < operationTable[operHandle].data.buf_len; ++i) {
-                         out.push_back(operationTable[operHandle].data.buf[i]);
-                     }
-                     if(ErrorCode::OK != (errorCode = cb(out, finish))) {
-                         return errorCode;
-                     }
-                 } else {
-                      //Input message length should not be more than the MAX_BUF_SIZE.
-                     if(operationTable[operHandle].data.buf_len <= MAX_BUF_SIZE) {
-                         size_t bufIndex = operationTable[operHandle].data.buf_len;
-                         size_t pos = 0;
-                         for(; (pos < len) && (pos < (MAX_BUF_SIZE-bufIndex)); pos++)
-                         {
-                             operationTable[operHandle].data.buf[bufIndex+pos] = data[pos];
-                         }
-                         operationTable[operHandle].data.buf_len += pos;
-                     }
-                 }
-             } else {
-                 for(size_t j=0; j < len; ++j)
-                 {
-                     out.push_back(data[j]);
-                 }
-                 /* if len=0, then no need to call the callback, since there is no information to be send to javacard,
-                  * but if finish flag is true irrespective of length the callback should be called.
-                  */
-                 if(len != 0 || finish) {
-                     if(ErrorCode::OK != (errorCode = cb(out, finish))) {
-                         return errorCode;
-                     }
-                 }
-             }
-         }
-         return errorCode;
-     }
 };
 
 }  // namespace javacard

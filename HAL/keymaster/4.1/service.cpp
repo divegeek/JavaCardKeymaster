@@ -22,10 +22,9 @@
 
 int main() {
     ::android::hardware::configureRpcThreadpool(1, true);
+    auto keymaster = new ::keymaster::V4_1::javacard::JavacardKeymaster4Device();
 
-    auto keymaster = new ::android::hardware::keymaster::V4_1::JavacardKeymaster4Device();
-
-    auto status = keymaster->registerAsService();
+    auto status = keymaster->registerAsService("javacard");
     if (status != android::OK) {
         LOG(FATAL) << "Could not register service for Keymaster 4.1 (" << status << ")";
         return -1;

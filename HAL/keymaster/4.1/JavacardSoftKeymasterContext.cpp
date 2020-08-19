@@ -25,7 +25,7 @@
 #include <keymaster/km_openssl/openssl_err.h>
 #include <keymaster/km_openssl/ec_key_factory.h>
 #include <keymaster/km_openssl/rsa_key_factory.h>
-#include <java_card_soft_keymaster_context.h>
+#include <JavacardSoftKeymasterContext.h>
 #include <CborConverter.h>
 #include <CommonUtils.h>
 
