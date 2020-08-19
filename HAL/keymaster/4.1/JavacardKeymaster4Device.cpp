@@ -1085,16 +1085,27 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     cborConverter_.addHardwareAuthToken(array, authToken);
     std::vector<uint8_t> cborData = array.encode();
 
-    /* keyCharacteristics.hardwareEnforced is required to store algorithm, digest and padding values in operationInfo
-     * structure. To retrieve keyCharacteristics.hardwareEnforced, parse the keyBlob.
-     */
-    /* TODO if keyBlob is corrupted it crashes in cbor */
-    std::tie(blobItem, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(keyBlob), false);
+    // keyCharacteristics.hardwareEnforced is required to store algorithm, digest and padding values in operationInfo
+    // structure. To retrieve keyCharacteristics.hardwareEnforced, call getKeyCharacateristics.
+    // By calling getKeyCharacateristics also helps in finding a corrupted keyblob.
+    hidl_vec<uint8_t> applicationId;
+    hidl_vec<uint8_t> applicationData;
+    if(getTag(inParams, Tag::APPLICATION_ID, param)) {
+        applicationId = param.blob;
+    }
+    if(getTag(inParams, Tag::APPLICATION_DATA, param)) {
+        applicationData = param.blob;
+    }
+    //Call to getKeyCharacteristics.
+    getKeyCharacteristics(keyBlob, applicationId, applicationData,
+            [&](ErrorCode error, KeyCharacteristics keyChars) {
+            errorCode = error;
+            keyCharacteristics = keyChars;
+            });
 
-    if(blobItem != nullptr) {
+    if(errorCode == ErrorCode::OK) {
         errorCode = ErrorCode::UNKNOWN_ERROR;
-        if(cborConverter_.getKeyCharacteristics(blobItem, 3, keyCharacteristics) &&
-                getTag(keyCharacteristics.hardwareEnforced, Tag::ALGORITHM, param)) {
+        if(getTag(keyCharacteristics.hardwareEnforced, Tag::ALGORITHM, param)) {
             errorCode = sendData(Instruction::INS_BEGIN_OPERATION_CMD, cborData, cborOutData);
             if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
                 //Skip last 2 bytes in cborData, it contains status.
