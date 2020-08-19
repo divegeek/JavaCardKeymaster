@@ -22,7 +22,6 @@ import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
-import java.security.interfaces.RSAKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.RSAPrivateKeySpec;
@@ -62,7 +61,7 @@ import javax.crypto.spec.SecretKeySpec;
  * Key, and upto 512 bit HMAC key. Also simulator does not support TRNG, so this implementation just
  * creates its own RNG using PRNG.
  */
-public class KMJcardSimulator implements KMCryptoProvider {
+public class KMJcardSimulator implements KMSEProvider {
   public static final short AES_GCM_TAG_LENGTH = 12;
   public static final short AES_GCM_NONCE_LENGTH = 12;
   public static final short MAX_RND_NUM_SIZE = 64;
@@ -182,6 +181,11 @@ public class KMJcardSimulator implements KMCryptoProvider {
   }
 
   @Override
+  public short createSymmetricKey(byte alg, short keysize, byte[] buf, short startOff) {
+    return 0;
+  }
+
+  @Override
   public HMACKey createHMACKey(byte[] secretBuffer, short secretOff, short secretLength) {
     HMACKey key = null;
     key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC,
@@ -209,15 +213,17 @@ public class KMJcardSimulator implements KMCryptoProvider {
       short authTagLen) {
     //Create the sun jce compliant aes key
     byte[] keyMaterial = new byte[16];
+    short keySize = 16;
     if(key.getSize() == 128){
       keyMaterial = new byte[16];
     }else if(key.getSize() == 256){
       keyMaterial = new byte[32];
+      keySize = 32;
     }
     key.getKey(keyMaterial,(short)0);
     //print("KeyMaterial Enc", keyMaterial);
     //print("Authdata Enc", authData, authDataStart, authDataLen);
-    java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,(short)16, "AES");
+    java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,keySize, "AES");
     // Create the cipher
     javax.crypto.Cipher cipher = null;
     try {
@@ -341,7 +347,7 @@ public class KMJcardSimulator implements KMCryptoProvider {
       keyMaterial = new byte[16];
     }else if(key.getSize() == 256){
       keyMaterial = new byte[32];
-      keySize = 16;
+      keySize = 32;
     }
     key.getKey(keyMaterial,(short)0);
     //print("KeyMaterial Dec", keyMaterial);
@@ -467,6 +473,12 @@ public class KMJcardSimulator implements KMCryptoProvider {
   }
 
   @Override
+  public short cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
+    HMACKey key = cmacKdf(keyMaterial,label,context,contextStart,contextLength);
+    return key.getKey(keyBuf,keyStart);
+  }
+
+  @Override
   public short hmacSign(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
     hmacSignature.init(key, Signature.MODE_SIGN);
     return hmacSignature.sign(data, dataStart, dataLength, mac, macStart);
@@ -477,6 +489,71 @@ public class KMJcardSimulator implements KMCryptoProvider {
                           byte[] mac, short macStart, short macLength) {
     hmacSignature.init(key, Signature.MODE_VERIFY);
     return hmacSignature.verify(data, dataStart, dataLength, mac, macStart, macLength);
+  }
+
+  @Override
+  public short hmacSign(byte[] keyBuf, short keyStart, short keyLength, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
+    return 0;
+  }
+
+  @Override
+  public boolean hmacVerify(byte[] keyBuf, short keyStart, short keyLength, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
+    return false;
+  }
+
+  @Override
+  public short initSymmetricOperation(byte purpose, byte alg, byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart, short keyLength) {
+    return 0;
+  }
+
+  @Override
+  public short initSymmetricOperation(byte purpose, byte alg, byte digest, byte[] keyBuf, short keyStart, short keyLength) {
+    return 0;
+  }
+
+  @Override
+  public short initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] modBuf, short modStart, short modLength) {
+    return 0;
+  }
+
+  @Override
+  public short initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest, byte[] privKeyBuf, short privKeyStart, short privKeyLength) {
+    return 0;
+  }
+
+  @Override
+  public short updateOperation(short opHandle, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
+    return 0;
+  }
+
+  @Override
+  public short finishOperation(short opHandle, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
+    return 0;
+  }
+
+  @Override
+  public void abortOperation(short opHandle) {
+
+  }
+
+  @Override
+  public short hmacInit(byte[] keyBuf, short keyStart, short keyLength, byte digest, byte mode) {
+    return 0;
+  }
+
+  @Override
+  public short hmacSign(short opHandle, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
+    return 0;
+  }
+
+  @Override
+  public boolean hmacVerify(short opHandle, byte[] keyBuf, short keyStart, short keyLength, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
+    return false;
+  }
+
+  @Override
+  public short hmacUpdate(short opHandle, byte[] dataBuf, short dataStart, short dataLength) {
+    return 0;
   }
 
   @Override
@@ -609,16 +686,21 @@ public class KMJcardSimulator implements KMCryptoProvider {
 
   @Override
   public Signature createEcSigner(short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
-    short alg = Signature.ALG_ECDSA_SHA_256;
-    if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    //KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
-    //ecKeyPair.genKeyPair();
-    //ECPrivateKey privKey = (ECPrivateKey) ecKeyPair.getPrivate();
-    //privKey.setS(secret,secretStart, secretLength);
-    ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
-    key.setS(secret,secretStart,secretLength);
-    Signature ecSigner = Signature.getInstance((byte)alg,false);
-    ecSigner.init(key,Signature.MODE_SIGN);
+  	short alg = Signature.ALG_ECDSA_SHA_256;
+  	Signature ecSigner;
+  	if(msgDigestAlg == MessageDigest.ALG_NULL) {
+  		//CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+  		ecSigner = new KMEcdsa256NoDigestSignature(Signature.MODE_SIGN, secret, secretStart, secretLength);
+  	} else {
+  		//KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+  		//ecKeyPair.genKeyPair();
+  		//ECPrivateKey privKey = (ECPrivateKey) ecKeyPair.getPrivate();
+  		//privKey.setS(secret,secretStart, secretLength);
+  		ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
+  		key.setS(secret,secretStart,secretLength);
+  		ecSigner = Signature.getInstance((byte)alg,false);
+  		ecSigner.init(key,Signature.MODE_SIGN);
+  	}
     return ecSigner;
   }
 
@@ -669,7 +751,9 @@ public class KMJcardSimulator implements KMCryptoProvider {
         key = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,len,false);
         ((DESKey) key).setKey(secret,secretStart);
         symmCipher = Cipher.getInstance((byte)cipherAlg, false);
-        symmCipher.init(key, (byte) mode, ivBuffer, ivStart, ivLength);
+        //TODO Consume only 8 bytes of iv. the random number for iv is of 16 bytes.
+        //While sending back the iv send only 8 bytes.
+        symmCipher.init(key, (byte) mode, ivBuffer, ivStart, (short)8);
         break;
       case KMCipher.ALG_DES_ECB_NOPAD:
         cipherAlg = Cipher.ALG_DES_ECB_NOPAD;
@@ -967,15 +1051,76 @@ public class KMJcardSimulator implements KMCryptoProvider {
   @Override
   public Signature createEcVerifier(short msgDigestAlg, byte[] pubKey, short pubKeyStart, short pubKeyLength) {
     short alg = Signature.ALG_ECDSA_SHA_256;
-    if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-//    KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
-//    ecKeyPair.genKeyPair();
-//    ECPublicKey key = (ECPublicKey) ecKeyPair.getPublic();
-    ECPublicKey key = (ECPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);
-    key.setW(pubKey,pubKeyStart,pubKeyLength);
-    Signature ecVerifier = Signature.getInstance((byte)alg,false);
-    ecVerifier.init(key,Signature.MODE_VERIFY);
+    Signature ecVerifier;
+    //if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    if(msgDigestAlg == MessageDigest.ALG_NULL) {
+  		//CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    	ecVerifier = new KMEcdsa256NoDigestSignature(Signature.MODE_VERIFY, pubKey, pubKeyStart, pubKeyLength);
+    } else {
+    	//    KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+    	//    ecKeyPair.genKeyPair();
+    	//    ECPublicKey key = (ECPublicKey) ecKeyPair.getPublic();
+    	ECPublicKey key = (ECPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);
+    	key.setW(pubKey,pubKeyStart,pubKeyLength);
+    	ecVerifier = Signature.getInstance((byte)alg,false);
+    	ecVerifier.init(key,Signature.MODE_VERIFY);
+    }
     return ecVerifier;
+  }
+
+  @Override
+  public short getSystemTimeInMilliSeconds(byte[] timeBuf, short timeStart, short timeOffset) {
+    return 0;
+  }
+
+  @Override
+  public short addListener(KMEventListener listener, byte eventType) {
+    return 0;
+  }
+
+  @Override
+  public short getEventData(byte[] eventBuf, short eventStart, short eventLength) {
+    return 0;
+  }
+
+  @Override
+  public boolean isAlgSupported(byte alg) {
+    return true;
+  }
+
+  @Override
+  public boolean isKeySizeSupported(byte alg, short keySize) {
+    return true;
+  }
+
+  @Override
+  public boolean isCurveSupported(byte eccurve) {
+    return true;
+  }
+
+  @Override
+  public boolean isDigestSupported(byte alg, byte digest) {
+    return true;
+  }
+
+  @Override
+  public boolean isPaddingSupported(byte alg, byte padding) {
+    return true;
+  }
+
+  @Override
+  public boolean isBlockModeSupported(byte alg, byte blockMode) {
+    return true;
+  }
+
+  @Override
+  public boolean isSystemTimerSupported() {
+    return false;
+  }
+
+  @Override
+  public boolean isBootEventSupported() {
+    return false;
   }
 
   /*

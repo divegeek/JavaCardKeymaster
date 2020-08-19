@@ -20,8 +20,8 @@ import com.android.javacard.keymaster.KMArray;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
-import com.android.javacard.keymaster.KMCryptoProvider;
-import com.android.javacard.keymaster.KMCryptoProviderImpl;
+import com.android.javacard.keymaster.KMSEProvider;
+import com.android.javacard.keymaster.KMSEProviderImpl;
 import com.android.javacard.keymaster.KMDecoder;
 import com.android.javacard.keymaster.KMEncoder;
 import com.android.javacard.keymaster.KMEnum;
@@ -84,13 +84,13 @@ public class KMFrameworkTest {
   private short status;
   private short keyCharacteristics;
   private short keyBlob;
-  private KMCryptoProvider sim;
+  private KMSEProvider sim;
 
   @Test
   public void test_Lifecycle_Success() {
     // Create simulator
     //KMJcardSimulator.jcardSim = true;
-    sim = KMCryptoProviderImpl.instance();
+    sim = KMSEProviderImpl.instance();
     sim.bypassAesGcm();
     CardSimulator simulator = new CardSimulator();
 
@@ -202,7 +202,7 @@ public class KMFrameworkTest {
       ResponseAPDU response = simulator.transmitCommand(commandAPDU);
       Assert.assertEquals(0x9000, response.getSW());
       */
-    KMCryptoProvider cryptoProvider = KMCryptoProviderImpl.instance();
+    KMSEProvider cryptoProvider = KMSEProviderImpl.instance();
     KMEncoder encoder = new KMEncoder();
     KeyPair rsaKeyPair = cryptoProvider.createRsaKeyPair();
     byte[] pub = new byte[4];

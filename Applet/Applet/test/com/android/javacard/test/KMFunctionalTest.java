@@ -20,8 +20,8 @@ import com.android.javacard.keymaster.KMArray;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
-import com.android.javacard.keymaster.KMCryptoProvider;
-import com.android.javacard.keymaster.KMCryptoProviderImpl;
+import com.android.javacard.keymaster.KMSEProvider;
+import com.android.javacard.keymaster.KMSEProviderImpl;
 import com.android.javacard.keymaster.KMDecoder;
 import com.android.javacard.keymaster.KMEncoder;
 import com.android.javacard.keymaster.KMEnum;
@@ -80,15 +80,15 @@ public class KMFunctionalTest {
   private static final byte[] expiryTime = {0x32,0x30,0x35,0x37,0x30,0x31,0x30,0x31,0x30,0x30,0x30,0x30,0x30,0x30,0x5A};
   private static final byte[] authKeyId = {1,2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8,9,1,2};
 
-  private KMCryptoProvider sim;
+  private KMSEProvider sim;
   private CardSimulator simulator;
   private KMEncoder encoder;
   private KMDecoder decoder;
-  private KMCryptoProvider cryptoProvider;
+  private KMSEProvider cryptoProvider;
 
   public KMFunctionalTest(){
-    cryptoProvider = KMCryptoProviderImpl.instance();
-    sim = KMCryptoProviderImpl.instance();
+    cryptoProvider = KMSEProviderImpl.instance();
+    sim = KMSEProviderImpl.instance();
     simulator = new CardSimulator();
     encoder = new KMEncoder();
     decoder = new KMDecoder();
@@ -923,7 +923,7 @@ public class KMFunctionalTest {
     tag = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST, hwParams);
     Assert.assertTrue(KMEnumArrayTag.cast(tag).contains(KMType.SHA2_256));
     tag = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, hwParams);
-    Assert.assertEquals(KMInteger.cast(KMIntegerTag.cast(tag).getValue()).getShort(), 128);
+    Assert.assertEquals(KMInteger.cast(KMIntegerTag.cast(tag).getValue()).getShort(), 160);
     tag = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, hwParams);
     Assert.assertEquals(KMEnumTag.cast(tag).getValue(), KMType.HMAC);
     tag = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ORIGIN, hwParams);
@@ -944,7 +944,7 @@ public class KMFunctionalTest {
     KMByteBlob.cast(byteBlob).add((short)1, KMType.VERIFY);
     short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
-    short minMacLen = KMIntegerTag.instance(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, KMInteger.uint_16((short)128));
+    short minMacLen = KMIntegerTag.instance(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, KMInteger.uint_16((short)/*256*/160));
     short tagIndex = 0;
     KMArray.cast(arrPtr).add(tagIndex++, minMacLen);
     KMArray.cast(arrPtr).add(tagIndex++, purpose);
@@ -1828,6 +1828,7 @@ public class KMFunctionalTest {
       );
     inParams = getAesDesParams(alg,blockMode, padding, nonce);
     keyBlobPtr = KMArray.cast(ret).get((short)2);
+    //print(keyBlobPtr);
     byte[] cipherData = new byte[KMByteBlob.cast(keyBlobPtr).length()];
     Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
       cipherData,(short)0, (short)cipherData.length);
@@ -1838,6 +1839,8 @@ public class KMFunctionalTest {
       (short)0,null,update, aesGcmFlag
     );
     keyBlobPtr = KMArray.cast(ret).get((short)2);
+    //print(plainData,(short)0,(short)plainData.length);
+    //print(keyBlobPtr);
     short equal = Util.arrayCompare(plainData,(short)0,KMByteBlob.cast(keyBlobPtr).getBuffer(),
       KMByteBlob.cast(keyBlobPtr).getStartOff(),(short)plainData.length);
     Assert.assertTrue(equal == 0);
@@ -1948,7 +1951,7 @@ public class KMFunctionalTest {
     byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
     Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
       keyBlob,(short)0, (short)keyBlob.length);
-    short inParams = getHmacParams(digest);
+    short inParams = getHmacParams(digest,true);
     byte[] plainData = "Hello World 123!".getBytes();
     if(update) plainData= "Hello World 123! Hip Hip Hoorah!".getBytes();
     //Sign
@@ -1958,7 +1961,7 @@ public class KMFunctionalTest {
       KMKeyParameters.instance(inParams),
       (short)0,null,update,false
     );
-    inParams = getHmacParams(digest);
+    inParams = getHmacParams(digest,false);
     keyBlobPtr = KMArray.cast(ret).get((short)2);
     byte[] signatureData = new byte[KMByteBlob.cast(keyBlobPtr).length()];
     Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
@@ -2035,13 +2038,15 @@ public class KMFunctionalTest {
     KMArray.cast(inParams).add((short)0, KMEnumArrayTag.instance(KMType.DIGEST, byteBlob));
     return inParams;
   }
-  private short getHmacParams(byte digest) {
-    short inParams = KMArray.instance((short)2);
+  private short getHmacParams(byte digest, boolean sign) {
+	short paramsize = (short) (sign ? 2 : 1);
+    short inParams = KMArray.instance((short)paramsize);
     short byteBlob = KMByteBlob.instance((short)1);
     KMByteBlob.cast(byteBlob).add((short)0, digest);
     KMArray.cast(inParams).add((short)0, KMEnumArrayTag.instance(KMType.DIGEST, byteBlob));
-    short macLength = KMIntegerTag.instance(KMType.UINT_TAG,KMType.MAC_LENGTH, KMInteger.uint_16((short)256));
-    KMArray.cast(inParams).add((short)1, macLength);
+    short macLength = KMIntegerTag.instance(KMType.UINT_TAG,KMType.MAC_LENGTH, KMInteger.uint_16((short)/*256*/160));
+    if(sign)
+      KMArray.cast(inParams).add((short)1, macLength);
     return inParams;
   }
 
@@ -2062,8 +2067,16 @@ public class KMFunctionalTest {
     byte[] outputData = new byte[128];
     short len=0;
     inParams = 0;
+    //Test
+    short firstDataLen =16;
+    if (keyPurpose == KMType.DECRYPT) {
+    	firstDataLen = 32;
+    }
+
+    //Test
+
     if (updateFlag) {
-      dataPtr = KMByteBlob.instance(data, (short) 0, (short) 16);
+      dataPtr = KMByteBlob.instance(data, (short) 0, (short) /*16*/firstDataLen);
       if(aesGcmFlag){
         byte[] authData = "AuthData".getBytes();
         short associatedData = KMByteBlob.instance(authData,(short)0,(short)authData.length);
@@ -2084,7 +2097,7 @@ public class KMFunctionalTest {
         len = KMByteBlob.cast(dataPtr).length();
         dataPtr = KMByteBlob.instance(data, len, (short) (data.length - len));
       }else{
-        dataPtr = KMByteBlob.instance(data, (short)16, (short) (data.length - 16));
+        dataPtr = KMByteBlob.instance(data, (short)/*16*/firstDataLen, (short) (data.length - /*16*/firstDataLen));
       }
     }
 

@@ -33,6 +33,16 @@ public class KMCipherImpl extends KMCipher{
   }
 
   @Override
+  public short getCipherProvider() {
+    return 0;
+  }
+
+  @Override
+  public short getAesGcmOutputSize(short len, short macLength) {
+    return len;
+  }
+
+  @Override
   public short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i) {
     return cipher.update(buffer,startOff,length,scratchPad,i);
   }

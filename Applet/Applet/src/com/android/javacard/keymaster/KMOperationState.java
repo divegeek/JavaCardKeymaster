@@ -43,6 +43,7 @@ public class KMOperationState {
   private boolean secureUserIdReqd;
   private boolean authTimeoutValidated;
   private boolean aesGcmUpdateAllowed;
+
   private boolean aesBlockSaved;
   private byte[] aesBlock;
   private short macLength;

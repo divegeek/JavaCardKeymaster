@@ -40,7 +40,7 @@ import javacardx.crypto.Cipher;
  * Key, and upto 512 bit HMAC key. Also simulator does not support TRNG, so this implementation just
  * creates its own RNG using PRNG.
  */
-public class KMSimulator implements KMCryptoProvider {
+public class KMSimulator implements KMSEProvider {
   public static final short AES_GCM_TAG_LENGTH = 12;
   public static final short AES_GCM_NONCE_LENGTH = 12;
   public static final short MAX_RND_NUM_SIZE = 64;
@@ -149,6 +149,11 @@ public class KMSimulator implements KMCryptoProvider {
     newRandomNumber(rndNum, (short) 0, keysize);
     key.setKey(rndNum, (short) 0, keysize);
     return key;
+  }
+
+  @Override
+  public short createSymmetricKey(byte alg, short keysize, byte[] buf, short startOff) {
+    return 0;
   }
 
   @Override
@@ -358,6 +363,11 @@ public class KMSimulator implements KMCryptoProvider {
   }
 
   @Override
+  public short cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
+    return 0;
+  }
+
+  @Override
   public short hmacSign(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
     return 0;
   }
@@ -365,6 +375,71 @@ public class KMSimulator implements KMCryptoProvider {
   @Override
   public boolean hmacVerify(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
     return false;
+  }
+
+  @Override
+  public short hmacSign(byte[] keyBuf, short keyStart, short keyLength, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
+    return 0;
+  }
+
+  @Override
+  public boolean hmacVerify(byte[] keyBuf, short keyStart, short keyLength, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
+    return false;
+  }
+
+  @Override
+  public short initSymmetricOperation(byte purpose, byte alg, byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart, short keyLength) {
+    return 0;
+  }
+
+  @Override
+  public short initSymmetricOperation(byte purpose, byte alg, byte digest, byte[] keyBuf, short keyStart, short keyLength) {
+    return 0;
+  }
+
+  @Override
+  public short initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] modBuf, short modStart, short modLength) {
+    return 0;
+  }
+
+  @Override
+  public short initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest, byte[] privKeyBuf, short privKeyStart, short privKeyLength) {
+    return 0;
+  }
+
+  @Override
+  public short updateOperation(short opHandle, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
+    return 0;
+  }
+
+  @Override
+  public short finishOperation(short opHandle, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
+    return 0;
+  }
+
+  @Override
+  public void abortOperation(short opHandle) {
+
+  }
+
+  @Override
+  public short hmacInit(byte[] keyBuf, short keyStart, short keyLength, byte digest, byte mode) {
+    return 0;
+  }
+
+  @Override
+  public short hmacSign(short opHandle, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
+    return 0;
+  }
+
+  @Override
+  public boolean hmacVerify(short opHandle, byte[] keyBuf, short keyStart, short keyLength, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
+    return false;
+  }
+
+  @Override
+  public short hmacUpdate(short opHandle, byte[] dataBuf, short dataStart, short dataLength) {
+    return 0;
   }
 
   @Override
@@ -519,6 +594,61 @@ public class KMSimulator implements KMCryptoProvider {
   @Override
   public Signature createEcVerifier(short msgDigestAlg, byte[] pubKey, short pubKeyStart, short pubKeyLength) {
     return null;
+  }
+
+  @Override
+  public short getSystemTimeInMilliSeconds(byte[] timeBuf, short timeStart, short timeOffset) {
+    return 0;
+  }
+
+  @Override
+  public short addListener(KMEventListener listener, byte eventType) {
+    return 0;
+  }
+
+  @Override
+  public short getEventData(byte[] eventBuf, short eventStart, short eventLength) {
+    return 0;
+  }
+
+  @Override
+  public boolean isAlgSupported(byte alg) {
+    return false;
+  }
+
+  @Override
+  public boolean isKeySizeSupported(byte alg, short keySize) {
+    return false;
+  }
+
+  @Override
+  public boolean isCurveSupported(byte eccurve) {
+    return false;
+  }
+
+  @Override
+  public boolean isDigestSupported(byte alg, byte digest) {
+    return false;
+  }
+
+  @Override
+  public boolean isPaddingSupported(byte alg, byte padding) {
+    return false;
+  }
+
+  @Override
+  public boolean isBlockModeSupported(byte alg, byte blockMode) {
+    return false;
+  }
+
+  @Override
+  public boolean isSystemTimerSupported() {
+    return false;
+  }
+
+  @Override
+  public boolean isBootEventSupported() {
+    return false;
   }
 
 }

@@ -24,6 +24,9 @@ public abstract class KMType {
   public static final short INVALID_VALUE = (short)0x8000;
   protected static final byte TLV_HEADER_SIZE = 3;
 
+  //Event Type
+  public static final byte BOOT_EVENT = 0;
+  
   // Types
   public static final byte BYTE_BLOB_TYPE = 0x01;
   public static final byte INTEGER_TYPE = 0x02;

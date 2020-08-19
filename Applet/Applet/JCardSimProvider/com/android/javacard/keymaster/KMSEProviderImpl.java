@@ -1,8 +1,8 @@
 
 package com.android.javacard.keymaster;
 
-public class KMCryptoProviderImpl {
-  public static KMCryptoProvider instance(){
+public class KMSEProviderImpl {
+  public static KMSEProvider instance(){
     return new KMJcardSimulator();
   }
 }
