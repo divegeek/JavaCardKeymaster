@@ -229,12 +229,14 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* in
         /*Update */
         //Calculate the block sized length on combined input of both buffered data and input data.
         uint32_t blockAlignedLen = ((data.buf_len + input_len)/blockSize) * blockSize;
-        //For symmetric ciphers, decryption operation and PKCS7 padding mode save last 16 bytes of block and send this
-        //block in finish operation. This is done to make sure that there will be always a 16 bytes data to finish
-        //operation so that javacard Applet may remove PKCS7 padding if any.
+        //For symmetric ciphers, decryption operation and PKCS7 padding mode or AES GCM operation save the last 16 bytes
+        //of block and send this block in finish operation. This is done to make sure that there will be always a 16
+        //bytes of data left for finish operation so that javacard Applet may remove PKCS7 padding if any or get the tag
+        //data for AES GCM operation for authentication purpose.
         if(((operationTable[operHandle].info.alg == Algorithm::AES) || 
                     (operationTable[operHandle].info.alg == Algorithm::TRIPLE_DES)) &&
-                (operationTable[operHandle].info.pad == PaddingMode::PKCS7) &&
+                (operationTable[operHandle].info.pad == PaddingMode::PKCS7 ||
+                 operationTable[operHandle].info.mode == BlockMode::GCM) &&
                 (operationTable[operHandle].info.purpose == KeyPurpose::DECRYPT)) {
             if(blockAlignedLen >= blockSize) blockAlignedLen -= blockSize;
         }
