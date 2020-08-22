@@ -16,6 +16,7 @@
  */
 
 #include <JavacardOperationContext.h>
+#include <algorithm>
 
 #define MAX_ALLOWED_INPUT_SIZE 512
 #define AES_BLOCK_SIZE          16
@@ -203,12 +204,12 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
     return errorCode;
 }
 
-/* This function is called for only symmetric operations */
+/* This function is called for only Symmetric operations */
 ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* input, size_t input_len,
         Operation opr, std::vector<uint8_t>& out) {
-    int dataToSELen = 0;
-    int inputConsumed = 0;/*Length of the data consumed from input */
-    int blockSize = 0;
+    size_t dataToSELen = 0;
+    size_t inputConsumed = 0;/*Length of the data consumed from input */
+    size_t blockSize = 0;
     BufferedData& data = operationTable[operHandle].data;
     int bufIndex = data.buf_len;
 
@@ -228,7 +229,7 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* in
     } else {
         /*Update */
         //Calculate the block sized length on combined input of both buffered data and input data.
-        uint32_t blockAlignedLen = ((data.buf_len + input_len)/blockSize) * blockSize;
+        size_t blockAlignedLen = ((data.buf_len + input_len)/blockSize) * blockSize;
         //For symmetric ciphers, decryption operation and PKCS7 padding mode or AES GCM operation save the last 16 bytes
         //of block and send this block in finish operation. This is done to make sure that there will be always a 16
         //bytes of data left for finish operation so that javacard Applet may remove PKCS7 padding if any or get the tag
@@ -242,7 +243,7 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* in
         }
         //Copy data to be send to SE from buffer, only if atleast a minimum block aligned size is available.
         if(blockAlignedLen >= blockSize) {
-            for(size_t pos = 0; pos < data.buf_len; pos++) {
+            for(size_t pos = 0; pos < std::min(blockAlignedLen, data.buf_len); pos++) {
                 out.push_back(data.buf[pos]);
             }
         }
@@ -250,7 +251,9 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* in
     }
 
     if(dataToSELen > 0) {
-        inputConsumed = dataToSELen - data.buf_len;
+        //If buffer length is greater than the data length to be send to SE, then input data consumed is 0.
+        //That means all the data to be send to SE is consumed from the buffer.
+        inputConsumed = (data.buf_len > dataToSELen) ? 0 : (dataToSELen - data.buf_len);
 
         //Copy the buffer to be send to SE.
         for(int i = 0; i < inputConsumed; i++)
@@ -258,10 +261,18 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* in
             out.push_back(input[i]);
         }
 
-        /* All the data is consumed so clear buffer */
-        if(data.buf_len != 0) {
-            memset(data.buf, 0x00, sizeof(data.buf));
-            bufIndex = data.buf_len = 0;
+        if(data.buf_len > dataToSELen) {
+            //Only blockAlignedLen data is consumed from buffer so reorder the buffer data.
+            memcpy(data.buf, data.buf+dataToSELen, data.buf_len-dataToSELen);
+            memset(data.buf+dataToSELen, 0x00, data.buf_len-dataToSELen);
+            data.buf_len -= dataToSELen;
+            bufIndex = data.buf_len;
+        } else {
+            // All the data is consumed so clear buffer
+            if(data.buf_len != 0) {
+                memset(data.buf, 0x00, sizeof(data.buf));
+                bufIndex = data.buf_len = 0;
+            }
         }
     }
 

@@ -52,6 +52,8 @@
 namespace keymaster {
 namespace V4_1 {
 namespace javacard {
+//This key is used as master key for computing Hmac shared secret.
+constexpr uint8_t kFakeKeyAgreementKey[32] = {};
 
 static std::unique_ptr<se_transport::TransportFactory> pTransportFactory = nullptr;
 constexpr size_t kOperationTableSize = 4;
@@ -439,6 +441,8 @@ ErrorCode JavacardKeymaster4Device::provision(const hidl_vec<KeyParameter>& keyP
     std::vector<uint8_t> subject;
     std::vector<uint8_t> authorityKeyIdentifier;
     std::vector<uint8_t> notAfter;
+    std::vector<uint8_t> masterKey(kFakeKeyAgreementKey, kFakeKeyAgreementKey +
+    sizeof(kFakeKeyAgreementKey)/sizeof(kFakeKeyAgreementKey[0]));
 
     /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
     /* Get X509 certificate instance for the root certificate.*/
@@ -467,6 +471,7 @@ ErrorCode JavacardKeymaster4Device::provision(const hidl_vec<KeyParameter>& keyP
     array.add(subject);
     array.add(notAfter);
     array.add(authorityKeyIdentifier);
+    array.add(masterKey);
     std::vector<uint8_t> cborData = array.encode();
 
     if(ErrorCode::OK != (errorCode = constructApduMessage(ins, cborData, apdu)))
