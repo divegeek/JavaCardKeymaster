@@ -13,11 +13,10 @@ public class KMCipherImpl extends KMCipher{
   private Cipher cipher;
   private javax.crypto.Cipher sunCipher;
   private short cipherAlg;
-  private short paddingAlg;
+  private short padding;
   private short mode;
   private boolean verificationFlag;
-  public static short aes_gcm_decrypt_final_data = 0x00;
-
+  private short blockMode;
   KMCipherImpl(Cipher c){
     cipher = c;
   }
@@ -27,8 +26,7 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i){
-    if(cipherAlg == KMCipher.CIPHER_RSA &&
-      (paddingAlg == KMCipher.PAD_PKCS1_OAEP_SHA256||paddingAlg == KMCipher.PAD_PKCS1_OAEP)){
+    if(cipherAlg == KMType.RSA && padding == KMType.RSA_OAEP){
       try {
         return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
       } catch (ShortBufferException e) {
@@ -41,17 +39,8 @@ public class KMCipherImpl extends KMCipher{
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    }else if(cipherAlg == KMCipher.ALG_AES_GCM){
+    }else if(cipherAlg == KMType.AES && blockMode == KMType.GCM){
       try {
-        /*
-    	  if (mode == javax.crypto.Cipher.DECRYPT_MODE) {
-    	    short acutalLen = (short)sunCipher.getOutputSize(length);
-    	    aes_gcm_decrypt_final_data = KMByteBlob.instance(acutalLen);
-    	    return (short)sunCipher.doFinal(buffer,startOff,length,
-    	    		KMByteBlob.cast(aes_gcm_decrypt_final_data).getBuffer(),
-    	    		KMByteBlob.cast(aes_gcm_decrypt_final_data).getStartOff());
-    	  }
-      */
         return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
       } catch (AEADBadTagException e) {
         e.printStackTrace();
@@ -65,7 +54,7 @@ public class KMCipherImpl extends KMCipher{
       } catch (BadPaddingException e) {
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    } else if(cipherAlg == KMCipher.ALG_AES_CTR){
+    } else if(cipherAlg == KMType.AES && blockMode == KMType.CTR){
       try {
         return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
       } catch (ShortBufferException e) {
@@ -78,11 +67,10 @@ public class KMCipherImpl extends KMCipher{
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    }
-    else{
+    } else{
       short len = cipher.doFinal(buffer, startOff, length, scratchPad, i);
       // JCard Sim removes leading zeros during decryption in case of no padding - we add that back.
-      if (cipherAlg == Cipher.ALG_RSA_NOPAD && mode == Cipher.MODE_DECRYPT && len < 256) {
+      if (cipherAlg == KMType.RSA && padding == KMType.PADDING_NONE && mode == Cipher.MODE_DECRYPT && len < 256) {
         byte[] tempBuf = new byte[256];
         Util.arrayFillNonAtomic(tempBuf, (short) 0, (short) 256, (byte) 0);
         Util.arrayCopyNonAtomic(scratchPad, (short) 0, tempBuf, (short) (i + 256 - len), len);
@@ -106,13 +94,15 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i) {
-    short len = 0;
-    if(cipherAlg == KMCipher.ALG_AES_GCM || cipherAlg == KMCipher.ALG_AES_CTR){
+    if(cipherAlg == KMType.AES && (blockMode == KMType.GCM || blockMode == KMType.CTR)){
       try {
         return (short)sunCipher.update(buffer,startOff,length,scratchPad,i);
       } catch (ShortBufferException e) {
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      } catch (IllegalStateException e) {
+      	e.printStackTrace();
+      	CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
     } else{
       return cipher.update(buffer, startOff, length, scratchPad, i);
@@ -136,12 +126,22 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short getPaddingAlgorithm() {
-    return paddingAlg;
+    return padding;
   }
 
   @Override
   public void setPaddingAlgorithm(short alg) {
-    paddingAlg = alg;
+    padding = alg;
+  }
+
+  @Override
+  public void setBlockMode(short mode){
+    blockMode =  mode;
+  }
+
+  @Override
+  public short getBlockMode(){
+    return blockMode;
   }
 
   public short getMode() {

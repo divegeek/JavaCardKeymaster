@@ -41,6 +41,7 @@ import javacardx.crypto.Cipher;
  * creates its own RNG using PRNG.
  */
 public class KMSimulator implements KMSEProvider {
+
   public static final short AES_GCM_TAG_LENGTH = 12;
   public static final short AES_GCM_NONCE_LENGTH = 12;
   public static final short MAX_RND_NUM_SIZE = 64;
@@ -91,7 +92,6 @@ public class KMSimulator implements KMSEProvider {
     aesRngKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
   }
 
-  @Override
   public KeyPair createRsaKeyPair() {
     // By default 65537 is used as public exponent no need to set the public exponent. Now generate
     // 512 bit RSA keypair for the given exponent
@@ -99,7 +99,6 @@ public class KMSimulator implements KMSEProvider {
     return rsa512KeyPair;
   }
 
-  @Override
   public KeyPair createECKeyPair() {
     // Simulator does not support 256 bit keys.
     // Generate default 192 bit key pair supported by simulator.
@@ -107,7 +106,6 @@ public class KMSimulator implements KMSEProvider {
     return ec192KeyPair;
   }
 
-  @Override
   public AESKey createAESKey(short keysize) {
     // keysize is ignored as simulator only supports 128 bit aes key
     newRandomNumber(rndNum, (short) 0, (short) 16);
@@ -115,7 +113,6 @@ public class KMSimulator implements KMSEProvider {
     return aes128Key;
   }
 
-  @Override
   public AESKey createAESKey(byte[] buf, short startOff, short length) {
     if (length > 16) length = 16;
     else if(length < 16) return null;
@@ -123,7 +120,6 @@ public class KMSimulator implements KMSEProvider {
     return aes128Key;
   }
 
-  @Override
   public DESKey createTDESKey() {
     // only 128 bit keys are supported
     newRandomNumber(rndNum, (short) 0, (short) 21);
@@ -131,7 +127,6 @@ public class KMSimulator implements KMSEProvider {
     return triDesKey;
   }
 
-  @Override
   public HMACKey createHMACKey(short keysize) {
     // simulator only supports HMAC keys for SHA1 and SHA256 with block size 64.
     // So only 128 and 256 bit HMAC keys are supported.
@@ -154,6 +149,21 @@ public class KMSimulator implements KMSEProvider {
   @Override
   public short createSymmetricKey(byte alg, short keysize, byte[] buf, short startOff) {
     return 0;
+  }
+
+  @Override
+  public void createAsymmetricKey(byte alg, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength, short[] lengths) {
+
+  }
+
+  @Override
+  public boolean importSymmetricKey(byte alg, short keysize, byte[] buf, short startOff, short length) {
+    return false;
+  }
+
+  @Override
+  public boolean importAsymmetricKey(byte alg, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
+    return false;
   }
 
   @Override
@@ -182,7 +192,9 @@ public class KMSimulator implements KMSEProvider {
 
   @Override
   public short aesGCMEncrypt(
-      AESKey key,
+      byte[] aesKey,
+      short keyStart,
+      short keyLen,
       byte[] secret,
       short secretStart,
       short secretLen,
@@ -209,6 +221,7 @@ public class KMSimulator implements KMSEProvider {
     }
     byte[] aad = JCSystem.makeTransientByteArray(authDataLen, JCSystem.CLEAR_ON_RESET);
     Util.arrayCopyNonAtomic(authData, authDataStart, aad, (short) 0, authDataLen);
+    AESKey key = createAESKey(aesKey, keyStart, keyLen);
     try {
       aesGcmCipher.init(key, Cipher.MODE_ENCRYPT, nonce, nonceStart, nonceLen);
     } catch (CryptoException exp) {
@@ -247,8 +260,10 @@ public class KMSimulator implements KMSEProvider {
   }
 
   public boolean aesGCMDecrypt(
-      AESKey key,
-      byte[] encSecret,
+    byte[] aesKey,
+    short keyStart,
+    short keyLen,
+    byte[] encSecret,
       short encSecretStart,
       short encSecretLen,
       byte[] secret,
@@ -273,6 +288,7 @@ public class KMSimulator implements KMSEProvider {
     byte[] tag = JCSystem.makeTransientByteArray(AES_GCM_TAG_LENGTH, JCSystem.CLEAR_ON_RESET);
     Util.arrayCopyNonAtomic(authTag, authTagStart, tag, (short) 0, authTagLen);
     boolean verification = false;
+    AESKey key = createAESKey(aesKey, keyStart, keyLen);
     try {
       aesGcmCipher.init(key, Cipher.MODE_DECRYPT, nonce, nonceStart, nonceLen);
       aesGcmCipher.updateAAD(aad, (short) 0, authDataLen);
@@ -309,11 +325,6 @@ public class KMSimulator implements KMSEProvider {
     return kdf.sign(bufIn, bufInStart, buffInLength, bufOut, bufStart);
   }
 
-  @Override
-  public ECPrivateKey createEcKey(byte[] privBuffer, short privOff, short privLength) {
-    return null;
-  }
-
   public ECPrivateKey createEcPrivateKey(byte[] pubBuffer, short pubOff, short pubLength,
                                          byte[] privBuffer, short privOff, short privLength) {
     // Simulator does not support NamedParameterSpec or 256 bit keys
@@ -327,7 +338,6 @@ public class KMSimulator implements KMSEProvider {
     return privKey;
   }
 
-  @Override
   public HMACKey createHMACKey(byte[] secretBuffer, short secretOff, short secretLength) {
     // simulator only supports HMAC keys for SHA1 and SHA256 with block size 64.
     // So only 128 and 256 bit HMAC keys are supported.
@@ -344,7 +354,6 @@ public class KMSimulator implements KMSEProvider {
     }
     return key;
   }
-  @Override
   public DESKey createTDESKey(byte[] secretBuffer, short secretOff, short secretLength) {
     // only 128 bit keys are supported
     if(secretLength < 128) return null;
@@ -352,12 +361,10 @@ public class KMSimulator implements KMSEProvider {
     return triDesKey;
   }
 
-  @Override
   public RSAPrivateKey createRsaKey(byte[] modBuffer, short modOff, short modLength, byte[] privBuffer, short privOff, short privLength) {
     return null;
   }
 
-  @Override
   public HMACKey cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength) {
     return null;
   }
@@ -367,12 +374,10 @@ public class KMSimulator implements KMSEProvider {
     return 0;
   }
 
-  @Override
   public short hmacSign(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
     return 0;
   }
 
-  @Override
   public boolean hmacVerify(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
     return false;
   }
@@ -388,114 +393,23 @@ public class KMSimulator implements KMSEProvider {
   }
 
   @Override
-  public short initSymmetricOperation(byte purpose, byte alg, byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart, short keyLength) {
+  public short rsaDecipherOAEP256(byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
     return 0;
   }
 
   @Override
-  public short initSymmetricOperation(byte purpose, byte alg, byte digest, byte[] keyBuf, short keyStart, short keyLength) {
+  public short rsaSignPKCS1256(byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
     return 0;
   }
 
   @Override
-  public short initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] modBuf, short modStart, short modLength) {
-    return 0;
-  }
-
-  @Override
-  public short initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest, byte[] privKeyBuf, short privKeyStart, short privKeyLength) {
-    return 0;
-  }
-
-  @Override
-  public short updateOperation(short opHandle, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
-    return 0;
-  }
-
-  @Override
-  public short finishOperation(short opHandle, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
-    return 0;
-  }
-
-  @Override
-  public void abortOperation(short opHandle) {
-
-  }
-
-  @Override
-  public short hmacInit(byte[] keyBuf, short keyStart, short keyLength, byte digest, byte mode) {
-    return 0;
-  }
-
-  @Override
-  public short hmacSign(short opHandle, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
-    return 0;
-  }
-
-  @Override
-  public boolean hmacVerify(short opHandle, byte[] keyBuf, short keyStart, short keyLength, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
-    return false;
-  }
-
-  @Override
-  public short hmacUpdate(short opHandle, byte[] dataBuf, short dataStart, short dataLength) {
-    return 0;
-  }
-
-  @Override
-  public KMCipher createRsaDecipher(short padding, byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength) {
+  public KMOperation initSymmetricOperation(byte purpose, byte alg, byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart, short keyLength, byte[] ivBuf, short ivStart, short ivLength, short macLength) {
     return null;
   }
 
   @Override
-  public Signature createRsaSigner(short msgDigestAlg, short padding, byte[] secret, short secretStart, short secretLength, byte[] modBuffer, short modOff, short modLength) {
+  public KMOperation initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
     return null;
-  }
-
-  @Override
-  public Signature createEcSigner(short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
-    return null;
-  }
-
-  @Override
-  public KMCipher createSymmetricCipher(short cipherAlg, short padding, short mode, byte[] secret, short secretStart, short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
-    return null;
-  }
-
-  @Override
-  public KMCipher createSymmetricCipher(short cipherAlg, short mode, short padding, byte[] secret, short secretStart, short secretLength) {
-    return null;
-  }
-
-  @Override
-  public Signature createHmacSignerVerifier(short purpose, short msgDigestAlg, byte[] secret, short secretStart, short secretLength) {
-    return null;
-  }
-
-  @Override
-  public KMCipher createAesGcmCipher(short mode, short tagLen, byte[] secret, short secretStart, short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
-    return null;
-  }
-
-  @Override
-  public void delete(KMCipher cipher) {
-
-  }
-
-
-  @Override
-  public void delete(Signature signature) {
-
-  }
-
-  @Override
-  public void delete(Key key) {
-
-  }
-
-  @Override
-  public void delete(KeyPair keyPair) {
-
   }
 
   public RSAPrivateKey createRsaPrivateKey(byte[] modBuffer, short modOff, short modLength, byte[] privBuffer, short privOff, short privLength) {
@@ -576,24 +490,6 @@ public class KMSimulator implements KMSEProvider {
         break;
       }
     }
-  }
-  @Override
-  public void bypassAesGcm(){
-    jcardSim = true;
-  }
-
-  @Override
-  public KMCipher createRsaCipher(short padding, byte[] modBuffer, short modOff, short modLength) {
-    return null;
-  }
-
-  @Override
-  public Signature createRsaVerifier(short msgDigestAlg, short padding, byte[] modBuffer, short modOff, short modLength) {
-    return null;
-  }
-  @Override
-  public Signature createEcVerifier(short msgDigestAlg, byte[] pubKey, short pubKeyStart, short pubKeyLength) {
-    return null;
   }
 
   @Override

@@ -28,7 +28,7 @@ public class KMRepository {
   public static final short MAX_BLOB_STORAGE = 32;
   public static final short AES_GCM_AUTH_TAG_LENGTH = 12;
   public static final short MASTER_KEY_SIZE = 16;
-  public static final short SHARED_SECRET_KEY_SIZE = 16;
+  public static final short SHARED_SECRET_KEY_SIZE = 32;
   public static final short HMAC_SEED_NONCE_SIZE = 32;
   public static final short MAX_OPS = 4;
   public static final short COMPUTED_HMAC_KEY_SIZE = 32;
@@ -80,6 +80,7 @@ public class KMRepository {
 
   // Operation State Table
   private Object[] operationStateTable;
+  private static short opIdCounter;
 
   // boot parameters
   //TODO change the following into private
@@ -138,8 +139,9 @@ public class KMRepository {
     operationStateTable = new Object[MAX_OPS];
     index = 0;
     while(index < MAX_OPS){
-      operationStateTable[index] = new KMOperationState();
-      ((KMOperationState)operationStateTable[index]).reset();
+      operationStateTable[index] = new Object[]{new byte[2],
+        new Object[] {new byte[KMOperationState.MAX_DATA],
+        new Object[KMOperationState.MAX_REFS]}};
       index++;
     }
     deviceLockedFlag = false;
@@ -163,19 +165,94 @@ public class KMRepository {
     repository = this;
   }
 
+  public KMOperationState findOperation(short opHandle) {
+    short index = 0;
+    byte[] opId;
+    while(index < MAX_OPS){
+      opId = ((byte[])((Object[])operationStateTable[index])[0]);
+      if(Util.getShort(opId,(short)0) == opHandle)return KMOperationState.read((Object[])((Object[])operationStateTable[index])[1]);
+      index++;
+    }
+    return null;
+  }
+
   public KMOperationState reserveOperation(){
     short index = 0;
+    byte[] opId;
     while(index < MAX_OPS){
-      if(!((KMOperationState)operationStateTable[index]).isActive()){
-        ((KMOperationState)operationStateTable[index]).activate();
-        return (KMOperationState)operationStateTable[index];
+      opId = (byte[])((Object[])operationStateTable[index])[0];
+      if(Util.getShort(opId,(short)0) == 0){
+        //Util.setShort(opId, (short)0,getOpId());
+        return KMOperationState.instance(/*Util.getShort(opId,(short)0)*/getOpId(),(Object[])((Object[])operationStateTable[index])[1]);
       }
       index++;
     }
     return null;
   }
+
+  public void persistOperation(byte[] data, short opHandle, KMOperation op, KMOperation hmacSigner) {
+  	short index = 0;
+    byte[] opId;
+    //Update an existing operation state.
+    while(index < MAX_OPS){
+    	opId = (byte[])((Object[])operationStateTable[index])[0];
+    	if(Util.getShort(opId,(short)0) == opHandle){
+    		Object[] slot = (Object[])((Object[])operationStateTable[index])[1];
+      	JCSystem.beginTransaction();
+        Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length);
+        Object[] ops = ((Object[]) slot[1]);
+        ops[0] = op;
+        ops[1] = hmacSigner;
+        JCSystem.commitTransaction();
+        return;
+    	}
+    	index++;
+    }
+    index = 0;
+    //Persist a new operation.
+  	while(index < MAX_OPS){
+      opId = (byte[])((Object[])operationStateTable[index])[0];
+      if(Util.getShort(opId,(short)0) == 0){
+      	Util.setShort(opId, (short)0, opHandle);
+      	Object[] slot = (Object[])((Object[])operationStateTable[index])[1];
+      	JCSystem.beginTransaction();
+        Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length);
+        Object[] ops = ((Object[]) slot[1]);
+        ops[0] = op;
+        ops[1] = hmacSigner;
+        JCSystem.commitTransaction();
+      	break;
+      }
+      index++;
+    }
+  }
+
+  private short getOpId() {
+    byte index = 0;
+    opIdCounter++;
+    while (index < MAX_OPS) {
+      if (Util.getShort((byte[]) ((Object[]) operationStateTable[index])[0], (short) 0)
+          == opIdCounter) {
+        opIdCounter++;
+        index = 0;
+        continue;
+      }
+      index++;
+    }
+    return opIdCounter;
+  }
   public void releaseOperation(KMOperationState op){
-    op.reset();
+    short index = 0;
+    byte[] var;
+    while(index < MAX_OPS){
+      var = ((byte[])((Object[])operationStateTable[index])[0]);
+      if(Util.getShort(var,(short)0) == op.handle()){
+        Util.arrayFillNonAtomic(var,(short)0,(short)var.length,(byte)0);
+        op.release();
+        break;
+      }
+      index++;
+    }
   }
   public void initMasterKey(byte[] key, short len) {
     if (masterKey == null) {
@@ -185,12 +262,12 @@ public class KMRepository {
     }
   }
 
-  public void initHmacSharedSecretKey(byte[] key, short len) {
+  public void initHmacSharedSecretKey(byte[] key, short start, short len) {
     if (sharedKey == null) {
       sharedKey = new byte[SHARED_SECRET_KEY_SIZE];
     }
     if(len != SHARED_SECRET_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    Util.arrayCopy(key, (short) 0, sharedKey, (short) 0, len);
+    Util.arrayCopy(key, start, sharedKey, (short) 0, len);
   }
 
 
@@ -209,7 +286,7 @@ public class KMRepository {
     if (len != HMAC_SEED_NONCE_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
-    Util.arrayCopy(nonce, (short) 0, hmacNonce, (short) 0, len);
+    Util.arrayCopy(nonce, offset, hmacNonce, (short) 0, len);
   }
   /* TODO according to hal specs seed should always be empty.
       Confirm this before removing the code as it is also specified that keymasterdevice with storage
@@ -295,10 +372,7 @@ public class KMRepository {
 
   public boolean validateAuthTag(short authTag) {
     KMAuthTag tag = findTag(authTag);
-    if(tag != null){
-      return true;
-    }
-    return false;
+    return tag != null;
   }
 
   public void removeAuthTag(short authTag) {
@@ -320,9 +394,9 @@ public class KMRepository {
 
   public void removeAllAuthTags() {
     JCSystem.beginTransaction();
-    KMAuthTag tag = null;
+    KMAuthTag tag;
     short index = 0;
-    short i = 0;
+    short i;
     while (index < MAX_BLOB_STORAGE) {
       tag = (KMAuthTag) authTagRepo[index];
       tag.reserved = false;
@@ -340,7 +414,7 @@ public class KMRepository {
 
   public KMAuthTag findTag(short authTag) {
     short index = 0;
-    short found = 0;
+    short found;
     while (index < MAX_BLOB_STORAGE) {
       if (((KMAuthTag) authTagRepo[index]).reserved) {
         found =
@@ -376,17 +450,6 @@ public class KMRepository {
     JCSystem.commitTransaction();
   }
 
-  public KMOperationState findOperation(short opHandle) {
-    short index = 0;
-    while(index < MAX_OPS){
-      if(((KMOperationState)operationStateTable[index]).isActive() &&
-        ((KMOperationState)operationStateTable[index]).handle() == opHandle){
-        return (KMOperationState)operationStateTable[index];
-      }
-      index++;
-    }
-    return null;
-  }
 
   public void persistAttestationKey(short mod, short exp) {
     JCSystem.beginTransaction();

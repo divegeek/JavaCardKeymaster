@@ -750,10 +750,12 @@ public class KMX509Certificate {
     if (start > stackPtr) KMException.throwIt(KMError.UNKNOWN_ERROR);
   }
 
-  public static short sign(Signature signer) {
-    short ret = signer.sign(stack,tbsOffset,tbsLength,stack,signatureOffset);
+  public static short sign(KMSEProvider seProv, byte[] privBuf, short privStart, short privLength,
+                           byte[] modBuf, short modStart, short modLength) {
+    //short ret = signer.sign(stack,tbsOffset,tbsLength,stack,signatureOffset);
     //print(getBuffer(),getCertStart(),getCertLength());
-    return ret;
+    return seProv.rsaSignPKCS1256(privBuf,privStart,privLength,modBuf,modStart,modLength,
+      stack,tbsOffset,tbsLength,stack,signatureOffset);
   }
   public static short getCertStart(){
     return certStart;
