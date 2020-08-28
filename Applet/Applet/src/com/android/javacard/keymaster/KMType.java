@@ -16,8 +16,30 @@
 
 package com.android.javacard.keymaster;
 
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+import javacard.framework.Util;
+
 public abstract class KMType {
-  public static final short TAG_TYPE_MASK = (short) 0xF000;
+  public static final short INVALID_VALUE = (short)0x8000;
+  protected static final byte TLV_HEADER_SIZE = 3;
+
+  //Event Type
+  public static final byte BOOT_EVENT = 0;
+  
+  // Types
+  public static final byte BYTE_BLOB_TYPE = 0x01;
+  public static final byte INTEGER_TYPE = 0x02;
+  public static final byte ENUM_TYPE = 0x03;
+  public static final byte TAG_TYPE = 0x04;
+  public static final byte ARRAY_TYPE = 0x05;
+  public static final byte KEY_PARAM_TYPE = 0x06;
+  public static final byte KEY_CHAR_TYPE = 0x07;
+  public static final byte HW_AUTH_TOKEN_TYPE = 0x08;
+  public static final byte VERIFICATION_TOKEN_TYPE = 0x09;
+  public static final byte HMAC_SHARING_PARAM_TYPE = 0x0A;
+  public static final byte X509_CERT = 0x0B;
+  // Tag Types
   public static final short INVALID_TAG = 0x0000;
   public static final short ENUM_TAG = 0x1000;
   public static final short ENUM_ARRAY_TAG = 0x2000;
@@ -29,6 +51,7 @@ public abstract class KMType {
   public static final short BIGNUM_TAG = (short) 0x8000;
   public static final short BYTES_TAG = (short) 0x9000;
   public static final short ULONG_ARRAY_TAG = (short) 0xA000;
+  public static final short TAG_TYPE_MASK = (short) 0xF000;
 
   // Enum Tag
   // Algorithm Enum Tag key and values
@@ -56,6 +79,8 @@ public abstract class KMType {
   public static final byte USER_AUTH_NONE = 0x00;
   public static final byte PASSWORD = 0x01;
   public static final byte FINGERPRINT = 0x02;
+  public static final byte BOTH = 0x03;
+  // have to be power of 2
   public static final byte ANY = (byte) 0xFF;
 
   // Origin Enum Tag key and values.
@@ -88,21 +113,40 @@ public abstract class KMType {
   public static final byte PKCS8 = 0x01;
   public static final byte RAW = 0x03;
 
+  // Verified Boot State
+  public static final short VERIFIED_BOOT_STATE = (short) 0xF003;
+  public static final byte VERIFIED_BOOT = 0x00;
+  public static final byte SELF_SIGNED_BOOT = 0x01;
+  public static final byte UNVERIFIED_BOOT = 0x02;
+  public static final byte FAILED_BOOT = 0x03;
+
+  // Verified Boot Key
+  public static final short VERIFIED_BOOT_KEY = (short) 0xF004;
+
+  // Verified Boot Hash
+  public static final short VERIFIED_BOOT_HASH = (short) 0xF005;
+
+  // Device Locked
+  public static final short DEVICE_LOCKED = (short) 0xF006;
+  public static final byte DEVICE_LOCKED_TRUE = 0x01;
+  public static final byte DEVICE_LOCKED_FALSE = 0x00;
+
   // Enum Array Tag
   // Purpose
-  public static final short PURPOSE = 0x0002;
-  public static final byte ENCRYPT = 0x01;
-  public static final byte DECRYPT = 0x02;
-  public static final byte SIGN = 0x04;
-  public static final byte VERIFY = 0x05;
-  public static final byte WRAP_KEY = 0x06;
-  public static final byte ATTEST_KEY = (byte) 0x7F;
+  public static final short PURPOSE = 0x0001;
+  public static final byte ENCRYPT = 0x00;
+  public static final byte DECRYPT = 0x01;
+  public static final byte SIGN = 0x02;
+  public static final byte VERIFY = 0x03;
+  public static final byte WRAP_KEY = 0x05;
+  public static final byte ATTEST_KEY = (byte) 0x7F; /* TODO This is not present in types.hal */
 
   // Block mode
   public static final short BLOCK_MODE = 0x0004;
   public static final byte ECB = 0x01;
   public static final byte CBC = 0x02;
-  public static final byte CTR = 0x04;
+  public static final byte CTR = 0x03;
+  public static final byte GCM = 0x20;
 
   // Digest
   public static final short DIGEST = 0x0005;
@@ -156,7 +200,7 @@ public abstract class KMType {
   public static final short ACTIVE_DATETIME = 0x0190;
   public static final short ORIGINATION_EXPIRE_DATETIME = 0x0191;
   public static final short USAGE_EXPIRE_DATETIME = 0x0192;
-  public static final short CREATION_DATETIME = 0x0193;
+  public static final short CREATION_DATETIME = 0x02BD;//0x0193;
 
   // Integer Array Tags - ULONG_REP and UINT_REP.
   // User Secure Id
@@ -225,12 +269,29 @@ public abstract class KMType {
   public static final byte NO_VALUE = (byte) 0xff;
 
   protected static KMRepository repository;
+  protected static byte[] heap;
 
-  public static void initialize(KMRepository repo) {
-    KMType.repository = repo;
+  public static void initialize() {
+    KMType.repository = KMRepository.instance();
+    KMType.heap = repository.getHeap();
   }
 
-  public abstract void init();
+  public static byte getType(short ptr){return heap[ptr];}
+  public static short length(short ptr){return Util.getShort(heap, (short)(ptr+1));}
+  public static short getValue(short ptr){return Util.getShort(heap, (short)(ptr+TLV_HEADER_SIZE));}
 
-  public abstract short length();
+  protected static short instance(byte type, short length){
+    if (length < 0) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    short ptr = repository.alloc((short) (length + TLV_HEADER_SIZE));
+    heap[ptr] = type;
+    Util.setShort(heap, (short) (ptr + 1), length);
+    return ptr;
+  }
+
+  protected static short exp(byte type) {
+    short ptr = repository.alloc(TLV_HEADER_SIZE);
+    heap[ptr] = type;
+    Util.setShort(heap, (short) (ptr + 1), INVALID_VALUE);
+    return ptr;
+  }
 }

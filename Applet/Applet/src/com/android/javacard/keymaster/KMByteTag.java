@@ -18,8 +18,11 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMByteTag extends KMTag {
+  private static KMByteTag prototype;
+  private static short instPtr;
 
   private static final short[] tags = {
     APPLICATION_ID,
@@ -38,73 +41,73 @@ public class KMByteTag extends KMTag {
     ATTESTATION_ID_MODEL,
     ASSOCIATED_DATA,
     NONCE,
-    CONFIRMATION_TOKEN
+    CONFIRMATION_TOKEN,
+    VERIFIED_BOOT_KEY,
+    VERIFIED_BOOT_HASH
   };
 
-  private short key;
-  private KMByteBlob val;
+  private KMByteTag() {}
 
-  private KMByteTag() {
-    init();
+  private static KMByteTag proto(short ptr) {
+    if (prototype == null) prototype = new KMByteTag();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    key = 0;
-    val = null;
+  // pointer to an empty instance used as expression
+  public static short exp() {
+    short blobPtr = KMByteBlob.exp();
+    short ptr = instance(TAG_TYPE, (short)6);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), BYTES_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), INVALID_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), blobPtr);
+    return ptr;
   }
 
-  @Override
+  public static short instance(short key) {
+    if (!validateKey(key)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    return instance(key, KMByteBlob.exp());
+  }
+
+  public static short instance(short key, short byteBlob) {
+    if (!validateKey(key)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    if(heap[byteBlob] != BYTE_BLOB_TYPE) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short ptr = instance(TAG_TYPE, (short)6);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), BYTES_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), byteBlob);
+    return ptr;
+  }
+
+  public static KMByteTag cast(short ptr) {
+    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE)) != BYTES_TAG) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return proto(ptr);
+  }
+
   public short getKey() {
-    return key;
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
   }
 
-  @Override
-  public short length() {
-    return val.length();
-  }
-
-  @Override
   public short getTagType() {
     return KMType.BYTES_TAG;
   }
 
-  public static KMByteTag instance() {
-    return repository.newByteTag();
+  public short getValue() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
   }
 
-  public static KMByteTag instance(short key) {
-    if (!validateKey(key)) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    KMByteTag tag = repository.newByteTag();
-    tag.key = key;
-    tag.val = null;
-    return tag;
-  }
-
-  public static void create(KMByteTag[] byteTagRefTable) {
-    byte index = 0;
-    while (index < byteTagRefTable.length) {
-      byteTagRefTable[index] = new KMByteTag();
-      index++;
-    }
-  }
-
-  // create default assignBlob without any value
-  public static KMByteTag instance(short key, KMByteBlob array) {
-    if (!validateKey(key)) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    KMByteTag tag = repository.newByteTag();
-    tag.key = key;
-    tag.val = array;
-    return tag;
-  }
-
-  public KMByteTag withLength(short length) {
-    this.val.withLength(length);
-    return this;
+  public short length() {
+    short blobPtr = Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+    return KMByteBlob.cast(blobPtr).length();
   }
 
   private static boolean validateKey(short key) {
@@ -115,14 +118,5 @@ public class KMByteTag extends KMTag {
       }
     }
     return false;
-  }
-
-  public KMByteBlob getValue() {
-    return val;
-  }
-
-  public KMByteTag setValue(KMByteBlob val) {
-    this.val = val;
-    return this;
   }
 }

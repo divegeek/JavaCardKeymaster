@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMVerificationToken extends KMType {
   public static final byte CHALLENGE = 0x00;
@@ -25,71 +26,121 @@ public class KMVerificationToken extends KMType {
   public static final byte PARAMETERS_VERIFIED = 0x02;
   public static final byte SECURITY_LEVEL = 0x03;
   public static final byte MAC = 0x04;
-  private KMArray vals;
 
-  private KMVerificationToken() {
-    init();
+  private static KMVerificationToken prototype;
+  private static short instPtr;
+
+  private KMVerificationToken() {}
+
+  public static short exp() {
+    short arrPtr = KMArray.instance((short)5);
+    KMArray arr = KMArray.cast(arrPtr);
+    arr.add(CHALLENGE, KMInteger.exp());
+    arr.add(TIMESTAMP, KMInteger.exp());
+    //arr.add(PARAMETERS_VERIFIED, KMKeyParameters.exp());
+    arr.add(PARAMETERS_VERIFIED, KMByteBlob.exp());
+    arr.add(SECURITY_LEVEL, KMEnum.instance(KMType.HARDWARE_TYPE));
+    arr.add(MAC, KMByteBlob.exp());
+    return instance(arrPtr);
   }
 
-  @Override
-  public void init() {
-    vals = null;
+  private static KMVerificationToken proto(short ptr) {
+    if (prototype == null) prototype = new KMVerificationToken();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
+
+  public static short instance() {
+    short arrPtr = KMArray.instance((short)5);
+    KMArray arr = KMArray.cast(arrPtr);
+    arr.add(CHALLENGE, KMInteger.uint_16((short)0));
+    arr.add(TIMESTAMP, KMInteger.uint_16((short)0));
+    //arr.add(PARAMETERS_VERIFIED, KMKeyParameters.exp());
+    arr.add(PARAMETERS_VERIFIED, KMByteBlob.instance((short)0));
+    arr.add(SECURITY_LEVEL, KMEnum.instance(KMType.HARDWARE_TYPE, KMType.STRONGBOX));
+    arr.add(MAC, KMByteBlob.instance((short)0));
+    return instance(arrPtr);
+  }
+
+  public static short instance(short vals) {
+    KMArray arr = KMArray.cast(vals);
+    if(arr.length() != 5)ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    short ptr = KMType.instance(VERIFICATION_TOKEN_TYPE, (short)2);
+    Util.setShort(heap, (short)(ptr + TLV_HEADER_SIZE), vals);
+    return ptr;
+  }
+
+  public static KMVerificationToken cast(short ptr) {
+    if (heap[ptr] != VERIFICATION_TOKEN_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    short arrPtr = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
+    if(heap[arrPtr] != ARRAY_TYPE)  ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    return proto(ptr);
+  }
+
+  public short getVals() {
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+  }
+
   public short length() {
-    return vals.length();
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).length();
   }
 
-  public static void create(KMVerificationToken[] verTokenRefTable) {
-    byte index = 0;
-    while (index < verTokenRefTable.length) {
-      verTokenRefTable[index] = new KMVerificationToken();
-      index++;
-    }
+  public short getChallenge() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(CHALLENGE);
   }
 
-  public static KMVerificationToken instance() {
-    KMVerificationToken inst = repository.newVerificationToken();
-    inst.vals = KMArray.instance((short) 5);
-    inst.vals.add(CHALLENGE, KMInteger.instance());
-    inst.vals.add(TIMESTAMP, KMInteger.instance());
-    inst.vals.add(PARAMETERS_VERIFIED, KMKeyParameters.instance());
-    inst.vals.add(SECURITY_LEVEL, KMEnumTag.instance(KMType.HARDWARE_TYPE));
-    inst.vals.add(MAC, KMByteBlob.instance());
-    return inst;
+  public void setChallenge(short vals) {
+    KMInteger.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(CHALLENGE, vals);
   }
 
-  public static KMVerificationToken instance(KMArray vals) {
-    if (vals.length() != 5) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
-    KMVerificationToken inst = repository.newVerificationToken();
-    inst.vals = vals;
-    return inst;
+  public short getTimestamp() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(TIMESTAMP);
   }
 
-  public KMInteger getChallenge() {
-    return (KMInteger) vals.get(CHALLENGE);
+  public void setTimestamp(short vals) {
+    KMInteger.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(TIMESTAMP, vals);
   }
 
-  public KMInteger getTimestamp() {
-    return (KMInteger) vals.get(TIMESTAMP);
+  public short getMac() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(MAC);
   }
 
-  public KMKeyParameters getParametersVerified() {
-    return (KMKeyParameters) vals.get(PARAMETERS_VERIFIED);
+  public void setMac(short vals) {
+    KMByteBlob.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(MAC, vals);
   }
 
-  public byte getSecurityLevel() {
-    return ((KMEnumTag) vals.get(SECURITY_LEVEL)).getValue();
+  public short getParametersVerified() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(PARAMETERS_VERIFIED);
   }
 
-  public KMByteBlob getMac() {
-    return (KMByteBlob) vals.get(MAC);
+  public void setParametersVerified(short vals) {
+   // KMKeyParameters.cast(vals);
+    KMByteBlob.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(PARAMETERS_VERIFIED, vals);
   }
 
-  public KMArray getVals() {
-    return vals;
+  public short getSecurityLevel() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(SECURITY_LEVEL);
   }
+
+  public void setSecurityLevel(short vals) {
+    KMEnum.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(SECURITY_LEVEL, vals);
+  }
+
 }

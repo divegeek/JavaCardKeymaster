@@ -20,93 +20,93 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
-// Byte val represents contiguous memory buffer.
+// Byte blob represents contiguous memory buffer.
 public class KMByteBlob extends KMType {
-  private byte[] val;
-  private short startOff;
-  private short length;
+  private static KMByteBlob prototype;
+  private static short instPtr;
 
-  private KMByteBlob() {
-    init();
+  private KMByteBlob() {}
+
+  private static KMByteBlob proto(short ptr) {
+    if (prototype == null) prototype = new KMByteBlob();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    length = 0;
-    startOff = 0;
-    val = null;
+  // pointer to an empty instance used as expression
+  public static short exp() {
+    return KMType.exp(BYTE_BLOB_TYPE);
   }
 
-  @Override
-  public short length() {
-    return length;
+  // return an empty byte blob instance
+  public static short instance(short length) {
+    return KMType.instance(BYTE_BLOB_TYPE, length);
   }
 
-  public static KMByteBlob instance() {
-    return repository.newByteBlob();
+  // byte blob from existing buf
+  public static short instance(byte[] buf, short startOff, short length) {
+    short ptr = instance(length);
+    Util.arrayCopyNonAtomic(buf, startOff, heap, (short) (ptr + TLV_HEADER_SIZE), length);
+    return ptr;
   }
 
-  // copy the blob
-  public static KMByteBlob instance(byte[] blob, short startOff, short length) {
-    if ((length <= 0) || ((short)(startOff+length) > blob.length)) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+  // cast the ptr to KMByteBlob
+  public static KMByteBlob cast(short ptr) {
+    if (heap[ptr] != BYTE_BLOB_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (Util.getShort(heap, (short) (ptr + 1)) == INVALID_VALUE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    KMByteBlob inst = instance(length);
-    Util.arrayCopyNonAtomic(blob, startOff, inst.val, inst.startOff, inst.length);
-    return inst;
+    return proto(ptr);
   }
 
-  // returns empty blob with given length
-  public static KMByteBlob instance(short length) {
-    if (length <= 0) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
-    KMByteBlob inst = instance();
-    inst.startOff = repository.newByteArray(length);
-    inst.val = repository.getByteHeapRef();
-    inst.length = length;
-    return inst;
-  }
-
-  public static void create(KMByteBlob[] byteBlobRefTable) {
-    byte index = 0;
-    while (index < byteBlobRefTable.length) {
-      byteBlobRefTable[index] = new KMByteBlob();
-      index++;
-    }
-  }
-
-  // sets the expected length for prototype byte val.
-  public KMByteBlob withLength(short len) {
-    this.length = len;
-    return this;
-  }
-
+  // Add the byte
   public void add(short index, byte val) {
-    if (index >= this.length) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
-    if (this.val == null) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    this.val[(short) (startOff + index)] = val;
+    short len = length();
+    if (index >= len) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    heap[(short) (instPtr + TLV_HEADER_SIZE + index)] = val;
   }
 
+  // Get the byte
   public byte get(short index) {
-    if (index >= this.length) {
+    short len = length();
+    if (index >= len) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    return heap[(short) (instPtr + TLV_HEADER_SIZE + index)];
+  }
+
+  // Get the start of blob
+  public short getStartOff() {
+    return (short) (instPtr + TLV_HEADER_SIZE);
+  }
+
+  // Get the length of the blob
+  public short length() {
+    return Util.getShort(heap, (short) (instPtr + 1));
+  }
+
+  // Get the buffer pointer in which blob is contained.
+  public byte[] getBuffer() {
+    return heap;
+  }
+
+  public void getValue(byte[] destBuf, short destStart, short destLength){
+    Util.arrayCopyNonAtomic(heap, getStartOff(), destBuf, destStart, destLength);
+  }
+  public short getValues(byte[] destBuf, short destStart){
+    short destLength = length();
+    Util.arrayCopyNonAtomic(heap, getStartOff(), destBuf, destStart, destLength);
+    return destLength;
+  }
+
+  public void setValue(byte[] srcBuf, short srcStart, short srcLength){
+    if(length() > srcLength){
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    if (this.val == null) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), length());
+  }
+  public boolean isValid(){
+    if (length() == 0) {
+        return false;
     }
-    return this.val[(short) (startOff + index)];
-  }
-
-  public byte[] getVal() {
-    return val;
-  }
-
-  public short getStartOff() {
-    return startOff;
+    return true;
   }
 }

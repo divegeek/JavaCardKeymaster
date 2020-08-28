@@ -20,454 +20,510 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
-import javacard.security.AESKey;
-import javacard.security.KeyBuilder;
-
-// TODO cleanup, move most of the buffers to transient memory with "clear on deselect". Only
-//  exception may be OperationState - TBD. The initialize and reset functions will be refactored
-//  to handle onInstall and onSelect.
 
 public class KMRepository {
-  private static final byte REF_TABLE_SIZE = 5;
-  private static final short HEAP_SIZE = 0x1000;
-  private static final byte INT_TABLE_SIZE = 10;
-  private static final byte TYPE_ARRAY_SIZE = 100;
-  private static final byte INT_SIZE = 4;
-  private static final byte LONG_SIZE = 8;
+  //TODO make the sizes configurable
+  public static final short INVALID_VALUE = (short) 0x8000;
+  public static final short HEAP_SIZE = 10000;
+  public static final short MAX_BLOB_STORAGE = 32;
+  public static final short AES_GCM_AUTH_TAG_LENGTH = 12;
+  public static final short MASTER_KEY_SIZE = 16;
+  public static final short SHARED_SECRET_KEY_SIZE = 16;
+  public static final short HMAC_SEED_NONCE_SIZE = 32;
+  public static final short MAX_OPS = 4;
+  public static final short COMPUTED_HMAC_KEY_SIZE = 32;
+  public static final short ATT_ID_HEAP_SIZE = 160;
+  public static final short CERT_DATA_MEM_SIZE = 256;
+  // Key Attestation related constants
+  public static final byte ATT_ID_TABLE_SIZE = 8;
+  public static final byte ATT_ID_HEADER_SIZE = 3;
+  public static final short ATT_KEY_MOD_SIZE = 256;
+  public static final short ATT_KEY_EXP_SIZE = 256;
+  public static final byte ATT_ID_OFFSET = 0x02;
+  public static final byte ATT_ID_LENGTH = 0x01;
+  public static final byte ATT_ID_TAG = 0x00;
+  public static final byte ATT_ID_BRAND = 0x00;
+  public static final byte ATT_ID_DEVICE = 0x01;
+  public static final byte ATT_ID_PRODUCT = 0x02;
+  public static final byte ATT_ID_SERIAL = 0x03;
+  public static final byte ATT_ID_IMEI = 0x04;
+  public static final byte ATT_ID_MEID = 0x05;
+  public static final byte ATT_ID_MANUFACTURER = 0x06;
+  public static final byte ATT_ID_MODEL = 0x07;
+  final short[] attIdTags ={
+    KMType.ATTESTATION_ID_BRAND,
+    KMType.ATTESTATION_ID_DEVICE,
+    KMType.ATTESTATION_ID_PRODUCT,
+    KMType.ATTESTATION_ID_SERIAL,
+    KMType.ATTESTATION_ID_IMEI,
+    KMType.ATTESTATION_ID_MEID,
+    KMType.ATTESTATION_ID_MANUFACTURER,
+    KMType.ATTESTATION_ID_MODEL};
+  public byte[] attestCertIssuer;
+  public byte[] attestCertAuthKeyId;
+  // Boot params constants
+  public static final byte BOOT_KEY_MAX_SIZE = 32;
+  public static final byte BOOT_HASH_MAX_SIZE = 32;
+  // Repository attributes
   private static KMRepository repository;
-  private AESKey masterKey = null;
-  private KMEncoder encoder = null;
-  private KMDecoder decoder = null;
+  public boolean deviceUnlockPasswordOnly;
+  private byte[] masterKey;
+  private byte[] sharedKey;
+  private byte[] computedHmacKey;
+  private byte[] hmacNonce;
+  // Volatile memory heap
+  private byte[] heap;
+  private short heapIndex;
 
-  private KMByteBlob[] byteBlobRefTable = null;
-  private byte blobRefIndex = 0;
-  private KMInteger[] integerRefTable = null;
-  private byte intRefIndex = 0;
-  private KMArray[] arrayRefTable = null;
-  private byte arrayRefIndex = 0;
-  private KMVector[] vectorRefTable = null;
-  private byte vectorRefIndex = 0;
-  private KMEnum[] enumRefTable = null;
-  private byte enumRefIndex = 0;
-  private KMByteTag[] byteTagRefTable = null;
-  private byte byteTagRefIndex = 0;
-  private KMIntegerTag[] intTagRefTable = null;
-  private byte intTagRefIndex = 0;
-  private KMIntegerArrayTag[] intArrayTagRefTable = null;
-  private byte intArrayTagRefIndex = 0;
-  private KMEnumTag[] enumTagRefTable = null;
-  private byte enumTagRefIndex = 0;
-  private KMEnumArrayTag[] enumArrayTagRefTable = null;
-  private byte enumArrayTagRefIndex = 0;
-  private KMBoolTag[] boolTagRefTable = null;
-  private byte boolTagRefIndex = 0;
-  private KMKeyParameters[] keyParametersRefTable = null;
-  private byte keyParametersRefIndex = 0;
-  private KMKeyCharacteristics[] keyCharRefTable = null;
-  private byte keyCharRefIndex = 0;
-  private KMVerificationToken[] verTokenRefTable = null;
-  private byte verTokenRefIndex = 0;
-  private KMHmacSharingParameters[] hmacSharingParamsRefTable = null;
-  private byte hmacSharingParamsRefIndex = 0;
-  private KMHardwareAuthToken[] hwAuthTokenRefTable = null;
-  private byte hwAuthTokenRefIndex = 0;
-  private KMOperationState[] opStateRefTable = null;
-  private byte opStateRefIndex = 0;
-  private KMType[] typeRefTable = null;
-  private byte typeRefIndex = 0;
+  //Attesation Id Table;
+  private Object[] attIdTable;
 
-  private byte[] byteHeap = null;
-  private short byteHeapIndex = 0;
-  private Object[] uint32Array = null;
-  private byte uint32Index = 0;
-  private Object[] uint64Array = null;
-  private byte uint64Index = 0;
-  private KMOperationState[] operationStateTable = null;
-  private byte[] entropyPool = null;
-  private byte[] counter;
+  // Operation State Table
+  private Object[] operationStateTable;
+
+  // boot parameters
+  //TODO change the following into private
+  public Object[] authTagRepo;
+  public short keyBlobCount;
+  public byte[] osVersion;
+  public byte[] osPatch;
+  public byte[] verifiedBootKey;
+  public short actualBootKeyLength;
+  public byte[] verifiedBootHash;
+  public short actualBootHashLength;
+  public boolean verifiedBootFlag;
+  public boolean selfSignedBootFlag;
+  public boolean deviceLockedFlag;
+  public byte[] deviceLockedTimestamp;
+  // attestation
+  private byte[] attKeyModulus;
+  private byte[] attKeyExponent;
+  private byte[] attIdMem;
+  private short attIdMemIndex;
+  // attestation cert data
+  private byte[] certData;
+  private short issuer;
+  private short issuerLen;
+  private short certExpiryTime;
+  private short certExpiryTimeLen;
+  private short authKeyId;
+  private short authKeyIdLen;
+  private short certDataIndex;
+  private boolean attIdSupported;
 
   public static KMRepository instance() {
-    if (repository == null) {
-      repository = new KMRepository();
-    }
     return repository;
   }
 
-  public KMRepository(){
-    initialize();
+  public KMRepository() {
+    heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
+    heapIndex = 0;
+    attIdMem = new byte[ATT_ID_HEAP_SIZE];
+    attIdMemIndex = 0;
+
+    authTagRepo = new Object[MAX_BLOB_STORAGE];
+    short index = 0;
+    while (index < MAX_BLOB_STORAGE) {
+      authTagRepo[index] = new KMAuthTag();
+      ((KMAuthTag) authTagRepo[index]).reserved = false;
+      ((KMAuthTag) authTagRepo[index]).authTag = new byte[AES_GCM_AUTH_TAG_LENGTH];
+      ((KMAuthTag) authTagRepo[index]).usageCount = 0;
+      index++;
+    }
+
+    osVersion = new byte[4];
+    osPatch = new byte[4];
+    verifiedBootKey = new byte[BOOT_KEY_MAX_SIZE];
+    verifiedBootHash = new byte[BOOT_HASH_MAX_SIZE];
+    operationStateTable = new Object[MAX_OPS];
+    index = 0;
+    while(index < MAX_OPS){
+      operationStateTable[index] = new KMOperationState();
+      ((KMOperationState)operationStateTable[index]).reset();
+      index++;
+    }
+    deviceLockedFlag = false;
+    deviceLockedTimestamp = new byte[8];
+    deviceUnlockPasswordOnly = false;
+    Util.arrayFillNonAtomic(deviceLockedTimestamp,(short)0,(short)8,(byte)0);
+
+    attKeyModulus = new byte[ATT_KEY_MOD_SIZE];
+    attKeyExponent = new byte[ATT_KEY_EXP_SIZE];
+    attIdTable = new Object[ATT_ID_TABLE_SIZE];
+    attIdSupported = false;
+    index = 0;
+    while(index < ATT_ID_TABLE_SIZE){
+      attIdTable[index] = new short[ATT_ID_HEADER_SIZE];
+      ((short[])attIdTable[index])[ATT_ID_TAG] = attIdTags[index];
+      ((short[])attIdTable[index])[ATT_ID_LENGTH] = 0;
+      index++;
+    }
+    certData = new byte[CERT_DATA_MEM_SIZE];
+    certDataIndex = 0;
+    repository = this;
   }
 
-  private void initialize() {
-    // Initialize buffers and context.
-    JCSystem.beginTransaction();
-    encoder = new KMEncoder();
-    decoder = new KMDecoder();
-    operationStateTable = new KMOperationState[4];
-    // Initialize masterkey - AES 256 bit key.
+  public KMOperationState reserveOperation(){
+    short index = 0;
+    while(index < MAX_OPS){
+      if(!((KMOperationState)operationStateTable[index]).isActive()){
+        ((KMOperationState)operationStateTable[index]).activate();
+        return (KMOperationState)operationStateTable[index];
+      }
+      index++;
+    }
+    return null;
+  }
+  public void releaseOperation(KMOperationState op){
+    op.reset();
+  }
+  public void initMasterKey(byte[] key, short len) {
     if (masterKey == null) {
-      masterKey =
-          (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
+      masterKey = new byte[MASTER_KEY_SIZE];
+      if(len != MASTER_KEY_SIZE) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+      Util.arrayCopy(key, (short) 0, masterKey, (short) 0, len);
     }
-    // Initialize types
-    KMType.initialize(this);
-    byteBlobRefTable = new KMByteBlob[(short)(REF_TABLE_SIZE*4)];
-    KMByteBlob.create(byteBlobRefTable);
-    integerRefTable = new KMInteger[REF_TABLE_SIZE];
-    KMInteger.create(integerRefTable);
-    arrayRefTable = new KMArray[(short)(REF_TABLE_SIZE*4)];
-    KMArray.create(arrayRefTable);
-    vectorRefTable = new KMVector[REF_TABLE_SIZE];
-    KMVector.create(vectorRefTable);
-    enumRefTable = new KMEnum[(short)(REF_TABLE_SIZE*2)];
-    KMEnum.create(enumRefTable);
-    byteTagRefTable = new KMByteTag[REF_TABLE_SIZE];
-    KMByteTag.create(byteTagRefTable);
-    intTagRefTable = new KMIntegerTag[REF_TABLE_SIZE];
-    KMIntegerTag.create(intTagRefTable);
-    intArrayTagRefTable = new KMIntegerArrayTag[REF_TABLE_SIZE];
-    KMIntegerArrayTag.create(intArrayTagRefTable);
-    enumTagRefTable = new KMEnumTag[REF_TABLE_SIZE];
-    KMEnumTag.create(enumTagRefTable);
-    enumArrayTagRefTable = new KMEnumArrayTag[REF_TABLE_SIZE];
-    KMEnumArrayTag.create(enumArrayTagRefTable);
-    boolTagRefTable = new KMBoolTag[REF_TABLE_SIZE];
-    KMBoolTag.create(boolTagRefTable);
-    keyParametersRefTable = new KMKeyParameters[REF_TABLE_SIZE];
-    KMKeyParameters.create(keyParametersRefTable);
-    keyCharRefTable = new KMKeyCharacteristics[REF_TABLE_SIZE];
-    KMKeyCharacteristics.create(keyCharRefTable);
-    verTokenRefTable = new KMVerificationToken[REF_TABLE_SIZE];
-    KMVerificationToken.create(verTokenRefTable);
-    hmacSharingParamsRefTable = new KMHmacSharingParameters[REF_TABLE_SIZE];
-    KMHmacSharingParameters.create(hmacSharingParamsRefTable);
-    hwAuthTokenRefTable = new KMHardwareAuthToken[REF_TABLE_SIZE];
-    KMHardwareAuthToken.create(hwAuthTokenRefTable);
-    opStateRefTable = new KMOperationState[REF_TABLE_SIZE];
-    KMOperationState.create(opStateRefTable);
+  }
 
-    byteHeap = new byte[HEAP_SIZE];
-    uint32Array = new Object[INT_TABLE_SIZE];
-    uint64Array = new Object[INT_TABLE_SIZE];
-    typeRefTable = new KMType[TYPE_ARRAY_SIZE];
-
-    short index = 0;
-    while (index < INT_TABLE_SIZE) {
-      uint32Array[index] = new byte[INT_SIZE];
-      uint64Array[index] = new byte[LONG_SIZE];
-      index++;
+  public void initHmacSharedSecretKey(byte[] key, short len) {
+    if (sharedKey == null) {
+      sharedKey = new byte[SHARED_SECRET_KEY_SIZE];
     }
-
-    JCSystem.commitTransaction();
+    if(len != SHARED_SECRET_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    Util.arrayCopy(key, (short) 0, sharedKey, (short) 0, len);
   }
 
-  public KMEncoder getEncoder() {
-    return encoder;
+
+  public void initComputedHmac(byte[] key, short start, short len) {
+    if (computedHmacKey == null) {
+      computedHmacKey = new byte[COMPUTED_HMAC_KEY_SIZE];
+    }
+    if(len != COMPUTED_HMAC_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    Util.arrayCopy(key, (short) 0, computedHmacKey, start, len);
   }
 
-  public KMDecoder getDecoder() {
-    return decoder;
+  public void initHmacNonce(byte[] nonce, short offset, short len) {
+    if (hmacNonce == null) {
+      hmacNonce = new byte[HMAC_SEED_NONCE_SIZE];
+    }
+    if (len != HMAC_SEED_NONCE_SIZE) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    Util.arrayCopy(nonce, (short) 0, hmacNonce, (short) 0, len);
   }
-
+  /* TODO according to hal specs seed should always be empty.
+      Confirm this before removing the code as it is also specified that keymasterdevice with storage
+      must store and return the seed.
+  public void initHmacSeed(byte[] seed, short len) {
+    if (hmacSeed == null) {
+      hmacSeed = new byte[HMAC_SEED_NONCE_SIZE];
+    }
+    if(len != HMAC_SEED_NONCE_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    Util.arrayCopy(seed, (short) 0, hmacSeed, (short) 0, len);
+  }
+*/
   public void onUninstall() {
-    masterKey = null;
+    // TODO change this
+    Util.arrayFillNonAtomic(masterKey, (short) 0, (short) masterKey.length, (byte) 0);
   }
 
-  public void onProcess() {
-    reset();
+  public void onProcess() {}
+
+  public void clean() {
+    Util.arrayFillNonAtomic(heap, (short) 0, heapIndex, (byte) 0);
+    heapIndex = 0;
   }
 
-  private void reset() {
-    Util.arrayFillNonAtomic(byteHeap, (short) 0, (short) byteHeap.length, (byte) 0);
-    byteHeapIndex = 0;
-    short index = 0;
-    while (index < typeRefTable.length) {
-      typeRefTable[index] = null;
-      index++;
-    }
-    typeRefIndex = 0;
-    index = 0;
-    while (index < uint32Array.length) {
-      byte[] num = (byte[]) uint32Array[index];
-      byte numIndex = 0;
-      while (numIndex < INT_SIZE) {
-        num[numIndex] = 0;
-        numIndex++;
-      }
-      index++;
-    }
-    uint32Index = 0;
-    index = 0;
-    while (index < uint64Array.length) {
-      byte[] num = (byte[]) uint64Array[index];
-      byte numIndex = 0;
-      while (numIndex < LONG_SIZE) {
-        num[numIndex] = 0;
-        numIndex++;
-      }
-      index++;
-    }
-    uint64Index = 0;
-    resetTypeObjects(byteBlobRefTable);
-    resetTypeObjects(integerRefTable);
-    resetTypeObjects(enumRefTable);
-    resetTypeObjects(byteTagRefTable);
-    resetTypeObjects(boolTagRefTable);
-    resetTypeObjects(arrayRefTable);
-    resetTypeObjects(enumTagRefTable);
-    resetTypeObjects(enumArrayTagRefTable);
-    resetTypeObjects(intTagRefTable);
-    resetTypeObjects(intArrayTagRefTable);
-    resetTypeObjects(vectorRefTable);
-    resetTypeObjects(keyCharRefTable);
-    resetTypeObjects(keyParametersRefTable);
-    resetTypeObjects(hmacSharingParamsRefTable);
-    resetTypeObjects(hwAuthTokenRefTable);
-    resetTypeObjects(verTokenRefTable);
-  }
+  public void onDeselect() {}
 
-  public void resetTypeObjects(KMType[] type){
-    byte index = 0;
-    while(index < type.length){
-      type[index].init();
-      index++;
-    }
-  }
-  public void onDeselect() {
-    // TODO clear operation state?
-  }
+  public void onSelect() {}
 
-  public void onSelect() {
-    // Nothing to be done currently.
-  }
-
-  public AESKey getMasterKey() {
+  public byte[] getMasterKeySecret() {
     return masterKey;
   }
 
-  // Allocate 4 bytes or 8 bytes buffer
-  public byte[] newIntegerArray(short length) {
-    if (length == 4) {
-      if (uint32Index >= uint32Array.length) {
-        // TODO this is placeholder exception value. This needs to be replaced by 910E, 91A1 or 9210
-        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+  public short alloc(short length) {
+    if (((short) (heapIndex + length)) > heap.length) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    heapIndex += length;
+    return (short) (heapIndex - length);
+  }
+
+  public byte[] getHeap() {
+    return heap;
+  }
+
+  public byte[] getSharedKey() {
+    return sharedKey;
+  }
+
+  public byte[] getHmacNonce() {
+    return hmacNonce;
+  }
+
+  public void setHmacNonce(byte[] hmacNonce) {
+    Util.arrayCopy(hmacNonce, (short) 0, this.hmacNonce, (short) 0, HMAC_SEED_NONCE_SIZE);
+  }
+  public byte[] getComputedHmacKey() {
+    return computedHmacKey;
+  }
+
+  public void setComputedHmacKey(byte[] computedHmacKey) {
+    Util.arrayCopy( computedHmacKey, (short) 0, this.computedHmacKey, (short) 0, COMPUTED_HMAC_KEY_SIZE);
+  }
+
+  public void persistAuthTag(short authTag) {
+    short index = 0;
+    while (index < MAX_BLOB_STORAGE) {
+      if (!((KMAuthTag) authTagRepo[index]).reserved) {
+        JCSystem.beginTransaction();
+        ((KMAuthTag) authTagRepo[index]).reserved = true;
+        Util.arrayCopy(
+            KMByteBlob.cast(authTag).getBuffer(),
+            KMByteBlob.cast(authTag).getStartOff(),
+            ((KMAuthTag) authTagRepo[index]).authTag ,
+            (short) 0,
+            AES_GCM_AUTH_TAG_LENGTH);
+        keyBlobCount++;
+        JCSystem.commitTransaction();
+        break;
       }
-      byte[] ret = (byte[]) uint32Array[uint32Index];
-      uint32Index++;
-      return ret;
-    } else if (length == 8) {
-      if (uint64Index >= uint64Array.length) {
-        // TODO this is placeholder exception value. This needs to be replaced by 910E, 91A1 or 9210
-        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      index++;
+    }
+  }
+
+  public boolean validateAuthTag(short authTag) {
+    KMAuthTag tag = findTag(authTag);
+    if(tag != null){
+      return true;
+    }
+    return false;
+  }
+
+  public void removeAuthTag(short authTag) {
+    KMAuthTag tag = findTag(authTag);
+    if(tag == null){
+      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+    }
+    JCSystem.beginTransaction();
+    tag.reserved = false;
+    short index = 0;
+    while(index < AES_GCM_AUTH_TAG_LENGTH){
+      tag.authTag[index] = 0;
+      index++;
+    }
+    tag.usageCount = 0;
+    keyBlobCount--;
+    JCSystem.commitTransaction();
+  }
+
+  public void removeAllAuthTags() {
+    JCSystem.beginTransaction();
+    KMAuthTag tag = null;
+    short index = 0;
+    short i = 0;
+    while (index < MAX_BLOB_STORAGE) {
+      tag = (KMAuthTag) authTagRepo[index];
+      tag.reserved = false;
+      i = 0;
+      while(i < AES_GCM_AUTH_TAG_LENGTH){
+        tag.authTag[i] = 0;
+        i++;
       }
-      byte[] ret = (byte[]) uint64Array[uint64Index];
-      uint64Index++;
-      return ret;
-    } else {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+      tag.usageCount = 0;
+      index++;
     }
-    return null;// this will never be executed.
+    keyBlobCount = 0;
+    JCSystem.commitTransaction();
   }
 
-  public KMByteBlob newByteBlob() {
-    if (blobRefIndex >= byteBlobRefTable.length) {
-      // TODO this is placeholder exception value.
+  public KMAuthTag findTag(short authTag) {
+    short index = 0;
+    short found = 0;
+    while (index < MAX_BLOB_STORAGE) {
+      if (((KMAuthTag) authTagRepo[index]).reserved) {
+        found =
+            Util.arrayCompare(
+                ((KMAuthTag) authTagRepo[index]).authTag,
+                (short) 0,
+                KMByteBlob.cast(authTag).getBuffer(),
+                KMByteBlob.cast(authTag).getStartOff(),
+                AES_GCM_AUTH_TAG_LENGTH);
+        if (found == 0) {
+          return (KMAuthTag) authTagRepo[index];
+        }
+      }
+      index++;
+    }
+    return null;
+  }
+
+  public short getRateLimitedKeyCount(short authTag) {
+    KMAuthTag tag = findTag(authTag);
+    if (tag != null) {
+      return tag.usageCount;
+    }
+    return KMType.INVALID_VALUE;
+  }
+
+  public void setRateLimitedKeyCount(short authTag, short val) {
+    KMAuthTag tag = findTag(authTag);
+    JCSystem.beginTransaction();
+    if (tag != null) {
+      tag.usageCount = val;
+    }
+    JCSystem.commitTransaction();
+  }
+
+  public KMOperationState findOperation(short opHandle) {
+    short index = 0;
+    while(index < MAX_OPS){
+      if(((KMOperationState)operationStateTable[index]).isActive() &&
+        ((KMOperationState)operationStateTable[index]).handle() == opHandle){
+        return (KMOperationState)operationStateTable[index];
+      }
+      index++;
+    }
+    return null;
+  }
+
+  public void persistAttestationKey(short mod, short exp) {
+    JCSystem.beginTransaction();
+    if(KMByteBlob.cast(mod).length() != ATT_KEY_MOD_SIZE) KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+    Util.arrayCopy(
+      KMByteBlob.cast(mod).getBuffer(),
+      KMByteBlob.cast(mod).getStartOff(),
+      attKeyModulus,
+      (short)0,
+      KMByteBlob.cast(mod).length());
+
+    if(KMByteBlob.cast(exp).length() != ATT_KEY_EXP_SIZE) KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+    Util.arrayCopy(
+      KMByteBlob.cast(exp).getBuffer(),
+      KMByteBlob.cast(exp).getStartOff(),
+      attKeyExponent,
+      (short)0,
+      KMByteBlob.cast(exp).length());
+    JCSystem.commitTransaction();
+  }
+
+  public byte[] getAttKeyModulus() {
+    return attKeyModulus;
+  }
+
+  public byte[] getAttKeyExponent() {
+    return attKeyExponent;
+  }
+
+  public void persistAttId(byte id, byte[] buf, short start, short len){
+    JCSystem.beginTransaction();
+    short[] attId = (short[])attIdTable[id];
+    attId[ATT_ID_OFFSET] = allocAttIdMemory(len);
+    attId[ATT_ID_LENGTH] = len;
+    Util.arrayCopy(buf,start, attIdMem,attId[ATT_ID_OFFSET],len);
+    attIdSupported = true;
+    JCSystem.commitTransaction();
+  }
+
+  public short getAttId(byte id, byte[] buf, short start){
+    short[] attId = (short[])attIdTable[id];
+    Util.arrayCopy(attIdMem,attId[ATT_ID_OFFSET],buf,start,attId[ATT_ID_LENGTH]);
+    return attId[ATT_ID_LENGTH];
+  }
+
+  public short getAttIdOffset(byte id){
+    short[] attId = (short[])attIdTable[id];
+    return attId[ATT_ID_OFFSET];
+  }
+
+  public byte[] getAttIdBuffer(byte id){
+    return attIdMem;
+  }
+
+  public short getAttIdLen(byte id){
+    short[] attId = (short[])attIdTable[id];
+    return attId[ATT_ID_LENGTH];
+  }
+  public short getAttIdTag(byte id){
+    short[] attId = (short[])attIdTable[id];
+    return attId[ATT_ID_TAG];
+  }
+
+  private short allocAttIdMemory(short len){
+    if (((short) (attIdMemIndex + len)) > attIdMem.length) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    KMByteBlob ret = byteBlobRefTable[blobRefIndex];
-    blobRefIndex++;
-    return ret;
+    attIdMemIndex += len;
+    return (short) (attIdMemIndex - len);
   }
 
-  public KMInteger newInteger() {
-    if (intRefIndex >= integerRefTable.length) {
-      // TODO this is placeholder exception value.
+  public void deleteAttIds(){
+    JCSystem.beginTransaction();
+    Util.arrayFillNonAtomic(attIdMem,(short)0,(short)attIdMem.length,(byte)0);
+    short index = 0;
+    while(index < ATT_ID_TABLE_SIZE){
+      short[] attId = (short[])attIdTable[index];
+      attId[ATT_ID_OFFSET] = 0;
+      attId[ATT_ID_LENGTH] = 0;
+      index++;
+    }
+    attIdSupported = false;
+    JCSystem.commitTransaction();
+  }
+  public boolean isAttIdSupported(){
+    return attIdSupported;
+  }
+  public short getIssuer() {
+    return issuer;
+  }
+
+  public void setIssuer(byte[] buf, short start, short len) {
+    this.issuer = allocCertData(len);
+    this.issuerLen = len;
+    Util.arrayCopy(buf,start,certData, issuer,len);
+  }
+
+  public short getIssuerLen() {
+    return issuerLen;
+  }
+
+  public short getCertExpiryTime() {
+    return certExpiryTime;
+  }
+
+  public void setCertExpiryTime(byte[] buf, short start, short len) {
+    this.certExpiryTime = allocCertData(len);
+    this.certExpiryTimeLen = len;
+    Util.arrayCopy(buf,start,certData, certExpiryTime,len);
+  }
+
+  public short getCertExpiryTimeLen() {
+    return certExpiryTimeLen;
+  }
+
+
+  public short getAuthKeyId() {
+    return authKeyId;
+  }
+
+  public void setAuthKeyId(byte[] buf, short start, short len) {
+    this.authKeyId = allocCertData(len);
+    this.authKeyIdLen = len;
+    Util.arrayCopy(buf,start,certData,authKeyId,len);
+  }
+
+  public short getAuthKeyIdLen() {
+    return authKeyIdLen;
+  }
+  public byte[] getCertDataBuffer(){
+    return certData;
+  }
+  private short allocCertData(short len){
+    if (((short) (certDataIndex + len)) > certData.length) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    KMInteger ret = integerRefTable[intRefIndex];
-    intRefIndex++;
-    return ret;
-  }
-
-  public KMEnumTag newEnumTag() {
-    if (enumTagRefIndex >= enumTagRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMEnumTag ret = enumTagRefTable[enumTagRefIndex];
-    enumTagRefIndex++;
-    return ret;
-  }
-
-  public KMEnumArrayTag newEnumArrayTag() {
-    if (enumArrayTagRefIndex >= enumArrayTagRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMEnumArrayTag ret = enumArrayTagRefTable[enumArrayTagRefIndex];
-    enumArrayTagRefIndex++;
-    return ret;
-  }
-
-  public KMIntegerTag newIntegerTag() {
-    if (intTagRefIndex >= intTagRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMIntegerTag ret = intTagRefTable[intTagRefIndex];
-    intTagRefIndex++;
-    return ret;
-  }
-
-  public KMIntegerArrayTag newIntegerArrayTag() {
-    if (intArrayTagRefIndex >= intArrayTagRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMIntegerArrayTag ret = intArrayTagRefTable[intArrayTagRefIndex];
-    intArrayTagRefIndex++;
-    return ret;
-  }
-
-  public KMBoolTag newBoolTag() {
-    if (boolTagRefIndex >= boolTagRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMBoolTag ret = boolTagRefTable[boolTagRefIndex];
-    boolTagRefIndex++;
-    return ret;
-  }
-
-  public KMByteTag newByteTag() {
-    if (byteTagRefIndex >= byteTagRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMByteTag ret = byteTagRefTable[byteTagRefIndex];
-    byteTagRefIndex++;
-    return ret;
-  }
-
-  public KMKeyParameters newKeyParameters() {
-    if (keyParametersRefIndex >= keyParametersRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMKeyParameters ret = keyParametersRefTable[keyParametersRefIndex];
-    keyParametersRefIndex++;
-    return ret;
-  }
-
-  public KMArray newArray() {
-    if (arrayRefIndex >= arrayRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMArray ret = arrayRefTable[arrayRefIndex];
-    arrayRefIndex++;
-    return ret;
-  }
-
-  public KMKeyCharacteristics newKeyCharacteristics() {
-    if (keyCharRefIndex >= keyCharRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMKeyCharacteristics ret = keyCharRefTable[keyCharRefIndex];
-    keyCharRefIndex++;
-    return ret;
-  }
-
-  public KMHardwareAuthToken newHwAuthToken() {
-    if (hwAuthTokenRefIndex >= hwAuthTokenRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMHardwareAuthToken ret = hwAuthTokenRefTable[hwAuthTokenRefIndex];
-    hwAuthTokenRefIndex++;
-    return ret;
-  }
-
-  public KMHmacSharingParameters newHmacSharingParameters() {
-    if (hmacSharingParamsRefIndex >= hmacSharingParamsRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMHmacSharingParameters ret = hmacSharingParamsRefTable[hmacSharingParamsRefIndex];
-    hmacSharingParamsRefIndex++;
-    return ret;
-  }
-
-  public KMVerificationToken newVerificationToken() {
-    if (verTokenRefIndex >= verTokenRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMVerificationToken ret = verTokenRefTable[verTokenRefIndex];
-    verTokenRefIndex++;
-    return ret;
-  }
-
-  public KMOperationState newOperationState() {
-    if (opStateRefIndex >= opStateRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMOperationState ret = operationStateTable[opStateRefIndex];
-    opStateRefIndex++;
-    return ret;
-  }
-
-  public void releaseOperationState(KMOperationState state){
-    opStateRefIndex--;
-    if(opStateRefIndex <0){
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    opStateRefTable[opStateRefIndex] = state;
-  }
-  public KMVector newVector() {
-    if (vectorRefIndex >= vectorRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMVector ret = vectorRefTable[vectorRefIndex];
-    vectorRefIndex++;
-    return ret;
-  }
-
-  public KMEnum newEnum() {
-    if (enumRefIndex >= enumRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    KMEnum ret = enumRefTable[enumRefIndex];
-    enumRefIndex++;
-    return ret;
-  }
-
-  public KMType[] getTypeArrayRef(){
-    return typeRefTable;
-  }
-
-  public byte[] getByteHeapRef(){
-    return byteHeap;
-  }
-
-  public short newTypeArray(short length) {
-    if (((short) (typeRefIndex + length)) >= typeRefTable.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    typeRefIndex += length;
-    return (short) (typeRefIndex - length);
-  }
-
-  public short newByteArray(short length) {
-    if (((short) (byteHeapIndex + length)) >= byteHeap.length) {
-      // TODO this is placeholder exception value.
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    byteHeapIndex += length;
-    return (short) (byteHeapIndex - length);
+    certDataIndex += len;
+    return (short) (certDataIndex - len);
   }
 }

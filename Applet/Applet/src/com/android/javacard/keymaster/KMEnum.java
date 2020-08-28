@@ -18,45 +18,64 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMEnum extends KMType {
-  private static short[] types = {HARDWARE_TYPE, KEY_FORMAT, KEY_DERIVATION_FUNCTION};
+  private static KMEnum prototype;
+  private static short instPtr;
+
+  private static short[] types = {HARDWARE_TYPE, KEY_FORMAT, KEY_DERIVATION_FUNCTION,
+    VERIFIED_BOOT_STATE, DEVICE_LOCKED, USER_AUTH_TYPE, PURPOSE,ECCURVE};
 
   private static Object[] enums = null;
 
-  private short type;
-  private byte val;
+  private KMEnum() {}
 
-  private KMEnum() {
-    init();
+  private static KMEnum proto(short ptr) {
+    if (prototype == null) prototype = new KMEnum();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    type = 0;
-    val = 0;
+  // pointer to an empty instance used as expression
+  public static short exp() {
+    return KMType.exp(ENUM_TYPE);
   }
 
-  @Override
+
   public short length() {
-    return 1;
+    return Util.getShort(heap, (short) (instPtr + 1));
   }
 
-  public static KMEnum instance() {
-    return repository.newEnum();
+  // cast the ptr to KMByteBlob
+  public static KMEnum cast(short ptr) {
+    if (heap[ptr] != ENUM_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (Util.getShort(heap, (short) (ptr + 1)) == INVALID_VALUE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return proto(ptr);
   }
 
-  public static KMEnum instance(short enumType, byte val) {
-    KMEnum inst = repository.newEnum();
+  public static short instance(short enumType) {
+    if (!validateEnum(enumType, NO_VALUE)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short ptr = KMType.instance(ENUM_TYPE, (short)2);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), enumType);
+    return ptr;
+  }
+
+  public static short instance(short enumType, byte val) {
     if (!validateEnum(enumType, val)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    inst.type = enumType;
-    inst.val = val;
-    return inst;
+    short ptr = KMType.instance(ENUM_TYPE, (short)3);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), enumType);
+    heap[(short)(ptr+TLV_HEADER_SIZE+2)] = val;
+    return ptr;
   }
 
-  public static void create(KMEnum[] enumRefTable) {
+  private static void create() {
     if (enums == null) {
       enums =
           new Object[] {
@@ -69,35 +88,37 @@ public class KMEnum extends KMType {
               ISO18033_2_KDF1_SHA256,
               ISO18033_2_KDF2_SHA1,
               ISO18033_2_KDF2_SHA256
-            }
+            },
+            new byte[] {SELF_SIGNED_BOOT, VERIFIED_BOOT, UNVERIFIED_BOOT, FAILED_BOOT},
+            new byte[] {DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
+            new byte[] {USER_AUTH_NONE,PASSWORD,FINGERPRINT, BOTH},
+            new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
+            new byte[] {P_224, P_256, P_384, P_521}
           };
-    }
-    byte index = 0;
-    while (index < enumRefTable.length) {
-      enumRefTable[index] = new KMEnum();
-      index++;
     }
   }
 
-  public KMEnum setVal(byte val) {
-    this.val = val;
-    return this;
+  public void setVal(byte val) {
+    heap[(short)(instPtr+TLV_HEADER_SIZE+2)] = val;
   }
 
   public byte getVal() {
-    return val;
+    return heap[(short)(instPtr+TLV_HEADER_SIZE+2)];
   }
 
-  public KMEnum setType(short type) {
-    this.type = type;
-    return this;
+  public void setEnumType(short type) {
+    Util.setShort(heap, (short)(instPtr+TLV_HEADER_SIZE),type);
   }
 
-  public short getType() {
-    return type;
+  public short getEnumType() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE));
   }
-  // validate enumeration keys and values.
+
+  // isValidTag enumeration keys and values.
   private static boolean validateEnum(short key, byte value) {
+    create();
+    byte[] vals;
+    short enumInd;
     // check if key exists
     short index = (short) types.length;
     while (--index >= 0) {
@@ -105,8 +126,8 @@ public class KMEnum extends KMType {
         // check if value given
         if (value != NO_VALUE) {
           // check if the value exist
-          byte[] vals = (byte[]) enums[index];
-          short enumInd = (short) vals.length;
+          vals = (byte[]) enums[index];
+          enumInd = (short) vals.length;
           while (--enumInd >= 0) {
             if (vals[enumInd] == value) {
               // return true if value exist
@@ -123,4 +144,5 @@ public class KMEnum extends KMType {
     // return false if key does not exist
     return false;
   }
+
 }

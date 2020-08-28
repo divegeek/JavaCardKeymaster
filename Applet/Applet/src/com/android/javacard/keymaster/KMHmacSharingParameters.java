@@ -18,60 +18,78 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMHmacSharingParameters extends KMType {
   public static final byte SEED = 0x00;
   public static final byte NONCE = 0x01;
-  private KMArray vals;
 
-  private KMHmacSharingParameters() {
-    init();
+  private static KMHmacSharingParameters prototype;
+  private static short instPtr;
+
+  private KMHmacSharingParameters() {}
+
+  public static short exp() {
+    short arrPtr = KMArray.instance((short)2);
+    KMArray arr = KMArray.cast(arrPtr);
+    arr.add(SEED, KMByteBlob.exp());
+    arr.add(NONCE, KMByteBlob.exp());
+    return instance(arrPtr);
   }
 
-  @Override
-  public void init() {
-    vals = null;
+  private static KMHmacSharingParameters proto(short ptr) {
+    if (prototype == null) prototype = new KMHmacSharingParameters();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
+  public static short instance() {
+    short arrPtr = KMArray.instance((short)2);
+    return instance(arrPtr);
+  }
+
+  public static short instance(short vals) {
+    short ptr = KMType.instance(HMAC_SHARING_PARAM_TYPE, (short)2);
+    if(KMArray.cast(vals).length() != 2) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    Util.setShort(heap, (short)(ptr + TLV_HEADER_SIZE), vals);
+    return ptr;
+  }
+
+  public static KMHmacSharingParameters cast(short ptr) {
+    if (heap[ptr] != HMAC_SHARING_PARAM_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    short arrPtr = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
+    if(heap[arrPtr] != ARRAY_TYPE)  ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    return proto(ptr);
+  }
+
+  public short getVals() {
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+  }
+
   public short length() {
-    return vals.length();
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).length();
   }
 
-  public static KMHmacSharingParameters instance() {
-    KMHmacSharingParameters inst = repository.newHmacSharingParameters();
-    inst.vals = KMArray.instance((short) 2);
-    inst.vals.add(SEED, KMByteBlob.instance());
-    inst.vals.add(NONCE, KMByteBlob.instance());
-    return inst;
+  public void setSeed(short vals) {
+    KMByteBlob.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(SEED, vals);
   }
 
-  public static KMHmacSharingParameters instance(KMArray vals) {
-    if (vals.length() != 2) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
-    KMHmacSharingParameters inst = repository.newHmacSharingParameters();
-    inst.vals = vals;
-    return inst;
+  public void setNonce(short vals) {
+    KMByteBlob.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(NONCE, vals);
   }
 
-  public static void create(KMHmacSharingParameters[] hmacSharingParamsRefTable) {
-    byte index = 0;
-    while (index < hmacSharingParamsRefTable.length) {
-      hmacSharingParamsRefTable[index] = new KMHmacSharingParameters();
-      index++;
-    }
+  public short getNonce() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(NONCE);
   }
 
-  public KMByteBlob getSeed() {
-    return (KMByteBlob) vals.get(SEED);
-  }
-
-  public KMByteBlob getNonce() {
-    return (KMByteBlob) vals.get(NONCE);
-  }
-
-  public KMArray getVals() {
-    return vals;
+  public short getSeed() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(SEED);
   }
 }

@@ -18,77 +18,96 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMIntegerArrayTag extends KMTag {
+  private static KMIntegerArrayTag prototype;
+  private static short instPtr;
+
   private static final short[] tags = {USER_SECURE_ID};
-  private short key;
-  private KMVector vals;
-  private short tagType;
 
-  private KMIntegerArrayTag() {
-    init();
+  private KMIntegerArrayTag() {}
+
+  private static KMIntegerArrayTag proto(short ptr) {
+    if (prototype == null) prototype = new KMIntegerArrayTag();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    key = 0;
-    vals = null;
-    tagType = KMType.UINT_ARRAY_TAG;
-  }
-
-  @Override
-  public short getKey() {
-    return key;
-  }
-
-  @Override
-  public short length() {
-    return this.vals.length();
-  }
-
-  @Override
-  public short getTagType() {
-    return tagType;
-  }
-
-  public static KMIntegerArrayTag instance() {
-    return repository.newIntegerArrayTag();
-  }
-
-  public static void create(KMIntegerArrayTag[] intArrayTagRefTable) {
-    byte index = 0;
-    while (index < intArrayTagRefTable.length) {
-      intArrayTagRefTable[index] = new KMIntegerArrayTag();
-      index++;
+  public static short exp(short tagType) {
+    if (!validateTagType(tagType)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
+    short arrPtr = KMArray.exp(KMType.INTEGER_TYPE);
+    short ptr = instance(TAG_TYPE, (short)6);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), tagType);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), INVALID_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), arrPtr);
+    return ptr;
   }
 
-  public KMIntegerArrayTag asUlongArray() {
-    tagType = KMType.ULONG_ARRAY_TAG;
-    return this;
-  }
-
-  public static KMIntegerArrayTag instance(short key) {
+  public static short instance(short tagType, short key) {
+    if (!validateTagType(tagType)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
     if (!validateKey(key)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    KMIntegerArrayTag tag = repository.newIntegerArrayTag();
-    tag.key = key;
-    tag.vals = KMVector.instance(KMInteger.instance());
-    return tag;
+    short arrPtr = KMArray.exp();
+    return instance(tagType, key, arrPtr);
   }
 
-  public static KMIntegerArrayTag instance(short key, KMVector val) {
-    if (!(val.getType() instanceof KMInteger)) {
+  public static short instance(short tagType, short key, short arrObj) {
+    if (!validateTagType(tagType)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    if (!(validateKey(key))) {
+    if (!validateKey(key)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    KMIntegerArrayTag tag = repository.newIntegerArrayTag();
-    tag.key = key;
-    tag.vals = val;
-    return tag;
+    if(heap[arrObj] != ARRAY_TYPE) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short ptr = instance(TAG_TYPE, (short)6);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), tagType);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), arrObj);
+    return ptr;
+  }
+
+  public static KMIntegerArrayTag cast(short ptr) {
+    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    short tagType = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
+    if (!validateTagType(tagType)) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return proto(ptr);
+  }
+
+  public short getTagType() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE));
+  }
+
+  public short getKey() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
+  }
+
+  public short getValues() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+  }
+
+  public short length() {
+    short ptr = getValues();
+    return KMArray.cast(ptr).length();
+  }
+
+  public void add(short index, short val) {
+    KMArray arr = KMArray.cast(getValues());
+    arr.add(index, val);
+  }
+
+  public short get(short index) {
+    KMArray arr = KMArray.cast(getValues());
+    return arr.get(index);
   }
 
   private static boolean validateKey(short key) {
@@ -101,25 +120,28 @@ public class KMIntegerArrayTag extends KMTag {
     return false;
   }
 
-  public KMIntegerArrayTag withLength(short length) {
-    this.vals.withLength(length);
-    return this;
+  // TODO this should be combined with validateKey to actually isValidTag {tagType, tagKey} pair.
+  private static boolean validateTagType(short tagType) {
+    if ((tagType == ULONG_ARRAY_TAG) || (tagType == UINT_ARRAY_TAG)) {
+      return true;
+    }
+    return false;
   }
 
-  public KMVector getValues() {
-    return this.vals;
+  public static boolean contains(short tagId, short tagValue, short params) {
+    short tag =
+      KMKeyParameters.findTag(KMType.UINT_ARRAY_TAG, tagId, params);
+    if (tag != KMType.INVALID_VALUE) {
+      short index = 0;
+      tag = KMIntegerArrayTag.cast(tag).getValues();
+      while (index < KMArray.cast(tag).length()) {
+        if (KMInteger.compare(tagValue, KMArray.cast(tag).get(index)) == 0) {
+          return true;
+        }
+        index++;
+      }
+    }
+    return false;
   }
 
-  public KMIntegerArrayTag setValues(KMVector vals) {
-    this.vals = vals;
-    return this;
-  }
-
-  public void add(short index, KMInteger val) {
-    this.vals.add(index, val);
-  }
-
-  public KMInteger get(short index) {
-    return (KMInteger) this.vals.get(index);
-  }
 }

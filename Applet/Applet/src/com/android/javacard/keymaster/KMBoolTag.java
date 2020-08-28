@@ -18,8 +18,11 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMBoolTag extends KMTag {
+  private static KMBoolTag prototype;
+  private static short instPtr;
 
   private static final short[] tags = {
     CALLER_NONCE,
@@ -34,62 +37,53 @@ public class KMBoolTag extends KMTag {
     RESET_SINCE_ID_ROTATION
   };
 
-  // Array of Tag Values.
-  private short key;
-  private byte val;
+  private KMBoolTag() {}
 
-  // assignBlob constructor
-  private KMBoolTag() {
-    init();
+  private static KMBoolTag proto(short ptr) {
+    if (prototype == null) prototype = new KMBoolTag();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    key = 0;
-    val = 1; // always 1.
+  // pointer to an empty instance used as expression
+  public static short exp() {
+    short ptr = instance(TAG_TYPE, (short)2);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), BOOL_TAG);
+    return ptr;
   }
 
-  public static KMBoolTag instance() {
-    return repository.newBoolTag();
-  }
-
-  public static void create(KMBoolTag[] boolTagRefTable) {
-    byte index = 0;
-    while (index < boolTagRefTable.length) {
-      boolTagRefTable[index] = new KMBoolTag();
-      index++;
+  public static short instance(short key) {
+    if (!validateKey(key)) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
+    short ptr = KMType.instance(TAG_TYPE, (short)5);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), BOOL_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
+    heap[(short)(ptr+TLV_HEADER_SIZE+4)] = 0x01;
+    return ptr;
   }
 
-  @Override
+  public static KMBoolTag cast(short ptr) {
+    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE)) != BOOL_TAG) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return proto(ptr);
+  }
+
   public short getKey() {
-    return key;
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
   }
 
-  @Override
-  public short length() {
-    return 1;
-  }
-
-  @Override
   public short getTagType() {
     return KMType.BOOL_TAG;
   }
 
   public byte getVal() {
-    return val;
-  }
-  // create default assignBlob without any value
-  public static KMBoolTag instance(short key) {
-    if (!validateKey(key)) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    KMBoolTag tag = repository.newBoolTag();
-    tag.key = key;
-    return tag;
+    return heap[(short)(instPtr+TLV_HEADER_SIZE+4)];
   }
 
-  // validate the tag key
+  // isValidTag the tag key
   private static boolean validateKey(short key) {
     short index = (short) tags.length;
     while (--index >= 0) {
@@ -98,5 +92,8 @@ public class KMBoolTag extends KMTag {
       }
     }
     return false;
+  }
+  public static short[] getTags(){
+    return tags;
   }
 }

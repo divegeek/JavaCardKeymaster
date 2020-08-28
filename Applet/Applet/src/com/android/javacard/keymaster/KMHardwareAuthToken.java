@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMHardwareAuthToken extends KMType {
   public static final byte CHALLENGE = 0x00;
@@ -27,76 +28,128 @@ public class KMHardwareAuthToken extends KMType {
   public static final byte TIMESTAMP = 0x04;
   public static final byte MAC = 0x05;
 
-  private KMArray vals;
+  private static KMHardwareAuthToken prototype;
+  private static short instPtr;
 
-  private KMHardwareAuthToken() {
-    init();
+  private KMHardwareAuthToken() {}
+
+  public static short exp() {
+    short arrPtr = KMArray.instance((short)6);
+    KMArray arr = KMArray.cast(arrPtr);
+    arr.add(CHALLENGE, KMInteger.exp());
+    arr.add(USER_ID, KMInteger.exp());
+    arr.add(AUTHENTICATOR_ID, KMInteger.exp());
+    arr.add(HW_AUTHENTICATOR_TYPE, KMEnum.instance(KMType.USER_AUTH_TYPE));
+    arr.add(TIMESTAMP, KMInteger.exp());
+    arr.add(MAC, KMByteBlob.exp());
+    return instance(arrPtr);
   }
 
-  @Override
-  public void init() {
-    vals = null;
+  private static KMHardwareAuthToken proto(short ptr) {
+    if (prototype == null) prototype = new KMHardwareAuthToken();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
+  public static short instance() {
+    short arrPtr = KMArray.instance((short)6);
+    KMArray arr = KMArray.cast(arrPtr);
+    arr.add(CHALLENGE, KMInteger.uint_16((short)0));
+    arr.add(USER_ID, KMInteger.uint_16((short)0));
+    arr.add(AUTHENTICATOR_ID, KMInteger.uint_16((short)0));
+    arr.add(HW_AUTHENTICATOR_TYPE, KMEnum.instance(KMType.USER_AUTH_TYPE, KMType.USER_AUTH_NONE));
+    arr.add(TIMESTAMP, KMInteger.uint_16((short)0));
+    arr.add(MAC, KMByteBlob.instance((short)0));
+    return instance(arrPtr);
+  }
+
+  public static short instance(short vals) {
+    KMArray arr = KMArray.cast(vals);
+    if(arr.length() != 6)ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    short ptr = KMType.instance(HW_AUTH_TOKEN_TYPE, (short)2);
+    Util.setShort(heap, (short)(ptr + TLV_HEADER_SIZE), vals);
+    return ptr;
+  }
+
+  public static KMHardwareAuthToken cast(short ptr) {
+    if (heap[ptr] != HW_AUTH_TOKEN_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    short arrPtr = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
+    if(heap[arrPtr] != ARRAY_TYPE)  ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    return proto(ptr);
+  }
+
+  public short getVals() {
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+  }
+
   public short length() {
-    return vals.length();
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).length();
   }
 
-  public static KMHardwareAuthToken instance() {
-    KMHardwareAuthToken inst = repository.newHwAuthToken();
-    inst.vals = KMArray.instance((short) 6);
-    inst.vals.add(CHALLENGE, KMInteger.instance());
-    inst.vals.add(USER_ID, KMInteger.instance());
-    inst.vals.add(AUTHENTICATOR_ID, KMInteger.instance());
-    inst.vals.add(HW_AUTHENTICATOR_TYPE, KMEnumTag.instance(KMType.USER_AUTH_TYPE));
-    inst.vals.add(TIMESTAMP, KMInteger.instance());
-    inst.vals.add(MAC, KMByteBlob.instance());
-    return inst;
+  public short getChallenge() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(CHALLENGE);
   }
 
-  public static KMHardwareAuthToken instance(KMArray vals) {
-    if (vals.length() != 6) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
-    KMHardwareAuthToken inst = repository.newHwAuthToken();
-    inst.vals = vals;
-    return inst;
+  public void setChallenge(short vals) {
+    KMInteger.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(CHALLENGE, vals);
   }
 
-  public static void create(KMHardwareAuthToken[] hwAuthTokenRefTable) {
-    byte index = 0;
-    while (index < hwAuthTokenRefTable.length) {
-      hwAuthTokenRefTable[index] = new KMHardwareAuthToken();
-      index++;
-    }
+  public short getUserId() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(USER_ID);
   }
 
-  public KMInteger getChallenge() {
-    return (KMInteger) vals.get(CHALLENGE);
+  public void setUserId(short vals) {
+    KMInteger.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(USER_ID, vals);
   }
 
-  public KMInteger getUserId() {
-    return (KMInteger) vals.get(USER_ID);
+  public short getAuthenticatorId() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(AUTHENTICATOR_ID);
   }
 
-  public KMInteger getAuthenticatorId() {
-    return (KMInteger) vals.get(AUTHENTICATOR_ID);
+  public void setAuthenticatorId(short vals) {
+    KMInteger.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(AUTHENTICATOR_ID, vals);
   }
 
-  public byte getHwAuthenticatorType() {
-    return ((KMEnumTag) vals.get(HW_AUTHENTICATOR_TYPE)).getValue();
+  public short getHwAuthenticatorType() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(HW_AUTHENTICATOR_TYPE);
   }
 
-  public KMInteger getTimestamp() {
-    return (KMInteger) vals.get(TIMESTAMP);
+  public void setHwAuthenticatorType(short vals) {
+    KMEnum.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(HW_AUTHENTICATOR_TYPE, vals);
   }
 
-  public KMByteBlob getMac() {
-    return (KMByteBlob) vals.get(MAC);
+  public short getTimestamp() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(TIMESTAMP);
   }
 
-  public KMArray getVals() {
-    return vals;
+  public void setTimestamp(short vals) {
+    KMInteger.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(TIMESTAMP, vals);
+  }
+
+  public short getMac() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(MAC);
+  }
+
+  public void setMac(short vals) {
+    KMByteBlob.cast(vals);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(MAC, vals);
   }
 }

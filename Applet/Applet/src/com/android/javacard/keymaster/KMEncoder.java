@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 public class KMEncoder {
@@ -43,177 +44,238 @@ public class KMEncoder {
   private byte[] buffer;
   private short startOff;
   private short length;
+  private static short[] stack;
+  private static byte stackPtr;
 
   public KMEncoder() {
     buffer = null;
     startOff = 0;
     length = 0;
+    stack = JCSystem.makeTransientShortArray((short)50, JCSystem.CLEAR_ON_RESET);
   }
 
-  public short encode(KMArray object, byte[] buffer, short startOff, short length) {
+  private static void push (short objPtr){
+    stack[stackPtr] = objPtr;
+    stackPtr++;
+  }
+  private static short pop(){
+    stackPtr--;
+    return stack[stackPtr];
+  }
+  private void encode(short obj){
+    push(obj);
+  }
+  public short encode(short object, byte[] buffer, short startOff) {
+    stackPtr = 0;
     this.buffer = buffer;
     this.startOff = startOff;
-    this.length = length;
-    encode(object);
-    this.length = this.startOff;
+    short len = (short) buffer.length;
+    if((len <0) || (len > KMKeymasterApplet.MAX_LENGTH)){
+      this.length = KMKeymasterApplet.MAX_LENGTH;
+    }else{
+      this.length = (short)buffer.length;
+    }
+    //this.length = (short)(startOff + length);
+    push(object);
+    encode();
+    return (short)(this.startOff - startOff);
+  }
+
+  //array{KMError.OK,Array{KMByteBlobs}}
+  public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength) {
+    this.buffer = certBuffer;
+    this.startOff = certStart;
+    this.length = (short)(certStart+1);
+    //Array header - 2 elements i.e. 1 byte
+    this.startOff--;
+    // Error.Ok - 1 byte
+    this.startOff--;
+    //Array header - 2 elements i.e. 1 byte
+    this.startOff--;
+    // Cert Byte blob - typically 2 bytes length i.e. 3 bytes header
+    this.startOff -= 2;
+    if(certLength >= SHORT_PAYLOAD) {
+     this.startOff--;
+    }
+    bufferStart = startOff;
+    if(this.startOff < bufferStart) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    writeMajorTypeWithLength(ARRAY_TYPE,(short)2); // Array of 2 elements
+    writeByte(UINT_TYPE); // Error.OK
+    writeMajorTypeWithLength(ARRAY_TYPE,(short)1); // Array of 1 element
+    writeMajorTypeWithLength(BYTES_TYPE, certLength); // Cert Byte Blob of length
+    return bufferStart;
+  }
+
+  public short encodeError(short err, byte[] buffer, short startOff, short length) {
+    this.buffer = buffer;
     this.startOff = startOff;
-    return this.length;
+    this.length = (short)(startOff + length);
+    // encode the err as UINT with value in err - should not be greater then 5 bytes.
+    if(err < UINT8_LENGTH){
+      writeByte((byte)(UINT_TYPE | err ));
+    }else if(err < 0x100){
+      writeByte((byte)(UINT_TYPE | UINT8_LENGTH));
+      writeByte((byte)err);
+    }else {
+      writeByte((byte)(UINT_TYPE | UINT16_LENGTH));
+      writeShort(err);
+    }
+    return (short)(this.startOff - startOff);
   }
 
-  private void encode(KMType exp){
-    if(exp instanceof KMByteBlob){
-      encode((KMByteBlob) exp);
-      return;
+  private void encode(){
+    while (stackPtr > 0) {
+      short exp = pop();
+      byte type = KMType.getType(exp);
+      switch (type) {
+        case KMType.BYTE_BLOB_TYPE:
+          encodeByteBlob(exp);
+          break;
+        case KMType.INTEGER_TYPE:
+          encodeInteger(exp);
+          break;
+        case KMType.ARRAY_TYPE:
+          encodeArray(exp);
+          break;
+        case KMType.ENUM_TYPE:
+          encodeEnum(exp);
+          break;
+        case KMType.KEY_PARAM_TYPE:
+          encodeKeyParam(exp);
+          break;
+        case KMType.KEY_CHAR_TYPE:
+          encodeKeyChar(exp);
+          break;
+        case KMType.VERIFICATION_TOKEN_TYPE:
+          encodeVeriToken(exp);
+          break;
+        case KMType.HMAC_SHARING_PARAM_TYPE:
+          encodeHmacSharingParam(exp);
+          break;
+        case KMType.HW_AUTH_TOKEN_TYPE:
+          encodeHwAuthToken(exp);
+          break;
+        case KMType.TAG_TYPE:
+          short tagType = KMTag.getTagType(exp);
+          encodeTag(tagType, exp);
+          break;
+        default:
+          ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+      }
     }
-    if(exp instanceof KMEnum){
-      encode((KMEnum) exp);
-      return;
-    }
-    if(exp instanceof KMInteger){
-      encode((KMInteger)exp);
-      return;
-    }
-    if(exp instanceof KMArray){
-      encode((KMArray)exp);
-      return;
-    }
-    if(exp instanceof KMVector){
-      encode((KMVector)exp);
-      return;
-    }
-    if(exp instanceof KMByteTag){
-      encode((KMByteTag)exp);
-      return;
-    }
-    if(exp instanceof KMBoolTag){
-      encode((KMBoolTag) exp);
-      return;
-    }
-    if(exp instanceof KMIntegerTag){
-      encode((KMIntegerTag)exp);
-      return;
-    }
-    if(exp instanceof KMIntegerArrayTag){
-      encode((KMIntegerArrayTag)exp);
-      return;
-    }
-    if(exp instanceof KMEnumTag){
-      encode((KMEnumTag) exp);
-      return;
-    }
-    if(exp instanceof KMEnumArrayTag){
-      encode((KMEnumArrayTag) exp);
-      return;
-    }
-    if(exp instanceof KMKeyParameters){
-      encode((KMKeyParameters) exp);
-      return;
-    }
-    if(exp instanceof KMKeyCharacteristics){
-      encode((KMKeyCharacteristics) exp);
-      return;
-    }
-    if(exp instanceof KMVerificationToken){
-      encode((KMVerificationToken) exp);
-      return;
-    }
-    if(exp instanceof KMHmacSharingParameters){
-      encode((KMHmacSharingParameters) exp);
-      return;
-    }
-    if(exp instanceof KMHardwareAuthToken){
-      encode((KMHardwareAuthToken) exp);
-      return;
-    }
-    ISOException.throwIt(ISO7816.SW_DATA_INVALID);
   }
-
-  private void encode(KMKeyParameters obj) {
-    encodeAsMap(obj.getVals());
-  }
-  private void encode(KMKeyCharacteristics obj) {
-    encode(obj.getVals());
-  }
-
-  private void encode(KMVerificationToken obj) {
-    encode(obj.getVals());
-  }
-
-  private void encode(KMHardwareAuthToken obj) {
-    encode(obj.getVals());
-  }
-
-  private void encode(KMHmacSharingParameters obj) {
-    encode(obj.getVals());
-  }
-
-  private void encode(KMArray obj) {
-    writeMajorTypeWithLength(ARRAY_TYPE, obj.length());
-    short index = 0;
-    while(index < obj.length()){
-      encode(obj.get(index));
-      index++;
+  private void encodeTag(short tagType, short exp){
+    switch(tagType){
+      case KMType.BYTES_TAG:
+        encodeBytesTag(exp);
+        return;
+      case KMType.BOOL_TAG:
+        encodeBoolTag(exp);
+        return;
+      case KMType.UINT_TAG:
+      case KMType.ULONG_TAG:
+      case KMType.DATE_TAG:
+        encodeIntegerTag(exp);
+        return;
+      case KMType.ULONG_ARRAY_TAG:
+      case KMType.UINT_ARRAY_TAG:
+        encodeIntegerArrayTag(exp);
+        return;
+      case KMType.ENUM_TAG:
+        encodeEnumTag(exp);
+        return;
+      case KMType.ENUM_ARRAY_TAG:
+        encodeEnumArrayTag(exp);
+        return;
+      default:
+        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
 
-  private void encodeAsMap(KMArray obj){
-    writeMajorTypeWithLength(MAP_TYPE, obj.length());
-    short index = 0;
-    while(index < obj.length()){
-      KMType t = obj.get(index);
-      encode(t);
-      //encode(obj.get(index));
-      index++;
+  private void encodeKeyParam(short obj) {
+    encodeAsMap(KMKeyParameters.cast(obj).getVals());
+  }
+  private void encodeKeyChar(short obj) {
+    encode(KMKeyCharacteristics.cast(obj).getVals());
+  }
+
+  private void encodeVeriToken(short obj) {
+    encode(KMVerificationToken.cast(obj).getVals());
+  }
+
+  private void encodeHwAuthToken(short obj) {
+    encode(KMHardwareAuthToken.cast(obj).getVals());
+  }
+
+  private void encodeHmacSharingParam(short obj) {
+    encode(KMHmacSharingParameters.cast(obj).getVals());
+  }
+
+  private void encodeArray(short obj) {
+    writeMajorTypeWithLength(ARRAY_TYPE, KMArray.cast(obj).length());
+    short len = KMArray.cast(obj).length();
+    short index = (short)(len-1);
+    while(index >= 0){
+      encode(KMArray.cast(obj).get(index));
+      index--;
     }
   }
 
-  private void encode(KMVector obj){
-    writeMajorTypeWithLength(ARRAY_TYPE, obj.length());
-    short index = 0;
-    while(index <obj.length()){
-      encode(obj.getVals().get(index));
+  private void encodeAsMap(short obj){
+    writeMajorTypeWithLength(MAP_TYPE, KMArray.cast(obj).length());
+    short len = KMArray.cast(obj).length();
+    short index = (short)(len-1);
+    short inst;
+    while(index >= 0){
+      inst = KMArray.cast(obj).get(index);
+      encode(inst);
+      index--;
     }
   }
-  private void encode(KMIntegerArrayTag obj) {
-    writeTag(obj.getTagType(), obj.getKey());
-    encode(obj.getValues());
+
+  private void encodeIntegerArrayTag(short obj) {
+    writeTag(KMIntegerArrayTag.cast(obj).getTagType(), KMIntegerArrayTag.cast(obj).getKey());
+    encode(KMIntegerArrayTag.cast(obj).getValues());
   }
 
-  private void encode(KMEnumArrayTag obj) {
-    writeTag(obj.getTagType(), obj.getKey());
-    encode(obj.getValues());
+  private void encodeEnumArrayTag(short obj) {
+    writeTag(KMEnumArrayTag.cast(obj).getTagType(), KMEnumArrayTag.cast(obj).getKey());
+    encode(KMEnumArrayTag.cast(obj).getValues());
   }
 
-  private void encode(KMIntegerTag obj) {
-    writeTag(obj.getTagType(), obj.getKey());
-    encode(obj.getValue());
+  private void encodeIntegerTag(short obj) {
+    writeTag(KMIntegerTag .cast(obj).getTagType(), KMIntegerTag .cast(obj).getKey());
+    encode(KMIntegerTag .cast(obj).getValue());
   }
 
-  private void encode(KMByteTag obj) {
-    writeTag(obj.getTagType(), obj.getKey());
-    encode(obj.getValue());
+  private void encodeBytesTag(short obj) {
+    writeTag(KMByteTag.cast(obj).getTagType(), KMByteTag.cast(obj).getKey());
+    encode(KMByteTag.cast(obj).getValue());
   }
 
-  private void encode(KMBoolTag obj) {
-    writeTag(obj.getTagType(), obj.getKey());
-    writeByteValue(obj.getVal());
+  private void encodeBoolTag(short obj) {
+    writeTag(KMBoolTag.cast(obj).getTagType(), KMBoolTag.cast(obj).getKey());
+    writeByteValue(KMBoolTag.cast(obj).getVal());
   }
 
-  private void encode(KMEnumTag obj) {
-    writeTag(obj.getTagType(), obj.getKey());
-    writeByteValue(obj.getValue());
+  private void encodeEnumTag(short obj) {
+    writeTag(KMEnumTag.cast(obj).getTagType(), KMEnumTag.cast(obj).getKey());
+    writeByteValue(KMEnumTag.cast(obj).getValue());
   }
-  private void encode(KMEnum obj) {
-    writeByteValue(obj.getVal());
+  private void encodeEnum(short obj) {
+    writeByteValue(KMEnum.cast(obj).getVal());
   }
 
-  private void encode(KMInteger obj) {
-    byte[] val = obj.getValue();
-    short len = obj.length();
+  private void encodeInteger(short obj) {
+    byte[] val = KMInteger.cast(obj).getBuffer();
+    short len = KMInteger.cast(obj).length();
+    short startOff = KMInteger.cast(obj).getStartOff();
     byte index =0;
     // find out the most significant byte
     while(index < len){
-      if(val[index] > 0){
+      if(val[(short)(startOff + index)] > 0){
+        break;
+      }else if(val[(short)(startOff + index)] < 0){
         break;
       }
       index++; // index will be equal to len if value is 0.
@@ -222,34 +284,36 @@ public class KMEncoder {
     short diff = (short)(len - index);
     if(diff == 0){
       writeByte((byte)(UINT_TYPE | 0));
-    }else if((diff == 1) && val[index] < UINT8_LENGTH){
-      writeByte((byte)(UINT_TYPE | val[index]));
+    }else if((diff == 1) && (val[(short)(startOff + index)] < UINT8_LENGTH)
+      &&(val[(short)(startOff + index)] >= 0)){
+      writeByte((byte)(UINT_TYPE | val[(short)(startOff + index)]));
     }else if (diff == 1){
       writeByte((byte)(UINT_TYPE | UINT8_LENGTH));
-      writeByte(val[index]);
+      writeByte(val[(short)(startOff + index)]);
     }else if(diff == 2){
       writeByte((byte)(UINT_TYPE | UINT16_LENGTH));
-      writeBytes(val, index, (short)2);
+      writeBytes(val, (short)(startOff + index), (short)2);
     }else if(diff <= 4){
       writeByte((byte)(UINT_TYPE | UINT32_LENGTH));
-      writeBytes(val, (short)(len - 4), (short)4);
+      writeBytes(val, (short)(startOff + len - 4), (short)4);
     }else {
       writeByte((byte)(UINT_TYPE | UINT64_LENGTH));
-      writeBytes(val, (short)0, (short)8);
+      writeBytes(val, startOff, (short)8);
     }
   }
 
-  private void encode(KMByteBlob obj) {
-    writeMajorTypeWithLength(BYTES_TYPE, obj.length());
-    writeBytes(obj.getVal(), obj.getStartOff(), obj.length());
+  private void encodeByteBlob(short obj) {
+    writeMajorTypeWithLength(BYTES_TYPE, KMByteBlob.cast(obj).length());
+    writeBytes(KMByteBlob.cast(obj).getBuffer(), KMByteBlob.cast(obj).getStartOff(),
+      KMByteBlob.cast(obj).length());
   }
 
   private void writeByteValue(byte val){
-    if(val < UINT8_LENGTH){
+    if((val < UINT8_LENGTH) && (val >=0)){
       writeByte((byte)(UINT_TYPE | val));
     }else{
       writeByte((byte)(UINT_TYPE | UINT8_LENGTH));
-      writeByte(val);
+      writeByte((byte)val);
     }
   }
 
@@ -258,7 +322,6 @@ public class KMEncoder {
     writeShort(tagType);
     writeShort(tagKey);
   }
-  // TODO bug here
   private void writeMajorTypeWithLength(byte majorType, short len) {
     if(len <= TINY_PAYLOAD){
       writeByte((byte)(majorType | (byte) (len & ADDITIONAL_MASK)));
@@ -292,4 +355,15 @@ public class KMEncoder {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
+  /*
+  private static void print(byte[] buf, short start, short length){
+    StringBuilder sb = new StringBuilder();
+    for(int i = start; i < (start+length); i++){
+      sb.append(String.format("%02X", buf[i])) ;
+      //if((i-start)%16 == 0 && (i-start) != 0) sb.append(String.format("\n"));
+    }
+    System.out.println(sb.toString());
+  }
+
+   */
 }

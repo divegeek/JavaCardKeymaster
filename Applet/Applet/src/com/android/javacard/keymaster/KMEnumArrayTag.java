@@ -18,119 +18,58 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.Util;
 
 public class KMEnumArrayTag extends KMTag {
+
+  private static KMEnumArrayTag prototype;
+  private static short instPtr;
 
   // Arrays given below, together they form multi dimensional array.
   // Tag
   private static short[] tags = {PURPOSE, BLOCK_MODE, DIGEST, PADDING};
   // Tag Values.
   private static Object[] enums = null;
-  // Tag Key
-  private short key;
-  // Byte Array of Tag Values.
-  private KMByteBlob array;
 
-  // assignBlob constructor
-  private KMEnumArrayTag() {
-    init();
+  private KMEnumArrayTag() {}
+
+  private static KMEnumArrayTag proto(short ptr) {
+    if (prototype == null) prototype = new KMEnumArrayTag();
+    instPtr = ptr;
+    return prototype;
   }
 
-  @Override
-  public void init() {
-    key = 0;
-    array = null;
+  // pointer to an empty instance used as expression
+  public static short exp() {
+    short blobPtr = KMByteBlob.exp();
+    short ptr = instance(TAG_TYPE, (short)6);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), ENUM_ARRAY_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), INVALID_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), blobPtr);
+    return ptr;
   }
 
-  @Override
-  public short getKey() {
-    return key;
-  }
-
-  @Override
-  public short getTagType() {
-    return KMType.ENUM_ARRAY_TAG;
-  }
-  // returns the length
-  @Override
-  public short length() {
-    return array.length();
-  }
-
-  public static KMEnumArrayTag instance() {
-    return repository.newEnumArrayTag();
-  }
-
-  public static void create(KMEnumArrayTag[] enumArrayTagRefTable) {
-    if (enums == null) {
-      enums =
-          new Object[] {
-            new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
-            new byte[] {ECB, CBC, CTR},
-            new byte[] {DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
-            new byte[] {
-              PADDING_NONE, RSA_OAEP, RSA_PSS, RSA_PKCS1_1_5_ENCRYPT, RSA_PKCS1_1_5_SIGN, PKCS7
-            }
-          };
-    }
-    byte index = 0;
-    while (index < enumArrayTagRefTable.length) {
-      enumArrayTagRefTable[index] = new KMEnumArrayTag();
-      index++;
-    }
-  }
-
-  // create default assignBlob without any value array
-  public static KMEnumArrayTag instance(short key) {
-    // check if key is valid.
+  public static short instance(short key) {
     byte[] vals = getAllowedEnumValues(key);
     if (vals == null) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    KMEnumArrayTag tag = repository.newEnumArrayTag();
-    tag.key = key;
-    tag.array = null;
-    return tag;
+    short blobPtr = KMByteBlob.exp();
+    return instance(key, blobPtr);
   }
 
-  // Set the expected length for the prototype.
-  public KMEnumArrayTag withLength(short length) {
-    array.withLength(length);
-    return this;
-  }
-
-  // get the allowed enum values for given tag key
-  private static byte[] getAllowedEnumValues(short key) {
-    // check if key is allowed
-    short index = (short) tags.length;
-    while (--index >= 0) {
-      if (tags[index] == key) {
-        return (byte[]) enums[index];
-      }
-    }
-    return null;
-  }
-
-  // get value array of this tag assignBlob.
-  public KMByteBlob getValues() {
-    return this.array;
-  }
-
-  public KMEnumArrayTag setValues(KMByteBlob val) {
-    this.array = val;
-    return this;
-  }
-  // instantiate enum array pointing to existing array.
-  public static KMEnumArrayTag instance(short key, KMByteBlob blob) {
-    // validate key
+  public static short instance(short key, short byteBlob) {
     byte[] allowedVals = getAllowedEnumValues(key);
     if (allowedVals == null) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
+    KMByteBlob blob = KMByteBlob.cast(byteBlob);
     short byteIndex = 0;
+    short enumIndex;
+    boolean validValue;
     while (byteIndex < blob.length()) {
-      short enumIndex = 0;
-      boolean validValue = false;
+      enumIndex = 0;
+      validValue = false;
       while (enumIndex < allowedVals.length) {
         if (blob.get(byteIndex) == allowedVals[enumIndex]) {
           validValue = true;
@@ -143,9 +82,203 @@ public class KMEnumArrayTag extends KMTag {
       }
       byteIndex++;
     }
-    KMEnumArrayTag tag = repository.newEnumArrayTag();
-    tag.key = key;
-    tag.array = blob;
-    return tag;
+    short ptr = instance(TAG_TYPE, (short)6);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), ENUM_ARRAY_TAG);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), byteBlob);
+    return ptr;
+  }
+
+  public static KMEnumArrayTag cast(short ptr) {
+    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE)) != ENUM_ARRAY_TAG) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return proto(ptr);
+  }
+
+  public short getKey() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
+  }
+
+  public short getTagType() {
+    return KMType.ENUM_ARRAY_TAG;
+  }
+
+  public short getValues() {
+    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+  }
+
+  public short length() {
+    short blobPtr = Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+    return KMByteBlob.cast(blobPtr).length();
+  }
+
+  public static void create() {
+    if (enums == null) {
+      enums =
+          new Object[] {
+            new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
+            new byte[] {ECB, CBC, CTR, GCM},
+            new byte[] {DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
+            new byte[] {
+              PADDING_NONE, RSA_OAEP, RSA_PSS, RSA_PKCS1_1_5_ENCRYPT, RSA_PKCS1_1_5_SIGN, PKCS7
+            }
+          };
+    }
+  }
+
+  private static byte[] getAllowedEnumValues(short key) {
+    create();
+    short index = (short) tags.length;
+    while (--index >= 0) {
+      if (tags[index] == key) {
+        return (byte[]) enums[index];
+      }
+    }
+    return null;
+  }
+
+  public static short getValues(short tagId, short params, byte[] buf, short start) {
+    short tag =
+        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    if (tag == KMType.INVALID_VALUE) {
+      return KMType.INVALID_VALUE;
+    }
+    tag = KMEnumArrayTag.cast(tag).getValues();
+    return KMByteBlob.cast(tag).getValues(buf, start);
+  }
+
+  public short get(short index){
+    return KMByteBlob.cast(getValues()).get(index);
+  }
+
+  public static boolean contains(short tagId, short tagValue, short params) {
+    short tag =
+      KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    if (tag != KMType.INVALID_VALUE) {
+      short index = 0;
+      while (index < KMEnumArrayTag.cast(tag).length()) {
+        if (tagValue == KMEnumArrayTag.cast(tag).get(index)) {
+          return true;
+        }
+        index++;
+      }
+    }
+    return false;
+  }
+  public static short length(short tagId, short params) {
+    short tag =
+      KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    if (tag != KMType.INVALID_VALUE) {
+      return KMEnumArrayTag.cast(tag).length();
+    }
+    return KMType.INVALID_VALUE;
+  }
+  public  boolean contains(short tagValue){
+    short index = 0;
+    while(index < length()){
+      if(get(index) == (byte)tagValue){
+        return true;
+      }
+      index++;
+    }
+    return false;
+  }
+
+  public boolean isValidDigests(byte alg){
+    short index = 0;
+    short digest;
+    while(index < length()){
+      digest = get(index);
+      switch (alg) {
+        case KMType.EC:
+        case KMType.RSA:
+          if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256 && digest != KMType.SHA1) return false;
+          break;
+        case KMType.HMAC:
+          if (digest != KMType.SHA2_256) return false;
+          break;
+        case KMType.AES:
+        case KMType.DES:
+          if (digest != KMType.DIGEST_NONE) return false;
+          break;
+        default:
+          return false;
+      }
+      index++;
+    }
+    return true;
+  }
+
+  public boolean isValidPaddingModes(byte alg){
+    short index = 0;
+    short padding;
+    while(index < length()){
+      padding = get(index);
+      switch(alg){
+        case KMType.RSA:
+          if(padding != KMType.RSA_OAEP && padding != KMType.PADDING_NONE &&
+            padding != KMType.RSA_PKCS1_1_5_SIGN && padding != KMType.RSA_PKCS1_1_5_ENCRYPT &&
+          padding != KMType.RSA_PSS){
+            return false;
+          }
+          break;
+        case KMType.AES:
+        case KMType.DES:
+          if(padding != KMType.PKCS7 && padding != KMType.PADDING_NONE){
+            return false;
+          }
+          break;
+        case KMType.EC:
+        case KMType.HMAC:
+          if(padding != PADDING_NONE){
+            return false;
+          }
+          break;
+        default:
+          return false;
+      }
+      index++;
+    }
+    return true;
+  }
+  public boolean isValidPurpose(byte alg){
+    short index = 0;
+    short purpose;
+    while(index < length()){
+      purpose = get(index);
+      switch(purpose){
+        case KMType.DECRYPT:
+        case KMType.ENCRYPT:
+          if(alg != KMType.RSA && alg != KMType.AES &&
+            alg != KMType.DES){
+            return false;
+          }
+          break;
+        case KMType.SIGN:
+        case KMType.VERIFY:
+          if(alg != KMType.HMAC && alg != KMType.RSA &&
+            alg != KMType.EC){
+            return false;
+          }
+          break;
+        case KMType.WRAP_KEY:
+          if(alg != KMType.RSA) return false;
+          break;
+        default:
+          return false;
+      }
+      index++;
+    }
+    return true;
+  }
+
+  public boolean isValidBlockMode(byte alg) {
+    if (alg == KMType.AES || alg == KMType.DES) {
+      return true;
+    } else {
+      return false;
+    }
   }
 }
