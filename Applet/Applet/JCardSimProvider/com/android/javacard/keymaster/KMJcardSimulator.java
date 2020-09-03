@@ -248,6 +248,11 @@ public class KMJcardSimulator implements KMSEProvider {
   }
 
   @Override
+  public boolean importAsymmetricKey(byte alg, byte[] buf, short start, short length, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
+    return false;
+  }
+
+  @Override
   public boolean importAsymmetricKey(byte alg, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
     switch (alg){
       case KMType.RSA:
@@ -1283,6 +1288,22 @@ public class KMJcardSimulator implements KMSEProvider {
   @Override
   public boolean isBootEventSupported() {
     return false;
+  }
+
+  @Override
+  public boolean isPkcs8ParsingSupported() {
+    return false;
+  }
+
+  @Override
+  public boolean isAttestationCertSupported() {
+    return true;
+  }
+
+  @Override
+  public KMAttestationCert getAttestationCert(boolean rsaCert) {
+    //certBuilder.reset();
+    return KMAttestationCertImpl.instance(rsaCert);
   }
 
   /*

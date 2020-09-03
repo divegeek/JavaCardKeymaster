@@ -1400,9 +1400,11 @@ public class KMFunctionalTest {
     Assert.assertEquals(error, KMError.OK);
     ret = deleteKey(KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
     Assert.assertEquals(ret, KMError.OK);
-    ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
+/*    ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
     short err = KMByteBlob.cast(ret).get((short)1);
     Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
+
+ */
     cleanUp();
   }
 
@@ -1422,12 +1424,14 @@ public class KMFunctionalTest {
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
     Assert.assertEquals(respBuf[0], KMError.OK);
-    short ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob1,(short)0,(short)keyBlob1.length));
+/*    short ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob1,(short)0,(short)keyBlob1.length));
     short err = KMByteBlob.cast(ret).get((short)1);
     Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
     ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob2,(short)0,(short)keyBlob2.length));
     err = KMByteBlob.cast(ret).get((short)1);
     Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
+
+ */
     cleanUp();
   }
 

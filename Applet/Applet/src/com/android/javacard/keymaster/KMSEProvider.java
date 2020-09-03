@@ -8,22 +8,35 @@ public interface KMSEProvider {
       byte alg,
       byte[] privKeyBuf,
       short privKeyStart,
-      short privKeyLength,
+      short privKeyMaxLength,
       byte[] pubModBuf,
       short pubModStart,
-      short pubModLength,
+      short pubModMaxLength,
       short[] lengths);
+
   // Import key operations
   boolean importSymmetricKey(byte alg, short keysize, byte[] buf, short startOff, short length);
 
   boolean importAsymmetricKey(
       byte alg,
+      byte[] buf,
+      short start,
+      short length,
       byte[] privKeyBuf,
       short privKeyStart,
       short privKeyLength,
       byte[] pubModBuf,
       short pubModStart,
       short pubModLength);
+
+  boolean importAsymmetricKey(
+    byte alg,
+    byte[] privKeyBuf,
+    short privKeyStart,
+    short privKeyLength,
+    byte[] pubModBuf,
+    short pubModStart,
+    short pubModLength);
 
   // Oneshot Operations
   void newRandomNumber(byte[] num, short offset, short length);
@@ -169,7 +182,7 @@ public interface KMSEProvider {
 
   short getEventData(byte[] eventBuf, short eventStart, short eventLength);
 
-  // Capability query - should return true
+  // Capability query
   boolean isAlgSupported(byte alg);
 
   boolean isKeySizeSupported(byte alg, short keySize);
@@ -185,4 +198,12 @@ public interface KMSEProvider {
   boolean isSystemTimerSupported();
 
   boolean isBootEventSupported();
+
+  boolean isPkcs8ParsingSupported();
+
+  boolean isAttestationCertSupported();
+
+  //X509 Cert
+  KMAttestationCert getAttestationCert(boolean rsaCert);
+
 }

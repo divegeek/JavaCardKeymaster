@@ -25,7 +25,7 @@ public class KMRepository {
   //TODO make the sizes configurable
   public static final short INVALID_VALUE = (short) 0x8000;
   public static final short HEAP_SIZE = 10000;
-  public static final short MAX_BLOB_STORAGE = 32;
+  public static final short MAX_BLOB_STORAGE = 8;
   public static final short AES_GCM_AUTH_TAG_LENGTH = 12;
   public static final short MASTER_KEY_SIZE = 16;
   public static final short SHARED_SECRET_KEY_SIZE = 32;
@@ -75,7 +75,7 @@ public class KMRepository {
   private byte[] heap;
   private short heapIndex;
 
-  //Attesation Id Table;
+  //Attestation Id Table;
   private Object[] attIdTable;
 
   // Operation State Table
@@ -412,7 +412,7 @@ public class KMRepository {
     JCSystem.commitTransaction();
   }
 
-  public KMAuthTag findTag(short authTag) {
+  private KMAuthTag findTag(short authTag) {
     short index = 0;
     short found;
     while (index < MAX_BLOB_STORAGE) {
