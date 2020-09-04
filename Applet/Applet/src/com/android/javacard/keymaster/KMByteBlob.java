@@ -109,4 +109,10 @@ public class KMByteBlob extends KMType {
     }
     return true;
   }
+
+  public void decrementLength(short len){
+    short length = Util.getShort(heap, (short) (instPtr + 1));
+    length = (short)(length - len);
+    Util.setShort(heap, (short) (instPtr + 1),length);
+  }
 }

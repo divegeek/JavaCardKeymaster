@@ -1089,6 +1089,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 1);
     //parse key blob
     parseEncryptedKeyBlob(scratchPad);
+    //TODO This below code is added to pass one of the VTS 4.1 tests.
+    //TODO Need to confirm with Shawn and modify this accordingly.
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.DEVICE_UNIQUE_ATTESTATION, data[KEY_PARAMETERS]);
+    if(tmpVariables[0] != KMType.INVALID_VALUE) {
+    	KMException.throwIt(KMError.UNIMPLEMENTED);
+    }
     // The key which is being attested should be asymmetric i.e. RSA or EC
     tmpVariables[0] = KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]);
     if(tmpVariables[0] != KMType.RSA && tmpVariables[0] != KMType.EC){
@@ -1109,8 +1116,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     cert.attestationChallenge(KMByteTag.cast(tmpVariables[0]).getValue());
-    // extract key characteristics
-    //makeKeyCharacteristics(scratchPad);
     // unique id byte blob - uses application id and temporal month count of creation time.
     tmpVariables[0] = makeUniqueId(scratchPad);
     cert.uniqueId(tmpVariables[0]);
@@ -1143,15 +1148,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         repository.getCertExpiryTime(),repository.getCertExpiryTimeLen());
     }
     cert.notAfter(tmpVariables[2]);
-//    // read att application id.
-//    tmpVariables[4] = KMKeyParameters.findTag(KMType.BYTES_TAG,KMType.ATTESTATION_APPLICATION_ID,data[KEY_PARAMETERS]);
-//    if(tmpVariables[4] != KMType.INVALID_VALUE) tmpVariables[4] = KMByteTag.cast(tmpVariables[4]).getValue();
-//    else tmpVariables[4] = 0;
-
-//    // read att challenge
-//    tmpVariables[5] = KMKeyParameters.findTag(KMType.BYTES_TAG,KMType.ATTESTATION_CHALLENGE,data[KEY_PARAMETERS]);
-//    if(tmpVariables[5] == KMType.INVALID_VALUE) KMException.throwIt(KMError.ATTESTATION_CHALLENGE_MISSING);
-//    tmpVariables[5] = KMByteTag.cast(tmpVariables[5]).getValue();
     addAttestationIds(cert);
     addTags(KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getHardwareEnforced(),true,cert);
     addTags(KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getSoftwareEnforced(),false,cert);
@@ -1186,26 +1182,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     bufferLength = KMByteBlob.cast(tmpVariables[3]).length();
     cert.buffer(buffer,bufferStartOffset,bufferLength);
     cert.build();
-//    // create X509 certificate.
-//    KMAttestationCertImpl.encodeCert(tmpVariables[3]/*buf*/, data[KEY_CHARACTERISTICS]/*key char*/,
-//    tmpVariables[0]/*unique Id*/,tmpVariables[1]/*start*/,tmpVariables[2]/*end*/,
-//        data[PUB_KEY]/*pub key/modulus*/,tmpVariables[5],tmpVariables[4], rsaCert);
-//
-//    // Now sign the cert
-//    // Create signer
-//
-//   //Sign the cert - returns the length of complete cert
-//    tmpVariables[1] = KMAttestationCertImpl.sign(seProvider,repository.getAttKeyExponent(),(short)0, KMRepository.ATT_KEY_EXP_SIZE,
-//      repository.getAttKeyModulus(),(short)0,KMRepository.ATT_KEY_MOD_SIZE);
-//
-//    // Send the response back. This is slightly different we do not copy the cert blob again.
-//    // We just add CBOR encoding around it.
-//    // Encode the response
-//    buffer = KMAttestationCertImpl.getBuffer();
-//    // add CBOR header and elements
-//    bufferStartOffset = encoder.encodeCert(KMAttestationCertImpl.getBuffer(), KMAttestationCertImpl.getBufferStart(),
-//      KMAttestationCertImpl.getCertStart(), KMAttestationCert.getCertLength());
-//    bufferLength = (short)(KMAttestationCert.getCertLength() + (KMAttestationCertImpl.getCertStart()- bufferStartOffset));
     bufferStartOffset = encoder.encodeCert(buffer, bufferStartOffset, cert.getCertStart(), cert.getCertLength());
     bufferLength = (short)(cert.getCertLength() + (cert.getCertStart()- bufferStartOffset));
     sendOutgoing(apdu);
@@ -3040,6 +3016,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Decode the argument
     tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
     data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    //Check if EarlyBootEnded tag is present.
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ENDED, data[KEY_PARAMETERS]);
+    if(tmpVariables[0] != KMType.INVALID_VALUE) {
+    	KMException.throwIt(KMError.EARLY_BOOT_ENDED);
+    }
     //Check if rollback resistance tag is present
     tmpVariables[0] =
         KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE, data[KEY_PARAMETERS]);
