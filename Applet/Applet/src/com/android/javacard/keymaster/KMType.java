@@ -139,7 +139,7 @@ public abstract class KMType {
   public static final byte SIGN = 0x02;
   public static final byte VERIFY = 0x03;
   public static final byte WRAP_KEY = 0x05;
-  public static final byte ATTEST_KEY = (byte) 0x7F; /* TODO This is not present in types.hal */
+  public static final byte ATTEST_KEY = (byte) 0x7F;
 
   // Block mode
   public static final short BLOCK_MODE = 0x0004;

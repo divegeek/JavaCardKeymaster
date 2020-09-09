@@ -16,225 +16,255 @@
 
 package com.android.javacard.keymaster;
 
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
-import javacard.security.Signature;
 
-// TODO complete the class design and implementation
 public class KMOperationState {
-  private short opHandleCounter;
-  private byte algorithm;
-  private byte padding;
-  private byte blockMode;
-  private byte digest;
-  private short purpose;
-  private short keySize;
-  private boolean active;
-  private boolean trustedConfirmation;
-  private boolean cipherOperation;
-  // TODO This should be 64 bits
-  private  short handle;
-  private KMCipher cipher;
-  private Signature hmacSigner; // used for trusted confirmation.
-  private Signature signer;
-  private byte[] key;
-  private short keyLength;
-  private byte[] authTime;
-  private boolean authPerOperationReqd;
-  private boolean secureUserIdReqd;
-  private boolean authTimeoutValidated;
-  private boolean aesGcmUpdateAllowed;
 
-  private boolean aesBlockSaved;
-  private byte[] aesBlock;
-  private short macLength;
+  public static final byte MAX_DATA = 20;
+  public static final byte MAX_REFS = 2;
+  private static final byte DATA = 0;
+  private static final byte REFS = 1;
+  // byte type
+  private static final byte ALG = 0;
+  private static final byte PURPOSE = 1;
+  private static final byte PADDING = 2;
+  private static final byte BLOCKMODE = 3;
+  private static final byte DIGEST = 4;
+  private static final byte FLAGS = 5;
+  // short type
+  private static final byte KEY_SIZE = 6;
+  private static final byte MAC_LENGTH = 8;
+  // Handle - currently this is short
+  private static final byte OP_HANDLE = 10;
+  // Auth time 64 bits
+  private static final byte AUTH_TIME = 12;
+  // Flag masks
+  private static final byte AUTH_PER_OP_REQD = 1;
+  private static final byte SECURE_USER_ID_REQD = 2;
+  private static final byte AUTH_TIMEOUT_VALIDATED = 4;
+  private static final byte AES_GCM_UPDATE_ALLOWED = 8;
 
-  public KMOperationState(){
-    authTime = new byte[8];
-    key = new byte[256];
-    aesBlock = new byte[KMKeymasterApplet.AES_BLOCK_SIZE];
-    reset();
+  // Object References
+  private static final byte OPERATION = 0;
+  private static final byte HMAC_SIGNER = 1;
+
+  private static KMOperation hmacSigner; // used for trusted confirmation.
+  private static KMOperation op;
+  private static byte[] data;
+  private static Object[] slot;
+  private static KMOperationState prototype;
+  private static boolean dFlag;
+
+  private KMOperationState() {
+    data = JCSystem.makeTransientByteArray(MAX_DATA, JCSystem.CLEAR_ON_RESET);
   }
 
-  public short getKeySize() {
-    return keySize;
+  private static KMOperationState proto() {
+    if (prototype == null) prototype = new KMOperationState();
+    return prototype;
+  }
+
+  public static KMOperationState instance(short opId, Object[] slot) {
+    KMOperationState opState = proto();
+    opState.reset();
+    Util.setShort(opState.data, OP_HANDLE, opId);
+    opState.slot = slot;
+    return opState;
+  }
+
+  public static KMOperationState read(Object[] slot) {
+    KMOperationState opState = proto();
+    opState.reset();
+    Util.arrayCopy((byte[]) slot[DATA], (short) 0, opState.data, (short) 0, (short) opState.data.length);
+    Object[] ops = ((Object[]) slot[REFS]);
+    opState.op = (KMOperation) ops[OPERATION];
+    opState.hmacSigner = (KMOperation) ops[HMAC_SIGNER];
+    opState.slot = slot;
+    return opState;
+  }
+
+  public void persist() {
+    if (!dFlag) return;
+    /*JCSystem.beginTransaction();
+    Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length);
+    Object[] ops = ((Object[]) slot[1]);
+    ops[0] = op;
+    ops[1] = hmacSigner;
+    JCSystem.commitTransaction();*/
+    KMRepository.instance().persistOperation(data, Util.getShort(data, OP_HANDLE), op, hmacSigner);
+    dFlag = false;
   }
 
   public void setKeySize(short keySize) {
-    this.keySize = keySize;
+    Util.setShort(data, KEY_SIZE, keySize);
   }
 
+  public short getKeySize() {
+    return Util.getShort(data, KEY_SIZE);
+  }
 
-  public void setTrustedConfirmationSigner(Signature hmacSigner){
-    this.hmacSigner = hmacSigner;
-    trustedConfirmation = true;
+  public void setTrustedConfirmationSigner(KMOperation hmacSigner) {
+    KMOperationState.hmacSigner = hmacSigner;
   }
-  public Signature getTrustedConfirmationSigner(){
-    return hmacSigner;
+
+  public KMOperation getTrustedConfirmationSigner() {
+    return KMOperationState.hmacSigner;
   }
-  public boolean isTrustedConfirmationRequired(){
-    return trustedConfirmation;
+
+  public boolean isTrustedConfirmationRequired() {
+    if (KMOperationState.hmacSigner != null) return true;
+    else return false;
   }
-  public void activate(){
-    active = true;
-    handle = getOpHandleCounter();
-  }
-  public void reset(){
-    Util.arrayFillNonAtomic(authTime, (short)0,(short)8, (byte)0);
-    cipherOperation = false;
-    keyLength = 0;
-    authPerOperationReqd = false;
-    secureUserIdReqd = false;
-    active = false;
-    handle = 0;
-    Util.arrayFillNonAtomic(key,(short)0,(short)key.length,(byte)0);
-    cipher = null;
-    signer = null;
-    purpose = KMType.INVALID_VALUE;
-    trustedConfirmation = false;
+
+  public void reset() {
+    dFlag = false;
     hmacSigner = null;
-    authTimeoutValidated = false;
-    aesGcmUpdateAllowed = false;
-    aesBlockSaved = false;
-    macLength = 0;
+    op = null;
+    slot = null;
+    Util.arrayFillNonAtomic(
+        data, (short) 0, (short) data.length, (byte) 0);
   }
-  //TODO make this random number
-  public short getOpHandleCounter() {
-    opHandleCounter++;
-    if(opHandleCounter < 0){
-      opHandleCounter = 0;
-    }
-    return opHandleCounter;
+  private void dataUpdated(){
+    dFlag = true;
   }
-
-  public boolean isActive() {
-    return active;
+  public void release() {
+    JCSystem.beginTransaction();
+    Util.arrayFillNonAtomic(
+        (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length, (byte) 0);
+    Object[] ops = ((Object[]) slot[1]);
+    ops[0] = null;
+    ops[1] = null;
+    JCSystem.commitTransaction();
+    reset();
   }
-  public boolean isCipherOperation(){ return cipherOperation;}
-  public void setCipherOperation(boolean flag){cipherOperation = flag;}
 
   public short getHandle() {
-    return KMInteger.uint_16(handle);
+    return KMInteger.uint_16(Util.getShort(KMOperationState.data, OP_HANDLE));
   }
 
-  public short handle(){
-    return handle;
+  public short handle() {
+    return Util.getShort(KMOperationState.data, OP_HANDLE);
   }
+
   public short getPurpose() {
-    return purpose;
+    return data[PURPOSE];
   }
 
-  public void setPurpose(short purpose) {
-    this.purpose = purpose;
+  public void setPurpose(byte purpose) {
+    data[PURPOSE] = purpose;
+    dataUpdated();
   }
 
-  public KMCipher getCipher() {
-    return cipher;
+  public void setOperation(KMOperation operation) {
+    op = operation;
+    dataUpdated();
+    persist();
   }
 
-  public void setCipher(KMCipher cipher) {
-    this.cipher = cipher;
-  }
-
-  public Signature getSignerVerifier() {
-    return signer;
-  }
-
-  public void setSignerVerifier(Signature signer) {
-    this.signer = signer;
-  }
-
-  public short getKey(byte[] buf, short start) {
-    Util.arrayCopy(key,(short)0, buf, start,keyLength);
-    return keyLength;
-  }
-
-  public void setKey(byte[] buf, short start, short len) {
-    keyLength = len;
-    Util.arrayCopy(buf, start, key, (short)0, len);
+  public KMOperation getOperation() {
+    return op;
   }
 
   public boolean isAuthPerOperationReqd() {
-    return authPerOperationReqd;
+    if ((data[FLAGS] & AUTH_PER_OP_REQD) != 0) return true;
+    else return false;
   }
 
   public boolean isAuthTimeoutValidated() {
-    return authTimeoutValidated;
-  }
-  public boolean isSecureUserIdReqd(){return secureUserIdReqd;}
-
-  public byte[] getAuthTime() {
-    return authTime;
+    if ((data[FLAGS] & AUTH_TIMEOUT_VALIDATED) != 0) return true;
+    else return false;
   }
 
-  public void setAuthTime(byte[] time, short start) {
-    Util.arrayCopy(time, start, authTime, (short)0, (short)8);
+  public boolean isSecureUserIdReqd() {
+    if ((data[FLAGS] & SECURE_USER_ID_REQD) != 0) return true;
+    else return false;
   }
-  public void setOneTimeAuthReqd(boolean flag){secureUserIdReqd = flag;}
+
+  public short getAuthTime() {
+    return KMInteger.uint_64(data, (short) AUTH_TIME);
+  }
+
+  public void setAuthTime(byte[] timeBuf, short start) {
+    Util.arrayCopy(timeBuf, start, data, (short) AUTH_TIME, (short) 8);
+    dataUpdated();
+  }
+
+  public void setOneTimeAuthReqd(boolean flag) {
+    if (flag) data[FLAGS] = (byte) (data[FLAGS] | SECURE_USER_ID_REQD);
+    else data[FLAGS] = (byte) (data[FLAGS] & (~SECURE_USER_ID_REQD));
+    dataUpdated();
+  }
+
   public void setAuthTimeoutValidated(boolean flag) {
-    authTimeoutValidated = flag;
+    if (flag) data[FLAGS] = (byte) (data[FLAGS] | AUTH_TIMEOUT_VALIDATED);
+    else data[FLAGS] = (byte) (data[FLAGS] & (~AUTH_TIMEOUT_VALIDATED));
+    dataUpdated();
   }
-  public void setAuthPerOperationReqd(boolean flag){ authPerOperationReqd = flag;}
+
+  public void setAuthPerOperationReqd(boolean flag) {
+    if (flag) data[FLAGS] = (byte) (data[FLAGS] | AUTH_PER_OP_REQD);
+    else data[FLAGS] = (byte) (data[FLAGS] & (~AUTH_PER_OP_REQD));
+    dataUpdated();
+  }
 
   public byte getAlgorithm() {
-    return algorithm;
+    return data[ALG];
   }
 
   public void setAlgorithm(byte algorithm) {
-    this.algorithm = algorithm;
+    this.data[ALG] = algorithm;
+    dataUpdated();
   }
 
   public byte getPadding() {
-    return padding;
+    return data[PADDING];
   }
 
   public void setPadding(byte padding) {
-    this.padding = padding;
+    this.data[PADDING] = padding;
+    dataUpdated();
   }
 
   public byte getBlockMode() {
-    return blockMode;
+    return data[BLOCKMODE];
   }
 
   public void setBlockMode(byte blockMode) {
-    this.blockMode = blockMode;
+    this.data[BLOCKMODE] = blockMode;
+    dataUpdated();
   }
 
   public byte getDigest() {
-    return digest;
+    return data[DIGEST];
   }
 
   public void setDigest(byte digest) {
-    this.digest = digest;
+    this.data[DIGEST] = digest;
+    dataUpdated();
   }
 
-  public boolean isAesGcmUpdateAllowed(){
-    return aesGcmUpdateAllowed;
-  }
-  public void setAesGcmUpdateComplete(){
-    aesGcmUpdateAllowed = false;
-  }
-  public void setAesGcmUpdateStart(){
-    aesGcmUpdateAllowed = true;
-  }
-  public byte[] getAesBlock(){
-    return aesBlock;
+  public boolean isAesGcmUpdateAllowed() {
+    if ((data[FLAGS] & AES_GCM_UPDATE_ALLOWED) != 0) return true;
+    else return false;
   }
 
-  public void setAesBlock(byte[] buf, short start, short length){
-    if(aesBlock.length != length) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    Util.arrayCopy(buf,start,aesBlock, (short)0, length);
-    aesBlockSaved = true;
+  public void setAesGcmUpdateComplete() {
+    data[FLAGS] = (byte) (data[FLAGS] & (~AES_GCM_UPDATE_ALLOWED));
+    dataUpdated();
   }
 
-  public boolean isAesBlockSaved() {
-    return aesBlockSaved;
+  public void setAesGcmUpdateStart() {
+    data[FLAGS] = (byte) (data[FLAGS] | AES_GCM_UPDATE_ALLOWED);
+    dataUpdated();
   }
 
   public void setMacLength(short length) {
-    macLength = length;
+    Util.setShort(data, MAC_LENGTH, length);
+    dataUpdated();
   }
 
   public short getMacLength() {
-    return macLength;
+    return Util.getShort(data, MAC_LENGTH);
   }
 }
