@@ -307,6 +307,12 @@ public class KMSimulator implements KMSEProvider {
     return verification;
   }
 
+
+  @Override
+  public short cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
+    return 0;
+  }
+
   @Override
   public byte[] getTrueRandomNumber(short i) {
     // ignore the size as simulator only supports 128 bit entropy
@@ -319,13 +325,15 @@ public class KMSimulator implements KMSEProvider {
       short bufInStart,
       short buffInLength,
       byte[] masterKeySecret,
+      short masterKeyStart,
+      short masterKeyLen,
       byte[] bufOut,
       short bufStart) {
-    if (masterKeySecret.length > 16) {
+    if (masterKeyLen > 16) {
 
       return -1;
     }
-    aes128Key.setKey(masterKeySecret, (short) 0);
+    aes128Key.setKey(masterKeySecret, masterKeyStart);
     kdf.init(aes128Key, Signature.MODE_SIGN);
     return kdf.sign(bufIn, bufInStart, buffInLength, bufOut, bufStart);
   }
@@ -372,11 +380,6 @@ public class KMSimulator implements KMSEProvider {
 
   public HMACKey cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength) {
     return null;
-  }
-
-  @Override
-  public short cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
-    return 0;
   }
 
   public short hmacSign(HMACKey key, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
@@ -498,73 +501,23 @@ public class KMSimulator implements KMSEProvider {
   }
 
   @Override
-  public short getSystemTimeInMilliSeconds(byte[] timeBuf, short timeStart, short timeOffset) {
-    return 0;
-  }
-
-  @Override
-  public short addListener(KMEventListener listener, byte eventType) {
-    return 0;
-  }
-
-  @Override
-  public short getEventData(byte[] eventBuf, short eventStart, short eventLength) {
-    return 0;
-  }
-
-  @Override
-  public boolean isAlgSupported(byte alg) {
-    return false;
-  }
-
-  @Override
-  public boolean isKeySizeSupported(byte alg, short keySize) {
-    return false;
-  }
-
-  @Override
-  public boolean isCurveSupported(byte eccurve) {
-    return false;
-  }
-
-  @Override
-  public boolean isDigestSupported(byte alg, byte digest) {
-    return false;
-  }
-
-  @Override
-  public boolean isPaddingSupported(byte alg, byte padding) {
-    return false;
-  }
-
-  @Override
-  public boolean isBlockModeSupported(byte alg, byte blockMode) {
-    return false;
-  }
-
-  @Override
-  public boolean isSystemTimerSupported() {
-    return false;
-  }
-
-  @Override
-  public boolean isBootEventSupported() {
-    return false;
-  }
-
-  @Override
-  public boolean isPkcs8ParsingSupported() {
-    return false;
-  }
-
-  @Override
-  public boolean isAttestationCertSupported() {
+  public boolean isBackupRestoreSupported() {
     return false;
   }
 
   @Override
   public KMAttestationCert getAttestationCert(boolean rsaCert) {
     return null;
+  }
+
+  @Override
+  public void backup(byte[] buf, short start, short len) {
+
+  }
+
+  @Override
+  public short restore(byte[] buf, short start) {
+    return 0;
   }
 
 }

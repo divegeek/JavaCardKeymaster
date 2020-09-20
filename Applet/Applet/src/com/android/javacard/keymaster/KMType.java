@@ -298,4 +298,5 @@ public abstract class KMType {
     Util.setShort(heap, (short) (ptr + 1), INVALID_VALUE);
     return ptr;
   }
+
 }
