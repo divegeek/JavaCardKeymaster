@@ -26,12 +26,10 @@ public class KMRsa2048NoDigestSignature extends Signature {
 
   @Override
   public void init(Key key, byte b, byte[] bytes, short i, short i1) throws CryptoException {
-
   }
 
   @Override
   public void setInitialDigest(byte[] bytes, short i, short i1, byte[] bytes1, short i2, short i3) throws CryptoException {
-
   }
 
   @Override
@@ -61,7 +59,6 @@ public class KMRsa2048NoDigestSignature extends Signature {
 
   @Override
   public void update(byte[] bytes, short i, short i1) throws CryptoException {
-
   }
 
   @Override
@@ -93,8 +90,8 @@ public class KMRsa2048NoDigestSignature extends Signature {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
     Util.arrayFillNonAtomic(inputData, (short) 0, (short) 256, (byte) 0x00);
-    if (padding == KMCipher.PAD_NOPAD) { // add zero to right
-    } else if (padding == KMCipher.PAD_PKCS1) {// 0x00||0x01||PS||0x00
+    if (padding == KMType.PADDING_NONE) { // add zero to right
+    } else if (padding == KMType.RSA_PKCS1_1_5_SIGN) {// 0x00||0x01||PS||0x00
       inputData[0] = 0x00;
       inputData[1] = 0x01;
       Util.arrayFillNonAtomic(inputData,(short)2,(short)(256-len-3),(byte)0xFF);
@@ -107,7 +104,7 @@ public class KMRsa2048NoDigestSignature extends Signature {
   }
 
   private boolean isValidData(byte[] buf, short start, short len) {
-    if (padding == KMCipher.PAD_NOPAD) {
+    if (padding == KMType.PADDING_NONE) {
       if (len > 256) return false;
       else if (len == 256) {
         short v = Util.arrayCompare(buf, start, rsaModulus, (short) 0, len);

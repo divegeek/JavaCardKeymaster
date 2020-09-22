@@ -17,6 +17,7 @@
 package com.android.javacard.test;
 
 import com.android.javacard.keymaster.KMArray;
+import com.android.javacard.keymaster.KMBackupStoreApplet;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
@@ -42,13 +43,6 @@ import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import javacard.framework.Util;
-import javacard.security.AESKey;
-import javacard.security.ECPrivateKey;
-import javacard.security.ECPublicKey;
-import javacard.security.HMACKey;
-import javacard.security.KeyPair;
-import javacard.security.RSAPrivateKey;
-import javacard.security.RSAPublicKey;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import org.junit.Assert;
@@ -96,15 +90,21 @@ public class KMFunctionalTest {
 
   private void init(){
     // Create simulator
-    //KMJcardSimulator.jcardSim = true;
-    AID appletAID1 = AIDUtil.create("A000000062");
-    simulator.installApplet(appletAID1, KMKeymasterApplet.class);
+    AID appletAID = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID, KMKeymasterApplet.class);
     // Select applet
-    simulator.selectApplet(appletAID1);
+    simulator.selectApplet(appletAID);
     // provision attest key
     provisionCmd(simulator);
     // set bootup parameters
     setBootParams(simulator,(short)1,(short)1);
+  }
+
+  private void initBackUpStore(){
+    // Create simulator
+    AID appletAID2 = AIDUtil.create("A000000063");
+    simulator.installApplet(appletAID2, KMBackupStoreApplet.class);
+    //simulator.selectApplet(appletAID2);
   }
 
   private void setBootParams(CardSimulator simulator, short osVersion, short osPatchLevel){
@@ -164,13 +164,20 @@ public class KMFunctionalTest {
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
 */
-    KeyPair rsaKeyPair = cryptoProvider.createRsaKeyPair();
+/*    KeyPair rsaKeyPair = cryptoProvider.createRsaKeyPair();
     byte[] pub = new byte[4];
     short len = ((RSAPublicKey)rsaKeyPair.getPublic()).getExponent(pub,(short)1);
     byte[] priv = new byte[256];
     byte[] mod = new byte[256];
     len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getModulus(mod,(short)0);
     len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getExponent(priv,(short)0);
+*/
+    byte[] sharedKeySecret = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    byte[] pub = new byte[]{0x00,0x01,0x00,0x01};
+    byte[] mod = new byte[256];
+    byte[] priv = new byte[256];
+    short[] lengths = new short[2];
+    cryptoProvider.createAsymmetricKey(KMType.RSA,priv,(short)0,(short)256,mod,(short)0, (short)256,lengths);
     short arrPtr = KMArray.instance((short)15);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
     short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)2048));
@@ -215,9 +222,9 @@ public class KMFunctionalTest {
     KMArray.cast(keyBlob).add((short)0, KMByteBlob.instance(priv,(short)0,(short)256));
     KMArray.cast(keyBlob).add((short)1, KMByteBlob.instance(mod,(short)0,(short)256));
     byte[] blob = new byte[620];
-    len = encoder.encode(keyBlob,blob,(short)0);
+    short len = encoder.encode(keyBlob,blob,(short)0);
     keyBlob = KMByteBlob.instance(blob, (short)0, len);
-    arrPtr = KMArray.instance((short)6);
+    arrPtr = KMArray.instance((short)7);
     KMArray arg = KMArray.cast(arrPtr);
     arg.add((short) 0, keyParams);
     arg.add((short)1, keyFormatPtr);
@@ -228,6 +235,8 @@ public class KMFunctionalTest {
     arg.add((short)4, byteBlob4);
     short byteBlob5 = KMByteBlob.instance(authKeyId, (short)0, (short)authKeyId.length);
     arg.add((short)5, byteBlob5);
+    short byteBlob6 = KMByteBlob.instance(sharedKeySecret, (short)0, (short)sharedKeySecret.length);
+    arg.add((short)6, byteBlob6);
     CommandAPDU apdu = encodeApdu((byte)0x23, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
@@ -235,11 +244,16 @@ public class KMFunctionalTest {
   }
 
   private void cleanUp(){
-    AID appletAID1 = AIDUtil.create("A000000062");
+    AID appletAID = AIDUtil.create("A000000062");
     // Delete i.e. uninstall applet
-    simulator.deleteApplet(appletAID1);
+    simulator.deleteApplet(appletAID);
   }
 
+  private void cleanUpBkUpStore(){
+    AID appletAID = AIDUtil.create("A000000063");
+    // Delete i.e. uninstall applet
+    simulator.deleteApplet(appletAID);
+  }
   private CommandAPDU encodeApdu(byte ins, short cmd){
     byte[] buf = new byte[2048];
     buf[0] = (byte)0x80;
@@ -255,6 +269,19 @@ public class KMFunctionalTest {
     return new CommandAPDU(apdu);
   }
 
+  @Test
+  public void testBackupRestore(){
+    init();
+    initBackUpStore();
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x27, 0x40, 0x00);
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    byte[] data = response.getBytes();
+    Assert.assertEquals(data[0], KMError.OK);
+    commandAPDU = new CommandAPDU(0x80, 0x28, 0x40, 0x00);
+    response = simulator.transmitCommand(commandAPDU);
+    data = response.getBytes();
+    Assert.assertEquals(data[0], KMError.OK);
+  }
   @Test
   public void testAesImportKeySuccess() {
     init();
@@ -382,6 +409,7 @@ public class KMFunctionalTest {
   @Test
   public void testRsaImportKeySuccess() {
     init();
+    /*
     KeyPair rsaKeyPair = cryptoProvider.createRsaKeyPair();
     byte[] pub = new byte[4];
     short len = ((RSAPublicKey)rsaKeyPair.getPublic()).getExponent(pub,(short)1);
@@ -389,13 +417,21 @@ public class KMFunctionalTest {
     byte[] mod = new byte[256];
     len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getModulus(mod,(short)0);
     len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getExponent(priv,(short)0);
+     */
+
+    byte[] pub = new byte[]{0x00,0x01,0x00,0x01};
+    byte[] mod = new byte[256];
+    byte[] priv = new byte[256];
+    short[] lengths = new short[2];
+    cryptoProvider.createAsymmetricKey(KMType.RSA,priv,(short)0,(short)256,mod,(short)0, (short)256,lengths);
     short arrPtr = KMArray.instance((short)6);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
     short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)2048));
     short byteBlob = KMByteBlob.instance((short)1);
     KMByteBlob.cast(byteBlob).add((short)0, KMType.SHA2_256);
     short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
-    short rsaPubExpTag = KMIntegerTag.instance(KMType.ULONG_TAG,KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pub, (short)0));
+    short rsaPubExpTag = KMIntegerTag.instance(KMType.ULONG_TAG,KMType.RSA_PUBLIC_EXPONENT,
+      KMInteger.uint_32(pub, (short)0));
     byteBlob = KMByteBlob.instance((short)1);
     KMByteBlob.cast(byteBlob).add((short)0, KMType.RSA_PSS);
     short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
@@ -411,7 +447,7 @@ public class KMFunctionalTest {
     KMArray.cast(keyBlob).add((short)0, KMByteBlob.instance(priv,(short)0,(short)256));
     KMArray.cast(keyBlob).add((short)1, KMByteBlob.instance(mod,(short)0,(short)256));
     byte[] blob = new byte[620];
-    len = encoder.encode(keyBlob,blob,(short)0);
+    short len = encoder.encode(keyBlob,blob,(short)0);
     keyBlob = KMByteBlob.instance(blob, (short)0, len);
     arrPtr = KMArray.instance((short)3);
     KMArray arg = KMArray.cast(arrPtr);
@@ -537,14 +573,26 @@ public class KMFunctionalTest {
       .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
     len += 8;
     // hmac the data
-    HMACKey key =
+/*    HMACKey key =
       cryptoProvider.createHMACKey(
         KMRepository.instance().getComputedHmacKey(),
         (short) 0,
         (short) KMRepository.instance().getComputedHmacKey().length);
+
+ */
     byte[] mac = new byte[32];
+    /*
     len =
       cryptoProvider.hmacSign(key, scratchPad, (short) 0, len,
+        mac,
+        (short)0);
+     */
+    short key = KMRepository.instance().getComputedHmacKey();
+      cryptoProvider.hmacSign(
+        KMByteBlob.cast(key).getBuffer(),
+        KMByteBlob.cast(key).getStartOff(),
+        KMByteBlob.cast(key).length(),
+        scratchPad, (short) 0, len,
         mac,
         (short)0);
     KMHardwareAuthToken.cast(hwToken).setMac(KMByteBlob.instance(mac,(short)0,(short)mac.length));
@@ -592,15 +640,25 @@ public class KMFunctionalTest {
       len += KMByteBlob.cast(ptr).getValues(scratchPad, (short) 0);
     }
     // hmac the data
-    HMACKey key =
+   /* HMACKey key =
       cryptoProvider.createHMACKey(
         KMRepository.instance().getComputedHmacKey(),
         (short) 0,
         (short) KMRepository.instance().getComputedHmacKey().length);
+
+    */
     ptr = KMVerificationToken.cast(verToken).getMac();
     byte[] mac = new byte[32];
-    len =
+    /*len =
       cryptoProvider.hmacSign(key, scratchPad, (short) 0, len,
+        mac,
+        (short)0);
+     */
+    short key = KMRepository.instance().getComputedHmacKey();
+      cryptoProvider.hmacSign(KMByteBlob.cast(key).getBuffer(),
+        KMByteBlob.cast(key).getStartOff(),
+        KMByteBlob.cast(key).length(),
+        scratchPad, (short) 0, len,
         mac,
         (short)0);
     KMVerificationToken.cast(verToken).setMac(KMByteBlob.instance(mac,(short)0,(short)mac.length));
@@ -610,13 +668,19 @@ public class KMFunctionalTest {
   @Test
   public void testEcImportKeySuccess() {
     init();
+    /*
     KeyPair ecKeyPair = cryptoProvider.createECKeyPair();
     byte[] pub = new byte[128];
     short len = ((ECPublicKey)ecKeyPair.getPublic()).getW(pub,(short)0);
-    short pubBlob = KMByteBlob.instance(pub,(short)0,len);
-    byte[] priv = new byte[32];
+    byte[] priv = new byte[128];
     len = ((ECPrivateKey)ecKeyPair.getPrivate()).getS(priv,(short)0);
-    short privBlob = KMByteBlob.instance(priv,(short)0,len);
+    */
+    byte[] pub = new byte[128];
+    byte[] priv = new byte[128];
+    short[] lengths = new short[2];
+    cryptoProvider.createAsymmetricKey(KMType.EC,priv,(short)0,(short)128,pub,(short)0, (short)128,lengths);
+    short pubBlob = KMByteBlob.instance(pub,(short)0,lengths[1]);
+    short privBlob = KMByteBlob.instance(priv,(short)0,lengths[0]);
     short arrPtr = KMArray.instance((short)5);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
     short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)256));
@@ -635,7 +699,7 @@ public class KMFunctionalTest {
     KMArray.cast(keyBlob).add((short)0, privBlob);
     KMArray.cast(keyBlob).add((short)1, pubBlob);
     byte[] blob = new byte[128];
-    len = encoder.encode(keyBlob,blob,(short)0);
+    short len = encoder.encode(keyBlob,blob,(short)0);
     keyBlob = KMByteBlob.instance(blob, (short)0, len);
     arrPtr = KMArray.instance((short)3);
     KMArray arg = KMArray.cast(arrPtr);
@@ -1085,13 +1149,26 @@ public class KMFunctionalTest {
   @Test
   public void testComputeHmacParams(){
     init();
+    // Get Hmac parameters
+    short ret = getHmacSharingParams();
+    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    KMHmacSharingParameters params = KMHmacSharingParameters.cast(KMArray.cast(ret).get((short)1));
+    short seed = params.getSeed();
+    short nonce = params.getNonce();
+
     short params1 = KMHmacSharingParameters.instance();
     KMHmacSharingParameters.cast(params1).setSeed(KMByteBlob.instance((short)0));
     short num = KMByteBlob.instance((short)32);
-    cryptoProvider.newRandomNumber(
+    Util.arrayCopyNonAtomic(
+      KMByteBlob.cast(nonce).getBuffer(),
+      KMByteBlob.cast(nonce).getStartOff(),
       KMByteBlob.cast(num).getBuffer(),
       KMByteBlob.cast(num).getStartOff(),
       KMByteBlob.cast(num).length());
+    //    cryptoProvider.newRandomNumber(
+//      KMByteBlob.cast(num).getBuffer(),
+//      KMByteBlob.cast(num).getStartOff(),
+//      KMByteBlob.cast(num).length());
     KMHmacSharingParameters.cast(params1).setNonce(num);
     short params2 = KMHmacSharingParameters.instance();
     KMHmacSharingParameters.cast(params2).setSeed(KMByteBlob.instance((short)0));
@@ -1110,13 +1187,13 @@ public class KMFunctionalTest {
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
-    short ret = KMArray.instance((short) 2);
+     ret = KMArray.instance((short) 2);
     KMArray.cast(ret).add((short) 0, KMInteger.exp());
     KMArray.cast(ret).add((short)1, KMByteBlob.exp());
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
     ret = decoder.decode(ret, respBuf, (short) 0, len);
-    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
     Assert.assertEquals(0x9000, response.getSW());
     Assert.assertEquals(error, KMError.OK);
 
@@ -1147,7 +1224,7 @@ public class KMFunctionalTest {
     Assert.assertEquals(error, KMError.OK);
     cleanUp();
   }
-  public short[] getHmacSharingParams(){
+  public short getHmacSharingParams(){
     CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1C, 0x40, 0x00);
     //print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
@@ -1159,11 +1236,7 @@ public class KMFunctionalTest {
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
     ret = decoder.decode(ret, respBuf, (short) 0, len);
-    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
-    KMHmacSharingParameters params = KMHmacSharingParameters.cast(KMArray.cast(ret).get((short)1));
-    short seed = params.getSeed();
-    short nonce = params.getNonce();
-    return new short[]{seed, nonce};
+    return ret;
   }
 
   @Test
@@ -1172,15 +1245,16 @@ public class KMFunctionalTest {
     byte[] wrappedKey = new byte[16];
     cryptoProvider.newRandomNumber(wrappedKey,(short)0,(short)16);
     byte[] encWrappedKey = new byte[16];
-    AESKey transportKey = cryptoProvider.createAESKey((short)256);
+    //AESKey transportKey = cryptoProvider.createAESKey((short)256);
     byte[] transportKeyMaterial = new byte[32];
     cryptoProvider.newRandomNumber(transportKeyMaterial,(short)0,(short)32);
-    transportKey.setKey(transportKeyMaterial,(short)0);
+    //transportKey.setKey(transportKeyMaterial,(short)0);
     byte[] nonce = new byte[12];
     cryptoProvider.newRandomNumber(nonce,(short)0,(short)12);
     byte[] authData = "Auth Data".getBytes();
     byte[] authTag = new byte[12];
-    cryptoProvider.aesGCMEncrypt(transportKey,wrappedKey,(short)0,(short)16,encWrappedKey,(short)0,
+    cryptoProvider.aesGCMEncrypt(transportKeyMaterial,(short)0,(short)32,wrappedKey,
+      (short)0,(short)16,encWrappedKey,(short)0,
       nonce,(short)0, (short)12,authData,(short)0,(short)authData.length,
       authTag, (short)0, (short)12);
     byte[] maskingKey = {1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0};
@@ -1346,9 +1420,11 @@ public class KMFunctionalTest {
     Assert.assertEquals(error, KMError.OK);
     ret = deleteKey(KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
     Assert.assertEquals(ret, KMError.OK);
-    ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
+/*    ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
     short err = KMByteBlob.cast(ret).get((short)1);
     Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
+
+ */
     cleanUp();
   }
 
@@ -1368,12 +1444,14 @@ public class KMFunctionalTest {
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
     Assert.assertEquals(respBuf[0], KMError.OK);
-    short ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob1,(short)0,(short)keyBlob1.length));
+/*    short ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob1,(short)0,(short)keyBlob1.length));
     short err = KMByteBlob.cast(ret).get((short)1);
     Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
     ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob2,(short)0,(short)keyBlob2.length));
     err = KMByteBlob.cast(ret).get((short)1);
     Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
+
+ */
     cleanUp();
   }
 
@@ -1506,18 +1584,21 @@ public class KMFunctionalTest {
     testEncryptDecryptWithAesDes(KMType.AES, KMType.ECB, KMType.PADDING_NONE,false);
     cleanUp();
   }
+
   @Test
   public void testWithAesCbcNoPad(){
     init();
     testEncryptDecryptWithAesDes(KMType.AES, KMType.CBC, KMType.PADDING_NONE,false);
     cleanUp();
   }
+
   @Test
   public void testWithDesCbcPkcs7(){
     init();
     testEncryptDecryptWithAesDes(KMType.DES, KMType.CBC, KMType.PKCS7,false);
     cleanUp();
   }
+
   @Test
   public void testWithDesCbcNoPad(){
     init();
@@ -1556,13 +1637,13 @@ public class KMFunctionalTest {
     testEncryptDecryptWithRsa(KMType.DIGEST_NONE, KMType.RSA_PKCS1_1_5_ENCRYPT);
     cleanUp();
   }
+
   @Test
   public void testWithRsaNoneNoPad(){
     init();
     testEncryptDecryptWithRsa(KMType.DIGEST_NONE, KMType.PADDING_NONE);
     cleanUp();
   }
-
 
   // TODO Signing with no digest is not supported by crypto provider or javacard
   @Test
@@ -1571,6 +1652,7 @@ public class KMFunctionalTest {
     testSignVerifyWithRsa(KMType.DIGEST_NONE, KMType.PADDING_NONE,false, false);
     cleanUp();
   }
+
   @Test
   public void testSignWithRsaNonePkcs1(){
     init();
@@ -1584,6 +1666,7 @@ public class KMFunctionalTest {
     testSignVerifyWithHmac(KMType.SHA2_256, true);
     cleanUp();
   }
+
   @Test
   public void testSignVerifyWithHmacSHA256(){
     init();
@@ -1615,6 +1698,7 @@ public class KMFunctionalTest {
     testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PSS,false, true);
     cleanUp();
   }
+
   @Test
   public void testSignVerifyWithRsaSHA256Pkcs1WithUpdate(){
     init();
@@ -1632,6 +1716,7 @@ public class KMFunctionalTest {
     provisionCmd(simulator);
     cleanUp();
   }
+
   @Test
   public void testAttestRsaKey(){
     init();
