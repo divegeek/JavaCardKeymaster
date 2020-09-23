@@ -72,6 +72,7 @@ public class KMError {
   public static short CONCURRENT_PROOF_OF_PRESENCE_REQUESTED =  70;
   public static short NO_USER_CONFIRMATION =  71;
   public static short DEVICE_LOCKED =  72;
+  public static short EARLY_BOOT_ENDED = 73;
   public static short UNIMPLEMENTED =  100;
   public static short VERSION_MISMATCH =  101;
   public static short UNKNOWN_ERROR =  1000;

@@ -26,6 +26,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
+import javacard.framework.AID;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
@@ -68,6 +69,9 @@ public class KMJcardSimulator implements KMSEProvider {
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   private static final int AES_GCM_KEY_SIZE = 16;
+  private static final byte[] aidArr = new byte[]{ (byte)0xA0, 0x00, 0x00, 0x00, 0x63};
+
+
   public static boolean jcardSim = false;
   private static Signature kdf;
   private static Signature hmacSignature;
@@ -478,18 +482,19 @@ public class KMJcardSimulator implements KMSEProvider {
 
   @Override
   public short aesCCMSign(
-      byte[] bufIn,
-      short bufInStart,
-      short buffInLength,
-      byte[] masterKeySecret,
-      byte[] bufOut,
-      short bufStart) {
-    if (masterKeySecret.length > 16) {
+    byte[] bufIn,
+    short bufInStart,
+    short buffInLength,
+    byte[] masterKeySecret,
+    short masterKeyStart,
+    short masterKeyLen,
+    byte[] bufOut,
+    short bufStart) {
+    if (masterKeyLen > 16) {
       return -1;
     }
-
     AESKey key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
-    key.setKey(masterKeySecret, (short) 0);
+    key.setKey(masterKeySecret, masterKeyStart);
     byte[] in = new byte[buffInLength];
     Util.arrayCopyNonAtomic(bufIn, bufInStart,in,(short)0,buffInLength);
     kdf.init(key, Signature.MODE_SIGN);
@@ -499,7 +504,7 @@ public class KMJcardSimulator implements KMSEProvider {
     return len;
   }
    
-  public HMACKey cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength) {
+  public HMACKey cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label, byte[] context, short contextStart, short contextLength) {
     // This is hardcoded to requirement - 32 byte output with two concatenated 16 bytes K1 and K2.
     final byte n = 2; // hardcoded
     final byte[] L = {0,0,1,0}; // [L] 256 bits - hardcoded 32 bits as per reference impl in keymaster.
@@ -508,7 +513,7 @@ public class KMJcardSimulator implements KMSEProvider {
     byte[] keyOut = new byte[(short)(n*16)];
     Signature prf = Signature.getInstance(Signature.ALG_AES_CMAC_128, false);
     AESKey key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
-    key.setKey(keyMaterial, (short) 0);
+    key.setKey(keyMaterial, keyMaterialStart);
     prf.init(key, Signature.MODE_SIGN);
     byte i =1;
     short pos = 0;
@@ -525,8 +530,8 @@ public class KMJcardSimulator implements KMSEProvider {
   }
 
   @Override
-  public short cmacKdf(byte[] keyMaterial, byte[] label, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
-    HMACKey key = cmacKdf(keyMaterial,label,context,contextStart,contextLength);
+  public short cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
+    HMACKey key = cmacKdf(keyMaterial,keyMaterialStart, keyMaterialLen, label,context,contextStart,contextLength);
     return key.getKey(keyBuf,keyStart);
   }
 
@@ -1235,68 +1240,9 @@ public class KMJcardSimulator implements KMSEProvider {
     return ecVerifier;
   }
 
-  @Override
-  public short getSystemTimeInMilliSeconds(byte[] timeBuf, short timeStart, short timeOffset) {
-    return 0;
-  }
 
   @Override
-  public short addListener(KMEventListener listener, byte eventType) {
-    return 0;
-  }
-
-  @Override
-  public short getEventData(byte[] eventBuf, short eventStart, short eventLength) {
-    return 0;
-  }
-
-  @Override
-  public boolean isAlgSupported(byte alg) {
-    return true;
-  }
-
-  @Override
-  public boolean isKeySizeSupported(byte alg, short keySize) {
-    return true;
-  }
-
-  @Override
-  public boolean isCurveSupported(byte eccurve) {
-    return true;
-  }
-
-  @Override
-  public boolean isDigestSupported(byte alg, byte digest) {
-    return true;
-  }
-
-  @Override
-  public boolean isPaddingSupported(byte alg, byte padding) {
-    return true;
-  }
-
-  @Override
-  public boolean isBlockModeSupported(byte alg, byte blockMode) {
-    return true;
-  }
-
-  @Override
-  public boolean isSystemTimerSupported() {
-    return false;
-  }
-
-  @Override
-  public boolean isBootEventSupported() {
-    return false;
-  }
-
-  @Override
-  public boolean isPkcs8ParsingSupported() {
-    return false;
-  }
-
-  @Override
-  public boolean isAttestationCertSupported() {
+  public boolean isBackupRestoreSupported() {
     return true;
   }
 
@@ -1304,6 +1250,25 @@ public class KMJcardSimulator implements KMSEProvider {
   public KMAttestationCert getAttestationCert(boolean rsaCert) {
     //certBuilder.reset();
     return KMAttestationCertImpl.instance(rsaCert);
+  }
+
+  @Override
+  public void backup(byte[] buf, short start, short len) {
+    byte[] data = new byte[len];
+    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
+    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
+    Util.arrayCopyNonAtomic(buf,start,data,(short)0,len);
+    backupStore.backup(data,(short)0,len);
+  }
+
+  @Override
+  public short restore(byte[] buf, short start) {
+    byte[] data = new byte[2200];
+    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
+    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
+    short len = backupStore.restore(data,(short)0);
+    Util.arrayCopyNonAtomic(data,(short)0,buf,start,len);
+    return len;
   }
 
   /*

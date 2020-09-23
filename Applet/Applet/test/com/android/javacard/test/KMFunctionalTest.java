@@ -17,6 +17,7 @@
 package com.android.javacard.test;
 
 import com.android.javacard.keymaster.KMArray;
+import com.android.javacard.keymaster.KMBackupStoreApplet;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
@@ -42,13 +43,6 @@ import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import javacard.framework.Util;
-import javacard.security.AESKey;
-import javacard.security.ECPrivateKey;
-import javacard.security.ECPublicKey;
-import javacard.security.HMACKey;
-import javacard.security.KeyPair;
-import javacard.security.RSAPrivateKey;
-import javacard.security.RSAPublicKey;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import org.junit.Assert;
@@ -96,15 +90,21 @@ public class KMFunctionalTest {
 
   private void init(){
     // Create simulator
-    //KMJcardSimulator.jcardSim = true;
-    AID appletAID1 = AIDUtil.create("A000000062");
-    simulator.installApplet(appletAID1, KMKeymasterApplet.class);
+    AID appletAID = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID, KMKeymasterApplet.class);
     // Select applet
-    simulator.selectApplet(appletAID1);
+    simulator.selectApplet(appletAID);
     // provision attest key
     provisionCmd(simulator);
     // set bootup parameters
     setBootParams(simulator,(short)1,(short)1);
+  }
+
+  private void initBackUpStore(){
+    // Create simulator
+    AID appletAID2 = AIDUtil.create("A000000063");
+    simulator.installApplet(appletAID2, KMBackupStoreApplet.class);
+    //simulator.selectApplet(appletAID2);
   }
 
   private void setBootParams(CardSimulator simulator, short osVersion, short osPatchLevel){
@@ -244,11 +244,16 @@ public class KMFunctionalTest {
   }
 
   private void cleanUp(){
-    AID appletAID1 = AIDUtil.create("A000000062");
+    AID appletAID = AIDUtil.create("A000000062");
     // Delete i.e. uninstall applet
-    simulator.deleteApplet(appletAID1);
+    simulator.deleteApplet(appletAID);
   }
 
+  private void cleanUpBkUpStore(){
+    AID appletAID = AIDUtil.create("A000000063");
+    // Delete i.e. uninstall applet
+    simulator.deleteApplet(appletAID);
+  }
   private CommandAPDU encodeApdu(byte ins, short cmd){
     byte[] buf = new byte[2048];
     buf[0] = (byte)0x80;
@@ -264,6 +269,19 @@ public class KMFunctionalTest {
     return new CommandAPDU(apdu);
   }
 
+  @Test
+  public void testBackupRestore(){
+    init();
+    initBackUpStore();
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x27, 0x40, 0x00);
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    byte[] data = response.getBytes();
+    Assert.assertEquals(data[0], KMError.OK);
+    commandAPDU = new CommandAPDU(0x80, 0x28, 0x40, 0x00);
+    response = simulator.transmitCommand(commandAPDU);
+    data = response.getBytes();
+    Assert.assertEquals(data[0], KMError.OK);
+  }
   @Test
   public void testAesImportKeySuccess() {
     init();
@@ -569,10 +587,11 @@ public class KMFunctionalTest {
         mac,
         (short)0);
      */
+    short key = KMRepository.instance().getComputedHmacKey();
       cryptoProvider.hmacSign(
-        KMRepository.instance().getComputedHmacKey(),
-        (short) 0,
-        (short) KMRepository.instance().getComputedHmacKey().length,
+        KMByteBlob.cast(key).getBuffer(),
+        KMByteBlob.cast(key).getStartOff(),
+        KMByteBlob.cast(key).length(),
         scratchPad, (short) 0, len,
         mac,
         (short)0);
@@ -634,11 +653,11 @@ public class KMFunctionalTest {
       cryptoProvider.hmacSign(key, scratchPad, (short) 0, len,
         mac,
         (short)0);
-
      */
-      cryptoProvider.hmacSign(KMRepository.instance().getComputedHmacKey(),
-        (short) 0,
-        (short) KMRepository.instance().getComputedHmacKey().length,
+    short key = KMRepository.instance().getComputedHmacKey();
+      cryptoProvider.hmacSign(KMByteBlob.cast(key).getBuffer(),
+        KMByteBlob.cast(key).getStartOff(),
+        KMByteBlob.cast(key).length(),
         scratchPad, (short) 0, len,
         mac,
         (short)0);
@@ -648,7 +667,8 @@ public class KMFunctionalTest {
 
   @Test
   public void testEcImportKeySuccess() {
-    init();/*
+    init();
+    /*
     KeyPair ecKeyPair = cryptoProvider.createECKeyPair();
     byte[] pub = new byte[128];
     short len = ((ECPublicKey)ecKeyPair.getPublic()).getW(pub,(short)0);
@@ -1678,6 +1698,7 @@ public class KMFunctionalTest {
     testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PSS,false, true);
     cleanUp();
   }
+
   @Test
   public void testSignVerifyWithRsaSHA256Pkcs1WithUpdate(){
     init();
@@ -1695,6 +1716,7 @@ public class KMFunctionalTest {
     provisionCmd(simulator);
     cleanUp();
   }
+
   @Test
   public void testAttestRsaKey(){
     init();

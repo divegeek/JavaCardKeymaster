@@ -227,6 +227,10 @@ public abstract class KMType {
   public static final short UNLOCKED_DEVICE_REQUIRED = (short) 0x01FD;
   // Reset Since Id Rotation
   public static final short RESET_SINCE_ID_ROTATION = (short) 0x03EC;
+  //Early boot ended.
+  public static final short EARLY_BOOT_ENDED = (short) 0x0131;
+  //Device unique attestation.
+  public static final short DEVICE_UNIQUE_ATTESTATION = (short) 0x02D0;
 
   // Byte Tag
   // Application Id
@@ -294,4 +298,5 @@ public abstract class KMType {
     Util.setShort(heap, (short) (ptr + 1), INVALID_VALUE);
     return ptr;
   }
+
 }

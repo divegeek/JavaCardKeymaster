@@ -16,12 +16,14 @@
 
 package com.android.javacard.keymaster;
 
+import javacard.framework.AID;
 import javacard.framework.APDU;
 import javacard.framework.Applet;
 import javacard.framework.AppletEvent;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
+import javacard.framework.Shareable;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
 import javacardx.apdu.ExtendedLength;
@@ -31,8 +33,6 @@ import javacardx.apdu.ExtendedLength;
  * objects. It also implements the keymaster state machine and handles javacard applet life cycle
  * events.
  */
-// TODO Currently implementing ExtendedLength for ease of testing
-//  - remove this in future.
 public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLength {
   // Constants.
   public static final byte AES_BLOCK_SIZE = 16;
@@ -42,6 +42,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final short KM_HAL_VERSION = (short) 0x4000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short MAX_IO_LENGTH = 0x600;
+
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
     0x4B, 0x65, 0x79, 0x6D, 0x61, 0x73, 0x74, 0x65, 0x72, 0x20, 0x48, 0x4D, 0x41, 0x43, 0x20, 0x56,
@@ -90,6 +91,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_SET_BOOT_PARAMS_CMD = 0x24;
   private static final byte INS_DEVICE_LOCKED_CMD = 0x25;
   private static final byte INS_EARLY_BOOT_ENDED_CMD = 0x26;
+  private static final byte INS_BACKUP_CMD = 0x27;
+  private static final byte INS_RESTORE_CMD = 0x28;
 
   // Data Dictionary items
   public static final byte DATA_ARRAY_SIZE = 30;
@@ -200,7 +203,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    * @param bLength the length in bytes of the parameter data in bArray
    */
   public static void install(byte[] bArray, short bOffset, byte bLength) {
-    new KMKeymasterApplet();
+   new KMKeymasterApplet();
   }
 
   /**
@@ -247,6 +250,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   @Override
   public void process(APDU apdu) {
     repository.onProcess();
+    //getRepository();
     // Verify whether applet is in correct state.
     if ((keymasterState != KMKeymasterApplet.ACTIVE_STATE)
         && (keymasterState != KMKeymasterApplet.FIRST_SELECT_STATE)) {
@@ -272,7 +276,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
     }
     // Validate whether INS can be supported
-    if (!(apduIns >= INS_GENERATE_KEY_CMD && apduIns <= INS_EARLY_BOOT_ENDED_CMD)) {
+    if (!(apduIns >= INS_GENERATE_KEY_CMD && apduIns <= INS_RESTORE_CMD)) {
       ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
     }
     // Validate if INS is provision command if applet is in FIRST_SELECT_STATE.
@@ -360,6 +364,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_EARLY_BOOT_ENDED_CMD:
           processEarlyBootEndedCmd(apdu);
           break;
+        case INS_BACKUP_CMD:
+          processBackupCmd(apdu);
+          break;
+        case INS_RESTORE_CMD:
+          processRestoreCmd(apdu);
+          break;
         default:
           ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
@@ -373,6 +383,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       resetData();
       repository.clean();
     }
+  }
+
+  private void processRestoreCmd(APDU apdu) {
+    //No arguments
+    if(seProvider.isBackupRestoreSupported()) sendError(apdu,KMError.UNIMPLEMENTED);
+    byte[] data = repository.getDataTable();
+    short buf = KMByteBlob.instance((short)data.length);
+    short len = seProvider.restore(KMByteBlob.cast(buf).getBuffer(),
+      KMByteBlob.cast(buf).getStartOff());
+    repository.restoreData(buf);
+    sendError(apdu, KMError.OK);
+  }
+
+  private void processBackupCmd(APDU apdu) {
+    // No arguments
+    if(seProvider.isBackupRestoreSupported()) sendError(apdu,KMError.UNIMPLEMENTED);
+    byte[] data = repository.getDataTable();
+    seProvider.backup(data,(short)0, (short)data.length);
+    sendError(apdu,KMError.OK);
   }
 
   private void freeOperations(){
@@ -402,13 +431,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[VERIFICATION_TOKEN] = KMArray.cast(tmpVariables[0]).get((short)1);
     validateVerificationToken(data[VERIFICATION_TOKEN],scratchPad);
     short verTime = KMVerificationToken.cast(data[VERIFICATION_TOKEN]).getTimestamp();
-    short lastDeviceLockedTime = KMInteger.uint_64(repository.deviceLockedTimestamp, (short)0);
+    //short lastDeviceLockedTime = KMInteger.uint_64(repository.deviceLockedTimestamp, (short)0);
+    short lastDeviceLockedTime = repository.getDeviceTimeStamp();
     if(KMInteger.compare(verTime,lastDeviceLockedTime) > 0){
       Util.arrayFillNonAtomic(scratchPad,(short)0, (short)8, (byte)0);
       KMInteger.cast(verTime).getValue(scratchPad,(short)0,(short)8);
-      repository.deviceLockedFlag = true;
-      repository.deviceUnlockPasswordOnly = (tmpVariables[1] == 0x01);
-      Util.arrayCopy(scratchPad,(short)0,repository.deviceLockedTimestamp,(short)0,(short)repository.deviceLockedTimestamp.length);
+      //repository.deviceLockedFlag = true;
+      repository.setDeviceLock(true);
+      //repository.deviceUnlockPasswordOnly = (tmpVariables[1] == 0x01);
+      repository.setDeviceLockPasswordOnly(tmpVariables[1] == 0x01);
+      //Util.arrayCopy(scratchPad,(short)0,repository.deviceLockedTimestamp,(short)0,(short)repository.deviceLockedTimestamp.length);
+      repository.setDeviceLockTimestamp(scratchPad,(short)0,(short)8);
     }
     sendError(apdu,KMError.OK);
   }
@@ -606,6 +639,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         keymasterState = KMKeymasterApplet.ACTIVE_STATE;
       }
     }
+/*
+    byte[] tmp = repository.getDataTable();
+    seProvider.backup(tmp,(short)0,(short)data.length);
+    Util.arrayFillNonAtomic(
+      KMByteBlob.cast(tmp).getBuffer(),
+      KMByteBlob.cast(tmp).getStartOff(),
+      KMByteBlob.cast(tmp).length(),(byte)0);
+    seProvider.restore(
+      KMByteBlob.cast(tmp).getBuffer(),
+      KMByteBlob.cast(tmp).getStartOff());*/
     sendError(apdu, KMError.OK);
   }
 
@@ -684,9 +727,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // No Arguments
     // Create HMAC Sharing Parameters
     tmpVariables[2] = KMHmacSharingParameters.instance();
+    /*
     KMHmacSharingParameters.cast(tmpVariables[2]).setNonce(
       KMByteBlob.instance(repository.getHmacNonce(), (short) 0,
       KMRepository.HMAC_SEED_NONCE_SIZE));
+     */
+    KMHmacSharingParameters.cast(tmpVariables[2]).setNonce(repository.getHmacNonce());
     KMHmacSharingParameters.cast(tmpVariables[2]).setSeed(KMByteBlob.instance((short)0));
     // prepare the response
     tmpVariables[3] = KMArray.instance((short) 2);
@@ -764,6 +810,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //To check if nonce created by Strongbox is found. This value becomes 1 if both
     //seed and nonce created here are found in hmac sharing parameters received.
     tmpVariables[7] = 0;
+    tmpVariables[9] = repository.getHmacNonce();
 
     while (tmpVariables[2] < tmpVariables[0]) {
       // read HmacSharingParam
@@ -782,6 +829,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             tmpVariables[6]);
         tmpVariables[3] += tmpVariables[6]; // increment the concat index
       }else if(tmpVariables[7] == 0){
+        // TODO according to hal specs seed should always be empty. Confirm this.
         //The seed we are passing is of zero length so if seed length is zero
         //the seed generated here is found.
           tmpVariables[7] = 1;
@@ -804,12 +852,24 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       // Check if the nonce generated here is present in the hmacSharingParameters array.
       // Otherwise throw INVALID_ARGUMENT error.
       if (tmpVariables[7] == 1) {
+        /*
         if (0 == Util.arrayCompare(
                 repository.getHeap(),
                 (short) (tmpVariables[1] + tmpVariables[3]),
                 repository.getHmacNonce(),
                 (short) 0,
                 tmpVariables[6])) {
+          tmpVariables[7] = 2; // hmac nonce for this keymaster found.
+        } else {
+          tmpVariables[7] = 0;
+        }
+         */
+        if (0 == Util.arrayCompare(
+          repository.getHeap(),
+          (short) (tmpVariables[1] + tmpVariables[3]),
+          KMByteBlob.cast(tmpVariables[9]).getBuffer(),
+          KMByteBlob.cast(tmpVariables[9]).getStartOff(),
+          tmpVariables[6])) {
           tmpVariables[7] = 2; // hmac nonce for this keymaster found.
         } else {
           tmpVariables[7] = 0;
@@ -822,8 +882,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     	KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     // generate the key and store it in scratch pad - 32 bytes
+    tmpVariables[8] = repository.getSharedKey();
     tmpVariables[6] = seProvider.cmacKdf(
-      repository.getSharedKey(), ckdfLable ,
+      KMByteBlob.cast(tmpVariables[8]).getBuffer(),
+      KMByteBlob.cast(tmpVariables[8]).getStartOff(),
+      KMByteBlob.cast(tmpVariables[8]).length(), ckdfLable ,
       repository.getHeap(), tmpVariables[1], tmpVariables[3],scratchPad, (short) 0);
     // persist the computed hmac key.
     repository.initComputedHmac(scratchPad, (short) 0, tmpVariables[6]);
@@ -875,8 +938,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
     tmpVariables[1] = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, data[HW_PARAMETERS]);
     tmpVariables[1] = KMIntegerTag.cast(tmpVariables[1]).getValue();
-    tmpVariables[2] = KMInteger.uint_32(repository.osVersion,(short)0);
-    tmpVariables[3] = KMInteger.uint_32(repository.osPatch,(short)0);
+    tmpVariables[2] = repository.getOsVersion();
+    tmpVariables[3] = repository.getOsPatch();
     tmpVariables[4] = KMInteger.uint_8((byte)0);
     if(tmpVariables[0] != KMType.INVALID_VALUE){
       // os version in key characteristics must be less the os version stored in javacard or the
@@ -927,10 +990,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processImportWrappedKeyCmd(APDU apdu) {
-    // Currently only RAW formatted import key blob are supported
-    if (repository.keyBlobCount > KMRepository.MAX_BLOB_STORAGE) {
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
     // Receive the incoming request fully from the master into buffer.
     receiveIncoming(apdu);
     byte[] scratchPad = apdu.getBuffer();
@@ -1089,6 +1148,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 1);
     //parse key blob
     parseEncryptedKeyBlob(scratchPad);
+    //TODO This below code is added to pass one of the VTS 4.1 tests.
+    //TODO Need to confirm with Shawn and modify this accordingly.
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.DEVICE_UNIQUE_ATTESTATION, data[KEY_PARAMETERS]);
+    if(tmpVariables[0] != KMType.INVALID_VALUE) {
+    	KMException.throwIt(KMError.UNIMPLEMENTED);
+    }
     // The key which is being attested should be asymmetric i.e. RSA or EC
     tmpVariables[0] = KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]);
     if(tmpVariables[0] != KMType.RSA && tmpVariables[0] != KMType.EC){
@@ -1109,8 +1175,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     cert.attestationChallenge(KMByteTag.cast(tmpVariables[0]).getValue());
-    // extract key characteristics
-    //makeKeyCharacteristics(scratchPad);
     // unique id byte blob - uses application id and temporal month count of creation time.
     tmpVariables[0] = makeUniqueId(scratchPad);
     cert.uniqueId(tmpVariables[0]);
@@ -1139,45 +1203,51 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       else tmpVariables[2] = convertToDate(tmpVariables[1], scratchPad, true);
     } else { // if no expiry tag is present then use the attestation key certificate's expiry time
       // that was provisioned in the provision command. This will be in Generalized or UTC time
-      tmpVariables[2] = KMByteBlob.instance(repository.getCertDataBuffer(),
-        repository.getCertExpiryTime(),repository.getCertExpiryTimeLen());
+     // tmpVariables[2] = KMByteBlob.instance(repository.getCertDataBuffer(),
+     //   repository.getCertExpiryTime(),repository.getCertExpiryTimeLen());
+      tmpVariables[2] = repository.getCertExpiryTime();
     }
     cert.notAfter(tmpVariables[2]);
-//    // read att application id.
-//    tmpVariables[4] = KMKeyParameters.findTag(KMType.BYTES_TAG,KMType.ATTESTATION_APPLICATION_ID,data[KEY_PARAMETERS]);
-//    if(tmpVariables[4] != KMType.INVALID_VALUE) tmpVariables[4] = KMByteTag.cast(tmpVariables[4]).getValue();
-//    else tmpVariables[4] = 0;
-
-//    // read att challenge
-//    tmpVariables[5] = KMKeyParameters.findTag(KMType.BYTES_TAG,KMType.ATTESTATION_CHALLENGE,data[KEY_PARAMETERS]);
-//    if(tmpVariables[5] == KMType.INVALID_VALUE) KMException.throwIt(KMError.ATTESTATION_CHALLENGE_MISSING);
-//    tmpVariables[5] = KMByteTag.cast(tmpVariables[5]).getValue();
     addAttestationIds(cert);
     addTags(KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getHardwareEnforced(),true,cert);
     addTags(KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getSoftwareEnforced(),false,cert);
     if(repository.getAuthKeyId() != 0){
-      cert.authKey(KMByteBlob.instance(
+ /*     cert.authKey(KMByteBlob.instance(
         repository.getCertDataBuffer(),
         repository.getAuthKeyId(),
         repository.getAuthKeyIdLen()));
+ */   cert.authKey(repository.getAuthKeyId());
     }
-    cert.deviceLocked(repository.deviceLockedFlag);
-    cert.issuer(
+    //cert.deviceLocked(repository.deviceLockedFlag);
+    cert.deviceLocked(repository.getDeviceLock());
+   /* cert.issuer(
       KMByteBlob.instance(
         repository.getCertDataBuffer(),
       repository.getIssuer(),
       repository.getIssuerLen()));
-    cert.publicKey(data[PUB_KEY]);
-    cert.signingKey(
+
+    */
+      cert.issuer(repository.getIssuer());
+      cert.publicKey(data[PUB_KEY]);
+   /* cert.signingKey(
       KMByteBlob.instance(repository.getAttKeyExponent(),(short)0, KMRepository.ATT_KEY_EXP_SIZE),
       KMByteBlob.instance(repository.getAttKeyModulus(),(short)0,KMRepository.ATT_KEY_MOD_SIZE));
-    cert.verifiedBootHash(
-      KMByteBlob.instance(repository.verifiedBootHash,(short)0,(short)repository.verifiedBootHash.length));
-    cert.verifiedBootKey(
-      KMByteBlob.instance(repository.verifiedBootKey,(short)0,(short)repository.verifiedBootKey.length));
+    */
+    cert.signingKey(repository.getAttKeyExponent(),repository.getAttKeyModulus());
+    //cert.verifiedBootHash(
+    //  KMByteBlob.instance(repository.verifiedBootHash,(short)0,(short)repository.verifiedBootHash.length));
+    cert.verifiedBootHash(repository.getVerifiedBootHash());
+
+    // cert.verifiedBootKey(
+   //   KMByteBlob.instance(repository.verifiedBootKey,(short)0,(short)repository.verifiedBootKey.length));
+    cert.verifiedBootKey(repository.getVerifiedBootKey());
+  /*
     if(repository.selfSignedBootFlag) cert.verifiedState(KMType.SELF_SIGNED_BOOT);
     else if(repository.verifiedBootFlag) cert.verifiedState(KMType.VERIFIED_BOOT);
     else cert.verifiedState(KMType.UNVERIFIED_BOOT);
+
+   */
+    cert.verifiedState(repository.getBootState());
     // buffer for cert - we allocate 2KBytes buffer
     // TODO make this buffer size configurable
     tmpVariables[3] = KMByteBlob.instance(MAX_CERT_SIZE);
@@ -1186,32 +1256,32 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     bufferLength = KMByteBlob.cast(tmpVariables[3]).length();
     cert.buffer(buffer,bufferStartOffset,bufferLength);
     cert.build();
-//    // create X509 certificate.
-//    KMAttestationCertImpl.encodeCert(tmpVariables[3]/*buf*/, data[KEY_CHARACTERISTICS]/*key char*/,
-//    tmpVariables[0]/*unique Id*/,tmpVariables[1]/*start*/,tmpVariables[2]/*end*/,
-//        data[PUB_KEY]/*pub key/modulus*/,tmpVariables[5],tmpVariables[4], rsaCert);
-//
-//    // Now sign the cert
-//    // Create signer
-//
-//   //Sign the cert - returns the length of complete cert
-//    tmpVariables[1] = KMAttestationCertImpl.sign(seProvider,repository.getAttKeyExponent(),(short)0, KMRepository.ATT_KEY_EXP_SIZE,
-//      repository.getAttKeyModulus(),(short)0,KMRepository.ATT_KEY_MOD_SIZE);
-//
-//    // Send the response back. This is slightly different we do not copy the cert blob again.
-//    // We just add CBOR encoding around it.
-//    // Encode the response
-//    buffer = KMAttestationCertImpl.getBuffer();
-//    // add CBOR header and elements
-//    bufferStartOffset = encoder.encodeCert(KMAttestationCertImpl.getBuffer(), KMAttestationCertImpl.getBufferStart(),
-//      KMAttestationCertImpl.getCertStart(), KMAttestationCert.getCertLength());
-//    bufferLength = (short)(KMAttestationCert.getCertLength() + (KMAttestationCertImpl.getCertStart()- bufferStartOffset));
     bufferStartOffset = encoder.encodeCert(buffer, bufferStartOffset, cert.getCertStart(), cert.getCertLength());
     bufferLength = (short)(cert.getCertLength() + (cert.getCertStart()- bufferStartOffset));
     sendOutgoing(apdu);
   }
   //--------------------------------
   private void addAttestationIds(KMAttestationCert cert) {
+    final short[] attTags = new short[]{
+      KMType.ATTESTATION_ID_BRAND,
+      KMType.ATTESTATION_ID_DEVICE,
+      KMType.ATTESTATION_ID_IMEI,
+      KMType.ATTESTATION_ID_MANUFACTURER,
+      KMType.ATTESTATION_ID_MEID,
+      KMType.ATTESTATION_ID_MODEL,
+      KMType.ATTESTATION_ID_PRODUCT,
+      KMType.ATTESTATION_ID_SERIAL};
+    byte index = 0;
+    short attIdTag;
+    while(index < (short)attTags.length){
+      attIdTag = repository.getAttId(mapToAttId(attTags[index]));
+      if (attIdTag != 0) {
+        attIdTag = KMByteTag.instance(attTags[index], attIdTag);
+        cert.extensionTag(attIdTag, true);
+      }
+      index++;
+    }
+    /*
     if(repository.isAttIdSupported()){
     short attTag;
     short blob;
@@ -1228,6 +1298,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     }
   }
+     */
   }
 
   private void addTags(short params, boolean hwEnforced, KMAttestationCert cert) {
@@ -1392,13 +1463,22 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // Sign - signature becomes unique id of 32 bits. Use 128 bits master key as an hmac key.
     tmpVariables[0] = KMByteBlob.instance((short)32);
+    tmpVariables[2] = repository.getMasterKeySecret();
+    /*
     tmpVariables[1]= seProvider.hmacSign(
       repository.getMasterKeySecret(),(short)0,
-      (short)repository.getMasterKeySecret().length,
+      (short)repository.getMasterKeySecret(, ).length,
       scratchPad,(short)0,tmpVariables[1],
       KMByteBlob.cast(tmpVariables[0]).getBuffer(),
       KMByteBlob.cast(tmpVariables[0]).getStartOff());
-
+*/
+    tmpVariables[1]= seProvider.hmacSign(
+      KMByteBlob.cast(tmpVariables[2]).getBuffer(),
+      KMByteBlob.cast(tmpVariables[2]).getStartOff(),
+      KMByteBlob.cast(tmpVariables[2]).length(),
+      scratchPad,(short)0,tmpVariables[1],
+      KMByteBlob.cast(tmpVariables[0]).getBuffer(),
+      KMByteBlob.cast(tmpVariables[0]).getStartOff());
     if(tmpVariables[1] != 32){
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
@@ -1780,17 +1860,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short ptr =
         KMKeyParameters.findTag(
             KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED, data[HW_PARAMETERS]);
-    if (ptr != KMType.INVALID_VALUE && repository.deviceLockedFlag) {
+
+    if (ptr != KMType.INVALID_VALUE && repository.getDeviceLock()) {
       if (hwToken == KMType.INVALID_VALUE) KMException.throwIt(KMError.DEVICE_LOCKED);
       ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
       // Check if the current auth time stamp is greater then device locked time stamp
-      if (KMInteger.compare(ptr, KMInteger.uint_64(repository.deviceLockedTimestamp, (short) 0))
+      short ts = repository.getDeviceTimeStamp();
+      /*if (KMInteger.compare(ptr, KMInteger.uint_64(repository.deviceLockedTimestamp, (short) 0))
           <= 0) {
+        KMException.throwIt(KMError.DEVICE_LOCKED);
+      }
+       */
+      if (KMInteger.compare(ptr, ts) <= 0) {
         KMException.throwIt(KMError.DEVICE_LOCKED);
       }
       // Now check if the device unlock requires password only authentication and whether
       // auth token is generated through password authentication or not.
-      if (repository.deviceUnlockPasswordOnly) {
+      if (repository.getDeviceLockPasswordOnly()) {
         ptr = KMHardwareAuthToken.cast(hwToken).getHwAuthenticatorType();
         ptr = KMEnum.cast(ptr).getVal();
         if (((byte) ptr & KMType.PASSWORD) == 0) {
@@ -1798,8 +1884,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
       }
       // Unlock the device
-      repository.deviceLockedFlag = false;
-      Util.arrayFillNonAtomic(repository.deviceLockedTimestamp, (short) 0, (short) 8, (byte) 0);
+      //repository.deviceLockedFlag = false;
+      repository.setDeviceLock(false);
+      repository.clearDeviceLockTimeStamp();
+      //Util.arrayFillNonAtomic(repository.deviceLockedTimestamp, (short) 0, (short) 8, (byte) 0);
     }
   }
 
@@ -1851,7 +1939,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // hmac the data
     ptr = KMVerificationToken.cast(verToken).getMac();
-    boolean verified =
+    short key = repository.getComputedHmacKey();
+    /*boolean verified =
       seProvider.hmacVerify(repository.getComputedHmacKey(),
         (short) 0,
         (short) repository.getComputedHmacKey().length,
@@ -1859,6 +1948,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(ptr).getBuffer(),
         KMByteBlob.cast(ptr).getStartOff(),
         KMByteBlob.cast(ptr).length());
+
+     */
+    boolean verified =
+      seProvider.hmacVerify(
+        KMByteBlob.cast(key).getBuffer(),
+        KMByteBlob.cast(key).getStartOff(),
+        KMByteBlob.cast(key).length(),
+        scratchPad, (short) 0, len,
+        KMByteBlob.cast(ptr).getBuffer(),
+        KMByteBlob.cast(ptr).getStartOff(),
+        KMByteBlob.cast(ptr).length());
+
     if(!verified){
       KMException.throwIt(KMError.VERIFICATION_FAILED);
     }
@@ -2081,14 +2182,24 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED, data[HW_PARAMETERS]) != KMType.INVALID_VALUE) {
       // get operation
       // get the hmac key
-      if (repository.getComputedHmacKey() == null) {
+      short key = repository.getComputedHmacKey();
+      if ( key == 0) {
         KMException.throwIt(KMError.OPERATION_CANCELLED);
       }
+      /*
       op.setTrustedConfirmationSigner(seProvider.initSymmetricOperation(
         KMType.VERIFY,KMType.HMAC,KMType.SHA2_256,(byte)0,(byte)0,repository.getComputedHmacKey(),
         (short) 0, (short) repository.getComputedHmacKey().length,null,(short)0,(short)0,(short)0));
+    */
+      op.setTrustedConfirmationSigner(seProvider.initSymmetricOperation(
+        KMType.VERIFY,KMType.HMAC,KMType.SHA2_256,(byte)0,(byte)0,
+        KMByteBlob.cast(key).getBuffer(),
+        KMByteBlob.cast(key).getStartOff(),
+        KMByteBlob.cast(key).length(),null,(short)0,(short)0,(short)0));
+
       op.getTrustedConfirmationSigner().update(confirmationToken,(short)0,(short)confirmationToken.length);
     }
+
   }
 
   private void authorizeAlgorithm(KMOperationState op){
@@ -2531,7 +2642,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += 8;
     // hmac the data
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
-    return seProvider.hmacVerify(
+    short key = repository.getComputedHmacKey();
+    /*return seProvider.hmacVerify(
         repository.getComputedHmacKey(),
         (short) 0,
         (short) repository.getComputedHmacKey().length,
@@ -2539,7 +2651,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(ptr).getBuffer(),
         KMByteBlob.cast(ptr).getStartOff(),
         KMByteBlob.cast(ptr).length());
-
+    */
+    return seProvider.hmacVerify(
+      KMByteBlob.cast(key).getBuffer(),
+      KMByteBlob.cast(key).getStartOff(),
+      KMByteBlob.cast(key).length(),
+      scratchPad, (short) 0, len,
+      KMByteBlob.cast(ptr).getBuffer(),
+      KMByteBlob.cast(ptr).getStartOff(),
+      KMByteBlob.cast(ptr).length());
   }
 
   private void authorizeKeyUsageForCount() {
@@ -2561,9 +2681,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processImportKeyCmd(APDU apdu) {
-    if (repository.keyBlobCount > KMRepository.MAX_BLOB_STORAGE) {
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
     // Receive the incoming request fully from the master into buffer.
     receiveIncoming(apdu);
     byte[] scratchPad = apdu.getBuffer();
@@ -2631,6 +2748,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     createEncryptedKeyBlob(scratchPad);
     tmpVariables[0] = KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT, data[KEY_PARAMETERS]);
     if (tmpVariables[0] != KMType.INVALID_VALUE){
+      // before generating key, check whether max count reached
+      if (repository.getKeyBlobCount() > KMRepository.MAX_BLOB_STORAGE) {
+        //TODO which error to return?
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
+      }
       repository.persistAuthTag(data[AUTH_TAG]);
     }
 
@@ -2988,19 +3110,40 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     // Begin transaction
-    JCSystem.beginTransaction();
-    KMInteger.cast(tmpVariables[0]).value(repository.osVersion, (short) 0);
-    KMInteger.cast(tmpVariables[1]).value(repository.osPatch, (short) 0);
+    // JCSystem.beginTransaction();
+    repository.setOsVersion(KMInteger.cast(tmpVariables[0]).getBuffer(),
+      KMInteger.cast(tmpVariables[0]).getStartOff(),
+      KMInteger.cast(tmpVariables[0]).length());
+    repository.setOsPatch(KMInteger.cast(tmpVariables[1]).getBuffer(),
+      KMInteger.cast(tmpVariables[1]).getStartOff(),
+      KMInteger.cast(tmpVariables[1]).length());
+    //KMInteger.cast(tmpVariables[0]).value(repository.osVersion, (short) 0);
+    //KMInteger.cast(tmpVariables[1]).value(repository.osPatch, (short) 0);
+
     //KMInteger.cast(valPtr).getValue(repository.osVersion, (short) 0, (short) 4);
     //valPtr = KMIntegerTag.cast(tmpVariables[1]).getValue();
     //KMInteger.cast(valPtr).getValue(repository.osPatch, (short) 0, (short) 4);
-    repository.actualBootKeyLength = KMByteBlob.cast(tmpVariables[2]).length();
-    KMByteBlob.cast(tmpVariables[2])
-        .getValue(repository.verifiedBootKey, (short) 0, repository.actualBootKeyLength);
-    repository.actualBootHashLength = KMByteBlob.cast(tmpVariables[3]).length();
-    KMByteBlob.cast(tmpVariables[3])
-        .getValue(repository.verifiedBootHash, (short) 0, repository.actualBootHashLength);
+
+    //repository.actualBootKeyLength = KMByteBlob.cast(tmpVariables[2]).length();
+    //KMByteBlob.cast(tmpVariables[2])
+    //    .getValue(repository.verifiedBootKey, (short) 0, repository.actualBootKeyLength);
+    repository.setVerifiedBootKey(
+      KMByteBlob.cast(tmpVariables[2]).getBuffer(),
+      KMByteBlob.cast(tmpVariables[2]).getStartOff(),
+      KMByteBlob.cast(tmpVariables[2]).length());
+
+    //repository.actualBootHashLength = KMByteBlob.cast(tmpVariables[3]).length();
+    //KMByteBlob.cast(tmpVariables[3])
+    //    .getValue(repository.verifiedBootHash, (short) 0, repository.actualBootHashLength);
+    repository.setVerifiedBootHash(
+      KMByteBlob.cast(tmpVariables[3]).getBuffer(),
+      KMByteBlob.cast(tmpVariables[3]).getStartOff(),
+      KMByteBlob.cast(tmpVariables[3]).length()
+    );
+
     byte enumVal = KMEnum.cast(tmpVariables[4]).getVal();
+    repository.setBootState(enumVal);
+    /*
     if (enumVal == KMTag.SELF_SIGNED_BOOT) {
       repository.selfSignedBootFlag = true;
       repository.verifiedBootFlag = false;
@@ -3011,8 +3154,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       repository.selfSignedBootFlag = false;
       repository.verifiedBootFlag = false;
     }
+
+     */
     enumVal = KMEnum.cast(tmpVariables[5]).getVal();
-    repository.deviceLockedFlag = (enumVal == KMType.DEVICE_LOCKED_TRUE);
+    //repository.deviceLockedFlag = (enumVal == KMType.DEVICE_LOCKED_TRUE);
+    repository.setDeviceLock(enumVal == KMType.DEVICE_LOCKED_TRUE);
     if (keymasterState == KMKeymasterApplet.FIRST_SELECT_STATE) {
       setBootParamsDone = true;
       if (provisionDone) {
@@ -3020,14 +3166,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
     }
     // end transaction
-    JCSystem.commitTransaction();
+    //JCSystem.commitTransaction();
   }
 
   private static void processGenerateKey(APDU apdu) {
-    // before generating key, check whether max count reached
-    if (repository.keyBlobCount > KMRepository.MAX_BLOB_STORAGE) {
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
     // Receive the incoming request fully from the master into buffer.
     receiveIncoming(apdu);
     // Re-purpose the apdu buffer as scratch pad.
@@ -3040,6 +3182,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Decode the argument
     tmpVariables[2] = decoder.decode(tmpVariables[1], buffer, bufferStartOffset, bufferLength);
     data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    //Check if EarlyBootEnded tag is present.
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ENDED, data[KEY_PARAMETERS]);
+    if(tmpVariables[0] != KMType.INVALID_VALUE) {
+    	KMException.throwIt(KMError.EARLY_BOOT_ENDED);
+    }
     //Check if rollback resistance tag is present
     tmpVariables[0] =
         KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE, data[KEY_PARAMETERS]);
@@ -3090,6 +3238,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     tmpVariables[0] = KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT, data[KEY_PARAMETERS]);
     if (tmpVariables[0] != KMType.INVALID_VALUE){
+      // before generating key, check whether max count reached
+      if (repository.getKeyBlobCount() > KMRepository.MAX_BLOB_STORAGE) {
+       //TODO which error to return?
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
+      }
       repository.persistAuthTag(data[AUTH_TAG]);
     }
 
@@ -3310,6 +3463,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] =
         KMIntegerTag.getValue(
             scratchPad, (short) 0, KMType.UINT_TAG, KMType.OS_VERSION, data[HW_PARAMETERS]);
+    if (tmpVariables[0] != KMType.INVALID_VALUE){
+      tmpVariables[1] = repository.getOsVersion();
+      tmpVariables[1] = Util.arrayCompare(
+        KMInteger.cast(tmpVariables[1]).getBuffer(),
+        KMInteger.cast(tmpVariables[1]).getStartOff(),
+        scratchPad, (short) 0, tmpVariables[0]);
+      if(tmpVariables[1] == -1){
+        // If the key characteristics has os version > current os version
+        KMException.throwIt(KMError.INVALID_KEY_BLOB);
+      }else if(tmpVariables[1] == 1){
+        KMException.throwIt(KMError.KEY_REQUIRES_UPGRADE);
+      }
+    }
+    /*
     if ((tmpVariables[0] != KMType.INVALID_VALUE)
         && (Util.arrayCompare(
                 repository.osVersion, (short) 0, scratchPad, (short) 0, tmpVariables[0])
@@ -3322,10 +3489,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.KEY_REQUIRES_UPGRADE);
       }
     }
+     */
     tmpVariables[0] =
         KMIntegerTag.getValue(
             scratchPad, (short) 0, KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, data[HW_PARAMETERS]);
-    if ((tmpVariables[0] != KMType.INVALID_VALUE)
+    if (tmpVariables[0] != KMType.INVALID_VALUE){
+      tmpVariables[1] = repository.getOsPatch();
+      tmpVariables[1] = Util.arrayCompare(
+        KMInteger.cast(tmpVariables[1]).getBuffer(),
+        KMInteger.cast(tmpVariables[1]).getStartOff(),
+        scratchPad, (short) 0, tmpVariables[0]);
+      if(tmpVariables[1] == -1){
+        KMException.throwIt(KMError.INVALID_KEY_BLOB);
+      }else if(tmpVariables[1] == 1){
+        KMException.throwIt(KMError.KEY_REQUIRES_UPGRADE);
+      }
+    }
+    /*if ((tmpVariables[0] != KMType.INVALID_VALUE)
         && (Util.arrayCompare(repository.osPatch, (short) 0, scratchPad, (short) 0, tmpVariables[0])
             != 0)) {
       if (Util.arrayCompare(repository.osPatch, (short) 0, scratchPad, (short) 0, tmpVariables[0])
@@ -3336,13 +3516,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.KEY_REQUIRES_UPGRADE);
       }
     }
+    */
   }
 
   private static void makeKeyCharacteristics(byte[] scratchPad) {
-    tmpVariables[0] =
-        KMInteger.instance(repository.osPatch, (short) 0, (short) repository.osPatch.length);
-    tmpVariables[1] =
-        KMInteger.instance(repository.osVersion, (short) 0, (short) repository.osVersion.length);
+    tmpVariables[0] = repository.getOsPatch();
+    tmpVariables[1] = repository.getOsVersion();
     data[HW_PARAMETERS] =
         KMKeyParameters.makeHwEnforced(
             data[KEY_PARAMETERS],
@@ -3360,9 +3539,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // make key characteristics - returns key characteristics in data[KEY_CHARACTERISTICS]
     makeKeyCharacteristics(scratchPad);
     // make root of trust blob
-    data[ROT] =
-        KMByteBlob.instance(
-            repository.verifiedBootKey, (short) 0, (short) repository.verifiedBootKey.length);
+    //data[ROT] =
+    //    KMByteBlob.instance(
+     //       repository.verifiedBootKey, (short) 0, (short) repository.verifiedBootKey.length);
+    data[ROT] = repository.getVerifiedBootKey();
+
     // make hidden key params list
     data[HIDDEN_PARAMETERS] =
         KMKeyParameters.makeHidden(data[KEY_PARAMETERS], data[ROT], scratchPad);
@@ -3419,9 +3600,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[SW_PARAMETERS] =
         KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getSoftwareEnforced();
     // make root of trust blob
-    data[ROT] =
-        KMByteBlob.instance(
-            repository.verifiedBootKey, (short) 0, (short) repository.verifiedBootKey.length);
+    //data[ROT] =
+    //   KMByteBlob.instance(
+    //        repository.verifiedBootKey, (short) 0, (short) repository.verifiedBootKey.length);
+    data[ROT] = repository.getVerifiedBootKey();
+
     data[HIDDEN_PARAMETERS] =
         KMKeyParameters.makeHidden(data[APP_ID], data[APP_DATA], data[ROT], scratchPad);
     // make auth data
@@ -3549,7 +3732,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // generate derivation material from hidden parameters
     tmpVariables[2] = encoder.encode(tmpVariables[0], repository.getHeap(), tmpVariables[1]);
     // create derived key i.e. MAC
-    tmpVariables[3] =
+/*    tmpVariables[3] =
         seProvider.aesCCMSign(
             repository.getHeap(),
             tmpVariables[1],
@@ -3557,7 +3740,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             repository.getMasterKeySecret(),
             scratchPad,
             (short) 0);
-    if (tmpVariables[3] < 0) {
+*/
+    tmpVariables[4] = repository.getMasterKeySecret();
+    tmpVariables[3] =
+      seProvider.aesCCMSign(
+        repository.getHeap(),
+        tmpVariables[1],
+        tmpVariables[2],
+        KMByteBlob.cast(tmpVariables[4]).getBuffer(),
+        KMByteBlob.cast(tmpVariables[4]).getStartOff(),
+        KMByteBlob.cast(tmpVariables[4]).length(),
+        scratchPad,
+        (short) 0);
+  if (tmpVariables[3] < 0) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     // store the derived secret in data dictionary
@@ -3571,7 +3766,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     bufferLength = encoder.encodeError(err, buffer, bufferStartOffset, (short) 5);
     sendOutgoing(apdu);
   }
-
 
   private short addIntegers(short num1, short num2){
     short buf = repository.alloc((short)24);
@@ -3588,6 +3782,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     add(scratchPad, buf, (short)(buf+8), (short)(buf+16));
     return KMInteger.uint_64(scratchPad,(short)(buf+16));
   }
+
 /*
   // num1 must be greater then or equal to num2 and both must be positive
   private short subtractIntegers(short num1, short num2){
@@ -3607,8 +3802,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     subtract(scratchPad,buf,(short)(buf+8),(short)(buf+16));
     return KMInteger.uint_64(scratchPad,(short)(buf+16));
   }
-
  */
+
   private void add(byte[] buf, short op1, short op2, short result){
     byte index = 7;
     byte carry = 0;
@@ -3642,7 +3837,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       index--;
     }
   }
-  // use Euclid's formula: dividend = quotient*divisor + remainder
+
+  // Use Euclid's formula: dividend = quotient*divisor + remainder
   // i.e. dividend - quotient*divisor = remainder where remainder < divisor.
   // so this is division by subtraction until remainder remains.
   private short divide(byte [] buf, short dividend, short divisor, short remainder){
@@ -3674,6 +3870,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private byte compare(byte[] buf, short lhs, short rhs){
     return Util.arrayCompare(buf,lhs,buf,rhs,(short)8);
   }
+
   private void shiftLeft(byte[] buf, short start){
     byte index = 7;
     byte carry = 0;
@@ -3702,4 +3899,5 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       index++;
     }
   }
+
 }

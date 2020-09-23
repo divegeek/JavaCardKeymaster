@@ -84,21 +84,23 @@ public interface KMSEProvider {
       short authTagLen);
 
   short aesCCMSign(
-      byte[] bufIn,
-      short bufInStart,
-      short buffInLength,
-      byte[] masterKeySecret,
-      byte[] bufOut,
-      short bufStart);
+    byte[] bufIn,
+    short bufInStart,
+    short buffInLength,
+    byte[] masterKeySecret,
+    short masterKeyStart, short masterKeyLen, byte[] bufOut,
+    short bufStart);
 
   short cmacKdf(
-      byte[] keyMaterial,
-      byte[] label,
-      byte[] context,
-      short contextStart,
-      short contextLength,
-      byte[] keyBuf,
-      short keyStart);
+    byte[] keyMaterial,
+    short keyMaterialStart,
+    short keyMaterialLen,
+    byte[] label,
+    byte[] context,
+    short contextStart,
+    short contextLength,
+    byte[] keyBuf,
+    short keyStart);
 
   short hmacSign(
       byte[] keyBuf,
@@ -174,36 +176,11 @@ public interface KMSEProvider {
       short pubModStart,
       short pubModLength);
 
-  // Timer API
-  short getSystemTimeInMilliSeconds(byte[] timeBuf, short timeStart, short timeOffset);
-
-  // Events API
-  short addListener(KMEventListener listener, byte eventType);
-
-  short getEventData(byte[] eventBuf, short eventStart, short eventLength);
-
-  // Capability query
-  boolean isAlgSupported(byte alg);
-
-  boolean isKeySizeSupported(byte alg, short keySize);
-
-  boolean isCurveSupported(byte eccurve);
-
-  boolean isDigestSupported(byte alg, byte digest);
-
-  boolean isPaddingSupported(byte alg, byte padding);
-
-  boolean isBlockModeSupported(byte alg, byte blockMode);
-
-  boolean isSystemTimerSupported();
-
-  boolean isBootEventSupported();
-
-  boolean isPkcs8ParsingSupported();
-
-  boolean isAttestationCertSupported();
-
   //X509 Cert
   KMAttestationCert getAttestationCert(boolean rsaCert);
 
+  // Backup and restore
+  boolean isBackupRestoreSupported();
+  void backup(byte[] buf, short start, short len);
+  short restore(byte[] buf, short start);
 }
