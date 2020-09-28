@@ -21,11 +21,16 @@ import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
+/**
+ * KMRepository class manages persistent and volatile memory usage by the applet. Note the repository
+ * is only used by applet and it is not intended to be used by seProvider.
+ */
 public class KMRepository {
   // Data table configuration
   public static final short DATA_INDEX_SIZE = 32;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_MEM_SIZE = 2048;
+  public static final short HEAP_SIZE = 10000;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
 
@@ -78,23 +83,19 @@ public class KMRepository {
   public static final short MAX_BLOB_STORAGE = 8;
   public static final short AUTH_TAG_LENGTH = 12;
   public static final short AUTH_TAG_ENTRY_SIZE = 14;
-  public static final short HEAP_SIZE = 10000;
   public static final short MAX_OPS = 4;
-
-  // Operation State Table
-  private Object[] operationStateTable;
-  private static short opIdCounter;
-
-  // Boot params constants
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
 
-  // Volatile memory heap
+  // Class Attributes
+  private Object[] operationStateTable;
+  private static short opIdCounter;
   private byte[] heap;
   private short heapIndex;
   private byte[] dataTable;
   private short dataIndex;
 
+  // Singleton instance
   private static KMRepository repository;
 
   public static KMRepository instance() {
@@ -106,6 +107,7 @@ public class KMRepository {
     heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
     heapIndex = 0;
     operationStateTable = new Object[MAX_OPS];
+    // create and initialize operation state table.
     byte index = 0;
     while(index < MAX_OPS){
       operationStateTable[index] = new Object[]{new byte[2],
@@ -208,9 +210,9 @@ public class KMRepository {
     }
   }
 
-  public void initMasterKey(byte[] key, short len) {
+  public void initMasterKey(byte[] key, short start, short len) {
     if(len != MASTER_KEY_SIZE) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    writeDataEntry(MASTER_KEY,key, (short)0, len);
+    writeDataEntry(MASTER_KEY,key, start, len);
   }
 
   public void initHmacSharedSecretKey(byte[] key, short start, short len) {
@@ -341,7 +343,6 @@ public class KMRepository {
     return heap;
   }
 
-
   public short getSharedKey() {
     return readData(SHARED_KEY);
   }
@@ -365,12 +366,10 @@ public class KMRepository {
     short index = 0;
     while (index < MAX_BLOB_STORAGE) {
       if(dataLength((short)(index+AUTH_TAG_1)) == 0){
-        JCSystem.beginTransaction();
         writeDataEntry((short)(index+AUTH_TAG_1),
           KMByteBlob.cast(authTagEntry).getBuffer(),
           KMByteBlob.cast(authTagEntry).getStartOff(),
           AUTH_TAG_ENTRY_SIZE);
-        JCSystem.commitTransaction();
       }
       index++;
     }
@@ -388,7 +387,6 @@ public class KMRepository {
   }
 
   public void removeAllAuthTags() {
-    JCSystem.beginTransaction();
     short index = 0;
     while (index < MAX_BLOB_STORAGE) {
       clearDataEntry((short)(index+AUTH_TAG_1));

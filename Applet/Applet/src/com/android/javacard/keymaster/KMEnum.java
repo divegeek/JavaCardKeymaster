@@ -20,12 +20,26 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * KMEnum represents an enumeration specified in android keymaster hal specifications. It
+ * corresponds to uint CBOR type and it is a byte value. struct{byte ENUM_TYPE; short length;
+ * struct{short enumType; byte val}}
+ */
 public class KMEnum extends KMType {
   private static KMEnum prototype;
   private static short instPtr;
 
-  private static short[] types = {HARDWARE_TYPE, KEY_FORMAT, KEY_DERIVATION_FUNCTION,
-    VERIFIED_BOOT_STATE, DEVICE_LOCKED, USER_AUTH_TYPE, PURPOSE,ECCURVE};
+  // The allowed enum types.
+  private static short[] types = {
+    HARDWARE_TYPE,
+    KEY_FORMAT,
+    KEY_DERIVATION_FUNCTION,
+    VERIFIED_BOOT_STATE,
+    DEVICE_LOCKED,
+    USER_AUTH_TYPE,
+    PURPOSE,
+    ECCURVE
+  };
 
   private static Object[] enums = null;
 
@@ -42,12 +56,10 @@ public class KMEnum extends KMType {
     return KMType.exp(ENUM_TYPE);
   }
 
-
   public short length() {
     return Util.getShort(heap, (short) (instPtr + 1));
   }
 
-  // cast the ptr to KMByteBlob
   public static KMEnum cast(short ptr) {
     if (heap[ptr] != ENUM_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     if (Util.getShort(heap, (short) (ptr + 1)) == INVALID_VALUE) {
@@ -60,8 +72,8 @@ public class KMEnum extends KMType {
     if (!validateEnum(enumType, NO_VALUE)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    short ptr = KMType.instance(ENUM_TYPE, (short)2);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), enumType);
+    short ptr = KMType.instance(ENUM_TYPE, (short) 2);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), enumType);
     return ptr;
   }
 
@@ -69,17 +81,18 @@ public class KMEnum extends KMType {
     if (!validateEnum(enumType, val)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    short ptr = KMType.instance(ENUM_TYPE, (short)3);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), enumType);
-    heap[(short)(ptr+TLV_HEADER_SIZE+2)] = val;
+    short ptr = KMType.instance(ENUM_TYPE, (short) 3);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), enumType);
+    heap[(short) (ptr + TLV_HEADER_SIZE + 2)] = val;
     return ptr;
   }
 
   private static void create() {
+    // The allowed enum values to corresponding enum types in the types array.
     if (enums == null) {
       enums =
           new Object[] {
-            new byte[] {SOFTWARE, TRUSTED_ENVIRONMENT,STRONGBOX},
+            new byte[] {SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX},
             new byte[] {X509, PKCS8, RAW},
             new byte[] {
               DERIVATION_NONE,
@@ -91,7 +104,7 @@ public class KMEnum extends KMType {
             },
             new byte[] {SELF_SIGNED_BOOT, VERIFIED_BOOT, UNVERIFIED_BOOT, FAILED_BOOT},
             new byte[] {DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
-            new byte[] {USER_AUTH_NONE,PASSWORD,FINGERPRINT, BOTH},
+            new byte[] {USER_AUTH_NONE, PASSWORD, FINGERPRINT, BOTH},
             new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
             new byte[] {P_224, P_256, P_384, P_521}
           };
@@ -99,19 +112,19 @@ public class KMEnum extends KMType {
   }
 
   public void setVal(byte val) {
-    heap[(short)(instPtr+TLV_HEADER_SIZE+2)] = val;
+    heap[(short) (instPtr + TLV_HEADER_SIZE + 2)] = val;
   }
 
   public byte getVal() {
-    return heap[(short)(instPtr+TLV_HEADER_SIZE+2)];
+    return heap[(short) (instPtr + TLV_HEADER_SIZE + 2)];
   }
 
   public void setEnumType(short type) {
-    Util.setShort(heap, (short)(instPtr+TLV_HEADER_SIZE),type);
+    Util.setShort(heap, (short) (instPtr + TLV_HEADER_SIZE), type);
   }
 
   public short getEnumType() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
   }
 
   // isValidTag enumeration keys and values.
@@ -144,5 +157,4 @@ public class KMEnum extends KMType {
     // return false if key does not exist
     return false;
   }
-
 }

@@ -19,11 +19,17 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
+/**
+ * KMEnumTag represents ENUM Tag type specified in android keymaster hal specifications.
+ * struct{byte TAG_TYPE; short length; struct{short ENUM_TAG; short tagKey; byte value}}
+ */
 
 public class KMEnumTag extends KMTag {
   private static KMEnumTag prototype;
   private static short instPtr;
 
+
+  // The allowed tag keys of type enum tag.
   private static short[] tags = {
     ALGORITHM, ECCURVE, BLOB_USAGE_REQ, USER_AUTH_TYPE, ORIGIN, HARDWARE_TYPE
   };
@@ -88,6 +94,7 @@ public class KMEnumTag extends KMTag {
 
   public static void create() {
     if (enums == null) {
+      // enum tag values.
       enums =
           new Object[] {
             new byte[] {RSA, DES, EC, AES, HMAC},

@@ -20,10 +20,17 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * KMByteTag represents BYTES Tag Type from android keymaster hal specifications. The tag value of this tag
+ * is the KMByteBlob pointer i.e. offset of KMByteBlob in memory heap.
+ * struct{byte TAG_TYPE; short length; struct{short BYTES_TAG; short tagKey; short blobPtr}}
+ */
+
 public class KMByteTag extends KMTag {
   private static KMByteTag prototype;
   private static short instPtr;
 
+  // The allowed tag keys of type bool tag
   private static final short[] tags = {
     APPLICATION_ID,
     APPLICATION_DATA,

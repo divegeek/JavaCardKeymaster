@@ -20,13 +20,16 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * This class declares all types, tag types, and tag keys. It also establishes basic structure of
+ * any KMType i.e. struct{byte type, short length, value} where value can any of the KMType. Also,
+ * KMType refers to transient memory heap in the repository. Finally KMType's subtypes are singleton
+ * prototype objects which just cast the structure over contiguous memory buffer.
+ */
 public abstract class KMType {
   public static final short INVALID_VALUE = (short)0x8000;
   protected static final byte TLV_HEADER_SIZE = 3;
 
-  //Event Type
-  public static final byte BOOT_EVENT = 0;
-  
   // Types
   public static final byte BYTE_BLOB_TYPE = 0x01;
   public static final byte INTEGER_TYPE = 0x02;

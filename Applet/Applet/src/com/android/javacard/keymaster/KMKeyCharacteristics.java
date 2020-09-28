@@ -19,7 +19,13 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
-
+/**
+ * KMKeyCharacteristics represents KeyCharacteristics structure from android keymaster hal specifications.
+ * It corresponds to CBOR array type.
+ * struct{byte KEY_CHAR_TYPE; short length=2; short arrayPtr} where arrayPtr is a pointer to
+ * ordered array with following elements:
+ * {KMKeyParameters sofEnf; KMKeyParameters hwEnf}
+ */
 public class KMKeyCharacteristics extends KMType {
   public static final byte SOFTWARE_ENFORCED = 0x00;
   public static final byte HARDWARE_ENFORCED = 0x01;
