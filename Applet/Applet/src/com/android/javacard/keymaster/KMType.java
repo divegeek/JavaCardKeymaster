@@ -20,13 +20,16 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * This class declares all types, tag types, and tag keys. It also establishes basic structure of
+ * any KMType i.e. struct{byte type, short length, value} where value can any of the KMType. Also,
+ * KMType refers to transient memory heap in the repository. Finally KMType's subtypes are singleton
+ * prototype objects which just cast the structure over contiguous memory buffer.
+ */
 public abstract class KMType {
   public static final short INVALID_VALUE = (short)0x8000;
   protected static final byte TLV_HEADER_SIZE = 3;
 
-  //Event Type
-  public static final byte BOOT_EVENT = 0;
-  
   // Types
   public static final byte BYTE_BLOB_TYPE = 0x01;
   public static final byte INTEGER_TYPE = 0x02;
@@ -139,7 +142,7 @@ public abstract class KMType {
   public static final byte SIGN = 0x02;
   public static final byte VERIFY = 0x03;
   public static final byte WRAP_KEY = 0x05;
-  public static final byte ATTEST_KEY = (byte) 0x7F; /* TODO This is not present in types.hal */
+  public static final byte ATTEST_KEY = (byte) 0x7F;
 
   // Block mode
   public static final short BLOCK_MODE = 0x0004;
@@ -227,6 +230,10 @@ public abstract class KMType {
   public static final short UNLOCKED_DEVICE_REQUIRED = (short) 0x01FD;
   // Reset Since Id Rotation
   public static final short RESET_SINCE_ID_ROTATION = (short) 0x03EC;
+  //Early boot ended.
+  public static final short EARLY_BOOT_ENDED = (short) 0x0131;
+  //Device unique attestation.
+  public static final short DEVICE_UNIQUE_ATTESTATION = (short) 0x02D0;
 
   // Byte Tag
   // Application Id
@@ -294,4 +301,5 @@ public abstract class KMType {
     Util.setShort(heap, (short) (ptr + 1), INVALID_VALUE);
     return ptr;
   }
+
 }

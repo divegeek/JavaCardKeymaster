@@ -20,20 +20,13 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * KMKeyParameters represents KeyParameters structure from android keymaster hal specifications.
+ * It corresponds to CBOR map type.
+ * struct{byte KEY_PARAM_TYPE; short length=2; short arrayPtr} where arrayPtr is a pointer to
+ * array with any KMTag subtype instances.
+ */
 public class KMKeyParameters extends KMType {
-
-  private static final short[] swEnforcedTags = {};
-
-  private static final short[] ignoredTags = {
-    KMType.ROOT_OF_TRUST,
-    KMType.RESET_SINCE_ID_ROTATION,
-    KMType.ALLOW_WHILE_ON_BODY,
-    KMType.ATTESTATION_CHALLENGE,
-    KMType.OS_VERSION, // not in hidden
-    KMType.OS_PATCH_LEVEL // not in hidden
-    // ALL_APPLICATIONS missing from types.hal
-  };
-
   private static KMKeyParameters prototype;
   private static short instPtr;
 
@@ -138,11 +131,11 @@ public class KMKeyParameters extends KMType {
       KMType.BOOL_TAG, KMType.RESET_SINCE_ID_ROTATION
     };
     byte index = 0;
-    short tagInd = 0;
+    short tagInd;
     short arrInd = 0;
-    short tagPtr = 0;
-    short tagKey = 0;
-    short tagType = 0;
+    short tagPtr;
+    short tagKey;
+    short tagType;
     short arrPtr = KMKeyParameters.cast(keyParamsPtr).getVals();
     short len = KMArray.cast(arrPtr).length();
     while (index < len) {
@@ -186,11 +179,11 @@ public class KMKeyParameters extends KMType {
       KMType.DATE_TAG, KMType.CREATION_DATETIME
     };
     byte index = 0;
-    short tagInd = 0;
+    short tagInd;
     short arrInd = 0;
-    short tagPtr = 0;
-    short tagKey = 0;
-    short tagType = 0;
+    short tagPtr;
+    short tagKey;
+    short tagType;
     short arrPtr = KMKeyParameters.cast(keyParamsPtr).getVals();
     short len = KMArray.cast(arrPtr).length();
     while (index < len) {
@@ -278,118 +271,4 @@ public class KMKeyParameters extends KMType {
     }
     return KMKeyParameters.instance(arrPtr);
   }
-/*
-  public void validateKeyCreation(){
-    short alg = KMEnumTag.getValue(KMType.ALGORITHM,instPtr);
-    if(alg == KMType.INVALID_VALUE){
-      KMException.throwIt(KMError.INVALID_ARGUMENT);
-    }
-    short keySize = KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.KEYSIZE, instPtr);
-    short padding = KMEnumArrayTag.
-    validateKeySize(keySize, alg);
-
-    if(padding != KMType.INVALID_VALUE){
-      validatePadding(padding, alg);
-    }
-    if(digest != KMType.INVALID_VALUE){
-      validateDigest(digest, alg);
-    }
-    if(purpose != KMType.INVALID_VALUE){
-      validatePurpose(purpose, alg);
-    }
-    switch(alg){
-      case KMType.RSA:
-        validateRsa(keySize, padding, digest, purpose, arrPtr);
-        break;
-      case KMType.AES:
-        validateAes(keySize, padding, digest, purpose);
-        break;
-      case KMType.DES:
-        validateDes(keySize, padding, digest, purpose);
-        break;
-      case KMType.EC:
-        validateEc(keySize, padding, digest, purpose);
-        break;
-      case KMType.HMAC:
-        validateHmac(keySize, padding, digest, purpose);
-        break;
-      default:
-        KMException.throwIt(KMError.INVALID_ARGUMENT);
-        break;
-    }
-    final byte[] alg = {, KMType.AES, KMType.DES, KMType.EC, KMType.HMAC};
-    final Object[] keySizes = {
-      new short[]{2048},
-      new short[]{128, 256},
-      new short[]{192},
-      new short[]{256},
-      new short[]{128, 256, 512}
-    };
-    final Object[] digests = {
-      new byte[]{KMType.DIGEST_NONE,KMType.SHA2_256},
-      new byte[]{KMType.DIGEST_NONE},
-      new byte[]{KMType.DIGEST_NONE},
-      new byte[]{KMType.DIGEST_NONE,KMType.SHA2_256},
-      new byte[]{KMType.SHA2_256}
-    };
-    final Object[] paddings = {
-      new byte[]{KMType.PADDING_NONE, KMType.RSA_OAEP, KMType.RSA_PKCS1_1_5_ENCRYPT, KMType.RSA_PKCS1_1_5_SIGN, KMType.RSA_PSS},
-      new byte[]{KMType.PADDING_NONE, KMType.PKCS7},
-      new byte[]{KMType.PADDING_NONE, KMType.PKCS7},
-      new byte[]{PADDING_NONE},
-      new byte[]{PADDING_NONE}
-    };
-    final Object[] purposes ={
-      new byte[]{KMType.ENCRYPT, KMType.DECRYPT, KMType.SIGN, KMType.VERIFY},
-      new byte[]{KMType.ENCRYPT, KMType.DECRYPT},
-      new byte[]{KMType.ENCRYPT, KMType.DECRYPT},
-      new byte[]{KMType.SIGN, KMType.VERIFY},
-      new byte[]{KMType.SIGN, KMType.VERIFY}
-    };
-
-  }
-  short keySize = findTag(KMType.UINT_TAG, KMType.KEYSIZE, this);
-  short padding = findTag(KMType.ENUM_ARRAY_TAG, KMType.PADDING, this);
-  short digest =  findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST, );
-  short purpose = findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, keyParams);
-
-  private void validateKeySize(short keySize, short alg){
-    if()
-  }
-  private static void validateRsa(short keySize, short padding, short digest, short purpose, short arr) {
-    short ptr =
-    if(KMIntegerTag.cast(keySize).)
-
-  }
-
-  public boolean validateDigest(short digest){
-    short index = 0;
-    while(index < KMEnumArrayTag.cast(digest).length()){
-      if(KMEnumArrayTag.cast(digest).get(index) != KMType.DIGEST_NONE &&
-        KMEnumArrayTag.cast(digest).get(index) != KMType.SHA2_256){
-        return false;
-      }
-      index++;
-    }
-    return true;
-  }
-*/
-/*
-  private static void print (String lab, byte[] b, short s, short l){
-    byte[] i = new byte[l];
-    Util.arrayCopyNonAtomic(b,s,i,(short)0,l);
-    print(lab,i);
-  }
-  private static void print(String label, byte[] buf){
-    System.out.println(label+": ");
-    StringBuilder sb = new StringBuilder();
-    for(int i = 0; i < buf.length; i++){
-      sb.append(String.format(" 0x%02X", buf[i])) ;
-      if(((i-1)%38 == 0) && ((i-1) >0)){
-        sb.append(";\n");
-      }
-    }
-    System.out.println(sb.toString());
-  }
-*/
 }

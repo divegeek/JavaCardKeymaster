@@ -1,6 +1,7 @@
 package com.android.javacard.keymaster;
 
 public abstract class KMCipher {
+  /*
   public static final byte CIPHER_RSA = 7;
   public static final short PAD_PKCS1_OAEP = 9;
   public static final short PAD_PKCS1_OAEP_SHA224 = 13;
@@ -22,6 +23,8 @@ public abstract class KMCipher {
   public static final short AES_BLOCK_SIZE = 16;
   public static final short DES_BLOCK_SIZE = 8;
   public static final short ALG_AES_CTR = -16;
+
+   */
   public static final short SUN_JCE = 0xE9;
 
   public abstract short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i);
@@ -29,6 +32,10 @@ public abstract class KMCipher {
   public abstract short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i);
 
   public abstract void updateAAD(byte[] buffer, short startOff, short length);
+
+  public abstract short getBlockMode();
+
+  public abstract void setBlockMode(short mode);
 
   public abstract short getPaddingAlgorithm();
 

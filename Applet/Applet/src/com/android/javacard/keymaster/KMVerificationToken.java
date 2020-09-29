@@ -19,7 +19,14 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
-
+/**
+ * KMVerificationToken represents VerificationToken structure from android keymaster hal specifications.
+ * It corresponds to CBOR array type.
+ * struct{byte type=VERIFICATION_TOKEN_TYPE; short length=2; short arrayPtr} where arrayPtr is a pointer to
+ * ordered array with following elements:
+ * {KMInteger Challenge; KMInteger Timestamp; KMByteBlob PARAMETERS_VERIFIED; SecurityLevel level;
+ * KMByteBlob Mac}.
+ */
 public class KMVerificationToken extends KMType {
   public static final byte CHALLENGE = 0x00;
   public static final byte TIMESTAMP = 0x01;
@@ -50,13 +57,11 @@ public class KMVerificationToken extends KMType {
     return prototype;
   }
 
-
   public static short instance() {
     short arrPtr = KMArray.instance((short)5);
     KMArray arr = KMArray.cast(arrPtr);
     arr.add(CHALLENGE, KMInteger.uint_16((short)0));
     arr.add(TIMESTAMP, KMInteger.uint_16((short)0));
-    //arr.add(PARAMETERS_VERIFIED, KMKeyParameters.exp());
     arr.add(PARAMETERS_VERIFIED, KMByteBlob.instance((short)0));
     arr.add(SECURITY_LEVEL, KMEnum.instance(KMType.HARDWARE_TYPE, KMType.STRONGBOX));
     arr.add(MAC, KMByteBlob.instance((short)0));
