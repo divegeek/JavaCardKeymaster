@@ -19,7 +19,13 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
-
+/**
+ * KMHmacSharingParameters represents HmacSharingParameters structure from android keymaster hal specifications.
+ * It corresponds to CBOR array type.
+ * struct{byte HMAC_SHARING_PARAM_TYPE; short length=2; short arrayPtr} where arrayPtr is a pointer to
+ * ordered array with following elements:
+ * {KMByteBlob Seed; KMByteBlob Nonce}
+ */
 public class KMHmacSharingParameters extends KMType {
   public static final byte SEED = 0x00;
   public static final byte NONCE = 0x01;

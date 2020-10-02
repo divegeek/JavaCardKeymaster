@@ -252,11 +252,6 @@ public class KMJcardSimulator implements KMSEProvider {
   }
 
   @Override
-  public boolean importAsymmetricKey(byte alg, byte[] buf, short start, short length, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
-    return false;
-  }
-
-  @Override
   public boolean importAsymmetricKey(byte alg, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
     switch (alg){
       case KMType.RSA:
@@ -475,9 +470,8 @@ public class KMJcardSimulator implements KMSEProvider {
   }
 
   @Override
-  public byte[] getTrueRandomNumber(short i) {
-    // ignore the size as simulator only supports 128 bit entropy
-    return entropyPool;
+  public void getTrueRandomNumber(byte[] buf, short start, short length) {
+    Util.arrayCopy(entropyPool,(short)0,buf,start,length);
   }
 
   @Override
@@ -504,7 +498,8 @@ public class KMJcardSimulator implements KMSEProvider {
     return len;
   }
    
-  public HMACKey cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label, byte[] context, short contextStart, short contextLength) {
+  public HMACKey cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label,
+                         short labelStart, short labelLen, byte[] context, short contextStart, short contextLength) {
     // This is hardcoded to requirement - 32 byte output with two concatenated 16 bytes K1 and K2.
     final byte n = 2; // hardcoded
     final byte[] L = {0,0,1,0}; // [L] 256 bits - hardcoded 32 bits as per reference impl in keymaster.
@@ -520,7 +515,7 @@ public class KMJcardSimulator implements KMSEProvider {
     while (i <= n) {
       iBuf[3] = i;
       prf.update(iBuf, (short) 0, (short) 4); // 4 bytes of iBuf with counter in it
-      prf.update(label, (short) 0, (short) label.length); // label
+      prf.update(label, labelStart, labelLen); // label
       prf.update(zero, (short) 0, (short) 1); // 1 byte of 0x00
       prf.update(context, contextStart, contextLength); // context
       pos = prf.sign(L, (short) 0, (short) 4, keyOut, pos); // 4 bytes of L - signature of 16 bytes
@@ -530,8 +525,9 @@ public class KMJcardSimulator implements KMSEProvider {
   }
 
   @Override
-  public short cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
-    HMACKey key = cmacKdf(keyMaterial,keyMaterialStart, keyMaterialLen, label,context,contextStart,contextLength);
+  public short cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label,
+                       short labelStart, short labelLen, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
+    HMACKey key = cmacKdf(keyMaterial,keyMaterialStart, keyMaterialLen, label, labelStart, labelLen,context,contextStart,contextLength);
     return key.getKey(keyBuf,keyStart);
   }
 

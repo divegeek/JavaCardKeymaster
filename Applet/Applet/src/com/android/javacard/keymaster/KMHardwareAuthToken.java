@@ -20,6 +20,14 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * KMHardwareAuthToken represents HardwareAuthToken structure from android keymaster hal specifications.
+ * It corresponds to CBOR array type.
+ * struct{byte HW_AUTH_TOKEN_TYPE; short length=2; short arrayPtr} where arrayPtr is a pointer to
+ * ordered array with following elements:
+ * {KMInteger Challenge; KMInteger UserId; KMInteger AuthenticatorId; UserAuthType HwAuthenticatorId;
+ * KMInteger TimeStamp; KMByteBlob Mac}
+ */
 public class KMHardwareAuthToken extends KMType {
   public static final byte CHALLENGE = 0x00;
   public static final byte USER_ID = 0x01;
