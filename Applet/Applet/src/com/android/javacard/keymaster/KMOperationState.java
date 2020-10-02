@@ -19,6 +19,12 @@ package com.android.javacard.keymaster;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
+/**
+ * KMOperationState is the container of an active operation started by beginOperation function.
+ * This operation state is persisted by the applet in non volatile memory. However, this state is not
+ * retained if applet is upgraded. There will be four operation state records maintained i.e. only four
+ * active operations are supported at any given time.
+ */
 public class KMOperationState {
 
   public static final byte MAX_DATA = 20;
@@ -68,30 +74,24 @@ public class KMOperationState {
   public static KMOperationState instance(short opId, Object[] slot) {
     KMOperationState opState = proto();
     opState.reset();
-    Util.setShort(opState.data, OP_HANDLE, opId);
-    opState.slot = slot;
+    Util.setShort(data, OP_HANDLE, opId);
+    KMOperationState.slot = slot;
     return opState;
   }
 
   public static KMOperationState read(Object[] slot) {
     KMOperationState opState = proto();
     opState.reset();
-    Util.arrayCopy((byte[]) slot[DATA], (short) 0, opState.data, (short) 0, (short) opState.data.length);
+    Util.arrayCopy((byte[]) slot[DATA], (short) 0, data, (short) 0, (short) data.length);
     Object[] ops = ((Object[]) slot[REFS]);
-    opState.op = (KMOperation) ops[OPERATION];
-    opState.hmacSigner = (KMOperation) ops[HMAC_SIGNER];
-    opState.slot = slot;
+    op = (KMOperation) ops[OPERATION];
+    hmacSigner = (KMOperation) ops[HMAC_SIGNER];
+    KMOperationState.slot = slot;
     return opState;
   }
 
   public void persist() {
     if (!dFlag) return;
-    /*JCSystem.beginTransaction();
-    Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length);
-    Object[] ops = ((Object[]) slot[1]);
-    ops[0] = op;
-    ops[1] = hmacSigner;
-    JCSystem.commitTransaction();*/
     KMRepository.instance().persistOperation(data, Util.getShort(data, OP_HANDLE), op, hmacSigner);
     dFlag = false;
   }
@@ -113,8 +113,7 @@ public class KMOperationState {
   }
 
   public boolean isTrustedConfirmationRequired() {
-    if (KMOperationState.hmacSigner != null) return true;
-    else return false;
+    return KMOperationState.hmacSigner != null;
   }
 
   public void reset() {
@@ -128,6 +127,7 @@ public class KMOperationState {
   private void dataUpdated(){
     dFlag = true;
   }
+
   public void release() {
     JCSystem.beginTransaction();
     Util.arrayFillNonAtomic(
@@ -167,18 +167,15 @@ public class KMOperationState {
   }
 
   public boolean isAuthPerOperationReqd() {
-    if ((data[FLAGS] & AUTH_PER_OP_REQD) != 0) return true;
-    else return false;
+    return (data[FLAGS] & AUTH_PER_OP_REQD) != 0;
   }
 
   public boolean isAuthTimeoutValidated() {
-    if ((data[FLAGS] & AUTH_TIMEOUT_VALIDATED) != 0) return true;
-    else return false;
+    return (data[FLAGS] & AUTH_TIMEOUT_VALIDATED) != 0;
   }
 
   public boolean isSecureUserIdReqd() {
-    if ((data[FLAGS] & SECURE_USER_ID_REQD) != 0) return true;
-    else return false;
+    return (data[FLAGS] & SECURE_USER_ID_REQD) != 0;
   }
 
   public short getAuthTime() {
@@ -213,7 +210,7 @@ public class KMOperationState {
   }
 
   public void setAlgorithm(byte algorithm) {
-    this.data[ALG] = algorithm;
+    data[ALG] = algorithm;
     dataUpdated();
   }
 
@@ -222,7 +219,7 @@ public class KMOperationState {
   }
 
   public void setPadding(byte padding) {
-    this.data[PADDING] = padding;
+    data[PADDING] = padding;
     dataUpdated();
   }
 
@@ -231,7 +228,7 @@ public class KMOperationState {
   }
 
   public void setBlockMode(byte blockMode) {
-    this.data[BLOCKMODE] = blockMode;
+    data[BLOCKMODE] = blockMode;
     dataUpdated();
   }
 
@@ -240,13 +237,12 @@ public class KMOperationState {
   }
 
   public void setDigest(byte digest) {
-    this.data[DIGEST] = digest;
+    data[DIGEST] = digest;
     dataUpdated();
   }
 
   public boolean isAesGcmUpdateAllowed() {
-    if ((data[FLAGS] & AES_GCM_UPDATE_ALLOWED) != 0) return true;
-    else return false;
+    return (data[FLAGS] & AES_GCM_UPDATE_ALLOWED) != 0;
   }
 
   public void setAesGcmUpdateComplete() {
