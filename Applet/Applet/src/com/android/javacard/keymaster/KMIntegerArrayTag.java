@@ -20,6 +20,11 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * KMIntegerArrayTag represents UINT_REP and ULONG_REP tags specified in keymaster hal specs. struct{byte
+ * TAG_TYPE; short length; struct{short UINT_TAG/ULONG_TAG; short tagKey; short arrPtr}, where arrPtr
+ * is the pointer to KMArray of KMInteger instances.
+ */
 public class KMIntegerArrayTag extends KMTag {
   private static KMIntegerArrayTag prototype;
   private static short instPtr;
@@ -122,10 +127,7 @@ public class KMIntegerArrayTag extends KMTag {
 
   // TODO this should be combined with validateKey to actually isValidTag {tagType, tagKey} pair.
   private static boolean validateTagType(short tagType) {
-    if ((tagType == ULONG_ARRAY_TAG) || (tagType == UINT_ARRAY_TAG)) {
-      return true;
-    }
-    return false;
+    return (tagType == ULONG_ARRAY_TAG) || (tagType == UINT_ARRAY_TAG);
   }
 
   public static boolean contains(short tagId, short tagValue, short params) {

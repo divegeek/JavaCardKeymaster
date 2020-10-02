@@ -16,6 +16,10 @@
 
 package com.android.javacard.keymaster;
 
+/**
+ * KMException is shared instance of exception used for all exceptions in the applet. It is used to
+ * throw EMError errors.
+ */
 public class KMException extends RuntimeException {
   public static short reason;
   public static KMException exception;

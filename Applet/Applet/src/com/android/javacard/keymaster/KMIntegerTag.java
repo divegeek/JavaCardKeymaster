@@ -19,12 +19,14 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
-
-// Implements UINT, ULONG and DATE tags.
+/**
+ * KMIntegerTag represents UINT, ULONG and DATE tags specified in keymaster hal specs. struct{byte
+ * TAG_TYPE; short length; struct{short UINT_TAG/ULONG_TAG/DATE_TAG; short tagKey; 4 or 8 byte value}}
+ */
 public class KMIntegerTag extends KMTag {
   private static KMIntegerTag prototype;
   private static short instPtr;
-
+  // Allowed tag keys.
   private static final short[] tags = {
     // UINT
     KEYSIZE,
@@ -133,10 +135,7 @@ public class KMIntegerTag extends KMTag {
 
   // TODO this should be combined with validateKey to actually isValidTag {tagType, tagKey} pair.
   private static boolean validateTagType(short tagType) {
-    if ((tagType == DATE_TAG) || (tagType == UINT_TAG) || (tagType == ULONG_TAG)) {
-      return true;
-    }
-    return false;
+    return (tagType == DATE_TAG) || (tagType == UINT_TAG) || (tagType == ULONG_TAG);
   }
 
   public static short getShortValue(short tagType, short tagKey, short keyParameters) {

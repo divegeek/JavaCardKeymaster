@@ -162,11 +162,6 @@ public class KMSimulator implements KMSEProvider {
   }
 
   @Override
-  public boolean importAsymmetricKey(byte alg, byte[] buf, short start, short length, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
-    return false;
-  }
-
-  @Override
   public boolean importAsymmetricKey(byte alg, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
     return false;
   }
@@ -193,6 +188,12 @@ public class KMSimulator implements KMSEProvider {
         randIndex = 0;
       }
     }
+  }
+
+  @Override
+  public void getTrueRandomNumber(byte[] num, short offset, short length) {
+    // ignore the size as simulator only supports 128 bit entropy
+    Util.arrayCopy(entropyPool,(short)0,num,offset,length);
   }
 
   @Override
@@ -307,18 +308,6 @@ public class KMSimulator implements KMSEProvider {
     return verification;
   }
 
-
-  @Override
-  public short cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
-    return 0;
-  }
-
-  @Override
-  public byte[] getTrueRandomNumber(short i) {
-    // ignore the size as simulator only supports 128 bit entropy
-    return entropyPool;
-  }
-
   @Override
   public short aesCCMSign(
       byte[] bufIn,
@@ -336,6 +325,11 @@ public class KMSimulator implements KMSEProvider {
     aes128Key.setKey(masterKeySecret, masterKeyStart);
     kdf.init(aes128Key, Signature.MODE_SIGN);
     return kdf.sign(bufIn, bufInStart, buffInLength, bufOut, bufStart);
+  }
+
+  @Override
+  public short cmacKdf(byte[] aesKey, short aesKeyStart, short aesKeyLen, byte[] label, short labelStart, short labelLen, byte[] context, short contextStart, short contextLength, byte[] key, short keyStart) {
+    return 0;
   }
 
   public ECPrivateKey createEcPrivateKey(byte[] pubBuffer, short pubOff, short pubLength,

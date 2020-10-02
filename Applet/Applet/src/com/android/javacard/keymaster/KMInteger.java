@@ -21,7 +21,10 @@ import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
-// Represents 8 bit, 16 bit, 32 bit and 64 bit integers
+/**
+ * Represents 8 bit, 16 bit, 32 bit and 64 bit unsigned integer. It corresponds to CBOR uint type.
+ * struct{byte INTEGER_TYPE; short length; 4 or 8 bytes of value}
+ */
 public class KMInteger extends KMType {
   public static final short UINT_32 = 4;
   public static final short UINT_64 = 8;

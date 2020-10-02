@@ -20,7 +20,11 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
-// Byte blob represents contiguous memory buffer.
+/**
+ * KMByteBlob represents contiguous block of bytes. It corresponds to CBOR type of Byte String. It
+ * extends KMType by specifying value field as zero or more sequence of bytes.
+ * struct{byte BYTE_BLOB_TYPE; short length; sequence of bytes}
+ */
 public class KMByteBlob extends KMType {
   private static KMByteBlob prototype;
   private static short instPtr;
@@ -88,31 +92,33 @@ public class KMByteBlob extends KMType {
     return heap;
   }
 
-  public void getValue(byte[] destBuf, short destStart, short destLength){
+  public void getValue(byte[] destBuf, short destStart, short destLength) {
     Util.arrayCopyNonAtomic(heap, getStartOff(), destBuf, destStart, destLength);
   }
-  public short getValues(byte[] destBuf, short destStart){
+
+  public short getValues(byte[] destBuf, short destStart) {
     short destLength = length();
     Util.arrayCopyNonAtomic(heap, getStartOff(), destBuf, destStart, destLength);
     return destLength;
   }
 
-  public void setValue(byte[] srcBuf, short srcStart, short srcLength){
-    if(length() > srcLength){
+  public void setValue(byte[] srcBuf, short srcStart, short srcLength) {
+    if (length() > srcLength) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), length());
   }
-  public boolean isValid(){
+
+  public boolean isValid() {
     if (length() == 0) {
-        return false;
+      return false;
     }
     return true;
   }
 
-  public void decrementLength(short len){
+  public void decrementLength(short len) {
     short length = Util.getShort(heap, (short) (instPtr + 1));
-    length = (short)(length - len);
-    Util.setShort(heap, (short) (instPtr + 1),length);
+    length = (short) (length - len);
+    Util.setShort(heap, (short) (instPtr + 1), length);
   }
 }

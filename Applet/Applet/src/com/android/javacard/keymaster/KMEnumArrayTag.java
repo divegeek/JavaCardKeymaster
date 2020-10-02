@@ -20,14 +20,18 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * KMEnumArrayTag represents ENUM_REP tag type. It has following structure, struct{byte TAG_TYPE;
+ * short length; struct{short ENUM_ARRAY_TAG; short tagKey; sequence of byte values}}
+ */
 public class KMEnumArrayTag extends KMTag {
 
   private static KMEnumArrayTag prototype;
   private static short instPtr;
 
-  // Arrays given below, together they form multi dimensional array.
-  // Tag
+  // The allowed tag keys of enum array type.
   private static short[] tags = {PURPOSE, BLOCK_MODE, DIGEST, PADDING};
+
   // Tag Values.
   private static Object[] enums = null;
 
@@ -42,10 +46,10 @@ public class KMEnumArrayTag extends KMTag {
   // pointer to an empty instance used as expression
   public static short exp() {
     short blobPtr = KMByteBlob.exp();
-    short ptr = instance(TAG_TYPE, (short)6);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), ENUM_ARRAY_TAG);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), INVALID_TAG);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), blobPtr);
+    short ptr = instance(TAG_TYPE, (short) 6);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), ENUM_ARRAY_TAG);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), INVALID_TAG);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 4), blobPtr);
     return ptr;
   }
 
@@ -82,10 +86,10 @@ public class KMEnumArrayTag extends KMTag {
       }
       byteIndex++;
     }
-    short ptr = instance(TAG_TYPE, (short)6);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), ENUM_ARRAY_TAG);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), byteBlob);
+    short ptr = instance(TAG_TYPE, (short) 6);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), ENUM_ARRAY_TAG);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), key);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 4), byteBlob);
     return ptr;
   }
 
@@ -98,7 +102,7 @@ public class KMEnumArrayTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -106,16 +110,17 @@ public class KMEnumArrayTag extends KMTag {
   }
 
   public short getValues() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
-    short blobPtr = Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+    short blobPtr = Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
     return KMByteBlob.cast(blobPtr).length();
   }
 
   public static void create() {
     if (enums == null) {
+      // allowed tag values.
       enums =
           new Object[] {
             new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
@@ -140,8 +145,7 @@ public class KMEnumArrayTag extends KMTag {
   }
 
   public static short getValues(short tagId, short params, byte[] buf, short start) {
-    short tag =
-        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    short tag = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
     if (tag == KMType.INVALID_VALUE) {
       return KMType.INVALID_VALUE;
     }
@@ -149,13 +153,12 @@ public class KMEnumArrayTag extends KMTag {
     return KMByteBlob.cast(tag).getValues(buf, start);
   }
 
-  public short get(short index){
+  public short get(short index) {
     return KMByteBlob.cast(getValues()).get(index);
   }
 
   public static boolean contains(short tagId, short tagValue, short params) {
-    short tag =
-      KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    short tag = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
     if (tag != KMType.INVALID_VALUE) {
       short index = 0;
       while (index < KMEnumArrayTag.cast(tag).length()) {
@@ -167,18 +170,19 @@ public class KMEnumArrayTag extends KMTag {
     }
     return false;
   }
+
   public static short length(short tagId, short params) {
-    short tag =
-      KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
+    short tag = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, tagId, params);
     if (tag != KMType.INVALID_VALUE) {
       return KMEnumArrayTag.cast(tag).length();
     }
     return KMType.INVALID_VALUE;
   }
-  public  boolean contains(short tagValue){
+
+  public boolean contains(short tagValue) {
     short index = 0;
-    while(index < length()){
-      if(get(index) == (byte)tagValue){
+    while (index < length()) {
+      if (get(index) == (byte) tagValue) {
         return true;
       }
       index++;
@@ -186,15 +190,16 @@ public class KMEnumArrayTag extends KMTag {
     return false;
   }
 
-  public boolean isValidDigests(byte alg){
+  public boolean isValidDigests(byte alg) {
     short index = 0;
     short digest;
-    while(index < length()){
+    while (index < length()) {
       digest = get(index);
       switch (alg) {
         case KMType.EC:
         case KMType.RSA:
-          if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256 && digest != KMType.SHA1) return false;
+          if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256 && digest != KMType.SHA1)
+            return false;
           break;
         case KMType.HMAC:
           if (digest != KMType.SHA2_256) return false;
@@ -211,28 +216,30 @@ public class KMEnumArrayTag extends KMTag {
     return true;
   }
 
-  public boolean isValidPaddingModes(byte alg){
+  public boolean isValidPaddingModes(byte alg) {
     short index = 0;
     short padding;
-    while(index < length()){
+    while (index < length()) {
       padding = get(index);
-      switch(alg){
+      switch (alg) {
         case KMType.RSA:
-          if(padding != KMType.RSA_OAEP && padding != KMType.PADDING_NONE &&
-            padding != KMType.RSA_PKCS1_1_5_SIGN && padding != KMType.RSA_PKCS1_1_5_ENCRYPT &&
-          padding != KMType.RSA_PSS){
+          if (padding != KMType.RSA_OAEP
+              && padding != KMType.PADDING_NONE
+              && padding != KMType.RSA_PKCS1_1_5_SIGN
+              && padding != KMType.RSA_PKCS1_1_5_ENCRYPT
+              && padding != KMType.RSA_PSS) {
             return false;
           }
           break;
         case KMType.AES:
         case KMType.DES:
-          if(padding != KMType.PKCS7 && padding != KMType.PADDING_NONE){
+          if (padding != KMType.PKCS7 && padding != KMType.PADDING_NONE) {
             return false;
           }
           break;
         case KMType.EC:
         case KMType.HMAC:
-          if(padding != PADDING_NONE){
+          if (padding != PADDING_NONE) {
             return false;
           }
           break;
@@ -243,28 +250,27 @@ public class KMEnumArrayTag extends KMTag {
     }
     return true;
   }
-  public boolean isValidPurpose(byte alg){
+
+  public boolean isValidPurpose(byte alg) {
     short index = 0;
     short purpose;
-    while(index < length()){
+    while (index < length()) {
       purpose = get(index);
-      switch(purpose){
+      switch (purpose) {
         case KMType.DECRYPT:
         case KMType.ENCRYPT:
-          if(alg != KMType.RSA && alg != KMType.AES &&
-            alg != KMType.DES){
+          if (alg != KMType.RSA && alg != KMType.AES && alg != KMType.DES) {
             return false;
           }
           break;
         case KMType.SIGN:
         case KMType.VERIFY:
-          if(alg != KMType.HMAC && alg != KMType.RSA &&
-            alg != KMType.EC){
+          if (alg != KMType.HMAC && alg != KMType.RSA && alg != KMType.EC) {
             return false;
           }
           break;
         case KMType.WRAP_KEY:
-          if(alg != KMType.RSA) return false;
+          if (alg != KMType.RSA) return false;
           break;
         default:
           return false;

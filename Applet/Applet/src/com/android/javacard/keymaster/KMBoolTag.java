@@ -20,10 +20,17 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
 
+/**
+ * KMBoolTag represents BOOL TAG type from the android keymaster hal specifications. If it is present in the key parameter list then its value is always true. A KMTag always requires
+ * a value because it is a key value pair. The bool tag always has 0x01 as its value.
+ * struct{byte TAG_TYPE; short length; struct{short BOOL_TAG; short tagKey; byte value 1}}
+ */
+
 public class KMBoolTag extends KMTag {
   private static KMBoolTag prototype;
   private static short instPtr;
 
+  // The allowed tag keys of type bool tag.
   private static final short[] tags = {
     CALLER_NONCE,
     INCLUDE_UNIQUE_ID,
@@ -61,6 +68,7 @@ public class KMBoolTag extends KMTag {
     short ptr = KMType.instance(TAG_TYPE, (short)5);
     Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), BOOL_TAG);
     Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
+    // Value is always 1.
     heap[(short)(ptr+TLV_HEADER_SIZE+4)] = 0x01;
     return ptr;
   }
@@ -85,7 +93,7 @@ public class KMBoolTag extends KMTag {
     return heap[(short)(instPtr+TLV_HEADER_SIZE+4)];
   }
 
-  // isValidTag the tag key
+  // validate the tag key.
   private static boolean validateKey(short key) {
     short index = (short) tags.length;
     while (--index >= 0) {
@@ -95,6 +103,7 @@ public class KMBoolTag extends KMTag {
     }
     return false;
   }
+
   public static short[] getTags(){
     return tags;
   }
