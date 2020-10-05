@@ -2693,7 +2693,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         try {
           op.setOperation(
               seProvider.initSymmetricOperation(
-                  (byte) op.getPurpose(),
+                  (byte) KMType.SIGN,
                   op.getAlgorithm(),
                   op.getDigest(),
                   op.getPadding(),
@@ -3948,7 +3948,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             tmpVariables[2],
             KMByteBlob.cast(tmpVariables[4]).getBuffer(),
             KMByteBlob.cast(tmpVariables[4]).getStartOff(),
-            KMByteBlob.cast(tmpVariables[4]).length(),
+            KMByteBlob.cast(tmpVariables[4
+                                         ]).length(),
             scratchPad,
             (short) 0);
     if (tmpVariables[3] < 0) {
