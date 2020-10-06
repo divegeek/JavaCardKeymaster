@@ -2124,6 +2124,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       // Allocate output buffer as input data is already block aligned
       data[OUTPUT_DATA] = KMByteBlob.instance(tmpVariables[0]);
       // Otherwise just update the data.
+      //HAL consumes all the input and maintains a buffered data inside it. So the
+      //applet inputConsumed as the input length.
+      tmpVariables[3] = tmpVariables[0];
       try {
         tmpVariables[0] =
             op.getOperation()
@@ -2159,7 +2162,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       data[OUTPUT_DATA] = KMByteBlob.instance((short) 0);
     }
     KMArray.cast(tmpVariables[2]).add((short) 0, KMInteger.uint_16(KMError.OK));
-    KMArray.cast(tmpVariables[2]).add((short) 1, KMInteger.uint_16(tmpVariables[0]));
+    KMArray.cast(tmpVariables[2]).add((short) 1, KMInteger.uint_16(tmpVariables[3]));
     KMArray.cast(tmpVariables[2]).add((short) 2, tmpVariables[1]);
     KMArray.cast(tmpVariables[2]).add((short) 3, data[OUTPUT_DATA]);
     // Encode the response
