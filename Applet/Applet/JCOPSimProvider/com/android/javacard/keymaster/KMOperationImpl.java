@@ -2,7 +2,6 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
-import javacard.security.CryptoException;
 import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
 import javacardx.crypto.Cipher;
@@ -13,7 +12,6 @@ public class KMOperationImpl implements KMOperation {
   private short cipherAlg;
   private short padding;
   private short mode;
-  private boolean verificationFlag;
   private short blockMode;
   private short macLength;
   private short aesGcmUpdatedLen;
@@ -81,7 +79,7 @@ public class KMOperationImpl implements KMOperation {
     JCSystem.commitTransaction();
   }
 
-  //@Override
+  @Override
   public short update(byte[] inputDataBuf, short inputDataStart, short inputDataLength,
       byte[] outputDataBuf, short outputDataStart) {
     short len = cipher.update(inputDataBuf,inputDataStart,inputDataLength,outputDataBuf,outputDataStart);
@@ -92,13 +90,13 @@ public class KMOperationImpl implements KMOperation {
     return len;
   }
 
-  //@Override
+  @Override
   public short update(byte[] inputDataBuf, short inputDataStart, short inputDataLength) {
     signature.update(inputDataBuf,inputDataStart,inputDataLength);
     return 0;
   }
 
-  //@Override
+  @Override
   public short finish(byte[] inputDataBuf, short inputDataStart, 
       short inputDataLen, byte[] outputDataBuf, short outputDataStart) {
     byte[] tmpArray = KMJCOPSimProvider.getInstance().tmpArray;
@@ -181,7 +179,7 @@ public class KMOperationImpl implements KMOperation {
     return len;
   }
 
-  //@Override
+  @Override
   public short sign(byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] signBuf, short signStart) {
     short len = 0;
     try {
@@ -193,7 +191,7 @@ public class KMOperationImpl implements KMOperation {
     return len;
   }
 
-  //@Override
+  @Override
   public boolean verify(byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] signBuf, short signStart, short signLength) {
     boolean ret = false;
     try {
@@ -205,25 +203,26 @@ public class KMOperationImpl implements KMOperation {
     return ret;
   }
 
-  //@Override
+  @Override
   public void abort() {
     // do nothing
     if(cipher != null) {
       KMJCOPSimProvider.getInstance().releaseCipherInstance(cipher);
-      cipher = null;
+      resetCipher();
     }
     if(signature != null) {
       KMJCOPSimProvider.getInstance().releaseSignatureInstance(signature);
       signature = null;
     }
+    KMJCOPSimProvider.getInstance().releaseOperationInstance(this);
   }
 
-  //@Override
+  @Override
   public void updateAAD(byte[] dataBuf, short dataStart, short dataLength) {
     ((AEADCipher) cipher).updateAAD(dataBuf, dataStart, dataLength);
   }
 
-  //@Override
+  @Override
   public short getAESGCMOutputSize(short dataSize, short macLength) {
     if (mode == KMType.ENCRYPT) {
       return (short) (aesGcmUpdatedLen + dataSize + macLength);
@@ -231,10 +230,4 @@ public class KMOperationImpl implements KMOperation {
       return (short) (aesGcmUpdatedLen + dataSize - macLength);
     }
   }
-
-  //@Override
-  public void release() {
-    KMJCOPSimProvider.getInstance().releaseOperationInstance(this);
-  }
-
 }

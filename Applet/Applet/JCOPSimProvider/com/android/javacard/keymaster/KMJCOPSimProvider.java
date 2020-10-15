@@ -15,16 +15,6 @@
  */
 package com.android.javacard.keymaster;
 
-import com.android.javacard.keymaster.KMAttestationCert;
-import com.android.javacard.keymaster.KMError;
-import com.android.javacard.keymaster.KMException;
-import com.android.javacard.keymaster.KMInstance;
-import com.android.javacard.keymaster.KMKeymasterApplet;
-import com.android.javacard.keymaster.KMOperation;
-import com.android.javacard.keymaster.KMRepository;
-import com.android.javacard.keymaster.KMSEProvider;
-import com.android.javacard.keymaster.KMType;
-
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
@@ -133,14 +123,15 @@ public class KMJCOPSimProvider implements KMSEProvider {
           Signature.ALG_RSA_SHA_256_PKCS1, Signature.ALG_RSA_SHA_256_PKCS1_PSS,
           Signature.ALG_ECDSA_SHA_256, Signature.ALG_HMAC_SHA_256,
           KMRsa2048NoDigestSignature.ALG_RSA_SIGN_NOPAD,
-          KMRsa2048NoDigestSignature.ALG_RSA_PKCS1_NODIGEST };
+          KMRsa2048NoDigestSignature.ALG_RSA_PKCS1_NODIGEST,
+          KMEcdsa256NoDigestSignature.ALG_ECDSA_NODIGEST};
 
   // AESKey
   private AESKey aesKeys[];
   // DES3Key
   private DESKey triDesKey;
   // HMACKey
-  private HMACKey hmacKeys[];
+  private HMACKey hmacKey;
   // RSA Key Pair
   private KeyPair rsaKeyPair;
   // EC Key Pair.
@@ -186,11 +177,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
             KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
     triDesKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
             KeyBuilder.LENGTH_DES3_3KEY, false);
-    hmacKeys = new HMACKey[2];
-    hmacKeys[KEYSIZE_128_OFFSET] = (HMACKey) KeyBuilder.buildKey(
-            KeyBuilder.TYPE_HMAC, (short) 128, false);
-    hmacKeys[KEYSIZE_256_OFFSET] = (HMACKey) KeyBuilder.buildKey(
-            KeyBuilder.TYPE_HMAC, (short) 256, false);
+    hmacKey = (HMACKey) KeyBuilder.buildKey(
+            KeyBuilder.TYPE_HMAC, (short) 512, false);
     rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
     initECKey();
 
@@ -311,6 +299,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
     if (KMRsa2048NoDigestSignature.ALG_RSA_SIGN_NOPAD == alg
             || KMRsa2048NoDigestSignature.ALG_RSA_PKCS1_NODIGEST == alg) {
       return new KMRsa2048NoDigestSignature(alg);
+    } else if(KMEcdsa256NoDigestSignature.ALG_ECDSA_NODIGEST == alg) {
+      return new KMEcdsa256NoDigestSignature(alg);
     } else {
       return Signature.getInstance(alg, false);
     }
@@ -500,14 +490,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   public HMACKey createHMACKey(byte[] secretBuffer, short secretOff,
           short secretLength) {
-    HMACKey key = null;
-    if (secretLength == 32) {
-      key = (HMACKey) hmacKeys[KEYSIZE_256_OFFSET];
-    } else {
-      key = (HMACKey) hmacKeys[KEYSIZE_128_OFFSET];
-    }
-    key.setKey(secretBuffer, secretOff, secretLength);
-    return key;
+    hmacKey.setKey(secretBuffer, secretOff, secretLength);
+    return hmacKey;
   }
 
   public KeyPair createRsaKeyPair() {
@@ -970,7 +954,10 @@ public class KMJCOPSimProvider implements KMSEProvider {
       }
       break;
     case KMType.EC:
-      return Signature.ALG_ECDSA_SHA_256;
+      if (digest == KMType.DIGEST_NONE)
+        return KMEcdsa256NoDigestSignature.ALG_ECDSA_NODIGEST;
+      else
+        return Signature.ALG_ECDSA_SHA_256;
     case KMType.HMAC:
       return Signature.ALG_HMAC_SHA_256;
     }
@@ -1018,16 +1005,18 @@ public class KMJCOPSimProvider implements KMSEProvider {
           short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
     Key key = null;
     Cipher symmCipher = null;
-    short len = 0;
     switch (secretLength) {
     case 32:
       key = aesKeys[KEYSIZE_256_OFFSET];
+      ((AESKey) key).setKey(secret,secretStart);
       break;
     case 16:
       key = aesKeys[KEYSIZE_128_OFFSET];
+      ((AESKey) key).setKey(secret,secretStart);
       break;
     case 24:
       key = triDesKey;
+      ((DESKey) key).setKey(secret,secretStart);
       break;
     default:
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -1205,15 +1194,10 @@ public class KMJCOPSimProvider implements KMSEProvider {
           short secretStart, short secretLength) {
     byte alg = mapSignature256Alg(KMType.EC, (byte) 0, (byte) digest);
     Signature ecSigner = null;
-    if (digest == KMType.DIGEST_NONE) {
-      // TODO: Implement from NXP.
-      KMException.throwIt(KMError.UNIMPLEMENTED);
-    } else {
-      ECPrivateKey key = (ECPrivateKey) ecKeyPair.getPrivate();
-      key.setS(secret, secretStart, secretLength);
-      ecSigner = getSignatureInstanceFromPool(alg);
-      ecSigner.init(key, Signature.MODE_SIGN);
-    }
+    ECPrivateKey key = (ECPrivateKey) ecKeyPair.getPrivate();
+    key.setS(secret, secretStart, secretLength);
+    ecSigner = getSignatureInstanceFromPool(alg);
+    ecSigner.init(key, Signature.MODE_SIGN);
     return ecSigner;
   }
 

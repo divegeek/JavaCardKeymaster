@@ -228,6 +228,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       keymasterState = KMKeymasterApplet.FIRST_SELECT_STATE;
     } else if (keymasterState == KMKeymasterApplet.INACTIVE_STATE) {
       keymasterState = KMKeymasterApplet.ACTIVE_STATE;
+    } else if (keymasterState == KMKeymasterApplet.ACTIVE_STATE ||
+               keymasterState == KMKeymasterApplet.FIRST_SELECT_STATE) {
+      return true;
     } else {
       return false;
     }
@@ -2095,6 +2098,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       // TODO refactor and optimize this
       tmpVariables[0] = KMByteBlob.cast(data[INPUT_DATA]).length();
+      short additionalExpOutLen = 0;
       if (op.getAlgorithm() == KMType.AES) {
         if (op.getBlockMode() == KMType.GCM) {
           updateAAD(op, (byte) 0x00);
@@ -2108,6 +2112,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               op.setAesGcmUpdateComplete();
             }
           }
+          additionalExpOutLen = 16;
         } else {
           // input data must be block aligned.
           // 128 bit block size - HAL must send block aligned data
@@ -2122,10 +2127,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
       }
       // Allocate output buffer as input data is already block aligned
-      data[OUTPUT_DATA] = KMByteBlob.instance(tmpVariables[0]);
+      data[OUTPUT_DATA] = KMByteBlob.instance((short)(tmpVariables[0]+additionalExpOutLen));
       // Otherwise just update the data.
       //HAL consumes all the input and maintains a buffered data inside it. So the
-      //applet inputConsumed as the input length.
+      //applet sends the inputConsumed length as same as the input length.
       tmpVariables[3] = tmpVariables[0];
       try {
         tmpVariables[0] =
@@ -2141,7 +2146,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       // Adjust the Output data if it is not equal to input data.
       // This happens in case of JCardSim provider.
-      if (tmpVariables[0] != KMByteBlob.cast(data[INPUT_DATA]).length()) {
+      if (tmpVariables[0] != KMByteBlob.cast(data[OUTPUT_DATA]).length()) {
         data[INPUT_DATA] = data[OUTPUT_DATA];
         data[OUTPUT_DATA] = KMByteBlob.instance(tmpVariables[0]);
         Util.arrayCopy(

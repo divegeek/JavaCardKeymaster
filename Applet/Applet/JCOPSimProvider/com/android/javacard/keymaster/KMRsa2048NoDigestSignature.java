@@ -1,6 +1,5 @@
 package com.android.javacard.keymaster;
 
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
 import javacard.security.Key;

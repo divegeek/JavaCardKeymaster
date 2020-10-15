@@ -130,7 +130,7 @@ public class KMOperationState {
 
   public void release() {
     Object[] ops = ((Object[]) slot[REFS]);
-    ((KMOperation)ops[OPERATION]).release();
+    ((KMOperation)ops[OPERATION]).abort();
     JCSystem.beginTransaction();
     Util.arrayFillNonAtomic(
         (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length, (byte) 0);
