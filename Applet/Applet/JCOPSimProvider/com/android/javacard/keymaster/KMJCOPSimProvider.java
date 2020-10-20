@@ -103,8 +103,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
   public static final short AES_GCM_NONCE_LENGTH = 12;
   public static final byte KEYSIZE_128_OFFSET = 0x00;
   public static final byte KEYSIZE_256_OFFSET = 0x01;
-  public static final short TMP_ARRAY_SIZE = 256; // TODO
-  public static final short AUTH_DATA_LEN = 650; // TODO
+  public static final short TMP_ARRAY_SIZE = 256;
   public static final short MAX_RND_NUM_SIZE = 64;
   public static final short ENTROPY_POOL_SIZE = 16;
   public static final byte[] aesICV = {
@@ -112,16 +111,20 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   final byte[] CIPHER_ALGS = {
           Cipher.ALG_AES_BLOCK_128_CBC_NOPAD,
-          Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, Cipher.ALG_DES_CBC_NOPAD,
-          Cipher.ALG_DES_ECB_NOPAD, Cipher.ALG_AES_CTR, Cipher.ALG_RSA_PKCS1,// NoDigest
-          Cipher.ALG_RSA_PKCS1_OAEP, // SHA256
-          Cipher.ALG_RSA_NOPAD, // NoDigest
-          // AEADCipher.ALG_AES_CCM,
+          Cipher.ALG_AES_BLOCK_128_ECB_NOPAD,
+          Cipher.ALG_DES_CBC_NOPAD,
+          Cipher.ALG_DES_ECB_NOPAD,
+          Cipher.ALG_AES_CTR,
+          Cipher.ALG_RSA_PKCS1,
+          Cipher.ALG_RSA_PKCS1_OAEP,
+          Cipher.ALG_RSA_NOPAD,
           AEADCipher.ALG_AES_GCM };
+
   final byte[] SIG_ALGS = {
-          // Signature.ALG_AES_CMAC_128,
-          Signature.ALG_RSA_SHA_256_PKCS1, Signature.ALG_RSA_SHA_256_PKCS1_PSS,
-          Signature.ALG_ECDSA_SHA_256, Signature.ALG_HMAC_SHA_256,
+          Signature.ALG_RSA_SHA_256_PKCS1,
+          Signature.ALG_RSA_SHA_256_PKCS1_PSS,
+          Signature.ALG_ECDSA_SHA_256,
+          Signature.ALG_HMAC_SHA_256,
           KMRsa2048NoDigestSignature.ALG_RSA_SIGN_NOPAD,
           KMRsa2048NoDigestSignature.ALG_RSA_PKCS1_NODIGEST,
           KMEcdsa256NoDigestSignature.ALG_ECDSA_NODIGEST};
@@ -138,8 +141,6 @@ public class KMJCOPSimProvider implements KMSEProvider {
   private KeyPair ecKeyPair;
   // Temporary array.
   public byte[] tmpArray;
-  // public byte[] tmpAuthDataArray;
-  private short tmpArrayIndex;
   // This is used for internal encryption/decryption operations.
   private static AEADCipher aesGcmCipher;
   // Cipher pool
@@ -198,8 +199,6 @@ public class KMJCOPSimProvider implements KMSEProvider {
     // Temporary transient array created to use locally inside functions.
     tmpArray = JCSystem.makeTransientByteArray(TMP_ARRAY_SIZE,
             JCSystem.CLEAR_ON_DESELECT);
-    // tmpAuthDataArray = JCSystem.makeTransientByteArray(AUTH_DATA_LEN,
-    // JCSystem.CLEAR_ON_DESELECT);
 
     // Random number generator initialisation.
     rndNum = JCSystem.makeTransientByteArray(MAX_RND_NUM_SIZE,
@@ -219,17 +218,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
             KeyBuilder.LENGTH_AES_128, false);
   }
 
-  public short alloc(short length) {
-    if (((short) (tmpArrayIndex + length)) > tmpArray.length) {
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    tmpArrayIndex += length;
-    return (short) (tmpArrayIndex - length);
-  }
-
   public void clean() {
-    Util.arrayFillNonAtomic(tmpArray, (short) 0, tmpArrayIndex, (byte) 0);
-    tmpArrayIndex = 0;
+    Util.arrayFillNonAtomic(tmpArray, (short) 0, (short) 256, (byte) 0);
   }
 
   private void initECKey() {
@@ -288,8 +278,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
     while (index < SIG_ALGS.length) {
       sigPool[index] = new KMInstance();
       ((KMInstance) sigPool[index]).instanceCount = 1;
-      ((KMInstance) sigPool[index]).object = getSignatureInstance(SIG_ALGS[index]);// Signature.getInstance(SIG_ALGS[index],
-                                                                                   // false);
+      ((KMInstance) sigPool[index]).object = getSignatureInstance(SIG_ALGS[index]);
       ((KMInstance) sigPool[index]).reserved = 0;
       index++;
     }
@@ -320,7 +309,6 @@ public class KMJCOPSimProvider implements KMSEProvider {
       if (Cipher.PAD_PKCS1_OAEP_SHA256 == c.getPaddingAlgorithm()) {
         return Cipher.ALG_RSA_PKCS1_OAEP;
       } else {
-        // TODO: What should we do here.
         KMException.throwIt(KMError.UNSUPPORTED_PADDING_MODE);
         return 0;
       }
@@ -400,6 +388,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
           break;
         } else {
           // Cipher/Signature instance count reached its maximum limit.
+          KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
           break;
         }
       }
