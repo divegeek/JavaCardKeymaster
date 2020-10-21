@@ -15,8 +15,6 @@
  */
 package com.android.javacard.keymaster;
 
-import javacard.framework.ISO7816;
-import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -104,10 +102,6 @@ public class KMJCOPSimProvider implements KMSEProvider {
   public static final byte KEYSIZE_128_OFFSET = 0x00;
   public static final byte KEYSIZE_256_OFFSET = 0x01;
   public static final short TMP_ARRAY_SIZE = 256;
-  public static final short MAX_RND_NUM_SIZE = 64;
-  public static final short ENTROPY_POOL_SIZE = 16;
-  public static final byte[] aesICV = {
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
   final byte[] CIPHER_ALGS = {
           Cipher.ALG_AES_BLOCK_128_CBC_NOPAD,
@@ -150,16 +144,12 @@ public class KMJCOPSimProvider implements KMSEProvider {
   // KMOperationImpl pool
   private Object[] operationPool;
 
-  private static Signature kdf;
+  private Signature kdf;
 
-  private static Signature hmacSignature;
+  private Signature hmacSignature;
 
-  // RNG
-  private static byte[] rngCounter;
-  private static AESKey aesRngKey;
-  private static Cipher aesRngCipher;
-  private static byte[] entropyPool;
-  private static byte[] rndNum;
+  // Entropy
+  private RandomData rng;
 
   private static KMJCOPSimProvider jcopProvider = null;
 
@@ -173,13 +163,13 @@ public class KMJCOPSimProvider implements KMSEProvider {
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
-            KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
+        KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
     aesKeys[KEYSIZE_256_OFFSET] = (AESKey) KeyBuilder.buildKey(
-            KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
+        KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
     triDesKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
-            KeyBuilder.LENGTH_DES3_3KEY, false);
-    hmacKey = (HMACKey) KeyBuilder.buildKey(
-            KeyBuilder.TYPE_HMAC, (short) 512, false);
+        KeyBuilder.LENGTH_DES3_3KEY, false);
+    hmacKey = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) 512,
+        false);
     rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
     initECKey();
 
@@ -198,24 +188,10 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
     // Temporary transient array created to use locally inside functions.
     tmpArray = JCSystem.makeTransientByteArray(TMP_ARRAY_SIZE,
-            JCSystem.CLEAR_ON_DESELECT);
+        JCSystem.CLEAR_ON_DESELECT);
 
     // Random number generator initialisation.
-    rndNum = JCSystem.makeTransientByteArray(MAX_RND_NUM_SIZE,
-            JCSystem.CLEAR_ON_RESET);
-    entropyPool = JCSystem.makeTransientByteArray(ENTROPY_POOL_SIZE,
-            JCSystem.CLEAR_ON_RESET);
-    rngCounter = JCSystem.makeTransientByteArray((short) 8,
-            JCSystem.CLEAR_ON_RESET);
-    initEntropyPool(entropyPool);
-    try {
-      aesRngCipher = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD,
-              false);
-    } catch (CryptoException exp) {
-      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-    }
-    aesRngKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
-            KeyBuilder.LENGTH_AES_128, false);
+    rng = RandomData.getInstance(RandomData.ALG_KEYGENERATION);
   }
 
   public void clean() {
@@ -286,9 +262,9 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   private Signature getSignatureInstance(byte alg) {
     if (KMRsa2048NoDigestSignature.ALG_RSA_SIGN_NOPAD == alg
-            || KMRsa2048NoDigestSignature.ALG_RSA_PKCS1_NODIGEST == alg) {
+        || KMRsa2048NoDigestSignature.ALG_RSA_PKCS1_NODIGEST == alg) {
       return new KMRsa2048NoDigestSignature(alg);
-    } else if(KMEcdsa256NoDigestSignature.ALG_ECDSA_NODIGEST == alg) {
+    } else if (KMEcdsa256NoDigestSignature.ALG_ECDSA_NODIGEST == alg) {
       return new KMEcdsa256NoDigestSignature(alg);
     } else {
       return Signature.getInstance(alg, false);
@@ -298,7 +274,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
   private Cipher getCipherInstance(byte alg) {
     if (Cipher.ALG_RSA_PKCS1_OAEP == alg) {
       return Cipher.getInstance(Cipher.CIPHER_RSA,
-              Cipher.PAD_PKCS1_OAEP_SHA256, false);
+          Cipher.PAD_PKCS1_OAEP_SHA256, false);
     } else {
       return Cipher.getInstance(alg, false);
     }
@@ -354,16 +330,13 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   // This pool implementation can create a maximum of total 4 instances per
-  // algorithm.
-  // This function returns the unreserved Cipher/Signature instance of type
-  // algorithm from pool. If
-  // there is no unreserved cipher/signature instance of algorithm type in the
-  // pool and Cipher/Signature
-  // algorithm instance count is less than 4 then it creates and returns a new
-  // Cipher/Signature
-  // instance of algorithm type. If there is no unreserved cipher/signature and
-  // maximum instance
-  // count reaches four it throws exception.
+  // algorithm. This function returns the unreserved Cipher/Signature instance
+  // of type algorithm from pool. If there is no unreserved cipher/signature
+  // instance of algorithm type in the pool and Cipher/Signature algorithm
+  // instance count is less than 4 then it creates and returns a new
+  // Cipher/Signature instance of algorithm type. If there is no unreserved
+  // cipher/signature and maximum instance count reaches four it throws
+  // exception.
   private Object getInstanceFromPool(Object[] pool, byte alg) {
     short index = 0;
     short instanceCount = 0;
@@ -378,11 +351,12 @@ public class KMJCOPSimProvider implements KMSEProvider {
           pool[index] = new KMInstance();
           JCSystem.beginTransaction();
           ((KMInstance) pool[index]).instanceCount = (byte) (++instanceCount);
-          if (isCipher)
+          if (isCipher) {
             ((KMInstance) pool[index]).object = object = getCipherInstance(alg);
-          else
+          } else {
             // Signature
             ((KMInstance) pool[index]).object = object = getSignatureInstance(alg);
+          }
           ((KMInstance) pool[index]).reserved = 1;
           JCSystem.commitTransaction();
           break;
@@ -394,7 +368,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
       }
       object = ((KMInstance) pool[index]).object;
       if ((isCipher && (alg == getCipherAlgorithm((Cipher) object)))
-              || ((isSigner && (alg == ((Signature) object).getAlgorithm())))) {
+          || ((isSigner && (alg == ((Signature) object).getAlgorithm())))) {
         instanceCount = ((KMInstance) pool[index]).instanceCount;
         if (((KMInstance) pool[index]).reserved == 0) {
           JCSystem.beginTransaction();
@@ -439,8 +413,12 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public AESKey createAESKey(short keysize) {
-    newRandomNumber(tmpArray, (short) 0, (short) (keysize / 8));
-    return createAESKey(tmpArray, (short) 0, (short) (keysize / 8));
+    try {
+      newRandomNumber(tmpArray, (short) 0, (short) (keysize / 8));
+      return createAESKey(tmpArray, (short) 0, (short) (keysize / 8));
+    } finally {
+      clean();
+    }
   }
 
   public AESKey createAESKey(byte[] buf, short startOff, short length) {
@@ -457,14 +435,18 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public DESKey createTDESKey() {
-    newRandomNumber(tmpArray, (short) 0,
-            (short) (KeyBuilder.LENGTH_DES3_3KEY / 8));
-    return createTDESKey(tmpArray, (short) 0,
-            (short) (KeyBuilder.LENGTH_DES3_3KEY / 8));
+    try {
+      newRandomNumber(tmpArray, (short) 0,
+          (short) (KeyBuilder.LENGTH_DES3_3KEY / 8));
+      return createTDESKey(tmpArray, (short) 0,
+          (short) (KeyBuilder.LENGTH_DES3_3KEY / 8));
+    } finally {
+      clean();
+    }
   }
 
   public DESKey createTDESKey(byte[] secretBuffer, short secretOff,
-          short secretLength) {
+      short secretLength) {
     triDesKey.setKey(secretBuffer, secretOff);
     return triDesKey;
   }
@@ -473,12 +455,16 @@ public class KMJCOPSimProvider implements KMSEProvider {
     if ((keysize % 8 != 0) || !(keysize >= 64 && keysize <= 512)) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
-    newRandomNumber(tmpArray, (short) 0, (short) (keysize / 8));
-    return createHMACKey(tmpArray, (short) 0, (short) (keysize / 8));
+    try {
+      newRandomNumber(tmpArray, (short) 0, (short) (keysize / 8));
+      return createHMACKey(tmpArray, (short) 0, (short) (keysize / 8));
+    } finally {
+      clean();
+    }
   }
 
   public HMACKey createHMACKey(byte[] secretBuffer, short secretOff,
-          short secretLength) {
+      short secretLength) {
     hmacKey.setKey(secretBuffer, secretOff, secretLength);
     return hmacKey;
   }
@@ -489,7 +475,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public RSAPrivateKey createRsaKey(byte[] modBuffer, short modOff,
-          short modLength, byte[] privBuffer, short privOff, short privLength) {
+      short modLength, byte[] privBuffer, short privOff, short privLength) {
     RSAPrivateKey privKey = (RSAPrivateKey) rsaKeyPair.getPrivate();
     privKey.setExponent(privBuffer, privOff, privLength);
     privKey.setModulus(modBuffer, modOff, modLength);
@@ -502,7 +488,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public ECPrivateKey createEcKey(byte[] privBuffer, short privOff,
-          short privLength) {
+      short privLength) {
     ECPrivateKey privKey = (ECPrivateKey) ecKeyPair.getPrivate();
     privKey.setS(privBuffer, privOff, privLength);
     return privKey;
@@ -510,7 +496,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   @Override
   public short createSymmetricKey(byte alg, short keysize, byte[] buf,
-          short startOff) {
+      short startOff) {
     switch (alg) {
     case KMType.AES:
       AESKey aesKey = createAESKey(keysize);
@@ -530,8 +516,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   @Override
   public void createAsymmetricKey(byte alg, byte[] privKeyBuf,
-          short privKeyStart, short privKeyLength, byte[] pubModBuf,
-          short pubModStart, short pubModLength, short[] lengths) {
+      short privKeyStart, short privKeyLength, byte[] pubModBuf,
+      short pubModStart, short pubModLength, short[] lengths) {
     switch (alg) {
     case KMType.RSA:
       KeyPair rsaKey = createRsaKeyPair();
@@ -560,7 +546,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   @Override
   public boolean importSymmetricKey(byte alg, short keysize, byte[] buf,
-          short startOff, short length) {
+      short startOff, short length) {
     switch (alg) {
     case KMType.AES:
       createAESKey(buf, startOff, length);
@@ -578,21 +564,14 @@ public class KMJCOPSimProvider implements KMSEProvider {
     return true;
   }
 
-  /*
-   * @Override public boolean importAsymmetricKey(byte alg, byte[] buf, short
-   * start, short length, byte[] privKeyBuf, short privKeyStart, short
-   * privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
-   * return false; }
-   */
-
   @Override
   public boolean importAsymmetricKey(byte alg, byte[] privKeyBuf,
-          short privKeyStart, short privKeyLength, byte[] pubModBuf,
-          short pubModStart, short pubModLength) {
+      short privKeyStart, short privKeyLength, byte[] pubModBuf,
+      short pubModStart, short pubModLength) {
     switch (alg) {
     case KMType.RSA:
       createRsaKey(pubModBuf, pubModStart, pubModLength, privKeyBuf,
-              privKeyStart, privKeyLength);
+          privKeyStart, privKeyLength);
       break;
     case KMType.EC:
       createEcKey(privKeyBuf, privKeyStart, privKeyLength);
@@ -604,122 +583,27 @@ public class KMJCOPSimProvider implements KMSEProvider {
     return true;
   }
 
-  private void initEntropyPool(byte[] pool) {
-    byte index = 0;
-    RandomData trng;
-    while (index < rngCounter.length) {
-      rngCounter[index++] = 0;
-    }
-    try {
-      trng = RandomData.getInstance(RandomData.ALG_TRNG);
-      trng.nextBytes(pool, (short) 0, (short) pool.length);
-    } catch (CryptoException exp) {
-      if (exp.getReason() == CryptoException.NO_SUCH_ALGORITHM) {
-        // TODO change this when possible
-        // simulator does not support TRNG algorithm. So, PRNG algorithm
-        // (deprecated) is used.
-        trng = RandomData.getInstance(RandomData.ALG_PSEUDO_RANDOM);
-        trng.nextBytes(pool, (short) 0, (short) pool.length);
-      } else {
-        // TODO change this to proper error code
-        ISOException.throwIt(ISO7816.SW_UNKNOWN);
-      }
-    }
+  @Override
+  public void getTrueRandomNumber(byte[] buf, short start, short length) {
+    newRandomNumber(buf, start, length);
   }
 
-  // Generate a secure random number from existing entropy pool. This uses aes
-  // cbc algorithm with
-  // 8 byte rngCounter and 16 byte block size.
   @Override
   public void newRandomNumber(byte[] num, short startOff, short length) {
-    KMRepository repository = KMRepository.instance();
-    byte[] bufPtr = repository.getHeap();
-    short countBufInd = repository.alloc(KMKeymasterApplet.AES_BLOCK_SIZE);
-    short randBufInd = repository.alloc(KMKeymasterApplet.AES_BLOCK_SIZE);
-    short len = KMKeymasterApplet.AES_BLOCK_SIZE;
-    aesRngKey.setKey(entropyPool, (short) 0);
-    aesRngCipher.init(aesRngKey, Cipher.MODE_ENCRYPT, aesICV, (short) 0,
-            (short) 16);
-    while (length > 0) {
-      if (length < len)
-        len = length;
-      // increment rngCounter by one
-      incrementCounter();
-      // copy the 8 byte rngCounter into the 16 byte rngCounter buffer.
-      Util.arrayCopy(rngCounter, (short) 0, bufPtr, countBufInd,
-              (short) rngCounter.length);
-      // encrypt the rngCounter buffer with existing entropy which forms the aes
-      // key.
-      aesRngCipher.doFinal(bufPtr, countBufInd,
-              KMKeymasterApplet.AES_BLOCK_SIZE, bufPtr, randBufInd);
-      // copy the encrypted rngCounter block to buffer passed in the argument
-      Util.arrayCopy(bufPtr, randBufInd, num, startOff, len);
-      length = (short) (length - len);
-      startOff = (short) (startOff + len);
-    }
-  }
-
-  // increment 8 byte rngCounter by one
-  private void incrementCounter() {
-    // start with least significant byte
-    short index = (short) (rngCounter.length - 1);
-    while (index >= 0) {
-      // if the msb of current byte is set then it will be negative
-      if (rngCounter[index] < 0) {
-        // then increment the rngCounter
-        rngCounter[index]++;
-        // is the msb still set? i.e. no carry over
-        if (rngCounter[index] < 0)
-          break; // then break
-        else
-          index--; // else go to the higher order byte
-      } else {
-        // if msb is not set then increment the rngCounter
-        rngCounter[index]++;
-        break;
-      }
-    }
+    rng.nextBytes(num, startOff, length);
   }
 
   @Override
   public void addRngEntropy(byte[] num, short offset, short length) {
-    // Maximum length can be 256 bytes. But currently we support max 32 bytes
-    // seed.
-    // Get existing entropy pool.
-    if (length > 32)
-      length = 32;
-    // Create new temporary pool.
-    // Populate the new pool with the entropy which is derived from current
-    // entropy pool.
-    newRandomNumber(rndNum, (short) 0, (short) entropyPool.length);
-    // Copy the entropy to the current pool - updates the entropy pool.
-    Util.arrayCopy(rndNum, (short) 0, entropyPool, (short) 0,
-            (short) entropyPool.length);
-    short index = 0;
-    short randIndex = 0;
-    // XOR the seed received from the master in the entropy pool - 16 bytes
-    // (entPool.length).
-    // at a time.
-    while (index < length) {
-      entropyPool[randIndex] = (byte) (entropyPool[randIndex] ^ num[(short) (offset + index)]);
-      randIndex++;
-      index++;
-      if (randIndex >= entropyPool.length) {
-        randIndex = 0;
-      }
-    }
+    rng.setSeed(num, offset, length);
   }
 
-  /*
-   * @Override public byte[] getTrueRandomNumber(short len) { //TODO ignore the
-   * size as simulator only supports 128 bit entropy return entropyPool; }
-   */
   @Override
   public short aesGCMEncrypt(byte[] aesKey, short aesKeyStart, short aesKeyLen,
-          byte[] secret, short secretStart, short secretLen, byte[] encSecret,
-          short encSecretStart, byte[] nonce, short nonceStart, short nonceLen,
-          byte[] authData, short authDataStart, short authDataLen,
-          byte[] authTag, short authTagStart, short authTagLen) {
+      byte[] secret, short secretStart, short secretLen, byte[] encSecret,
+      short encSecretStart, byte[] nonce, short nonceStart, short nonceLen,
+      byte[] authData, short authDataStart, short authDataLen, byte[] authTag,
+      short authTagStart, short authTagLen) {
 
     if (authTagLen != AES_GCM_TAG_LENGTH) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
@@ -729,186 +613,153 @@ public class KMJCOPSimProvider implements KMSEProvider {
     }
     if (aesGcmCipher == null) {
       aesGcmCipher = (AEADCipher) Cipher.getInstance(AEADCipher.ALG_AES_GCM,
-              false);
+          false);
     }
     AESKey key = createAESKey(aesKey, aesKeyStart, aesKeyLen);
-    try {
-      aesGcmCipher.init(key, Cipher.MODE_ENCRYPT, nonce, nonceStart, nonceLen);
-    } catch (CryptoException exp) {
-      KMException.throwIt(exp.getReason());
-    }
+    aesGcmCipher.init(key, Cipher.MODE_ENCRYPT, nonce, nonceStart, nonceLen);
     aesGcmCipher.updateAAD(authData, authDataStart, authDataLen);
     short ciphLen = aesGcmCipher.doFinal(secret, secretStart, secretLen,
-            encSecret, encSecretStart);
-    // TODO if this retrieveTag fails, then allocate
-    // The tag buffer must be exact size otherwise simulator returns 0 tag.
+        encSecret, encSecretStart);
     aesGcmCipher.retrieveTag(authTag, authTagStart, authTagLen);
     return ciphLen;
   }
 
   @Override
   public boolean aesGCMDecrypt(byte[] aesKey, short aesKeyStart,
-          short aesKeyLen, byte[] encSecret, short encSecretStart,
-          short encSecretLen, byte[] secret, short secretStart, byte[] nonce,
-          short nonceStart, short nonceLen, byte[] authData,
-          short authDataStart, short authDataLen, byte[] authTag,
-          short authTagStart, short authTagLen) {
-    // TODO Test and remove unnecessary trasientArrays.
+      short aesKeyLen, byte[] encSecret, short encSecretStart,
+      short encSecretLen, byte[] secret, short secretStart, byte[] nonce,
+      short nonceStart, short nonceLen, byte[] authData, short authDataStart,
+      short authDataLen, byte[] authTag, short authTagStart, short authTagLen) {
     if (aesGcmCipher == null) {
       aesGcmCipher = (AEADCipher) Cipher.getInstance(AEADCipher.ALG_AES_GCM,
-              false);
+          false);
     }
-    // allocate aad buffer of exact size - otherwise simulator throws exception
-    // byte[] aad = JCSystem.makeTransientByteArray(authDataLen,
-    // JCSystem.CLEAR_ON_RESET);
-
-    // Util.arrayCopyNonAtomic(authData, authDataStart, tmpAuthDataArray,
-    // (short) 0,
-    // authDataLen);
-    // allocate tag of exact size.
-    // byte[] tag = JCSystem.makeTransientByteArray(AES_GCM_TAG_LENGTH,
-    // JCSystem.CLEAR_ON_RESET);
-    // Util.arrayCopyNonAtomic(authTag, authTagStart, tmpArray, (short) 0,
-    // authTagLen);
     boolean verification = false;
     AESKey key = createAESKey(aesKey, aesKeyStart, aesKeyLen);
-    try {
-      aesGcmCipher.init(key, Cipher.MODE_DECRYPT, nonce, nonceStart, nonceLen);
-      aesGcmCipher.updateAAD(authData, authDataStart, authDataLen);
-      // byte[] plain = JCSystem.makeTransientByteArray(encSecretLen,
-      // JCSystem.CLEAR_ON_RESET);
-      // encrypt the secret
-      aesGcmCipher.doFinal(encSecret, encSecretStart, encSecretLen, secret,
-              secretStart);
-      verification = aesGcmCipher.verifyTag(authTag, authTagStart, (short) 12,
-              (short) 12);
-    } catch (CryptoException exp) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
+    aesGcmCipher.init(key, Cipher.MODE_DECRYPT, nonce, nonceStart, nonceLen);
+    aesGcmCipher.updateAAD(authData, authDataStart, authDataLen);
+    // encrypt the secret
+    aesGcmCipher.doFinal(encSecret, encSecretStart, encSecretLen, secret,
+        secretStart);
+    verification = aesGcmCipher.verifyTag(authTag, authTagStart, (short) 12,
+        (short) 12);
     return verification;
   }
 
   public HMACKey cmacKdf(byte[] keyMaterial, short keyMaterialStart,
-          short keyMaterialLen, byte[] label, short labelStart, short labelLen,
-          byte[] context, short contextStart, short contextLength) {
-    // This is hardcoded to requirement - 32 byte output with two concatenated
-    // 16 bytes K1 and K2.
-    final byte n = 2; // hardcoded
-    final byte[] L = {
-            0, 0, 1, 0 }; // [L] 256 bits - hardcoded 32 bits as per
-                          // reference impl in keymaster.
-    final byte[] zero = {
-      0 }; // byte
-    short iBufLen = 4;
-    short keyOutLen = n * 16;
-    // [i] counter - 32 bits
-    Util.arrayFillNonAtomic(tmpArray, (short) 0, iBufLen, (byte) 0);
-    // byte[] iBuf = new byte[] { 0, 0, 0, 0 }; // [i] counter - 32 bits
-    // byte[] keyOut = new byte[(short) (n * 16)];
-    Util.arrayFillNonAtomic(tmpArray, (short) iBufLen, keyOutLen, (byte) 0);
-    // Signature prf = Signature.getInstance(Signature.ALG_AES_CMAC_128, false);
-    aesKeys[KEYSIZE_256_OFFSET].setKey(keyMaterial, (short) keyMaterialStart);
-    // AESKey key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
-    // KeyBuilder.LENGTH_AES_256, false);
-    // key.setKey(keyMaterial, (short) 0);
-    kdf.init(aesKeys[KEYSIZE_256_OFFSET], Signature.MODE_SIGN);
-    byte i = 1;
-    short pos = 0;
-    while (i <= n) {
-      tmpArray[3] = i;
-      kdf.update(tmpArray, (short) 0, (short) iBufLen); // 4 bytes of iBuf with
-                                                        // counter in
-      // it
-      kdf.update(label, labelStart, (short) labelLen); // label
-      kdf.update(zero, (short) 0, (short) 1); // 1 byte of 0x00
-      kdf.update(context, contextStart, contextLength); // context
-      pos = kdf
-              .sign(L, (short) 0, (short) 4, tmpArray, (short) (iBufLen + pos)); // 4
-                                                                                 // bytes
-                                                                                 // of
-                                                                                 // L
-                                                                                 // -
-      // signature of 16
-      // bytes
-      i++;
+      short keyMaterialLen, byte[] label, short labelStart, short labelLen,
+      byte[] context, short contextStart, short contextLength) {
+    try {
+      // This is hardcoded to requirement - 32 byte output with two concatenated
+      // 16 bytes K1 and K2.
+      final byte n = 2; // hardcoded
+      // [L] 256 bits - hardcoded 32 bits as per
+      // reference impl in keymaster.
+      final byte[] L = {
+          0, 0, 1, 0
+      };
+      // byte
+      final byte[] zero = {
+        0
+      };
+      // [i] counter - 32 bits
+      short iBufLen = 4;
+      short keyOutLen = n * 16;
+      Util.arrayFillNonAtomic(tmpArray, (short) 0, iBufLen, (byte) 0);
+      Util.arrayFillNonAtomic(tmpArray, (short) iBufLen, keyOutLen, (byte) 0);
+      aesKeys[KEYSIZE_256_OFFSET].setKey(keyMaterial, (short) keyMaterialStart);
+      kdf.init(aesKeys[KEYSIZE_256_OFFSET], Signature.MODE_SIGN);
+      byte i = 1;
+      short pos = 0;
+      while (i <= n) {
+        tmpArray[3] = i;
+        // 4 bytes of iBuf with counter in it
+        kdf.update(tmpArray, (short) 0, (short) iBufLen);
+        kdf.update(label, labelStart, (short) labelLen); // label
+        kdf.update(zero, (short) 0, (short) 1); // 1 byte of 0x00
+        kdf.update(context, contextStart, contextLength); // context
+        // 4 bytes of L - signature of 16 bytes
+        pos = kdf.sign(L, (short) 0, (short) 4, tmpArray,
+            (short) (iBufLen + pos));
+        i++;
+      }
+      return createHMACKey(tmpArray, (short) iBufLen, (short) keyOutLen);
+    } finally {
+      clean();
     }
-    return createHMACKey(tmpArray, (short) iBufLen, (short) keyOutLen);
   }
 
   public short hmacSign(HMACKey key, byte[] data, short dataStart,
-          short dataLength, byte[] mac, short macStart) {
+      short dataLength, byte[] mac, short macStart) {
     hmacSignature.init(key, Signature.MODE_SIGN);
     return hmacSignature.sign(data, dataStart, dataLength, mac, macStart);
   }
 
   public boolean hmacVerify(HMACKey key, byte[] data, short dataStart,
-          short dataLength, byte[] mac, short macStart, short macLength) {
+      short dataLength, byte[] mac, short macStart, short macLength) {
     hmacSignature.init(key, Signature.MODE_VERIFY);
     return hmacSignature.verify(data, dataStart, dataLength, mac, macStart,
-            macLength);
+        macLength);
   }
 
   @Override
   public short hmacSign(byte[] keyBuf, short keyStart, short keyLength,
-          byte[] data, short dataStart, short dataLength, byte[] mac,
-          short macStart) {
+      byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
     HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
     return hmacSign(key, data, dataStart, dataLength, mac, macStart);
   }
 
   @Override
   public boolean hmacVerify(byte[] keyBuf, short keyStart, short keyLength,
-          byte[] data, short dataStart, short dataLength, byte[] mac,
-          short macStart, short macLength) {
+      byte[] data, short dataStart, short dataLength, byte[] mac,
+      short macStart, short macLength) {
     HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
     return hmacVerify(key, data, dataStart, dataLength, mac, macStart,
-            macLength);
+        macLength);
   }
 
   @Override
   public short rsaDecipherOAEP256(byte[] secret, short secretStart,
-          short secretLength, byte[] modBuffer, short modOff, short modLength,
-          byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-          byte[] outputDataBuf, short outputDataStart) {
+      short secretLength, byte[] modBuffer, short modOff, short modLength,
+      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+      byte[] outputDataBuf, short outputDataStart) {
     Cipher.OneShot cipher = null;
-    RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
-    key.setExponent(secret, secretStart, secretLength);
-    key.setModulus(modBuffer, modOff, modLength);
     try {
+      RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
+      key.setExponent(secret, secretStart, secretLength);
+      key.setModulus(modBuffer, modOff, modLength);
+
       cipher = Cipher.OneShot.open(Cipher.CIPHER_RSA,
-              Cipher.PAD_PKCS1_OAEP_SHA256);
+          Cipher.PAD_PKCS1_OAEP_SHA256);
       cipher.init(key, Cipher.MODE_DECRYPT);
       return cipher.doFinal(inputDataBuf, inputDataStart, inputDataLength,
-              outputDataBuf, (short) outputDataStart);
+          outputDataBuf, (short) outputDataStart);
 
-    } catch (SecurityException e) {
-      KMException.throwIt(KMError.SECURE_HW_ACCESS_DENIED);
-    } catch (CryptoException e) {
-      KMException.throwIt(e.getReason());
     } finally {
       if (cipher != null)
         cipher.close();
     }
-    return 0;
   }
 
   @Override
   public short rsaSignPKCS1256(byte[] secret, short secretStart,
-          short secretLength, byte[] modBuffer, short modOff, short modLength,
-          byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-          byte[] outputDataBuf, short outputDataStart) {
+      short secretLength, byte[] modBuffer, short modOff, short modLength,
+      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+      byte[] outputDataBuf, short outputDataStart) {
     Signature.OneShot signer = null;
-    RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
-    key.setExponent(secret, secretStart, secretLength);
-    key.setModulus(modBuffer, modOff, modLength);
     try {
+      RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
+      key.setExponent(secret, secretStart, secretLength);
+      key.setModulus(modBuffer, modOff, modLength);
+
       signer = Signature.OneShot.open(MessageDigest.ALG_SHA_256,
-              Signature.SIG_CIPHER_RSA, Cipher.PAD_PKCS1);
+          Signature.SIG_CIPHER_RSA, Cipher.PAD_PKCS1);
       signer.init(key, Signature.MODE_SIGN);
       return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
-              outputDataBuf, outputDataStart);
+          outputDataBuf, outputDataStart);
     } finally {
-      signer.close();
+      if (signer != null)
+        signer.close();
     }
   }
 
@@ -990,22 +841,22 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public Cipher createSymmetricCipher(short alg, short purpose,
-          short blockMode, short padding, byte[] secret, short secretStart,
-          short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
+      short blockMode, short padding, byte[] secret, short secretStart,
+      short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
     Key key = null;
     Cipher symmCipher = null;
     switch (secretLength) {
     case 32:
       key = aesKeys[KEYSIZE_256_OFFSET];
-      ((AESKey) key).setKey(secret,secretStart);
+      ((AESKey) key).setKey(secret, secretStart);
       break;
     case 16:
       key = aesKeys[KEYSIZE_128_OFFSET];
-      ((AESKey) key).setKey(secret,secretStart);
+      ((AESKey) key).setKey(secret, secretStart);
       break;
     case 24:
       key = triDesKey;
-      ((DESKey) key).setKey(secret,secretStart);
+      ((DESKey) key).setKey(secret, secretStart);
       break;
     default:
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -1023,14 +874,13 @@ public class KMJCOPSimProvider implements KMSEProvider {
       symmCipher.init(key, mapPurpose(purpose));
       break;
     case Cipher.ALG_DES_CBC_NOPAD:
-      // TODO Consume only 8 bytes of iv. the random number for iv is of 16
-      // bytes.
-      // While sending back the iv send only 8 bytes.
+      // Consume only 8 bytes of iv. the random number for iv is of 16 bytes.
+      // While sending back the iv, send only 8 bytes.
       symmCipher.init(key, mapPurpose(purpose), ivBuffer, ivStart, (short) 8);
       break;
     case AEADCipher.ALG_AES_GCM:
       ((AEADCipher) symmCipher).init(key, mapPurpose(purpose), ivBuffer,
-              ivStart, ivLength);
+          ivStart, ivLength);
       break;
     default:// This should never happen
       CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
@@ -1040,7 +890,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public Signature createHmacSignerVerifier(short purpose, short digest,
-          byte[] secret, short secretStart, short secretLength) {
+      byte[] secret, short secretStart, short secretLength) {
     byte alg = Signature.ALG_HMAC_SHA_256;
     if (digest != KMType.SHA2_256)
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -1052,15 +902,15 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   @Override
   public KMOperation initSymmetricOperation(byte purpose, byte alg,
-          byte digest, byte padding, byte blockMode, byte[] keyBuf,
-          short keyStart, short keyLength, byte[] ivBuf, short ivStart,
-          short ivLength, short macLength) {
+      byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart,
+      short keyLength, byte[] ivBuf, short ivStart, short ivLength,
+      short macLength) {
     KMOperationImpl opr = null;
     switch (alg) {
     case KMType.AES:
     case KMType.DES:
       Cipher cipher = createSymmetricCipher(alg, purpose, blockMode, padding,
-              keyBuf, keyStart, keyLength, ivBuf, ivStart, ivLength);
+          keyBuf, keyStart, keyLength, ivBuf, ivStart, ivLength);
       opr = getOperationInstanceFromPool();
       // Convert macLength to bytes
       macLength = (short) (macLength / 8);
@@ -1075,7 +925,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
       break;
     case KMType.HMAC:
       Signature signerVerifier = createHmacSignerVerifier(purpose, digest,
-              keyBuf, keyStart, keyLength);
+          keyBuf, keyStart, keyLength);
       opr = getOperationInstanceFromPool();
       JCSystem.beginTransaction();
       opr.setSignature(signerVerifier);
@@ -1089,14 +939,12 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public Signature createRsaSigner(short digest, short padding, byte[] secret,
-          short secretStart, short secretLength, byte[] modBuffer,
-          short modOff, short modLength) {
+      short secretStart, short secretLength, byte[] modBuffer, short modOff,
+      short modLength) {
     byte alg = mapSignature256Alg(KMType.RSA, (byte) padding, (byte) digest);
     byte opMode;
     if (padding == KMType.PADDING_NONE
-            || (padding == KMType.RSA_PKCS1_1_5_SIGN && digest == KMType.DIGEST_NONE)) {
-      // return createNoDigestSigner(padding,secret, secretStart, secretLength,
-      // modBuffer, modOff, modLength);
+        || (padding == KMType.RSA_PKCS1_1_5_SIGN && digest == KMType.DIGEST_NONE)) {
       opMode = Cipher.MODE_DECRYPT;
     } else {
       opMode = Signature.MODE_SIGN;
@@ -1110,67 +958,60 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public Signature createRsaVerifier(short digest, short padding,
-          byte[] modBuffer, short modOff, short modLength) {
-    byte alg = mapSignature256Alg(KMType.RSA, (byte) padding, (byte) digest);
-    if (digest == KMType.DIGEST_NONE || padding == KMType.PADDING_NONE)
-      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+      byte[] modBuffer, short modOff, short modLength) {
+    try {
+      byte alg = mapSignature256Alg(KMType.RSA, (byte) padding, (byte) digest);
+      if (digest == KMType.DIGEST_NONE || padding == KMType.PADDING_NONE)
+        CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
 
-    Signature rsaVerifier = getSignatureInstanceFromPool(alg);
-    RSAPublicKey key = (RSAPublicKey) rsaKeyPair.getPublic();
-    // setExponent
-    Util.setShort(tmpArray, (short) 0, (short) 0x0001);
-    Util.setShort(tmpArray, (short) 2, (short) 0x0001);
-    // byte[] exponent = new byte[] { 0x01, 0x00, 0x01 };
-    key.setExponent(tmpArray, (short) 0, (short) 4);
-    key.setModulus(modBuffer, modOff, modLength);
-    rsaVerifier.init(key, Signature.MODE_VERIFY);
-    return rsaVerifier;
+      Signature rsaVerifier = getSignatureInstanceFromPool(alg);
+      RSAPublicKey key = (RSAPublicKey) rsaKeyPair.getPublic();
+      // setExponent
+      Util.setShort(tmpArray, (short) 0, (short) 0x0001);
+      Util.setShort(tmpArray, (short) 2, (short) 0x0001);
+      key.setExponent(tmpArray, (short) 0, (short) 4);
+      key.setModulus(modBuffer, modOff, modLength);
+      rsaVerifier.init(key, Signature.MODE_VERIFY);
+      return rsaVerifier;
+    } finally {
+      clean();
+    }
   }
 
-  // TODO Remove commented code.
-  /*
-   * private Signature createNoDigestSigner(short padding, byte[] secret, short
-   * secretStart, short secretLength, byte[] modBuffer, short modOff, short
-   * modLength) { Cipher rsaCipher =
-   * getCipherInstanceFromPool(Cipher.ALG_RSA_NOPAD
-   * );//Cipher.getInstance(Cipher.ALG_RSA_NOPAD,false); RSAPrivateKey key =
-   * (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE,
-   * KeyBuilder.LENGTH_RSA_2048, false);
-   * key.setExponent(secret,secretStart,secretLength); key.setModulus(modBuffer,
-   * modOff, modLength); rsaCipher.init(key,Cipher.MODE_DECRYPT);
-   * KMRsa2048NoDigestSignature inst = new
-   * KMRsa2048NoDigestSignature(rsaCipher,(byte)padding,
-   * modBuffer,modOff,modLength); return inst; }
-   */
-
   public Cipher createRsaCipher(short padding, short digest, byte[] modBuffer,
-          short modOff, short modLength) {
-    byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0);
-    // TODO: Implement from NXP.
-    /*
-     * if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) { //TODO: Implement from NXP.
-     * KMException.throwIt(KMError.UNIMPLEMENTED); }
-     */
-    Cipher rsaCipher = getCipherInstanceFromPool(cipherAlg);
-    RSAPublicKey key = (RSAPublicKey) rsaKeyPair.getPublic();
-    // setExponent
-    Util.setShort(tmpArray, (short) 0, (short) 0x0001);
-    Util.setShort(tmpArray, (short) 2, (short) 0x0001);
-    // byte[] exponent = new byte[] { 0x01, 0x00, 0x01 };
-    key.setExponent(tmpArray, (short) 0, (short) 4);
-    key.setModulus(modBuffer, modOff, modLength);
-    rsaCipher.init(key, Cipher.MODE_ENCRYPT);
-    return rsaCipher;
+      short modOff, short modLength) {
+    try {
+      byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0);
+      // TODO Java Card does not support MGF1-SHA1 and digest as SHA256.
+      // Both digest should be SHA256 as per Java Card, but as per Keymaster
+      // MGF should use SHA1 and message digest should be SHA256.
+      if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
+        KMException.throwIt(KMError.UNIMPLEMENTED);
+      }
+      Cipher rsaCipher = getCipherInstanceFromPool(cipherAlg);
+      RSAPublicKey key = (RSAPublicKey) rsaKeyPair.getPublic();
+      // setExponent
+      Util.setShort(tmpArray, (short) 0, (short) 0x0001);
+      Util.setShort(tmpArray, (short) 2, (short) 0x0001);
+      key.setExponent(tmpArray, (short) 0, (short) 4);
+      key.setModulus(modBuffer, modOff, modLength);
+      rsaCipher.init(key, Cipher.MODE_ENCRYPT);
+      return rsaCipher;
+    } finally {
+      clean();
+    }
   }
 
   public Cipher createRsaDecipher(short padding, short digest, byte[] secret,
-          short secretStart, short secretLength, byte[] modBuffer,
-          short modOff, short modLength) {
+      short secretStart, short secretLength, byte[] modBuffer, short modOff,
+      short modLength) {
     byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0);
-    /*
-     * if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) { //TODO: Implement from NXP.
-     * KMException.throwIt(KMError.UNIMPLEMENTED); }
-     */
+    // TODO Java Card does not support MGF1-SHA1 and digest as SHA256.
+    // Both digest should be SHA256 as per Java Card, but as per Keymaster
+    // MGF should use SHA1 and message digest should be SHA256.
+    if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
+      KMException.throwIt(KMError.UNIMPLEMENTED);
+    }
     Cipher rsaCipher = getCipherInstanceFromPool(cipherAlg);
     RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
     key.setExponent(secret, secretStart, secretLength);
@@ -1180,7 +1021,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public Signature createEcSigner(short digest, byte[] secret,
-          short secretStart, short secretLength) {
+      short secretStart, short secretLength) {
     byte alg = mapSignature256Alg(KMType.EC, (byte) 0, (byte) digest);
     Signature ecSigner = null;
     ECPrivateKey key = (ECPrivateKey) ecKeyPair.getPrivate();
@@ -1191,35 +1032,27 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   public Signature createEcVerifier(short digest, byte[] pubKey,
-          short pubKeyStart, short pubKeyLength) {
+      short pubKeyStart, short pubKeyLength) {
     byte alg = mapSignature256Alg(KMType.EC, (byte) 0, (byte) digest);
     Signature ecVerifier = null;
-    // if(msgDigestAlg == MessageDigest.ALG_NULL)
-    // CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    if (digest == KMType.DIGEST_NONE) {
-      // TODO: Implement from NXP.
-      KMException.throwIt(KMError.UNIMPLEMENTED);
-    } else {
-      ECPublicKey key = (ECPublicKey) ecKeyPair.getPublic();
-      key.setW(pubKey, pubKeyStart, pubKeyLength);
-      ecVerifier = getSignatureInstanceFromPool(alg);
-      ecVerifier.init(key, Signature.MODE_VERIFY);
-    }
+    ECPublicKey key = (ECPublicKey) ecKeyPair.getPublic();
+    key.setW(pubKey, pubKeyStart, pubKeyLength);
+    ecVerifier = getSignatureInstanceFromPool(alg);
+    ecVerifier.init(key, Signature.MODE_VERIFY);
     return ecVerifier;
   }
 
   @Override
   public KMOperation initAsymmetricOperation(byte purpose, byte alg,
-          byte padding, byte digest, byte[] privKeyBuf, short privKeyStart,
-          short privKeyLength, byte[] pubModBuf, short pubModStart,
-          short pubModLength) {
+      byte padding, byte digest, byte[] privKeyBuf, short privKeyStart,
+      short privKeyLength, byte[] pubModBuf, short pubModStart,
+      short pubModLength) {
     KMOperationImpl opr = null;
     if (alg == KMType.RSA) {
       switch (purpose) {
       case KMType.SIGN:
         Signature signer = createRsaSigner(digest, padding, privKeyBuf,
-                privKeyStart, privKeyLength, pubModBuf, pubModStart,
-                pubModLength);
+            privKeyStart, privKeyLength, pubModBuf, pubModStart, pubModLength);
         opr = getOperationInstanceFromPool();
         JCSystem.beginTransaction();
         opr.setSignature(signer);
@@ -1230,7 +1063,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
         break;
       case KMType.VERIFY:
         Signature verifier = createRsaVerifier(digest, padding, pubModBuf,
-                pubModStart, pubModLength);
+            pubModStart, pubModLength);
         opr = getOperationInstanceFromPool();
         JCSystem.beginTransaction();
         opr.setSignature(verifier);
@@ -1241,7 +1074,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
         break;
       case KMType.ENCRYPT:
         Cipher cipher = createRsaCipher(padding, digest, pubModBuf,
-                pubModStart, pubModLength);
+            pubModStart, pubModLength);
         opr = getOperationInstanceFromPool();
         JCSystem.beginTransaction();
         opr.setCipher(cipher);
@@ -1252,8 +1085,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
         break;
       case KMType.DECRYPT:
         Cipher decipher = createRsaDecipher(padding, digest, privKeyBuf,
-                privKeyStart, privKeyLength, pubModBuf, pubModStart,
-                pubModLength);
+            privKeyStart, privKeyLength, pubModBuf, pubModStart, pubModLength);
         opr = getOperationInstanceFromPool();
         JCSystem.beginTransaction();
         opr.setCipher(decipher);
@@ -1269,7 +1101,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
       switch (purpose) {
       case KMType.SIGN:
         Signature signer = createEcSigner(digest, privKeyBuf, privKeyStart,
-                privKeyLength);
+            privKeyLength);
         opr = getOperationInstanceFromPool();
         JCSystem.beginTransaction();
         opr.setSignature(signer);
@@ -1277,7 +1109,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
         break;
       case KMType.VERIFY:
         Signature verifier = createEcVerifier(digest, pubModBuf, pubModStart,
-                pubModLength);
+            pubModLength);
         opr = getOperationInstanceFromPool();
         JCSystem.beginTransaction();
         opr.setSignature(verifier);
@@ -1298,8 +1130,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   @Override
   public short aesCCMSign(byte[] bufIn, short bufInStart, short buffInLength,
-          byte[] masterKeySecret, short masterKeyStart, short masterKeyLen,
-          byte[] bufOut, short bufStart) {
+      byte[] masterKeySecret, short masterKeyStart, short masterKeyLen,
+      byte[] bufOut, short bufStart) {
     if (masterKeyLen > 16) {
       return -1;
     }
@@ -1310,34 +1142,26 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   @Override
   public boolean isBackupRestoreSupported() {
-    // TODO Auto-generated method stub
     return false;
   }
 
   @Override
   public void backup(byte[] buf, short start, short len) {
-    // TODO Auto-generated method stub
 
   }
 
   @Override
   public short restore(byte[] buf, short start) {
-    // TODO Auto-generated method stub
     return 0;
   }
 
   @Override
-  public void getTrueRandomNumber(byte[] buf, short start, short length) {
-    Util.arrayCopy(entropyPool, (short) 0, buf, start, length);
-  }
-
-  @Override
   public short cmacKdf(byte[] keyMaterial, short keyMaterialStart,
-          short keyMaterialLen, byte[] label, short labelStart, short labelLen,
-          byte[] context, short contextStart, short contextLength,
-          byte[] keyBuf, short keyStart) {
+      short keyMaterialLen, byte[] label, short labelStart, short labelLen,
+      byte[] context, short contextStart, short contextLength, byte[] keyBuf,
+      short keyStart) {
     HMACKey key = cmacKdf(keyMaterial, keyMaterialStart, keyMaterialLen, label,
-            labelStart, labelLen, context, contextStart, contextLength);
+        labelStart, labelLen, context, contextStart, contextLength);
     return key.getKey(keyBuf, keyStart);
   }
 

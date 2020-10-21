@@ -69,18 +69,23 @@ public class KMEcdsa256NoDigestSignature extends Signature {
 
   @Override
   public short sign(byte[] bytes, short i, short i1, byte[] bytes1, short i2)
-          throws CryptoException {
-    if (i1 > MAX_NO_DIGEST_MSG_LEN)
-      CryptoException.throwIt(CryptoException.ILLEGAL_USE);
-    // add zeros to the left
-    if (i1 < MAX_NO_DIGEST_MSG_LEN) {
-      Util.arrayFillNonAtomic(KMJCOPSimProvider.getInstance().tmpArray,
-              (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, (byte) 0);
+      throws CryptoException {
+    try {
+      if (i1 > MAX_NO_DIGEST_MSG_LEN)
+        CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+      // add zeros to the left
+      if (i1 < MAX_NO_DIGEST_MSG_LEN) {
+        Util.arrayFillNonAtomic(KMJCOPSimProvider.getInstance().tmpArray,
+            (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, (byte) 0);
+      }
+      Util.arrayCopyNonAtomic(bytes, i,
+          KMJCOPSimProvider.getInstance().tmpArray,
+          (short) (MAX_NO_DIGEST_MSG_LEN - i1), i1);
+      return inst.signPreComputedHash(KMJCOPSimProvider.getInstance().tmpArray,
+          (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, bytes1, i2);
+    } finally {
+      KMJCOPSimProvider.getInstance().clean();
     }
-    Util.arrayCopyNonAtomic(bytes, i, KMJCOPSimProvider.getInstance().tmpArray,
-            (short) (MAX_NO_DIGEST_MSG_LEN-i1), i1);
-    return inst.signPreComputedHash(KMJCOPSimProvider.getInstance().tmpArray,
-    		(short)0, (short)MAX_NO_DIGEST_MSG_LEN, bytes1, i2);
   }
 
   @Override
@@ -91,18 +96,24 @@ public class KMEcdsa256NoDigestSignature extends Signature {
 
   @Override
   public boolean verify(byte[] bytes, short i, short i1, byte[] bytes1,
-          short i2, short i3) throws CryptoException {
-    if (i1 > MAX_NO_DIGEST_MSG_LEN)
-      CryptoException.throwIt(CryptoException.ILLEGAL_USE);
-    // add zeros to the left
-    if (i1 < MAX_NO_DIGEST_MSG_LEN) {
-      Util.arrayFillNonAtomic(KMJCOPSimProvider.getInstance().tmpArray,
-              (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, (byte) 0);
+      short i2, short i3) throws CryptoException {
+    try {
+      if (i1 > MAX_NO_DIGEST_MSG_LEN)
+        CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+      // add zeros to the left
+      if (i1 < MAX_NO_DIGEST_MSG_LEN) {
+        Util.arrayFillNonAtomic(KMJCOPSimProvider.getInstance().tmpArray,
+            (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, (byte) 0);
+      }
+      Util.arrayCopyNonAtomic(bytes, i,
+          KMJCOPSimProvider.getInstance().tmpArray,
+          (short) (MAX_NO_DIGEST_MSG_LEN - i1), i1);
+      return inst.verifyPreComputedHash(
+          KMJCOPSimProvider.getInstance().tmpArray, (short) 0,
+          (short) MAX_NO_DIGEST_MSG_LEN, bytes1, i2, i3);
+    } finally {
+      KMJCOPSimProvider.getInstance().clean();
     }
-    Util.arrayCopyNonAtomic(bytes, i, KMJCOPSimProvider.getInstance().tmpArray,
-            (short) (MAX_NO_DIGEST_MSG_LEN-i1), i1);
-    return inst.verifyPreComputedHash(KMJCOPSimProvider.getInstance().tmpArray,
-    		(short)0, (short)MAX_NO_DIGEST_MSG_LEN, bytes1, i2, i3);
   }
 
   @Override

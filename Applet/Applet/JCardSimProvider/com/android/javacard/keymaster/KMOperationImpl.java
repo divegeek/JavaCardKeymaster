@@ -56,11 +56,4 @@ public class KMOperationImpl implements KMOperation {
   public short getAESGCMOutputSize(short dataSize, short macLength) {
     return cipher.getAesGcmOutputSize(dataSize, macLength);
   }
-
-@Override
-public void release() {
-	// TODO Auto-generated method stub
-	
-}
-
 }
