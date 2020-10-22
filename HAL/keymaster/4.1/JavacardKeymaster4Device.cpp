@@ -676,31 +676,9 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
 
 }
 
-Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t operationHandle, const hidl_vec<KeyParameter>& parametersToVerify, const HardwareAuthToken& authToken, verifyAuthorization_cb _hidl_cb) {
-    cppbor::Array array;
-    std::unique_ptr<Item> item;
-    std::vector<uint8_t> cborOutData;
-    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t , const hidl_vec<KeyParameter>& , const HardwareAuthToken& , verifyAuthorization_cb _hidl_cb) {
     VerificationToken verificationToken;
-
-    /* Convert input data to cbor format */
-    array.add(operationHandle);
-    cborConverter_.addKeyparameters(array, parametersToVerify);
-    cborConverter_.addHardwareAuthToken(array, authToken);
-    std::vector<uint8_t> cborData = array.encode();
-
-    errorCode = sendData(Instruction::INS_VERIFY_AUTHORIZATION_CMD, cborData, cborOutData);
-
-    if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                true);
-        if (item != nullptr) {
-            if(!cborConverter_.getVerificationToken(item, 1, verificationToken))
-                errorCode = ErrorCode::UNKNOWN_ERROR;
-        }
-    }
-    _hidl_cb(errorCode, verificationToken);
+    _hidl_cb(ErrorCode::UNIMPLEMENTED, verificationToken);
     return Void();
 }
 
