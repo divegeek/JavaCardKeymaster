@@ -110,7 +110,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
           Cipher.ALG_DES_ECB_NOPAD,
           Cipher.ALG_AES_CTR,
           Cipher.ALG_RSA_PKCS1,
-          Cipher.ALG_RSA_PKCS1_OAEP,
+          KMRsaOAEPEncoding.ALG_RSA_PKCS1_OAEP_SHA256_MGF1_SHA1,
           Cipher.ALG_RSA_NOPAD,
           AEADCipher.ALG_AES_GCM };
 
@@ -147,6 +147,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
   private Signature kdf;
 
   private Signature hmacSignature;
+  //For ImportwrappedKey operations.
+  private KMRsaOAEPEncoding rsaOaepDecipher;
 
   // Entropy
   private RandomData rng;
@@ -182,6 +184,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
     // Creates an instance of each signature algorithm once.
     initializeSigPool();
     initializeOperationPool();
+    //RsaOAEP Decipher
+    rsaOaepDecipher = new KMRsaOAEPEncoding(KMRsaOAEPEncoding.ALG_RSA_PKCS1_OAEP_SHA256_MGF1_SHA1);
 
     kdf = Signature.getInstance(Signature.ALG_AES_CMAC_128, false);
     hmacSignature = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
@@ -272,25 +276,15 @@ public class KMJCOPSimProvider implements KMSEProvider {
   }
 
   private Cipher getCipherInstance(byte alg) {
-    if (Cipher.ALG_RSA_PKCS1_OAEP == alg) {
-      return Cipher.getInstance(Cipher.CIPHER_RSA,
-          Cipher.PAD_PKCS1_OAEP_SHA256, false);
+    if (KMRsaOAEPEncoding.ALG_RSA_PKCS1_OAEP_SHA256_MGF1_SHA1 == alg) {
+      return new KMRsaOAEPEncoding(alg);
     } else {
       return Cipher.getInstance(alg, false);
     }
   }
 
   private byte getCipherAlgorithm(Cipher c) {
-    if (0 == c.getAlgorithm()) {
-      if (Cipher.PAD_PKCS1_OAEP_SHA256 == c.getPaddingAlgorithm()) {
-        return Cipher.ALG_RSA_PKCS1_OAEP;
-      } else {
-        KMException.throwIt(KMError.UNSUPPORTED_PADDING_MODE);
-        return 0;
-      }
-    } else {
-      return c.getAlgorithm();
-    }
+	return c.getAlgorithm();
   }
 
   // Create a cipher instance of each algorithm once.
@@ -723,22 +717,12 @@ public class KMJCOPSimProvider implements KMSEProvider {
       short secretLength, byte[] modBuffer, short modOff, short modLength,
       byte[] inputDataBuf, short inputDataStart, short inputDataLength,
       byte[] outputDataBuf, short outputDataStart) {
-    Cipher.OneShot cipher = null;
-    try {
-      RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
-      key.setExponent(secret, secretStart, secretLength);
-      key.setModulus(modBuffer, modOff, modLength);
-
-      cipher = Cipher.OneShot.open(Cipher.CIPHER_RSA,
-          Cipher.PAD_PKCS1_OAEP_SHA256);
-      cipher.init(key, Cipher.MODE_DECRYPT);
-      return cipher.doFinal(inputDataBuf, inputDataStart, inputDataLength,
-          outputDataBuf, (short) outputDataStart);
-
-    } finally {
-      if (cipher != null)
-        cipher.close();
-    }
+    RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
+    key.setExponent(secret, (short)secretStart, (short)secretLength);
+    key.setModulus(modBuffer, (short)modOff, (short)modLength);
+    rsaOaepDecipher.init(key, Cipher.MODE_DECRYPT);
+    return rsaOaepDecipher.doFinal(inputDataBuf, (short)inputDataStart, (short)inputDataLength,
+        outputDataBuf, (short) outputDataStart);
   }
 
   @Override
@@ -804,7 +788,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
     return -1;
   }
 
-  private byte mapCipherAlg(byte alg, byte padding, byte blockmode) {
+  private byte mapCipherAlg(byte alg, byte padding, byte blockmode, byte digest) {
     switch (alg) {
     case KMType.AES:
       switch (blockmode) {
@@ -832,8 +816,12 @@ public class KMJCOPSimProvider implements KMSEProvider {
         return Cipher.ALG_RSA_NOPAD;
       case KMType.RSA_PKCS1_1_5_ENCRYPT:
         return Cipher.ALG_RSA_PKCS1;
-      case KMType.RSA_OAEP:
-        return Cipher.ALG_RSA_PKCS1_OAEP;
+      case KMType.RSA_OAEP: {
+        if (digest == KMType.SHA2_256)
+          return KMRsaOAEPEncoding.ALG_RSA_PKCS1_OAEP_SHA256_MGF1_SHA1;
+        else 
+          KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+      }
       }
       break;
     }
@@ -862,7 +850,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       break;
     }
-    short cipherAlg = mapCipherAlg((byte) alg, (byte) padding, (byte) blockMode);
+    short cipherAlg = mapCipherAlg((byte) alg, (byte) padding, (byte) blockMode, (byte)0);
     symmCipher = getCipherInstanceFromPool((byte) cipherAlg);
     switch (cipherAlg) {
     case Cipher.ALG_AES_BLOCK_128_CBC_NOPAD:
@@ -981,7 +969,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
   public Cipher createRsaCipher(short padding, short digest, byte[] modBuffer,
       short modOff, short modLength) {
     try {
-      byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0);
+      byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0, (byte)digest);
       // TODO Java Card does not support MGF1-SHA1 and digest as SHA256.
       // Both digest should be SHA256 as per Java Card, but as per Keymaster
       // MGF should use SHA1 and message digest should be SHA256.
@@ -1005,13 +993,7 @@ public class KMJCOPSimProvider implements KMSEProvider {
   public Cipher createRsaDecipher(short padding, short digest, byte[] secret,
       short secretStart, short secretLength, byte[] modBuffer, short modOff,
       short modLength) {
-    byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0);
-    // TODO Java Card does not support MGF1-SHA1 and digest as SHA256.
-    // Both digest should be SHA256 as per Java Card, but as per Keymaster
-    // MGF should use SHA1 and message digest should be SHA256.
-    if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
-      KMException.throwIt(KMError.UNIMPLEMENTED);
-    }
+    byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0, (byte)digest);
     Cipher rsaCipher = getCipherInstanceFromPool(cipherAlg);
     RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
     key.setExponent(secret, secretStart, secretLength);
