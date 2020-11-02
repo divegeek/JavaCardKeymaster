@@ -15,6 +15,7 @@
  */
 package com.android.javacard.keymaster;
 
+import javacard.framework.AID;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -34,7 +35,7 @@ import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
 import javacardx.crypto.Cipher;
 
-public class KMJCOPSimProvider implements KMSEProvider {
+public class KMSGTMProvider implements KMSEProvider {
   // static final variables
   // --------------------------------------------------------------
   // P-256 Curve Parameters
@@ -102,6 +103,8 @@ public class KMJCOPSimProvider implements KMSEProvider {
   public static final byte KEYSIZE_128_OFFSET = 0x00;
   public static final byte KEYSIZE_256_OFFSET = 0x01;
   public static final short TMP_ARRAY_SIZE = 256;
+  private static final byte[] aidArr = new byte[] {
+    (byte)0xA0, 0x00, 0x00, 0x00, 0x63};
 
   final byte[] CIPHER_ALGS = {
           Cipher.ALG_AES_BLOCK_128_CBC_NOPAD,
@@ -153,15 +156,15 @@ public class KMJCOPSimProvider implements KMSEProvider {
   // Entropy
   private RandomData rng;
 
-  private static KMJCOPSimProvider jcopProvider = null;
+  private static KMSGTMProvider sgtmProvider = null;
 
-  public static KMJCOPSimProvider getInstance() {
-    if (jcopProvider == null)
-      jcopProvider = new KMJCOPSimProvider();
-    return jcopProvider;
+  public static KMSGTMProvider getInstance() {
+    if (sgtmProvider == null)
+      sgtmProvider = new KMSGTMProvider();
+    return sgtmProvider;
   }
 
-  private KMJCOPSimProvider() {
+  private KMSGTMProvider() {
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
@@ -1129,12 +1132,17 @@ public class KMJCOPSimProvider implements KMSEProvider {
 
   @Override
   public void backup(byte[] buf, short start, short len) {
-
+    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
+    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
+    backupStore.backup(buf, (short)start, len);
   }
 
   @Override
   public short restore(byte[] buf, short start) {
-    return 0;
+    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
+    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
+    short len = backupStore.restore(buf,(short)start);
+    return len;
   }
 
   @Override

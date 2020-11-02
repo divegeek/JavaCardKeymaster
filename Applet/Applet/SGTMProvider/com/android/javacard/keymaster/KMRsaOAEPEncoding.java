@@ -165,7 +165,7 @@ public class KMRsaOAEPEncoding extends Cipher {
   private short rsaOAEPDecode(byte[] encodedMsg, short encodedMsgOff,
           short encodedMsgLen, byte[] msg, short offset) {
     MessageDigest.OneShot md = null;
-    byte[] tmpArray = KMJCOPSimProvider.getInstance().tmpArray;
+    byte[] tmpArray = KMSGTMProvider.getInstance().tmpArray;
 
     try {
       short hLen = getDigestLength();
@@ -238,7 +238,7 @@ public class KMRsaOAEPEncoding extends Cipher {
       if (md != null)
         md.close();
       Util.arrayFillNonAtomic(tmpArray, (short) 0,
-              KMJCOPSimProvider.TMP_ARRAY_SIZE, (byte) 0);
+              KMSGTMProvider.TMP_ARRAY_SIZE, (byte) 0);
     }
   }
 }
