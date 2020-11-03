@@ -35,7 +35,7 @@ import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
 import javacardx.crypto.Cipher;
 
-public class KMSGTMProvider implements KMSEProvider {
+public class AndroidSEProvider implements KMSEProvider {
   // static final variables
   // --------------------------------------------------------------
   // P-256 Curve Parameters
@@ -156,15 +156,15 @@ public class KMSGTMProvider implements KMSEProvider {
   // Entropy
   private RandomData rng;
 
-  private static KMSGTMProvider sgtmProvider = null;
+  private static AndroidSEProvider sgtmProvider = null;
 
-  public static KMSGTMProvider getInstance() {
+  public static AndroidSEProvider getInstance() {
     if (sgtmProvider == null)
-      sgtmProvider = new KMSGTMProvider();
+      sgtmProvider = new AndroidSEProvider();
     return sgtmProvider;
   }
 
-  private KMSGTMProvider() {
+  private AndroidSEProvider() {
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(

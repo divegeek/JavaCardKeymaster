@@ -75,16 +75,16 @@ public class KMEcdsa256NoDigestSignature extends Signature {
         CryptoException.throwIt(CryptoException.ILLEGAL_USE);
       // add zeros to the left
       if (i1 < MAX_NO_DIGEST_MSG_LEN) {
-        Util.arrayFillNonAtomic(KMSGTMProvider.getInstance().tmpArray,
+        Util.arrayFillNonAtomic(AndroidSEProvider.getInstance().tmpArray,
             (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, (byte) 0);
       }
       Util.arrayCopyNonAtomic(bytes, i,
-          KMSGTMProvider.getInstance().tmpArray,
+          AndroidSEProvider.getInstance().tmpArray,
           (short) (MAX_NO_DIGEST_MSG_LEN - i1), i1);
-      return inst.signPreComputedHash(KMSGTMProvider.getInstance().tmpArray,
+      return inst.signPreComputedHash(AndroidSEProvider.getInstance().tmpArray,
           (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, bytes1, i2);
     } finally {
-      KMSGTMProvider.getInstance().clean();
+      AndroidSEProvider.getInstance().clean();
     }
   }
 
@@ -102,17 +102,17 @@ public class KMEcdsa256NoDigestSignature extends Signature {
         CryptoException.throwIt(CryptoException.ILLEGAL_USE);
       // add zeros to the left
       if (i1 < MAX_NO_DIGEST_MSG_LEN) {
-        Util.arrayFillNonAtomic(KMSGTMProvider.getInstance().tmpArray,
+        Util.arrayFillNonAtomic(AndroidSEProvider.getInstance().tmpArray,
             (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, (byte) 0);
       }
       Util.arrayCopyNonAtomic(bytes, i,
-          KMSGTMProvider.getInstance().tmpArray,
+          AndroidSEProvider.getInstance().tmpArray,
           (short) (MAX_NO_DIGEST_MSG_LEN - i1), i1);
       return inst.verifyPreComputedHash(
-          KMSGTMProvider.getInstance().tmpArray, (short) 0,
+          AndroidSEProvider.getInstance().tmpArray, (short) 0,
           (short) MAX_NO_DIGEST_MSG_LEN, bytes1, i2, i3);
     } finally {
-      KMSGTMProvider.getInstance().clean();
+      AndroidSEProvider.getInstance().clean();
     }
   }
 

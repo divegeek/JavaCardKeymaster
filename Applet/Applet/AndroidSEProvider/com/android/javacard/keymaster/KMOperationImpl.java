@@ -103,7 +103,7 @@ public class KMOperationImpl implements KMOperation {
   @Override
   public short finish(byte[] inputDataBuf, short inputDataStart,
       short inputDataLen, byte[] outputDataBuf, short outputDataStart) {
-    byte[] tmpArray = KMSGTMProvider.getInstance().tmpArray;
+    byte[] tmpArray = AndroidSEProvider.getInstance().tmpArray;
     short len = 0;
     try {
       if (cipherAlg == KMType.AES && blockMode == KMType.GCM) {
@@ -175,8 +175,8 @@ public class KMOperationImpl implements KMOperation {
         }
       }
     } finally {
-      KMSGTMProvider.getInstance().clean();
-      KMSGTMProvider.getInstance().releaseCipherInstance(cipher);
+      AndroidSEProvider.getInstance().clean();
+      AndroidSEProvider.getInstance().releaseCipherInstance(cipher);
       resetCipher();
     }
     return len;
@@ -190,7 +190,7 @@ public class KMOperationImpl implements KMOperation {
       len = signature.sign(inputDataBuf, inputDataStart, inputDataLength,
           signBuf, signStart);
     } finally {
-      KMSGTMProvider.getInstance().releaseSignatureInstance(signature);
+      AndroidSEProvider.getInstance().releaseSignatureInstance(signature);
       signature = null;
     }
     return len;
@@ -204,7 +204,7 @@ public class KMOperationImpl implements KMOperation {
       ret = signature.verify(inputDataBuf, inputDataStart, inputDataLength,
           signBuf, signStart, signLength);
     } finally {
-      KMSGTMProvider.getInstance().releaseSignatureInstance(signature);
+      AndroidSEProvider.getInstance().releaseSignatureInstance(signature);
       signature = null;
     }
     return ret;
@@ -214,14 +214,14 @@ public class KMOperationImpl implements KMOperation {
   public void abort() {
     // do nothing
     if (cipher != null) {
-      KMSGTMProvider.getInstance().releaseCipherInstance(cipher);
+      AndroidSEProvider.getInstance().releaseCipherInstance(cipher);
       resetCipher();
     }
     if (signature != null) {
-      KMSGTMProvider.getInstance().releaseSignatureInstance(signature);
+      AndroidSEProvider.getInstance().releaseSignatureInstance(signature);
       signature = null;
     }
-    KMSGTMProvider.getInstance().releaseOperationInstance(this);
+    AndroidSEProvider.getInstance().releaseOperationInstance(this);
   }
 
   @Override
