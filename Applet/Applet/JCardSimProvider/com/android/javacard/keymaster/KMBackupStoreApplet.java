@@ -8,14 +8,18 @@ import javacard.framework.Shareable;
 import javacard.framework.Util;
 
 public class KMBackupStoreApplet extends Applet implements KMBackupRestoreAgent {
-  private static final short DATA_TABLE_MEM_SIZE = 2048;
+  private static final short PROVIDER_MEM_SIZE = 2050;
+  private static final short KM_APPLET_MEM_SIZE = 2050;
+  private static final short PROVIDER_OFFSET = 0;
+  private static final short KM_APPLET_DATA_OFFSET = PROVIDER_MEM_SIZE;
   private static final byte[] aidArr = new byte[]{ (byte)0xA0, 0x00, 0x00, 0x00, 0x62};
 
   private byte[] dataTable;
-  private short dataTableSize;
+  boolean backupAvailable;
 
   private KMBackupStoreApplet() {
-    dataTable = new byte[DATA_TABLE_MEM_SIZE];
+    dataTable = new byte[KM_APPLET_MEM_SIZE + PROVIDER_MEM_SIZE];
+    backupAvailable = false;
   }
 
   public static void install(byte bArray[], short bOffset, byte bLength) {
@@ -37,17 +41,22 @@ public class KMBackupStoreApplet extends Applet implements KMBackupRestoreAgent 
     // Store the data
     if (len > 0) {
       JCSystem.beginTransaction();
-      dataTableSize = len;
-      Util.arrayCopy(buf, start, dataTable, (short) 0, len);
+      // dataTableSize = len;
+      Util.setShort(dataTable, KM_APPLET_DATA_OFFSET, len);
+      Util.arrayCopy(buf, start, dataTable,
+          (short) (KM_APPLET_DATA_OFFSET + 2), len);
       JCSystem.commitTransaction();
     }
+    backupAvailable = true;
   }
 
   @Override
   public short restore(byte[] buf, short start) {
     // Restore the data
-    Util.arrayCopy(dataTable, (short) 0, buf, start, dataTableSize);
-    return dataTableSize;
+    short len = Util.getShort(dataTable, KM_APPLET_DATA_OFFSET);
+    Util.arrayCopyNonAtomic(dataTable, (short) (KM_APPLET_DATA_OFFSET + 2), buf, start,
+        len);
+    return len;
   }
 
   @Override
@@ -58,6 +67,31 @@ public class KMBackupStoreApplet extends Applet implements KMBackupRestoreAgent 
       return this;
     }
     return null;
+  }
+
+  @Override
+  public boolean isBackupAvailable() {
+    return backupAvailable;
+  }
+
+  @Override
+  public void backupProviderData(byte[] buf, short start, short len) {
+    // Store the data
+    if (len > 0) {
+      JCSystem.beginTransaction();
+      Util.arrayCopy(buf, start, dataTable, PROVIDER_OFFSET, len);
+      JCSystem.commitTransaction();
+    }
+    backupAvailable = true;
+  }
+
+  @Override
+  public short restoreProviderData(byte[] buf, short start) {
+    // Restore the data
+    short len = Util.getShort(dataTable, PROVIDER_OFFSET);
+    len += 2;// including length.
+    Util.arrayCopyNonAtomic(dataTable, PROVIDER_OFFSET, buf, start, len);
+    return len;
   }
 
 }

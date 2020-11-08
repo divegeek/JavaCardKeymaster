@@ -82,7 +82,7 @@ public class KMRepository {
   public static final short BOOT_STATE_SIZE = 1;
   public static final short MAX_BLOB_STORAGE = 8;
   public static final short AUTH_TAG_LENGTH = 12;
-  public static final short AUTH_TAG_ENTRY_SIZE = 14;
+  public static final short AUTH_TAG_ENTRY_SIZE = 15;
   public static final short MAX_OPS = 4;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
@@ -229,7 +229,15 @@ public class KMRepository {
   public void initHmacNonce(byte[] nonce, short offset, short len) {
       if (len != HMAC_SEED_NONCE_SIZE) { KMException.throwIt(KMError.INVALID_INPUT_LENGTH);}
       writeDataEntry(HMAC_NONCE,nonce,offset,len);
-    }
+  }
+
+  public void clearHmacNonce() {
+    clearDataEntry(HMAC_NONCE);
+  }
+
+  public void clearComputedHmac() {
+    clearDataEntry(COMPUTED_HMAC_KEY);
+  }
 
   public void onUninstall() {
     // Javacard Runtime environment cleans up the data.
@@ -297,7 +305,7 @@ public class KMRepository {
     if (dataLen != 0) {
       short dataPtr = Util.getShort(dataTable,(short)(id+DATA_INDEX_ENTRY_OFFSET));
       Util.arrayFillNonAtomic(dataTable, dataPtr,dataLen,(byte)0);
-      Util.arrayFillNonAtomic(dataTable, id,DATA_INDEX_ENTRY_SIZE,(byte)0);
+      //Util.arrayFillNonAtomic(dataTable, id,DATA_INDEX_ENTRY_SIZE,(byte)0);
     }
     JCSystem.commitTransaction();
   }
@@ -355,21 +363,46 @@ public class KMRepository {
     return readData(COMPUTED_HMAC_KEY);
   }
 
+  private byte readAuthTagState(byte[] buf, short offset) {
+    return buf[offset];
+  }
+
+  private void writeAuthTagState(byte[] buf, short offset, byte state) {
+    buf[offset] = state;
+  }
+
   public void persistAuthTag(short authTag) {
-    if(KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH)KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    if (KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH)
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     short authTagEntry = alloc(AUTH_TAG_ENTRY_SIZE);
+    short offset = alloc(AUTH_TAG_ENTRY_SIZE);
+    writeAuthTagState(
+        KMByteBlob.cast(authTagEntry).getBuffer(),
+        KMByteBlob.cast(authTagEntry).getStartOff(),
+        (byte) 1);
     Util.arrayCopyNonAtomic(
-      KMByteBlob.cast(authTag).getBuffer(),
-      KMByteBlob.cast(authTag).getStartOff(),
-      getHeap(),authTagEntry, AUTH_TAG_LENGTH);
-    Util.setShort(getHeap(),(short)(authTagEntry+AUTH_TAG_LENGTH),(short)0);
+        KMByteBlob.cast(authTag).getBuffer(),
+        KMByteBlob.cast(authTag).getStartOff(),
+        getHeap(), authTagEntry, AUTH_TAG_LENGTH);
+    Util.setShort(getHeap(), (short) (authTagEntry + AUTH_TAG_LENGTH +1),
+        (short) 0);
     short index = 0;
     while (index < MAX_BLOB_STORAGE) {
-      if(dataLength((short)(index+AUTH_TAG_1)) == 0){
-        writeDataEntry((short)(index+AUTH_TAG_1),
-          KMByteBlob.cast(authTagEntry).getBuffer(),
-          KMByteBlob.cast(authTagEntry).getStartOff(),
-          AUTH_TAG_ENTRY_SIZE);
+      if (dataLength((short) (index + AUTH_TAG_1)) != 0) {
+        readDataEntry((short) (index + AUTH_TAG_1), getHeap(), offset);
+        if (0 == readAuthTagState(getHeap(), offset)) {
+          writeDataEntry((short) (index + AUTH_TAG_1),
+              KMByteBlob.cast(authTagEntry).getBuffer(),
+              KMByteBlob.cast(authTagEntry).getStartOff(),
+              AUTH_TAG_ENTRY_SIZE);
+          break;
+        }
+      } else {
+        writeDataEntry((short) (index + AUTH_TAG_1),
+            KMByteBlob.cast(authTagEntry).getBuffer(),
+            KMByteBlob.cast(authTagEntry).getStartOff(),
+            AUTH_TAG_ENTRY_SIZE);
+        break;
       }
       index++;
     }
@@ -397,15 +430,16 @@ public class KMRepository {
   private short findTag(short authTag) {
     if(KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH)KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     short index = 0;
-    short authTagEntry;
     short found;
+    short offset = alloc(AUTH_TAG_ENTRY_SIZE);
     while (index < MAX_BLOB_STORAGE) {
       if (dataLength((short)(index+AUTH_TAG_1)) != 0) {
-        authTagEntry = readData((short)(index+AUTH_TAG_1));
+        readDataEntry((short)(index+AUTH_TAG_1),
+            getHeap(), offset);
         found =
           Util.arrayCompare(
-            KMByteBlob.cast(authTagEntry).getBuffer(),
-            KMByteBlob.cast(authTagEntry).getStartOff(),
+            getHeap(),
+            (short)(offset+1),
             KMByteBlob.cast(authTag).getBuffer(),
             KMByteBlob.cast(authTag).getStartOff(),
             AUTH_TAG_LENGTH);
@@ -422,18 +456,23 @@ public class KMRepository {
     if (tag != KMType.INVALID_VALUE) {
       blob = readData(tag);
       return Util.getShort(KMByteBlob.cast(blob).getBuffer(),
-        (short)(KMByteBlob.cast(blob).getStartOff()+AUTH_TAG_LENGTH));
+        (short)(KMByteBlob.cast(blob).getStartOff()+AUTH_TAG_LENGTH+1));
     }
     return KMType.INVALID_VALUE;
   }
 
   public void setRateLimitedKeyCount(short authTag, short val) {
     short tag = findTag(authTag);
-    short blob;
     if (tag != KMType.INVALID_VALUE) {
-      blob = alloc((short)2);
-      Util.setShort(getHeap(),blob,val);
-      writeDataEntry(tag,getHeap(), blob,(short)2);
+      short dataPtr = readData(tag);
+      Util.setShort(
+          KMByteBlob.cast(dataPtr).getBuffer(),
+          (short)(KMByteBlob.cast(dataPtr).getStartOff()+AUTH_TAG_LENGTH+1),
+          val);
+      writeDataEntry(tag,
+          KMByteBlob.cast(dataPtr).getBuffer(),
+          KMByteBlob.cast(dataPtr).getStartOff(),
+          KMByteBlob.cast(dataPtr).length());
     }
   }
 
@@ -601,6 +640,7 @@ public class KMRepository {
     if(len > BOOT_KEY_MAX_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     writeDataEntry(BOOT_VERIFIED_BOOT_KEY,buf,start,len);
   }
+
 
   public void setVerifiedBootHash(byte[] buf, short start, short len){
     if(len > BOOT_HASH_MAX_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);

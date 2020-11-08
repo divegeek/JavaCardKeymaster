@@ -26,6 +26,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
+
 import javacard.framework.AID;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
@@ -46,6 +47,7 @@ import javacard.security.RandomData;
 import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
 import javacardx.crypto.Cipher;
+
 import javax.crypto.AEADBadTagException;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
@@ -69,7 +71,9 @@ public class KMJcardSimulator implements KMSEProvider {
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   private static final int AES_GCM_KEY_SIZE = 16;
+  private static final short CERT_CHAIN_MAX_SIZE = 2050;//First 2 bytes for length.
   private static final byte[] aidArr = new byte[]{ (byte)0xA0, 0x00, 0x00, 0x00, 0x63};
+  public static final short NUM_OF_CERTS = 1;
 
 
   public static boolean jcardSim = false;
@@ -81,6 +85,7 @@ public class KMJcardSimulator implements KMSEProvider {
   private static Cipher aesRngCipher;
   private static byte[] entropyPool;
   private static byte[] rndNum;
+  private byte[] certificateChain;
 
   // Implements Oracle Simulator based restricted crypto provider
   public KMJcardSimulator() {
@@ -99,7 +104,8 @@ public class KMJcardSimulator implements KMSEProvider {
     }
     aesRngKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
     // various ciphers
-
+    //Allocate buffer for certificate chain.
+    certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
   }
 
    
@@ -1250,21 +1256,63 @@ public class KMJcardSimulator implements KMSEProvider {
 
   @Override
   public void backup(byte[] buf, short start, short len) {
-    byte[] data = new byte[len];
-    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
-    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
-    Util.arrayCopyNonAtomic(buf,start,data,(short)0,len);
-    backupStore.backup(data,(short)0,len);
+    short certChainLen = Util.getShort(certificateChain, (short) 0);
+    certChainLen += 2; // including the length of certifcate.
+    short arrayLen = (certChainLen > len) ? certChainLen : len;
+    byte[] data = new byte[arrayLen];
+    AID aid = JCSystem.lookupAID(aidArr, (short) 0, (byte) aidArr.length);
+    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem
+        .getAppletShareableInterfaceObject(aid, (byte) 0);
+    Util.arrayCopyNonAtomic(certificateChain, (short) 0, data, (short) 0,
+        certChainLen);
+    backupStore.backupProviderData(data, (short) 0, certChainLen);
+    Util.arrayCopyNonAtomic(buf, start, data, (short) 0, len);
+    backupStore.backup(data, (short) 0, len);
   }
 
   @Override
   public short restore(byte[] buf, short start) {
-    byte[] data = new byte[2200];
-    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
-    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
-    short len = backupStore.restore(data,(short)0);
-    Util.arrayCopyNonAtomic(data,(short)0,buf,start,len);
+    byte[] data = new byte[4250];
+    AID aid = JCSystem.lookupAID(aidArr, (short) 0, (byte) aidArr.length);
+    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem
+        .getAppletShareableInterfaceObject(aid, (byte) 0);
+    short len = backupStore.restore(data, (short) 0);
+    Util.arrayCopyNonAtomic(data, (short) 0, buf, start, (short) len);
+    start = len;
+    len = backupStore.restoreProviderData(data, (short) 0);
+    JCSystem.beginTransaction();
+    Util.arrayCopy(data, (short) 0, certificateChain, (short) 0, (short) len);
+    JCSystem.commitTransaction();
+    return start;
+  }
+
+  @Override
+  public boolean isBackupAvailable() {
+    return false;
+  }
+
+  @Override
+  public void persistCertificateChain(byte[] buf, short offset, short len) {
+    JCSystem.beginTransaction();
+    Util.setShort(certificateChain, (short)0, len);
+    Util.arrayCopyNonAtomic(buf, offset, certificateChain, (short)2, len);
+    JCSystem.commitTransaction();
+  }
+
+  public short readCertificateChain(byte[] buf, short offset) {
+    short len = Util.getShort(certificateChain, (short)0);
+    Util.arrayCopyNonAtomic(certificateChain, (short)2, buf, offset, len);
     return len;
+  }
+
+  @Override
+  public short getCertificateChainLength() {
+   return Util.getShort(certificateChain, (short)0);
+  }
+
+  @Override
+  public short getNumberOfCerts() {
+    return NUM_OF_CERTS;
   }
 
   /*

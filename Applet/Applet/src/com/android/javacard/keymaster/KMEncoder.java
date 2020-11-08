@@ -81,6 +81,16 @@ public class KMEncoder {
     return (short)(this.startOff - startOff);
   }
 
+  // array{KMError.OK,Array{KMByteBlobs}}
+  public void encodeCertChain(byte[] buffer, short offset, short length) {
+    this.buffer = buffer;
+    this.startOff = offset;
+    this.length = length;
+
+    writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
+    writeByte(UINT_TYPE); // Error.OK
+  }
+
   //array{KMError.OK,Array{KMByteBlobs}}
   public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength) {
     this.buffer = certBuffer;

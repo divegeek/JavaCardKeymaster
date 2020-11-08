@@ -461,4 +461,44 @@ public interface KMSEProvider {
    * @return the length of the data buffer in bytes.
    */
   short restore(byte[] buf, short start);
+
+  /**
+   * This operation returns true if backup is available, otherwise false
+   * if backup is not available.
+   *
+   * @return true if backup is available, false if no backup.
+   */
+  boolean isBackupAvailable();
+
+  /**
+   * This operation persists the certificate chain in the persistent memory.
+   *
+   * @param buf buffer containing certificate chain.
+   * @param offset is the start of the buffer.
+   * @param len is the length of the buffer.
+   */
+  void persistCertificateChain(byte[] buf, short offset, short len);
+
+  /**
+   * The operation reads the certificate chain from persistent memory.
+   *
+   * @param buf is the start of data buffer.
+   * @param offset is the start of the data.
+   * @return the length of the data buffer in bytes.
+   */
+  short readCertificateChain(byte[] buf, short offset);
+
+  /**
+   * This function returns the cert chain length.
+   *
+   * @return length of the certificate chain.
+   */
+  short getCertificateChainLength();
+
+  /**
+   * This function returns the number certificates in the cert chain.
+   *
+   * @return the number of certificates in cert chain.
+   */
+  short getNumberOfCerts();
 }
