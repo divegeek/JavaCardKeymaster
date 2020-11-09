@@ -82,10 +82,15 @@ enum class Instruction {
     INS_UPDATE_OPERATION_CMD = 0x20,
     INS_FINISH_OPERATION_CMD = 0x21,
     INS_ABORT_OPERATION_CMD = 0x22,
-    INS_PROVISION_CMD = 0x23,
+    INS_PROVISION_ATTEST_IDS_ROOT_KEY_CMD = 0x23,
     INS_SET_BOOT_PARAMS_CMD = 0x24,
     INS_DEVICE_LOCKED_CMD = 0x25,
     INS_EARLY_BOOT_ENDED_CMD = 0x26,
+    INS_BACKUP_CMD = 0x27,
+    INS_RESTORE_CMD = 0x28,
+    INS_PROVISION_SHARED_SECRET_CMD = 0x29,
+    INS_PROVISION_CERT_CHAIN_CMD = 0x2A,
+    INS_GET_CERT_CHAIN_CMD = 0x2B
 };
 
 static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFactoryInstance() {
@@ -316,7 +321,8 @@ keyFormat, std::vector<uint8_t>& wrappedKeyDescription) {
     return ErrorCode::OK;
 }
 
-ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut) {
+ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut, bool
+extendedOutput=false) {
     apduOut.push_back(static_cast<uint8_t>(APDU_CLS)); //CLS
     apduOut.push_back(static_cast<uint8_t>(ins)); //INS
     apduOut.push_back(static_cast<uint8_t>(APDU_P1)); //P1
@@ -341,6 +347,8 @@ ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData
             apduOut.insert(apduOut.end(), inputData.begin(), inputData.end());
         //Expected length of output
         apduOut.push_back(static_cast<uint8_t>(0x00));//Accepting complete length of output at a time
+        if(extendedOutput)
+            apduOut.push_back(static_cast<uint8_t>(0x00));
 
     } else {
         return (ErrorCode::INSUFFICIENT_BUFFER_SPACE);
@@ -396,24 +404,26 @@ Return<ErrorCode> setBootParams() {
             KM_VERIFIED_BOOT_UNVERIFIED, 0/*deviceLocked*/);
 }
 
-ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response) {
+ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response, bool
+extendedOutput=false) {
     ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> apdu;
 
     if(!android::base::GetBoolProperty(KM_JAVACARD_PROVISIONED_PROPERTY, false)) {
-        if(ErrorCode::OK != (ret = setBootParams())) {
-            LOG(ERROR) << "Failed to set boot params";
-            return ret;
-        }
 
         if(ErrorCode::OK != (ret = initiateProvision())) {
             LOG(ERROR) << "Failed to provision the device";
             return ret;
         }
+
+        if(ErrorCode::OK != (ret = setBootParams())) {
+            LOG(ERROR) << "Failed to set boot params";
+            return ret;
+        }
         android::base::SetProperty(KM_JAVACARD_PROVISIONED_PROPERTY, "true");
     }
 
-    ret = constructApduMessage(ins, inData, apdu);
+    ret = constructApduMessage(ins, inData, apdu, extendedOutput);
     if(ret != ErrorCode::OK) return ret;
 
     if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
@@ -434,7 +444,7 @@ ErrorCode JavacardKeymaster4Device::provision(const hidl_vec<KeyParameter>& keyP
     std::vector<uint8_t> apdu;
     hidl_vec<uint8_t> keyBlob;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    Instruction ins = Instruction::INS_PROVISION_CMD;
+    Instruction ins = Instruction::INS_PROVISION_ATTEST_IDS_ROOT_KEY_CMD;
     std::vector<uint8_t> response;
     CborConverter cborConverter;
     X509 *x509 = NULL;
@@ -471,7 +481,6 @@ ErrorCode JavacardKeymaster4Device::provision(const hidl_vec<KeyParameter>& keyP
     array.add(subject);
     array.add(notAfter);
     array.add(authorityKeyIdentifier);
-    array.add(masterKey);
     std::vector<uint8_t> cborData = array.encode();
 
     if(ErrorCode::OK != (errorCode = constructApduMessage(ins, cborData, apdu)))
@@ -490,6 +499,70 @@ ErrorCode JavacardKeymaster4Device::provision(const hidl_vec<KeyParameter>& keyP
         std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
                 true);
     }
+
+    if(ErrorCode::OK != errorCode)
+        return errorCode;
+
+    //Provision master key
+    ins = Instruction::INS_PROVISION_SHARED_SECRET_CMD;
+    array = cppbor::Array();
+    array.add(masterKey);
+    cborData = array.encode();
+    apdu.clear();
+    response.clear();
+
+    if(ErrorCode::OK != (errorCode = constructApduMessage(ins, cborData, apdu)))
+        return errorCode;
+
+    if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
+        return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
+    }
+
+    if((response.size() < 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
+        return (ErrorCode::UNKNOWN_ERROR);
+    }
+
+    if((response.size() > 2)) {
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
+                true);
+    }
+
+    if(ErrorCode::OK != errorCode)
+        return errorCode;
+
+    //Provsion root certificate
+    ins = Instruction::INS_PROVISION_CERT_CHAIN_CMD;
+    std::vector<uint8_t> certData;
+    array = cppbor::Array();
+    subArray = cppbor::Array();
+    /* Read the Root certificate */
+    if(!readDataFromFile(ROOT_RSA_CERT, certData)) {
+        LOG(ERROR) << " Failed to read the Root certificate";
+        return (ErrorCode::UNKNOWN_ERROR);
+    }
+    array.add(certData);
+    cborData = array.encode();
+    apdu.clear();
+    response.clear();
+
+    if(ErrorCode::OK != (errorCode = constructApduMessage(ins, cborData, apdu)))
+        return errorCode;
+
+    if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
+        return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
+    }
+
+    if((response.size() < 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
+        return (ErrorCode::UNKNOWN_ERROR);
+    }
+
+    if((response.size() > 2)) {
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
+                true);
+    }
+
     return errorCode;
 }
 
@@ -933,14 +1006,23 @@ Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToA
             if(!cborConverter_.getMultiBinaryArray(item, 1, temp)) {
                 errorCode = ErrorCode::UNKNOWN_ERROR;
             } else {
-                if(readDataFromFile(ROOT_RSA_CERT, rootCert)) {
-                    temp.push_back(std::move(rootCert));
-                    certChain.resize(temp.size());
-                    for(int i = 0; i < temp.size(); i++) {
-                        certChain[i] = temp[i];
+                cborData.clear();
+                cborOutData.clear();
+                errorCode = sendData(Instruction::INS_GET_CERT_CHAIN_CMD, cborData, cborOutData, true);
+                if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+                    //Skip last 2 bytes in cborData, it contains status.
+                    std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                            true);
+                    if (item != nullptr) {
+                        if(!cborConverter_.getMultiBinaryArray(item, 1, temp)) {
+                            errorCode = ErrorCode::UNKNOWN_ERROR;
+                        } else {
+                            certChain.resize(temp.size());
+                            for(int i = 0; i < temp.size(); i++) {
+                                certChain[i] = temp[i];
+                            }
+                        }
                     }
-                } else {
-                    LOG(ERROR) << "No root certificate found";
                 }
             }
         }
