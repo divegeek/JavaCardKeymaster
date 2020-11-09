@@ -85,7 +85,7 @@ public class KMEncoder {
   public void encodeCertChain(byte[] buffer, short offset, short length) {
     this.buffer = buffer;
     this.startOff = offset;
-    this.length = length;
+    this.length = (short)(offset+3);
 
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
     writeByte(UINT_TYPE); // Error.OK

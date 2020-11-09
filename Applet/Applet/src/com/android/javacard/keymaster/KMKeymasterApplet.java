@@ -290,7 +290,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
     }
     // Validate whether INS can be supported
-    if (!(apduIns >= INS_GENERATE_KEY_CMD && apduIns <= INS_RESTORE_CMD)) {
+    if (!(apduIns >= INS_GENERATE_KEY_CMD && apduIns <= INS_GET_CERT_CHAIN_CMD)) {
       ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
     }
     // Validate if INS is provision command if applet is in FIRST_SELECT_STATE.
@@ -596,15 +596,21 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     receiveIncoming(apdu);
     // Arguments
     short blob = KMByteBlob.exp();
+    short argsProto = KMArray.instance((short) 1);
+    KMArray.cast(argsProto).add((short) 0, blob);
     // Decode the argument.
-    short args = decoder.decode(blob, buffer, bufferStartOffset, bufferLength);
+    short args = decoder.decode(argsProto, buffer, bufferStartOffset, bufferLength);
 
-    if (KMByteBlob.cast(args).length() != KMRepository.SHARED_SECRET_KEY_SIZE) {
+    tmpVariables[0] = KMArray.cast(args).get((short) 0);
+    if (tmpVariables[0] != KMType.INVALID_VALUE &&
+        KMByteBlob.cast(tmpVariables[0]).length() != KMRepository.SHARED_SECRET_KEY_SIZE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     // Persist shared Hmac.
-    repository.initHmacSharedSecretKey(KMByteBlob.cast(args).getBuffer(),
-        KMByteBlob.cast(args).getStartOff(), KMByteBlob.cast(args).length());
+    repository.initHmacSharedSecretKey(
+        KMByteBlob.cast(tmpVariables[0]).getBuffer(),
+        KMByteBlob.cast(tmpVariables[0]).getStartOff(),
+        KMByteBlob.cast(tmpVariables[0]).length());
 
     provisionSharedHmacKeyDone = true;
     handleStateTransition();
@@ -828,12 +834,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // No Arguments
     // Generate Hmac nonce only if it is not generated after reboot.
     // Hmac nonce should be idempotent for the device boot session.
+    boolean lengthMismatch = false;
     tmpVariables[0] = repository.alloc(KMRepository.HMAC_SEED_NONCE_SIZE);
     Util.arrayFillNonAtomic(repository.getHeap(), tmpVariables[0],
         KMRepository.HMAC_SEED_NONCE_SIZE, (byte) 0);
     tmpVariables[1] = repository.readData(KMRepository.HMAC_NONCE);
-    boolean lengthMismatch = (KMRepository.HMAC_SEED_NONCE_SIZE != KMByteBlob
-        .cast(tmpVariables[1]).length());
+
+    if (tmpVariables[1] == 0)
+      lengthMismatch = true;
+
     if (lengthMismatch
         || (0 == Util.arrayCompare(
             KMByteBlob.cast(tmpVariables[1]).getBuffer(),
