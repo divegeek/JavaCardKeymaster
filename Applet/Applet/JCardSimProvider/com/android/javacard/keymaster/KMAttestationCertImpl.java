@@ -33,24 +33,22 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   // Authority Key Identifier Extn - 2.5.29.35
   private static final byte[] authKeyIdExtn = {0x06, 0x03, 0X55, 0X1D, 0X23};
 
-  // Signature algorithm identifier - always sha256WithRSAEncryption - 1.2.840.113549.1.1.11
-  // SEQUENCE of alg OBJ ID and parameters = NULL.
+  private static final short ECDSA_MAX_SIG_LEN = 72;
+  //Signature algorithm identifier - always ecdsaWithSha256 - 1.2.840.10045.4.3.2
+  //SEQUENCE of alg OBJ ID and parameters = NULL.
   private static final byte[] X509SignAlgIdentifier = {
     0x30,
-    0x0D,
+    0x0A,
     0x06,
-    0x09,
+    0x08,
     0x2A,
     (byte) 0x86,
     0x48,
-    (byte) 0x86,
-    (byte) 0xF7,
-    0x0D,
-    0x01,
-    0x01,
-    0x0B,
-    0x05,
-    0x00
+    (byte) 0xCE,
+    (byte) 0x3D,
+    0x04,
+    0x03,
+    0x02
   };
   // Validity is not fixed field
   // Subject is a fixed field with only CN= Android Keystore Key - same for all the keys
@@ -100,7 +98,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static short authKey;
   private static short issuer;
   private static short signPriv;
-  private static short signMod;
 
   private KMAttestationCertImpl() {}
 
@@ -143,7 +140,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     deviceLocked = 0;
     authKey = 0;
     signPriv = 0;
-    signMod = 0;
   }
 
   @Override
@@ -875,30 +871,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     if (start > stackPtr) KMException.throwIt(KMError.UNKNOWN_ERROR);
   }
 
-  public static short sign(
-      KMSEProvider seProv,
-      byte[] privBuf,
-      short privStart,
-      short privLength,
-      byte[] modBuf,
-      short modStart,
-      short modLength) {
-    // short ret = signer.sign(stack,tbsOffset,tbsLength,stack,signatureOffset);
-    // print(getBuffer(),getCertStart(),getCertLength());
-    return seProv.rsaSignPKCS1256(
-        privBuf,
-        privStart,
-        privLength,
-        modBuf,
-        modStart,
-        modLength,
-        stack,
-        tbsOffset,
-        tbsLength,
-        stack,
-        signatureOffset);
-  }
-
   @Override
   public KMAttestationCert buffer(byte[] buf, short bufStart, short maxLen) {
     stack = buf;
@@ -909,9 +881,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   }
 
   @Override
-  public KMAttestationCert signingKey(short privKey, short modulus) {
+  public KMAttestationCert signingKey(short privKey) {
     signPriv = privKey;
-    signMod = modulus;
     return this;
   }
 
@@ -933,10 +904,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   @Override
   public void build() {
     short last = stackPtr;
-    decrementStackPtr((short) 256);
+    decrementStackPtr((short) ECDSA_MAX_SIG_LEN);
     signatureOffset = stackPtr;
     pushBitStringHeader((byte) 0, (short) (last - stackPtr));
-    // signatureOffset = pushSignature(null, (short) 0, (short) 256);
     pushAlgorithmId(X509SignAlgIdentifier);
     tbsLength = stackPtr;
     pushTbsCert(rsaCert);
@@ -944,20 +914,25 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     tbsLength = (short) (tbsLength - tbsOffset);
     pushSequenceHeader((short) (last - stackPtr));
     certStart = stackPtr;
-    KMSEProviderImpl.instance()
-        .rsaSignPKCS1256(
-            KMByteBlob.cast(signPriv).getBuffer(),
-            KMByteBlob.cast(signPriv).getStartOff(),
-            KMByteBlob.cast(signPriv).length(),
-            KMByteBlob.cast(signMod).getBuffer(),
-            KMByteBlob.cast(signMod).getStartOff(),
-            KMByteBlob.cast(signMod).length(),
-            stack,
-            tbsOffset,
-            tbsLength,
-            stack,
-            signatureOffset);
-    //    print(stack, stackPtr, (short)(last - stackPtr));
+    short sigLen = KMSEProviderImpl.instance()
+        .ecSign256(
+                KMByteBlob.cast(signPriv).getBuffer(),
+                KMByteBlob.cast(signPriv).getStartOff(),
+                KMByteBlob.cast(signPriv).length(),
+                stack,
+                tbsOffset,
+                tbsLength,
+                stack,
+                signatureOffset);
+    if(sigLen != ECDSA_MAX_SIG_LEN) {
+      // Update the lengths appropriately.
+      stackPtr = (short)(signatureOffset - 1);
+      pushLength((short)(sigLen + 1));
+      stackPtr = tbsOffset;
+      last -= (short)(ECDSA_MAX_SIG_LEN - sigLen);
+      pushLength((short)(last - stackPtr));
+      length -= (short)(ECDSA_MAX_SIG_LEN - sigLen);
+    }
   }
 
   /* private static void print(byte[] buf, short start, short length){

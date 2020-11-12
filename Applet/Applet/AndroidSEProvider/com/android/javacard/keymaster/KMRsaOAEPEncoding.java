@@ -170,7 +170,7 @@ public class KMRsaOAEPEncoding extends Cipher {
     try {
       short hLen = getDigestLength();
 
-      if (encodedMsgLen < (2 * hLen + 1)) {
+      if (encodedMsgLen < (short)(2 * hLen + 1)) {
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
       // encodedMsg will be in the format of maskedSeed||maskedDB.

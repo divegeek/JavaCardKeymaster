@@ -41,6 +41,7 @@ import javacard.security.HMACKey;
 import javacard.security.Key;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
+import javacard.security.MessageDigest;
 import javacard.security.RSAPrivateKey;
 import javacard.security.RSAPublicKey;
 import javacard.security.RandomData;
@@ -570,17 +571,6 @@ public class KMJcardSimulator implements KMSEProvider {
         KMType.RSA_OAEP, KMType.SHA2_256, secret, secretStart, secretLength, modBuffer, modOff, modLength);
     return cipher.doFinal(
         inputDataBuf, inputDataStart, inputDataLength, outputDataBuf, outputDataStart);
-  }
-
-  @Override
-  public short rsaSignPKCS1256(byte[] secret, short secretStart, short secretLength,
-                               byte[] modBuffer, short modOff, short modLength,
-                               byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-                               byte[] outputDataBuf, short outputDataStart) {
-    Signature signer = createRsaSigner(
-      KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN, secret,secretStart,secretLength, modBuffer,modOff,modLength);
-    return signer.sign(
-      inputDataBuf, inputDataStart, inputDataLength, outputDataBuf, outputDataStart);
   }
 
   @Override
@@ -1313,6 +1303,51 @@ public class KMJcardSimulator implements KMSEProvider {
   @Override
   public short getNumberOfCerts() {
     return NUM_OF_CERTS;
+  }
+
+
+  @Override
+  public short ecSign256(byte[] secret, short secretStart, short secretLength,
+      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+      byte[] outputDataBuf, short outputDataStart) {
+    Signature.OneShot signer = null;
+    try {
+      ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
+      key.setS(secret, secretStart, secretLength);
+
+      signer = Signature.OneShot.open(MessageDigest.ALG_SHA_256,
+          Signature.SIG_CIPHER_ECDSA, Cipher.PAD_NULL);
+      signer.init(key, Signature.MODE_SIGN);
+      return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
+          outputDataBuf, outputDataStart);
+    } finally {
+      if (signer != null)
+        signer.close();
+    }
+
+  }
+
+
+  @Override
+  public void persistPartialCertificateChain(byte[] buf, short offset,
+      short len, short totalLen) {
+    //  _____________________________________________________
+    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 | 3 Bytes | Cert2|...
+    // |_________|________|_________|_______|_________|______|
+    // First two bytes holds the length of the total buffer.
+    // CBOR format:
+    // Next single byte holds the array header.
+    // Next 3 bytes holds the Byte array header with the cert1 length.
+    // Next 3 bytes holds the Byte array header with the cert2 length.
+    short persistedLen = Util.getShort(certificateChain, (short) 0);
+    if (persistedLen > totalLen) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    JCSystem.beginTransaction();
+    Util.setShort(certificateChain, (short) 0, (short) (len + persistedLen));
+    Util.arrayCopyNonAtomic(buf, offset, certificateChain,
+            (short) (persistedLen+2), len);
+    JCSystem.commitTransaction();
   }
 
   /*

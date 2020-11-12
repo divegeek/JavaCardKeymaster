@@ -27,7 +27,7 @@ import javacard.framework.Util;
  */
 public class KMRepository {
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 32;
+  public static final short DATA_INDEX_SIZE = 31;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_MEM_SIZE = 2048;
   public static final short HEAP_SIZE = 10000;
@@ -47,32 +47,29 @@ public class KMRepository {
   public static final byte ATT_ID_MEID = 5;
   public static final byte ATT_ID_MANUFACTURER = 6;
   public static final byte ATT_ID_MODEL = 7;
-  public static final byte ATT_EXPONENT = 12;
-  public static final byte ATT_MODULUS = 13;
-  public static final byte CERT_AUTH_KEY_ID = 14;
-  public static final byte CERT_ISSUER = 15;
-  public static final byte CERT_EXPIRY_TIME = 16;
-  public static final byte BOOT_OS_VERSION = 17;
-  public static final byte BOOT_OS_PATCH = 18;
-  public static final byte BOOT_VERIFIED_BOOT_KEY = 19;
-  public static final byte BOOT_VERIFIED_BOOT_HASH = 20;
-  public static final byte BOOT_VERIFIED_BOOT_STATE = 21;
-  public static final byte BOOT_DEVICE_LOCKED_STATUS = 22;
-  public static final byte BOOT_DEVICE_LOCKED_TIME = 23;
-  public static final byte AUTH_TAG_1 = 24;
-  public static final byte AUTH_TAG_2 = 25;
-  public static final byte AUTH_TAG_3 = 26;
-  public static final byte AUTH_TAG_4 = 27;
-  public static final byte AUTH_TAG_5 = 28;
-  public static final byte AUTH_TAG_6 = 29;
-  public static final byte AUTH_TAG_7 = 30;
-  public static final byte AUTH_TAG_8 = 31;
+  public static final byte ATT_EC_KEY = 12;
+  public static final byte CERT_AUTH_KEY_ID = 13;
+  public static final byte CERT_ISSUER = 14;
+  public static final byte CERT_EXPIRY_TIME = 15;
+  public static final byte BOOT_OS_VERSION = 16;
+  public static final byte BOOT_OS_PATCH = 17;
+  public static final byte BOOT_VERIFIED_BOOT_KEY = 18;
+  public static final byte BOOT_VERIFIED_BOOT_HASH = 19;
+  public static final byte BOOT_VERIFIED_BOOT_STATE = 20;
+  public static final byte BOOT_DEVICE_LOCKED_STATUS = 21;
+  public static final byte BOOT_DEVICE_LOCKED_TIME = 22;
+  public static final byte AUTH_TAG_1 = 23;
+  public static final byte AUTH_TAG_2 = 24;
+  public static final byte AUTH_TAG_3 = 25;
+  public static final byte AUTH_TAG_4 = 26;
+  public static final byte AUTH_TAG_5 = 27;
+  public static final byte AUTH_TAG_6 = 28;
+  public static final byte AUTH_TAG_7 = 29;
+  public static final byte AUTH_TAG_8 = 30;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
   public static final short SHARED_SECRET_KEY_SIZE = 32;
-  public static final short ATT_KEY_MOD_SIZE = 256;
-  public static final short ATT_KEY_EXP_SIZE = 256;
   public static final short HMAC_SEED_NONCE_SIZE = 32;
   public static final short COMPUTED_HMAC_KEY_SIZE = 32;
   public static final short OS_VERSION_SIZE = 4;
@@ -477,25 +474,15 @@ public class KMRepository {
   }
 
 
-  public void persistAttestationKey(short mod, short exp) {
-    if(KMByteBlob.cast(mod).length() != ATT_KEY_MOD_SIZE ||
-      KMByteBlob.cast(exp).length() != ATT_KEY_EXP_SIZE) KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
-    writeDataEntry(ATT_MODULUS,
-      KMByteBlob.cast(mod).getBuffer(),
-      KMByteBlob.cast(mod).getStartOff(),
-      KMByteBlob.cast(mod).length());
-    writeDataEntry(ATT_EXPONENT,
-      KMByteBlob.cast(exp).getBuffer(),
-      KMByteBlob.cast(exp).getStartOff(),
-      KMByteBlob.cast(exp).length());
+  public void persistAttestationKey(short secret) {
+    writeDataEntry(ATT_EC_KEY,
+      KMByteBlob.cast(secret).getBuffer(),
+      KMByteBlob.cast(secret).getStartOff(),
+      KMByteBlob.cast(secret).length());
   }
 
-  public short getAttKeyModulus() {
-    return readData(ATT_MODULUS);
-  }
-
-  public short getAttKeyExponent() {
-    return readData(ATT_EXPONENT);
+  public short getAttKey() {
+    return readData(ATT_EC_KEY);
   }
 
   public void persistAttId(byte id, byte[] buf, short start, short len){

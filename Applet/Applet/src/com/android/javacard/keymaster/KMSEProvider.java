@@ -326,15 +326,11 @@ public interface KMSEProvider {
       short outputDataStart);
 
   /**
-   * This is a oneshot operation that decrypts the data using RSA algorithm with oaep256 padding.
-   * The public exponent is always 0x010001.
+   * This is a oneshot operation that signs the data using EC private key.
    *
-   * @param privExp is the private exponent (2048 bit) buffer.
-   * @param privExpStart is the start of the private exponent buffer.
-   * @param privExpLength is the length of the private exponent buffer in bytes.
-   * @param modBuffer is the modulus (2048 bit) buffer.
-   * @param modOff is the start of the modulus buffer.
-   * @param modLength is the length of the modulus buffer in bytes.
+   * @param secret is the private key of P-256 curve.
+   * @param secretStart is the start of the private key buffer.
+   * @param secretLength is the length of the private buffer in bytes.
    * @param inputDataBuf is the buffer of the input data.
    * @param inputDataStart is the start of the input data buffer.
    * @param inputDataLength is the length of the inpur data buffer in bytes.
@@ -342,18 +338,15 @@ public interface KMSEProvider {
    * @param outputDataStart is the start of the output data buffer.
    * @return length of the decrypted data.
    */
-  short rsaSignPKCS1256(
-      byte[] privExp,
-      short privExpStart,
-      short privExpLength,
-      byte[] modBuffer,
-      short modOff,
-      short modLength,
-      byte[] inputDataBuf,
-      short inputDataStart,
-      short inputDataLength,
-      byte[] outputDataBuf,
-      short outputDataStart);
+  public short ecSign256(
+          byte[] secret,
+          short secretStart,
+          short secretLength,
+          byte[] inputDataBuf,
+          short inputDataStart,
+          short inputDataLength,
+          byte[] outputDataBuf,
+          short outputDataStart);
 
   /**
    * This creates a persistent operation for signing, verify, encryption and decryption using HMAC,
@@ -478,6 +471,17 @@ public interface KMSEProvider {
    * @param len is the length of the buffer.
    */
   void persistCertificateChain(byte[] buf, short offset, short len);
+
+  /**
+   * This operation persists the certificate chain in the persistent memory
+   * in multiple requets.
+   *
+   * @param buf buffer containing certificate chain.
+   * @param offset is the start of the buffer.
+   * @param len is the length of the buffer.
+   * @param totalLen is the total length of cert chain.
+   */
+  public void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen);
 
   /**
    * The operation reads the certificate chain from persistent memory.

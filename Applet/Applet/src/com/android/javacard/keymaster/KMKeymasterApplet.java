@@ -16,8 +16,6 @@
 
 package com.android.javacard.keymaster;
 
-import java.nio.BufferOverflowException;
-
 import javacard.framework.APDU;
 import javacard.framework.Applet;
 import javacard.framework.AppletEvent;
@@ -183,9 +181,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static short bufferStartOffset;
   private static short[] tmpVariables;
   private static short[] data;
-  private static boolean provisionAttestIdsDone = false;
-  private static boolean provisionCertChainDone = false;
-  private static boolean provisionSharedHmacKeyDone = false;
+  //Once provision is done this value becomes 0x07.
+  private byte provisionDone = 0x00;
   private static final short MAX_CERT_SIZE = 2048;
 
   /** Registers this applet. */
@@ -310,16 +307,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             && (apduIns != INS_PROVISION_SHARED_SECRET_CMD)) {
           ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
         }
-
-        if (provisionAttestIdsDone
+        if (((provisionDone & 0x01) == 0x01)
             && (apduIns == INS_PROVISION_ATTEST_IDS_ROOT_KEY_CMD)) {
           ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
         }
-        if (provisionCertChainDone && (apduIns == INS_PROVISION_CERT_CHAIN_CMD)) {
+        if (((provisionDone & 0x02) == 0x02)
+            && (apduIns == INS_PROVISION_SHARED_SECRET_CMD)) {
           ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
         }
-        if (provisionSharedHmacKeyDone
-            && (apduIns == INS_PROVISION_SHARED_SECRET_CMD)) {
+        if (((provisionDone & 0x04) == 0x04)
+            && (apduIns == INS_PROVISION_CERT_CHAIN_CMD)) {
           ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
         }
       }
@@ -429,7 +426,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processRestoreCmd(APDU apdu) {
     // No arguments
-    if (seProvider.isBackupRestoreSupported()) sendError(apdu, KMError.UNIMPLEMENTED);
+    if (!seProvider.isBackupRestoreSupported()) sendError(apdu, KMError.UNIMPLEMENTED);
     byte[] data = repository.getDataTable();
     short buf = KMByteBlob.instance((short) data.length);
     short len =
@@ -441,7 +438,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processBackupCmd(APDU apdu) {
     // No arguments
-    if (seProvider.isBackupRestoreSupported()) sendError(apdu, KMError.UNIMPLEMENTED);
+    if (!seProvider.isBackupRestoreSupported()) sendError(apdu, KMError.UNIMPLEMENTED);
     byte[] data = repository.getDataTable();
     seProvider.backup(data, (short) 0, (short) data.length);
     sendError(apdu, KMError.OK);
@@ -585,8 +582,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void handleStateTransition() {
     if (keymasterState == KMKeymasterApplet.FIRST_SELECT_STATE) {
-      if (provisionAttestIdsDone && provisionCertChainDone
-          && provisionSharedHmacKeyDone) {
+      if (provisionDone == 0x07) {
         keymasterState = KMKeymasterApplet.ACTIVE_STATE;
       }
     }
@@ -612,27 +608,62 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(tmpVariables[0]).getStartOff(),
         KMByteBlob.cast(tmpVariables[0]).length());
 
-    provisionSharedHmacKeyDone = true;
+    provisionDone |= 0x02;
     handleStateTransition();
     sendError(apdu, KMError.OK);
   }
 
   private void processProvisionCertChainCmd(APDU apdu) {
-    receiveIncoming(apdu);
-
-    tmpVariables[0] = seProvider.getNumberOfCerts();
-    // Arguments
-    short blob = KMByteBlob.exp();
-    short certChainProto = KMArray.instance(tmpVariables[0]);
-    for (short i = 0; i < tmpVariables[0]; i++) {
-      KMArray.cast(certChainProto).add((short) i, blob);
+    byte[] srcBuffer = apdu.getBuffer();
+    short recvLen = apdu.setIncomingAndReceive();
+    short srcOffset = apdu.getOffsetCdata();
+    bufferLength = apdu.getIncomingLength();
+    short index = bufferStartOffset;
+    // Receive data
+    if (bufferLength > MAX_IO_LENGTH) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    // Decode the argument to make sure that input is in proper CBOR format.
-    decoder.decode(certChainProto, buffer, bufferStartOffset, bufferLength);
-
-    // Persist certificate chain in CBOR format.
-    seProvider.persistCertificateChain(buffer, bufferStartOffset, bufferLength);
-    provisionCertChainDone = true;
+    short certStart = (short) (srcOffset + 1);
+    byte count = (byte)seProvider.getNumberOfCerts();
+    while (recvLen > 0 && ((short) (index - bufferStartOffset) < bufferLength)) {
+      // Checking conditions - validate CBOR data.
+      // 1. Check that Array header contains expected number of certificates
+      // chain.
+      // 2. Check array count matches with number of array elements.
+      // 3. Check that each certificate length matches its actual size.
+      if (index == bufferStartOffset) {
+        // Check if the Major type is 8
+        count |= 0x80;
+        if ((count ^ srcBuffer[srcOffset]) != (short)0)
+          ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+      }
+      while (certStart < (short) (srcOffset + recvLen)) {
+        // Check if the Major type is 4
+        if ((srcBuffer[certStart] & 0xE0) != 0x40)
+          ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+        // read the length of the certificate.
+        if ((srcBuffer[certStart] & 0x1F) != (byte) 0x18
+                && (srcBuffer[certStart] & 0x1F) != (byte) 0x19) {
+          ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+        }
+        if ((srcBuffer[certStart] & 0x1F) == (byte) 0x18) {
+          tmpVariables[1] = srcBuffer[(short) (certStart + 1)];
+          // cert data
+          certStart += 2;
+        } else { // 0x19
+          tmpVariables[1] = Util.getShort(srcBuffer, (short) (certStart + 1));
+          // cert data
+          certStart += 3;
+        }
+        certStart += tmpVariables[1];
+      }
+      certStart = (short)(certStart - recvLen);
+      seProvider.persistPartialCertificateChain(srcBuffer, srcOffset, recvLen,
+              bufferLength);
+      index += recvLen;
+      recvLen = apdu.receiveBytes(srcOffset);
+    }
+    provisionDone |= 0x04;
     handleStateTransition();
     sendError(apdu, KMError.OK);
   }
@@ -666,9 +697,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     data[ORIGIN] = KMType.IMPORTED;
 
-    // get algorithm - only RSA keys expected
+    // get algorithm - only EC keys expected
     tmpVariables[0] = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
-    if (tmpVariables[0] != KMType.RSA) {
+    if (tmpVariables[0] != KMType.EC) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     // get digest - only SHA256 supported
@@ -682,18 +713,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } else {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    // get padding - only PKCS1 supported
-    tmpVariables[0] =
-        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PADDING, data[KEY_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE) {
-      if (KMEnumArrayTag.cast(tmpVariables[0]).length() != 1)
-        KMException.throwIt(KMError.INVALID_ARGUMENT);
-      tmpVariables[0] = KMEnumArrayTag.cast(tmpVariables[0]).get((short) 0);
-      if (tmpVariables[0] != KMType.RSA_PKCS1_1_5_SIGN)
-        KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
-    } else {
-      KMException.throwIt(KMError.INVALID_ARGUMENT);
-    }
+    //Purpose should be ATTEST_KEY
     tmpVariables[0] =
         KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, data[KEY_PARAMETERS]);
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
@@ -704,23 +724,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } else {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    tmpVariables[0] =
-        KMKeyParameters.findTag(KMType.UINT_TAG, KMType.KEYSIZE, data[KEY_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE) {
-      tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
-      if (KMInteger.cast(tmpVariables[0]).getSignificantShort() != 0
-          || KMInteger.cast(tmpVariables[0]).getShort() != (short) 2048) {
-        KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
-      }
-    } else {
-      KMException.throwIt(KMError.INVALID_ARGUMENT);
-    }
-
-    // Import Rsa Key - initializes data[PUB_KEY] and data[SECRET]
-    importRSAKey(scratchPad);
+    // Import EC Key - initializes data[SECRET] data[PUB_KEY]
+    importECKeys(scratchPad);
 
     // persist key
-    repository.persistAttestationKey(data[PUB_KEY], data[SECRET]);
+    repository.persistAttestationKey(data[SECRET]);
 
     // save issuer - DER Encoded
     tmpVariables[0] = KMArray.cast(args).get((short) 3);
@@ -754,7 +762,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     saveAttId(KMType.ATTESTATION_ID_SERIAL);
 
     // Change the state to ACTIVE
-    provisionAttestIdsDone = true;
+    provisionDone |= 0x01;
     handleStateTransition();
     sendError(apdu, KMError.OK);
   }
@@ -832,29 +840,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processGetHmacSharingParamCmd(APDU apdu) {
     // No Arguments
-    // Generate Hmac nonce only if it is not generated after reboot.
-    // Hmac nonce should be idempotent for the device boot session.
-    boolean lengthMismatch = false;
-    tmpVariables[0] = repository.alloc(KMRepository.HMAC_SEED_NONCE_SIZE);
-    Util.arrayFillNonAtomic(repository.getHeap(), tmpVariables[0],
-        KMRepository.HMAC_SEED_NONCE_SIZE, (byte) 0);
-    tmpVariables[1] = repository.readData(KMRepository.HMAC_NONCE);
-
-    if (tmpVariables[1] == 0)
-      lengthMismatch = true;
-
-    if (lengthMismatch
-        || (0 == Util.arrayCompare(
-            KMByteBlob.cast(tmpVariables[1]).getBuffer(),
-            KMByteBlob.cast(tmpVariables[1]).getStartOff(),
-            repository.getHeap(), tmpVariables[0],
-            KMRepository.HMAC_SEED_NONCE_SIZE))) {
-      // Hmac is cleared, so generate a new Hmac nonce.
-      seProvider.newRandomNumber(repository.getHeap(), (short) tmpVariables[0],
-          KMRepository.HMAC_SEED_NONCE_SIZE);
-      repository.initHmacNonce(repository.getHeap(), (short) tmpVariables[0],
-          KMRepository.HMAC_SEED_NONCE_SIZE);
-    }
     // Create HMAC Sharing Parameters
     tmpVariables[2] = KMHmacSharingParameters.instance();
     KMHmacSharingParameters.cast(tmpVariables[2]).setNonce(
@@ -1375,7 +1360,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     cert.deviceLocked(repository.getDeviceLock());
     cert.issuer(repository.getIssuer());
     cert.publicKey(data[PUB_KEY]);
-    cert.signingKey(repository.getAttKeyExponent(), repository.getAttKeyModulus());
+    cert.signingKey(repository.getAttKey());
     cert.verifiedBootHash(repository.getVerifiedBootHash());
 
     cert.verifiedBootKey(repository.getVerifiedBootKey());
@@ -3365,6 +3350,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // implemented.
   private void processSetBootParamsCmd(APDU apdu) {
     receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
     // Argument 1 OS Version
     // short osVersionExp = KMIntegerTag.exp(KMType.UINT_TAG);
     tmpVariables[0] = KMInteger.exp();
@@ -3467,6 +3453,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //Clear the Computed SharedHmac and Hmac nonce from persistent memory.
     repository.clearComputedHmac();
     repository.clearHmacNonce();
+
+    // Hmac is cleared, so generate a new Hmac nonce.
+    seProvider.newRandomNumber(scratchPad, (short) 0,
+            KMRepository.HMAC_SEED_NONCE_SIZE);
+    repository.initHmacNonce(scratchPad, (short) 0,
+            KMRepository.HMAC_SEED_NONCE_SIZE);
   }
 
   private static void processGenerateKey(APDU apdu) {

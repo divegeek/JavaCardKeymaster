@@ -736,19 +736,16 @@ public class AndroidSEProvider implements KMSEProvider {
         outputDataBuf, (short) outputDataStart);
   }
 
-  @Override
-  public short rsaSignPKCS1256(byte[] secret, short secretStart,
-      short secretLength, byte[] modBuffer, short modOff, short modLength,
-      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-      byte[] outputDataBuf, short outputDataStart) {
+  public short ecSign256(byte[] secret, short secretStart, short secretLength,
+          byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+          byte[] outputDataBuf, short outputDataStart) {
     Signature.OneShot signer = null;
     try {
-      RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
-      key.setExponent(secret, secretStart, secretLength);
-      key.setModulus(modBuffer, modOff, modLength);
+      ECPrivateKey key = (ECPrivateKey) ecKeyPair.getPrivate();
+      key.setS(secret, secretStart, secretLength);
 
       signer = Signature.OneShot.open(MessageDigest.ALG_SHA_256,
-          Signature.SIG_CIPHER_RSA, Cipher.PAD_PKCS1);
+          Signature.SIG_CIPHER_ECDSA, Cipher.PAD_NULL);
       signer.init(key, Signature.MODE_SIGN);
       return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
           outputDataBuf, outputDataStart);
@@ -1135,7 +1132,7 @@ public class AndroidSEProvider implements KMSEProvider {
 
   @Override
   public boolean isBackupRestoreSupported() {
-    return false;
+    return true;
   }
 
   @Override
@@ -1174,7 +1171,7 @@ public class AndroidSEProvider implements KMSEProvider {
   public boolean isBackupAvailable() {
     AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
     if(null == aid)
-      ISOException.throwIt(ISO7816.SW_FUNC_NOT_SUPPORTED);
+      return false;
     KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
     return backupStore.isBackupAvailable();
   }
@@ -1187,6 +1184,27 @@ public class AndroidSEProvider implements KMSEProvider {
     HMACKey key = cmacKdf(keyMaterial, keyMaterialStart, keyMaterialLen, label,
         labelStart, labelLen, context, contextStart, contextLength);
     return key.getKey(keyBuf, keyStart);
+  }
+
+  //This function supports multi-part request data.
+  public void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen) {
+    //  _____________________________________________________
+    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 | 3 Bytes | Cert2|...
+    // |_________|________|_________|_______|_________|______|
+    // First two bytes holds the length of the total buffer.
+    // CBOR format:
+    // Next single byte holds the array header.
+    // Next 3 bytes holds the Byte array header with the cert1 length.
+    // Next 3 bytes holds the Byte array header with the cert2 length.
+    short persistedLen = Util.getShort(certificateChain, (short) 0);
+    if (persistedLen > totalLen) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    JCSystem.beginTransaction();
+    Util.setShort(certificateChain, (short) 0, (short) (len + persistedLen));
+    Util.arrayCopyNonAtomic(buf, offset, certificateChain,
+            (short) (persistedLen+2), len);
+    JCSystem.commitTransaction();
   }
 
   @Override

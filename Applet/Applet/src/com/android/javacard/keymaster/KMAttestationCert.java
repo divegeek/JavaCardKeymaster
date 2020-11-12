@@ -121,11 +121,10 @@ public interface KMAttestationCert {
   /**
    * Set signing key to be used to sign the cert.
    *
-   * @param privateKey Ths is rsa 2048 bit private key.
-   * @param modulus Ths is rsa 2048 bit modulus.
+   * @param privateKey This is ECPrivateKey with curve P-256.
    * @return instance of KMAttestationCert
    */
-  KMAttestationCert signingKey(short privateKey, short modulus);
+  KMAttestationCert signingKey(short privateKey);
 
   /**
    * Get the start of the certificate
