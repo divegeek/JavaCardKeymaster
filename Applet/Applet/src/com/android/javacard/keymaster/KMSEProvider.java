@@ -505,4 +505,11 @@ public interface KMSEProvider {
    * @return the number of certificates in cert chain.
    */
   short getNumberOfCerts();
+
+  /**
+   * This function tells if boot signal event is supported or not.
+   *
+   * @return true if supported, false otherwise.
+   */
+  boolean isBootSignalEventSupported();
 }

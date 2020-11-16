@@ -1310,21 +1310,16 @@ public class KMJcardSimulator implements KMSEProvider {
   public short ecSign256(byte[] secret, short secretStart, short secretLength,
       byte[] inputDataBuf, short inputDataStart, short inputDataLength,
       byte[] outputDataBuf, short outputDataStart) {
-    Signature.OneShot signer = null;
-    try {
-      ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
-      key.setS(secret, secretStart, secretLength);
 
-      signer = Signature.OneShot.open(MessageDigest.ALG_SHA_256,
-          Signature.SIG_CIPHER_ECDSA, Cipher.PAD_NULL);
-      signer.init(key, Signature.MODE_SIGN);
-      return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
-          outputDataBuf, outputDataStart);
-    } finally {
-      if (signer != null)
-        signer.close();
-    }
+    ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(
+        KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
+    key.setS(secret, secretStart, secretLength);
 
+    Signature signer = Signature
+        .getInstance(Signature.ALG_ECDSA_SHA_256, false);
+    signer.init(key, Signature.MODE_SIGN);
+    return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
+        outputDataBuf, outputDataStart);
   }
 
 
@@ -1348,6 +1343,12 @@ public class KMJcardSimulator implements KMSEProvider {
     Util.arrayCopyNonAtomic(buf, offset, certificateChain,
             (short) (persistedLen+2), len);
     JCSystem.commitTransaction();
+  }
+
+
+  @Override
+  public boolean isBootSignalEventSupported() {
+    return false;
   }
 
   /*

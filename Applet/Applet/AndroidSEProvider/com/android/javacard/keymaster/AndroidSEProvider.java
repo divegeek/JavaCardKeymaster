@@ -1240,4 +1240,9 @@ public class AndroidSEProvider implements KMSEProvider {
     return NUM_OF_CERTS;
   }
 
+  @Override
+  public boolean isBootSignalEventSupported() {
+    return false;
+  }
+
 }
