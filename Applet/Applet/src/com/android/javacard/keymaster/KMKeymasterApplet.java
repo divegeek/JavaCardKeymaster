@@ -338,9 +338,21 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
       }
     } else if (keymasterState == KMKeymasterApplet.BOOT_STATE) {
-      if (seProvider.isBootSignalEventSupported()
-              && (apduIns != INS_SET_BOOT_PARAMS_CMD)
+      if ((apduIns != INS_SET_BOOT_PARAMS_CMD)
               && (apduIns != INS_GET_PROVISION_STATE_CMD)) {
+        ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+      }
+    } else {//ACTIVE_STATE
+      if ((apduIns == INS_PROVISION_ROOT_KEY_CMD)
+              || (apduIns == INS_PROVISION_CERT_CHAIN_CMD)
+              || (apduIns == INS_PROVISION_CERT_PARAMS_CMD)
+              || (apduIns == INS_PROVISION_ATTEST_IDS)
+              || (apduIns == INS_PROVISION_SHARED_SECRET_CMD)
+              || (apduIns == INS_COMMIT_ATTESTIDS_SHARED_SECRET_CMD)) {
+        ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+      }
+      if (seProvider.isBootSignalEventSupported()
+              && (apduIns == INS_SET_BOOT_PARAMS_CMD)) {
         ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
       }
     }

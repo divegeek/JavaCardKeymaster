@@ -162,12 +162,12 @@ public class AndroidSEProvider implements KMSEProvider {
   //For storing root certificate and intermediate certificates.
   private byte[] certificateChain;
 
-  private static AndroidSEProvider sgtmProvider = null;
+  private static AndroidSEProvider androidSEProvider = null;
 
   public static AndroidSEProvider getInstance() {
-    if (sgtmProvider == null)
-      sgtmProvider = new AndroidSEProvider();
-    return sgtmProvider;
+    if (androidSEProvider == null)
+      androidSEProvider = new AndroidSEProvider();
+    return androidSEProvider;
   }
 
   private AndroidSEProvider() {
