@@ -21,6 +21,7 @@ import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 public class KMDecoder {
+  public static final short CONTEXT_LEN = 6;
   // major types
   private static final short UINT_TYPE = 0x00;
   private static final short BYTES_TYPE = 0x40;
@@ -406,5 +407,38 @@ public class KMDecoder {
     if (startOff > this.length) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
+  }
+
+  // Context holds below values
+  // 1. number of certificates.
+  // 2. number of certificates read.
+  // 3. Relative offset from where next certificate will start.
+  public void incrementalReceiveAndValidateCertificateChain(byte[] context,
+          short contextStart, short contextLen, byte[] buf, short bufOffset,
+          short bufLen) {
+    short payLoadLength;
+    short index = 0;
+    this.buffer = buf;
+    this.startOff = bufOffset;
+    this.length = (short) (bufOffset + bufLen);
+    // Increment the startOff to the cert data starting location.
+    startOff += Util.getShort(context, (short) (contextStart + 4));
+    if (0 == Util.getShort(context, contextStart)) {
+      payLoadLength = readMajorTypeWithPayloadLength(ARRAY_TYPE);
+      if (0 == payLoadLength)
+        ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+      Util.setShort(context, contextStart, payLoadLength);
+    }
+    while (startOff < length) {
+      if (Util.getShort(context, contextStart) <= Util.getShort(context,
+              (short) (contextStart + 2))) {
+        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+      }
+      payLoadLength = readMajorTypeWithPayloadLength(BYTES_TYPE);
+      Util.setShort(context, (short) (contextStart + 2), ++index);
+      startOff += payLoadLength;
+    }
+    Util.setShort(context, (short) (contextStart + 4),
+            (short) (startOff - length));
   }
 }
