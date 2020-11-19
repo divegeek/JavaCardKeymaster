@@ -98,13 +98,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_RESTORE_CMD = 0x27;
   private static final byte INS_GET_CERT_CHAIN_CMD = 0x28;
   //Instructions for Provision Commands.
-  private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = 0x3C;
-  private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = 0x3D;
-  private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = 0x3E;
-  private static final byte INS_PROVISION_ATTEST_IDS_CMD = 0x3F;
-  private static final byte INS_PROVISION_SHARED_SECRET_CMD = 0x40;
-  private static final byte INS_COMMIT_ATTESTIDS_SHARED_SECRET_CMD = 0x41;
-  private static final byte INS_GET_PROVISION_STATUS_CMD = 0x42;
+  private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = 0x29;
+  private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = 0x30;
+  private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = 0x31;
+  private static final byte INS_PROVISION_ATTEST_IDS_CMD = 0x32;
+  private static final byte INS_PROVISION_SHARED_SECRET_CMD = 0x33;
+  private static final byte INS_COMMIT_ATTESTIDS_SHARED_SECRET_CMD = 0x34;
+  private static final byte INS_GET_PROVISION_STATUS_CMD = 0x35;
   //Provision reporting status
   private static final byte NOT_PROVISIONED = 0x00;
   private static final byte PROVISION_STATUS_SIGN_KEY = 0x01;
