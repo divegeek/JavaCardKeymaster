@@ -96,7 +96,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_DEVICE_LOCKED_CMD = 0x24;
   private static final byte INS_EARLY_BOOT_ENDED_CMD = 0x25;
   private static final byte INS_GET_CERT_CHAIN_CMD = 0x26;
-
+  
   // Instructions for Provision Commands.
   private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = 0x27;
   private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = 0x28;
