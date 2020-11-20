@@ -101,17 +101,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = 0x27;
   private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = 0x28;
   private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = 0x29;
-  private static final byte INS_PROVISION_ATTEST_IDS_CMD = 0x30;
-  private static final byte INS_PROVISION_SHARED_SECRET_CMD = 0x3A;
-  private static final byte INS_COMMIT_ATTESTIDS_SHARED_SECRET_CMD = 0x3B;
-  private static final byte INS_GET_PROVISION_STATUS_CMD = 0x3C;
-  private static final byte INS_END_KM_CMD = 0x3D;
+  private static final byte INS_PROVISION_ATTEST_IDS_CMD = 0x2A;
+  private static final byte INS_PROVISION_SHARED_SECRET_CMD = 0x2B;
+  private static final byte INS_COMMIT_ATTESTIDS_SHARED_SECRET_CMD = 0x2C;
+  private static final byte INS_GET_PROVISION_STATUS_CMD = 0x2D;
+  private static final byte INS_END_KM_CMD = 0x2E;
 
   // Provision reporting status
   private static final byte NOT_PROVISIONED = 0x00;
-  private static final byte PROVISION_STATUS_SIGN_KEY = 0x01;
-  private static final byte PROVISION_STATUS_SIGN_CERT_CHAIN = 0x02;
-  private static final byte PROVISION_STATUS_SIGN_CERT_PARAMS = 0x04;
+  private static final byte PROVISION_STATUS_ATTESTATION_KEY = 0x01;
+  private static final byte PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x02;
+  private static final byte PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04;
   private static final byte PROVISION_STATUS_ATTEST_IDS = 0x08;
   private static final byte PROVISION_STATUS_SHARED_SECRET = 0x10;
   private static final byte PROVISION_STATUS_APPLET_PROVISIONED = 0x20;
@@ -312,11 +312,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         switch (apduIns) {
           case INS_PROVISION_ATTESTATION_KEY_CMD:
             {
-              if ((provisionStatus & PROVISION_STATUS_SIGN_KEY) == PROVISION_STATUS_SIGN_KEY) {
+              if ((provisionStatus & PROVISION_STATUS_ATTESTATION_KEY) == PROVISION_STATUS_ATTESTATION_KEY) {
                 ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
               } else {
                 processProvisionAttestationKey(apdu);
-                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SIGN_KEY;
+                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_KEY;
                 handleStateTransition();
                 sendError(apdu, KMError.OK);
               }
@@ -324,12 +324,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             }
           case INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD:
             {
-              if ((provisionStatus & PROVISION_STATUS_SIGN_CERT_CHAIN)
-                  == PROVISION_STATUS_SIGN_CERT_CHAIN) {
+              if ((provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_CHAIN)
+                  == PROVISION_STATUS_ATTESTATION_CERT_CHAIN) {
                 ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
               } else {
                 processProvisionAttestationCertChainCmd(apdu);
-                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SIGN_CERT_CHAIN;
+                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_CHAIN;
                 handleStateTransition();
                 sendError(apdu, KMError.OK);
               }
@@ -337,12 +337,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             }
           case INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD:
             {
-              if ((provisionStatus & PROVISION_STATUS_SIGN_CERT_PARAMS)
-                  == PROVISION_STATUS_SIGN_CERT_PARAMS) {
+              if ((provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_PARAMS)
+                  == PROVISION_STATUS_ATTESTATION_CERT_PARAMS) {
                 ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
               } else {
                 processProvisionAttestationCertParams(apdu);
-                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SIGN_CERT_PARAMS;
+                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_PARAMS;
                 handleStateTransition();
                 sendError(apdu, KMError.OK);
               }
@@ -634,16 +634,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     byte nextKMState = keymasterState;
     if (currentKMState == KMKeymasterApplet.FIRST_SELECT_STATE) {
       if (provisionStatus
-          == (PROVISION_STATUS_SIGN_KEY
-              | PROVISION_STATUS_SIGN_CERT_CHAIN
-              | PROVISION_STATUS_SIGN_CERT_PARAMS)) {
+          == (PROVISION_STATUS_ATTESTATION_KEY
+              | PROVISION_STATUS_ATTESTATION_CERT_CHAIN
+              | PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) {
         nextKMState = KMKeymasterApplet.PROVISIONED_AKEY_ACERT_STATE;
       }
     } else if (currentKMState == KMKeymasterApplet.PROVISIONED_AKEY_ACERT_STATE) {
       if (provisionStatus
-          == (PROVISION_STATUS_SIGN_KEY
-              | PROVISION_STATUS_SIGN_CERT_CHAIN
-              | PROVISION_STATUS_SIGN_CERT_PARAMS
+          == (PROVISION_STATUS_ATTESTATION_KEY
+              | PROVISION_STATUS_ATTESTATION_CERT_CHAIN
+              | PROVISION_STATUS_ATTESTATION_CERT_PARAMS
               | PROVISION_STATUS_ATTEST_IDS
               | PROVISION_STATUS_SHARED_SECRET
               | PROVISION_STATUS_APPLET_PROVISIONED)) {
@@ -686,10 +686,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(tmpVariables[0]).getBuffer(),
         KMByteBlob.cast(tmpVariables[0]).getStartOff(),
         KMByteBlob.cast(tmpVariables[0]).length());
-
-    provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SIGN_CERT_PARAMS;
-    handleStateTransition();
-    sendError(apdu, KMError.OK);
   }
 
   private void processProvisionAttestationCertChainCmd(APDU apdu) {
@@ -2862,12 +2858,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
         break;
       case KMType.HMAC:
-        // For HMAC, either sign or verify we do sign operation only and we compare the
-        // signature manually. The reason for doing this is the TAG_MAC_LENGTH can be 32 bytes
-        // length or less than that in case if it is less than 32 we are truncating it and sending
-        // back to the user. For Verify user will send the truncated and if we pass the truncated
-        // signature to Javacard verify API it will fail because it expects the full length
-        // signature.
+      // As per Keymaster HAL documentation, the length of the Hmac output can
+      // be decided by using TAG_MAC_LENGTH in Keyparameters. But there is no
+      // such provision to control the length of the Hmac output using JavaCard
+      // crypto APIs and the current implementation always returns 32 bytes
+      // length of Hmac output. So to provide support to TAG_MAC_LENGTH
+      // feature, we truncate the output signature to TAG_MAC_LENGTH and return
+      // the truncated signature back to the caller. At the time of verfication
+      // we again compute the signature of the plain text input, truncate it to
+      // TAG_MAC_LENGTH and compare it with the input signature for
+      // verification. So this is the reason we are using KMType.SIGN directly
+      // instead of using op.getPurpose().
         try {
           op.setOperation(
               seProvider.initSymmetricOperation(
@@ -4114,30 +4115,57 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[1] = repository.alloc((short) 256);
     // generate derivation material from hidden parameters
     tmpVariables[2] = encoder.encode(tmpVariables[0], repository.getHeap(), tmpVariables[1]);
-    // create derived key i.e. MAC
-    /*    tmpVariables[3] =
-            seProvider.aesCCMSign(
+    // KeyDerivation:
+    // 1. AesGCM Encryption, with below input parameters.
+    //    authData - HIDDEN_PARAMTERS
+    //    Key - Master Key
+    //    InputData - AUTH_DATA
+    //    IV - NONCE
+    // 2. After encryption it generates two outputs
+    //    a. Encrypted output
+    //    b. Auth Tag
+    // 3. Do HMAC Sign, with below input parameters.
+    //    Key - Auth Tag (Generated in step 2).
+    //    Input data - Encrypted output (Generated in step 2).
+    // 4. HMAC Sign generates an output of 32 bytes length.
+    //    Consume only first 16 bytes as derived key.
+    tmpVariables[4] = repository.getMasterKeySecret();
+    tmpVariables[5] = repository.alloc(AES_GCM_AUTH_TAG_LENGTH);
+    tmpVariables[3] =
+            seProvider.aesGCMEncrypt(
+                KMByteBlob.cast(tmpVariables[4]).getBuffer(),
+                KMByteBlob.cast(tmpVariables[4]).getStartOff(),
+                KMByteBlob.cast(tmpVariables[4]).length(),
+                repository.getHeap(),
+                data[AUTH_DATA],
+                data[AUTH_DATA_LENGTH],
+                scratchPad,
+                (short) 0,
+                KMByteBlob.cast(data[NONCE]).getBuffer(),
+                KMByteBlob.cast(data[NONCE]).getStartOff(),
+                KMByteBlob.cast(data[NONCE]).length(),
                 repository.getHeap(),
                 tmpVariables[1],
                 tmpVariables[2],
-                repository.getMasterKeySecret(),
-                scratchPad,
-                (short) 0);
-    */
-    tmpVariables[4] = repository.getMasterKeySecret();
-    tmpVariables[3] =
-        seProvider.aesCCMSign(
+                repository.getHeap(),
+                tmpVariables[5],
+                AES_GCM_AUTH_TAG_LENGTH);
+    // Hmac sign.
+    tmpVariables[3] = seProvider.hmacSign(
             repository.getHeap(),
-            tmpVariables[1],
-            tmpVariables[2],
-            KMByteBlob.cast(tmpVariables[4]).getBuffer(),
-            KMByteBlob.cast(tmpVariables[4]).getStartOff(),
-            KMByteBlob.cast(tmpVariables[4]).length(),
+            tmpVariables[5],
+            AES_GCM_AUTH_TAG_LENGTH,
             scratchPad,
-            (short) 0);
-    if (tmpVariables[3] < 0) {
+            (short) 0,
+            tmpVariables[3],
+            repository.getHeap(),
+            tmpVariables[1]);
+    if (tmpVariables[3] < 16) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
+    tmpVariables[3] = 16;
+    Util.arrayCopyNonAtomic(repository.getHeap(), tmpVariables[1], scratchPad,
+            (short) 0, tmpVariables[3]);
     // store the derived secret in data dictionary
     data[DERIVED_KEY] = repository.alloc(tmpVariables[3]);
     Util.arrayCopyNonAtomic(
