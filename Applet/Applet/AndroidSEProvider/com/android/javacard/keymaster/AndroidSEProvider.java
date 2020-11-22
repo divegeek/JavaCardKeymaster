@@ -1245,4 +1245,15 @@ public class AndroidSEProvider implements KMSEProvider {
     return false;
   }
 
+  @Override
+  public boolean isDeviceRebooted()  {
+    return false;
+  }
+
+  @Override
+  public void setDeviceBooted(boolean resetBootFlag) {
+    // To be filled
+  }
+
+
 }

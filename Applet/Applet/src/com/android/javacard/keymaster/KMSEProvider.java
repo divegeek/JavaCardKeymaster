@@ -512,4 +512,17 @@ public interface KMSEProvider {
    * @return true if supported, false otherwise.
    */
   boolean isBootSignalEventSupported();
+
+  /**
+   * This function tells if the device is booted or not.
+   *
+   * @return true if device booted, false otherwise.
+   */
+  boolean isDeviceRebooted();
+
+  /**
+   * This function is supposed to be used to reset the device booted stated after set boot param is handled
+   * @param resetBootFlag is false if event has been handled
+   */
+  void setDeviceBooted(boolean resetBootFlag);
 }

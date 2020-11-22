@@ -65,12 +65,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Possible states of the applet.
   private static final byte ILLEGAL_STATE = 0x00;
   private static final byte INIT_STATE = 0x01;
-  private static final byte FIRST_SELECT_STATE = 0x02;
-  private static final byte PROVISIONED_AKEY_ACERT_STATE = 0x03;
-  private static final byte PROVISIONED_AKEY_ACERT_AID_SS_STATE = 0x04;
-  private static final byte ACTIVE_STATE = 0x05;
-  private static final byte INACTIVE_STATE = 0x06;
-  private static final byte UNINSTALLED_STATE = 0x07;
+  private static final byte IN_PROVISION_STATE = 0x02;
+  private static final byte ACTIVE_STATE = 0x03;
+  private static final byte INACTIVE_STATE = 0x04;
+  private static final byte UNINSTALLED_STATE = 0x05;
   // Commands
   private static final byte INS_BEGIN_KM_CMD = 0x09;
   private static final byte INS_GENERATE_KEY_CMD = 0x10;
@@ -96,14 +94,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_DEVICE_LOCKED_CMD = 0x24;
   private static final byte INS_EARLY_BOOT_ENDED_CMD = 0x25;
   private static final byte INS_GET_CERT_CHAIN_CMD = 0x26;
-  
+
   // Instructions for Provision Commands.
   private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = 0x27;
   private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = 0x28;
   private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = 0x29;
   private static final byte INS_PROVISION_ATTEST_IDS_CMD = 0x2A;
   private static final byte INS_PROVISION_SHARED_SECRET_CMD = 0x2B;
-  private static final byte INS_COMMIT_ATTESTIDS_SHARED_SECRET_CMD = 0x2C;
+  private static final byte INS_LOCK_PROVISIONING_CMD = 0x2C;
   private static final byte INS_GET_PROVISION_STATUS_CMD = 0x2D;
   private static final byte INS_END_KM_CMD = 0x2E;
 
@@ -114,7 +112,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04;
   private static final byte PROVISION_STATUS_ATTEST_IDS = 0x08;
   private static final byte PROVISION_STATUS_SHARED_SECRET = 0x10;
-  private static final byte PROVISION_STATUS_APPLET_PROVISIONED = 0x20;
+  private static final byte PROVISION_STATUS_BOOT_PARAM = 0x20;
+  private static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x40;
 
   // Data Dictionary items
   public static final byte DATA_ARRAY_SIZE = 30;
@@ -239,7 +238,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public boolean select() {
     repository.onSelect();
     if (keymasterState == KMKeymasterApplet.INIT_STATE) {
-      keymasterState = KMKeymasterApplet.FIRST_SELECT_STATE;
+      keymasterState = KMKeymasterApplet.IN_PROVISION_STATE;
     } else if (keymasterState == KMKeymasterApplet.INACTIVE_STATE) {
       keymasterState = KMKeymasterApplet.ACTIVE_STATE;
     }
@@ -306,108 +305,76 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // Process the apdu
     try {
-      // Validate if INS is provision command if applet is in
-      // FIRST_SELECT_STATE.
-      if (keymasterState == KMKeymasterApplet.FIRST_SELECT_STATE) {
+
+      if (keymasterState == KMKeymasterApplet.IN_PROVISION_STATE) {
         switch (apduIns) {
           case INS_PROVISION_ATTESTATION_KEY_CMD:
-            {
-              if ((provisionStatus & PROVISION_STATUS_ATTESTATION_KEY) == PROVISION_STATUS_ATTESTATION_KEY) {
-                ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-              } else {
-                processProvisionAttestationKey(apdu);
-                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_KEY;
-                handleStateTransition();
-                sendError(apdu, KMError.OK);
-              }
-              break;
-            }
+            processProvisionAttestationKey(apdu);
+            provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_KEY;
+            sendError(apdu, KMError.OK);
+            break;
+
           case INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD:
-            {
-              if ((provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_CHAIN)
-                  == PROVISION_STATUS_ATTESTATION_CERT_CHAIN) {
-                ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-              } else {
-                processProvisionAttestationCertChainCmd(apdu);
-                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_CHAIN;
-                handleStateTransition();
-                sendError(apdu, KMError.OK);
-              }
-              break;
-            }
+            processProvisionAttestationCertChainCmd(apdu);
+            provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_CHAIN;
+            sendError(apdu, KMError.OK);
+            break;
+
           case INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD:
-            {
-              if ((provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_PARAMS)
-                  == PROVISION_STATUS_ATTESTATION_CERT_PARAMS) {
-                ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-              } else {
-                processProvisionAttestationCertParams(apdu);
-                provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_PARAMS;
-                handleStateTransition();
-                sendError(apdu, KMError.OK);
-              }
-              break;
-            }
-          case INS_GET_PROVISION_STATUS_CMD:
-            processGetProvisionStatusCmd(apdu);
+            processProvisionAttestationCertParams(apdu);
+            provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_PARAMS;
+            sendError(apdu, KMError.OK);
             break;
-          default:
-            ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-            break;
-        }
-      } else if (keymasterState == KMKeymasterApplet.PROVISIONED_AKEY_ACERT_STATE) {
-        switch (apduIns) {
+
           case INS_PROVISION_ATTEST_IDS_CMD:
             processProvisionAttestIdsCmd(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTEST_IDS;
-            handleStateTransition();
             sendError(apdu, KMError.OK);
             break;
+
           case INS_PROVISION_SHARED_SECRET_CMD:
             processProvisionSharedSecretCmd(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SHARED_SECRET;
-            handleStateTransition();
             sendError(apdu, KMError.OK);
             break;
-          case INS_COMMIT_ATTESTIDS_SHARED_SECRET_CMD:
-            processCommitAttestIDSharedSecretCmd(apdu);
-            provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_APPLET_PROVISIONED;
-            handleStateTransition();
-            sendError(apdu, KMError.OK);
-            break;
-          case INS_GET_PROVISION_STATUS_CMD:
-            processGetProvisionStatusCmd(apdu);
-            break;
-          default:
-            ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-            break;
-        }
-      } else if (keymasterState == KMKeymasterApplet.PROVISIONED_AKEY_ACERT_AID_SS_STATE) {
-        switch (apduIns) {
-          case INS_SET_BOOT_PARAMS_CMD:
-            processSetBootParamsCmd(apdu);
-            handleStateTransition();
-            sendError(apdu, KMError.OK);
-            break;
-          case INS_GET_PROVISION_STATUS_CMD:
-            processGetProvisionStatusCmd(apdu);
-            break;
-          default:
-            ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-            break;
-        }
 
-      } else { // ACTIVE_STATE
-        if (seProvider.isBootSignalEventSupported() && (apduIns == INS_SET_BOOT_PARAMS_CMD)) {
-          ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+          case INS_LOCK_PROVISIONING_CMD:
+            if (isProvisioningComplete()) {
+              provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED;
+              keymasterState = KMKeymasterApplet.ACTIVE_STATE;
+              sendError(apdu, KMError.OK);
+              return;
+            } else {
+              ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+            }
+            break;
         }
-        // Handle the command
+      }
+
+      if ((keymasterState == KMKeymasterApplet.ACTIVE_STATE)
+              || (keymasterState == KMKeymasterApplet.IN_PROVISION_STATE)) {
         switch (apduIns) {
           case INS_SET_BOOT_PARAMS_CMD:
+            if (seProvider.isBootSignalEventSupported()
+                    && (!seProvider.isDeviceRebooted())) {
+              ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+            }
+            seProvider.setDeviceBooted(false);
             processSetBootParamsCmd(apdu);
-            handleStateTransition();
+            provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_BOOT_PARAM;
             sendError(apdu, KMError.OK);
             break;
+
+          case INS_GET_PROVISION_STATUS_CMD:
+            processGetProvisionStatusCmd(apdu);
+            break;
+        }
+      }
+
+      if ((keymasterState == KMKeymasterApplet.ACTIVE_STATE)
+              || ((keymasterState == KMKeymasterApplet.IN_PROVISION_STATE)
+                      && isProvisioningComplete())) {
+        switch (apduIns) {
           case INS_GENERATE_KEY_CMD:
             processGenerateKey(apdu);
             break;
@@ -465,9 +432,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           case INS_ABORT_OPERATION_CMD:
             processAbortOperationCmd(apdu);
             break;
-          case INS_GET_PROVISION_STATUS_CMD:
-            processGetProvisionStatusCmd(apdu);
-            break;
           case INS_DEVICE_LOCKED_CMD:
             processDeviceLockedCmd(apdu);
             break;
@@ -490,6 +454,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } finally {
       resetData();
       repository.clean();
+    }
+  }
+
+  private boolean isProvisioningComplete() {
+    if((0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_KEY))
+         && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_CHAIN))
+         && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_PARAMS))
+         && (0 != (provisionStatus & PROVISION_STATUS_SHARED_SECRET))
+         && (0 != (provisionStatus & PROVISION_STATUS_BOOT_PARAM))) {
+      return true;
+    } else {
+      return false;
     }
   }
 
@@ -629,31 +605,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
-  private void handleStateTransition() {
-    byte currentKMState = keymasterState;
-    byte nextKMState = keymasterState;
-    if (currentKMState == KMKeymasterApplet.FIRST_SELECT_STATE) {
-      if (provisionStatus
-          == (PROVISION_STATUS_ATTESTATION_KEY
-              | PROVISION_STATUS_ATTESTATION_CERT_CHAIN
-              | PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) {
-        nextKMState = KMKeymasterApplet.PROVISIONED_AKEY_ACERT_STATE;
-      }
-    } else if (currentKMState == KMKeymasterApplet.PROVISIONED_AKEY_ACERT_STATE) {
-      if (provisionStatus
-          == (PROVISION_STATUS_ATTESTATION_KEY
-              | PROVISION_STATUS_ATTESTATION_CERT_CHAIN
-              | PROVISION_STATUS_ATTESTATION_CERT_PARAMS
-              | PROVISION_STATUS_ATTEST_IDS
-              | PROVISION_STATUS_SHARED_SECRET
-              | PROVISION_STATUS_APPLET_PROVISIONED)) {
-        nextKMState = KMKeymasterApplet.PROVISIONED_AKEY_ACERT_AID_SS_STATE;
-      }
-    } else if (currentKMState == KMKeymasterApplet.PROVISIONED_AKEY_ACERT_AID_SS_STATE) {
-      nextKMState = KMKeymasterApplet.ACTIVE_STATE;
-    }
-    keymasterState = nextKMState;
-  }
 
   private void processProvisionAttestationCertParams(APDU apdu) {
     receiveIncoming(apdu);
@@ -819,14 +770,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(tmpVariables[0]).getBuffer(),
         KMByteBlob.cast(tmpVariables[0]).getStartOff(),
         KMByteBlob.cast(tmpVariables[0]).length());
-  }
-
-  private void processCommitAttestIDSharedSecretCmd(APDU apdu) {
-    // Check if shared secret is persisted. If not persisted throw error.
-    short keyBlob = repository.getSharedKey();
-    if (KMByteBlob.cast(keyBlob).length() == 0) {
-      KMException.throwIt(KMError.KEY_NOT_YET_VALID);
-    }
   }
 
   private void processGetProvisionStatusCmd(APDU apdu) {
@@ -1448,6 +1391,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     bufferLength = (short) (cert.getCertLength() + (cert.getCertStart() - bufferStartOffset));
     sendOutgoing(apdu);
   }
+
   // --------------------------------
   private void addAttestationIds(KMAttestationCert cert) {
     final short[] attTags =
@@ -1502,6 +1446,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       index++;
     }
   }
+
   // --------------------------------------
   private short convertToDate(short time, byte[] scratchPad, boolean utcFlag) {
     short yrsCount = 0;
@@ -1601,15 +1546,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += numberToString(ssCount, scratchPad, len);
     scratchPad[len] = Z;
     len++;
-    if (utcFlag) return KMByteBlob.instance(scratchPad, (short) 2, (short) (len - 2)); // YY
-    else return KMByteBlob.instance(scratchPad, (short) 0, len); // YYYY
+    if (utcFlag)
+      return KMByteBlob.instance(scratchPad, (short) 2, (short) (len - 2)); // YY
+    else
+      return KMByteBlob.instance(scratchPad, (short) 0, len); // YYYY
   }
 
   private short numberToString(short number, byte[] scratchPad, short offset) {
     byte zero = 0x30;
     byte len = 2;
     byte digit;
-    if (number > 999) len = 4;
+    if (number > 999)
+      len = 4;
     byte index = len;
     while (index > 0) {
       digit = (byte) (number % 10);
@@ -2013,14 +1961,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
         break;
       case KMType.HMAC:
-        // For HMAC, either sign or verify we do sign operation only and we compare the
-        // signature manually. The reason for doing this is the TAG_MAC_LENGTH can be 32 bytes
-        // length or less than that in case if it is less than 32 we are truncating it and sending
-        // back to the user. For Verify user will send the truncated and if we pass the truncated
-        // signature to javacard verify API it will fail because it expects the full length
-        // signature.
-        // digest is always present.
-        // len of signature will always be 32 bytes.
+        // As per Keymaster HAL documentation, the length of the Hmac output can
+        // be decided by using TAG_MAC_LENGTH in Keyparameters. But there is no
+        // such provision to control the length of the Hmac output using JavaCard
+        // crypto APIs and the current implementation always returns 32 bytes
+        // length of Hmac output. So to provide support to TAG_MAC_LENGTH
+        // feature, we truncate the output signature to TAG_MAC_LENGTH and return
+        // the truncated signature back to the caller. At the time of verfication
+        // we again compute the signature of the plain text input, truncate it to
+        // TAG_MAC_LENGTH and compare it with the input signature for
+        // verification. So this is the reason we are using KMType.SIGN directly
+        // instead of using op.getPurpose().
         op.getOperation()
             .sign(
                 KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
@@ -2387,7 +2338,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] = KMEnum.cast(tmpVariables[0]).getVal();
     data[HW_TOKEN] = KMArray.cast(args).get((short) 3);
     KMOperationState op = repository.reserveOperation();
-    if (op == null) KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
+    if (op == null)
+      KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
     data[OP_HANDLE] = op.getHandle();
     op.setPurpose((byte) tmpVariables[0]);
     op.setKeySize(KMByteBlob.cast(data[SECRET]).length());

@@ -1351,6 +1351,16 @@ public class KMJcardSimulator implements KMSEProvider {
     return false;
   }
 
+  @Override
+  public boolean isDeviceRebooted() {
+    return false;
+  }
+
+  @Override
+  public void setDeviceBooted(boolean resetBootFlag) {
+    // To be filled
+  }
+
   /*
   private static void print (String lab, byte[] b, short s, short l){
     byte[] i = new byte[l];
