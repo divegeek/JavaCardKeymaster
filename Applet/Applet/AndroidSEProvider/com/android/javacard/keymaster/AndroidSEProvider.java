@@ -1251,7 +1251,7 @@ public class AndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public void setDeviceBooted(boolean resetBootFlag) {
+  public void clearDeviceBooted(boolean resetBootFlag) {
     // To be filled
   }
 

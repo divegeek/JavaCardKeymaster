@@ -63,47 +63,50 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   };
 
   // Possible states of the applet.
-  private static final byte ILLEGAL_STATE = 0x00;
-  private static final byte INIT_STATE = 0x01;
-  private static final byte IN_PROVISION_STATE = 0x02;
-  private static final byte ACTIVE_STATE = 0x03;
-  private static final byte INACTIVE_STATE = 0x04;
-  private static final byte UNINSTALLED_STATE = 0x05;
-  // Commands
-  private static final byte INS_BEGIN_KM_CMD = 0x09;
-  private static final byte INS_GENERATE_KEY_CMD = 0x10;
-  private static final byte INS_IMPORT_KEY_CMD = 0x11;
-  private static final byte INS_IMPORT_WRAPPED_KEY_CMD = 0x12;
-  private static final byte INS_EXPORT_KEY_CMD = 0x13;
-  private static final byte INS_ATTEST_KEY_CMD = 0x14;
-  private static final byte INS_UPGRADE_KEY_CMD = 0x15;
-  private static final byte INS_DELETE_KEY_CMD = 0x16;
-  private static final byte INS_DELETE_ALL_KEYS_CMD = 0x17;
-  private static final byte INS_ADD_RNG_ENTROPY_CMD = 0x18;
-  private static final byte INS_COMPUTE_SHARED_HMAC_CMD = 0x19;
-  private static final byte INS_DESTROY_ATT_IDS_CMD = 0x1A;
-  private static final byte INS_VERIFY_AUTHORIZATION_CMD = 0x1B;
-  private static final byte INS_GET_HMAC_SHARING_PARAM_CMD = 0x1C;
-  private static final byte INS_GET_KEY_CHARACTERISTICS_CMD = 0x1D;
-  private static final byte INS_GET_HW_INFO_CMD = 0x1E;
-  private static final byte INS_BEGIN_OPERATION_CMD = 0x1F;
-  private static final byte INS_UPDATE_OPERATION_CMD = 0x20;
-  private static final byte INS_FINISH_OPERATION_CMD = 0x21;
-  private static final byte INS_ABORT_OPERATION_CMD = 0x22;
-  private static final byte INS_SET_BOOT_PARAMS_CMD = 0x23;
-  private static final byte INS_DEVICE_LOCKED_CMD = 0x24;
-  private static final byte INS_EARLY_BOOT_ENDED_CMD = 0x25;
-  private static final byte INS_GET_CERT_CHAIN_CMD = 0x26;
+  private static final byte KM_BEGIN_STATE = 0x00;
+  private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
+  private static final byte INIT_STATE = KM_BEGIN_STATE + 2;
+  private static final byte IN_PROVISION_STATE = KM_BEGIN_STATE + 3;
+  private static final byte ACTIVE_STATE = KM_BEGIN_STATE + 4;
 
+  // Commands
+  private static final byte INS_BEGIN_KM_CMD = 0x00;
   // Instructions for Provision Commands.
-  private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = 0x27;
-  private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = 0x28;
-  private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = 0x29;
-  private static final byte INS_PROVISION_ATTEST_IDS_CMD = 0x2A;
-  private static final byte INS_PROVISION_SHARED_SECRET_CMD = 0x2B;
-  private static final byte INS_LOCK_PROVISIONING_CMD = 0x2C;
-  private static final byte INS_GET_PROVISION_STATUS_CMD = 0x2D;
-  private static final byte INS_END_KM_CMD = 0x2E;
+  private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = INS_BEGIN_KM_CMD + 1;
+  private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = INS_BEGIN_KM_CMD + 2;
+  private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = INS_BEGIN_KM_CMD + 3;
+  private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_BEGIN_KM_CMD + 4;
+  private static final byte INS_PROVISION_SHARED_SECRET_CMD = INS_BEGIN_KM_CMD + 5;
+  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD + 6;
+  private static final byte INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 7;
+  private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 8;
+  // Top 32 commands are reserved for provisioning.
+  private static final byte INS_END_KM_PROVISION_CMD = 0x20;
+
+  private static final byte INS_GENERATE_KEY_CMD = INS_END_KM_PROVISION_CMD + 1;
+  private static final byte INS_IMPORT_KEY_CMD = INS_END_KM_PROVISION_CMD + 2;
+  private static final byte INS_IMPORT_WRAPPED_KEY_CMD = INS_END_KM_PROVISION_CMD + 3;
+  private static final byte INS_EXPORT_KEY_CMD = INS_END_KM_PROVISION_CMD + 4;
+  private static final byte INS_ATTEST_KEY_CMD = INS_END_KM_PROVISION_CMD + 5;
+  private static final byte INS_UPGRADE_KEY_CMD = INS_END_KM_PROVISION_CMD + 6;
+  private static final byte INS_DELETE_KEY_CMD = INS_END_KM_PROVISION_CMD + 7;
+  private static final byte INS_DELETE_ALL_KEYS_CMD = INS_END_KM_PROVISION_CMD + 8;
+  private static final byte INS_ADD_RNG_ENTROPY_CMD = INS_END_KM_PROVISION_CMD + 9;
+  private static final byte INS_COMPUTE_SHARED_HMAC_CMD = INS_END_KM_PROVISION_CMD + 10;
+  private static final byte INS_DESTROY_ATT_IDS_CMD = INS_END_KM_PROVISION_CMD + 11;
+  private static final byte INS_VERIFY_AUTHORIZATION_CMD = INS_END_KM_PROVISION_CMD + 12;
+  private static final byte INS_GET_HMAC_SHARING_PARAM_CMD = INS_END_KM_PROVISION_CMD + 13;
+  private static final byte INS_GET_KEY_CHARACTERISTICS_CMD = INS_END_KM_PROVISION_CMD + 14;
+  private static final byte INS_GET_HW_INFO_CMD = INS_END_KM_PROVISION_CMD + 15;
+  private static final byte INS_BEGIN_OPERATION_CMD = INS_END_KM_PROVISION_CMD + 16;
+  private static final byte INS_UPDATE_OPERATION_CMD = INS_END_KM_PROVISION_CMD + 17;
+  private static final byte INS_FINISH_OPERATION_CMD = INS_END_KM_PROVISION_CMD + 18;
+  private static final byte INS_ABORT_OPERATION_CMD = INS_END_KM_PROVISION_CMD + 19;
+  private static final byte INS_DEVICE_LOCKED_CMD = INS_END_KM_PROVISION_CMD + 20;
+  private static final byte INS_EARLY_BOOT_ENDED_CMD = INS_END_KM_PROVISION_CMD + 21;
+  private static final byte INS_GET_CERT_CHAIN_CMD = INS_END_KM_PROVISION_CMD + 22;
+
+  private static final byte INS_END_KM_CMD = 0x7F;
 
   // Provision reporting status
   private static final byte NOT_PROVISIONED = 0x00;
@@ -239,8 +242,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.onSelect();
     if (keymasterState == KMKeymasterApplet.INIT_STATE) {
       keymasterState = KMKeymasterApplet.IN_PROVISION_STATE;
-    } else if (keymasterState == KMKeymasterApplet.INACTIVE_STATE) {
-      keymasterState = KMKeymasterApplet.ACTIVE_STATE;
     }
     return true;
   }
@@ -249,18 +250,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   @Override
   public void deselect() {
     repository.onDeselect();
-    if (keymasterState == KMKeymasterApplet.ACTIVE_STATE) {
-      keymasterState = KMKeymasterApplet.INACTIVE_STATE;
-    }
   }
 
   /** Uninstalls the applet after cleaning the repository. */
   @Override
   public void uninstall() {
     repository.onUninstall();
-    if (keymasterState != KMKeymasterApplet.UNINSTALLED_STATE) {
-      keymasterState = KMKeymasterApplet.UNINSTALLED_STATE;
-    }
   }
 
   /**
@@ -273,9 +268,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.onProcess();
     // Verify whether applet is in correct state.
     if ((keymasterState == KMKeymasterApplet.INIT_STATE)
-        || (keymasterState == KMKeymasterApplet.INACTIVE_STATE)
-        || (keymasterState == KMKeymasterApplet.ILLEGAL_STATE)
-        || (keymasterState == KMKeymasterApplet.UNINSTALLED_STATE)) {
+        || (keymasterState == KMKeymasterApplet.ILLEGAL_STATE)) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     // If this is select applet apdu which is selecting this applet then return
@@ -312,42 +305,41 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             processProvisionAttestationKey(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_KEY;
             sendError(apdu, KMError.OK);
-            break;
+            return;
 
           case INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD:
             processProvisionAttestationCertChainCmd(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_CHAIN;
             sendError(apdu, KMError.OK);
-            break;
+            return;
 
           case INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD:
             processProvisionAttestationCertParams(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_PARAMS;
             sendError(apdu, KMError.OK);
-            break;
+            return;
 
           case INS_PROVISION_ATTEST_IDS_CMD:
             processProvisionAttestIdsCmd(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTEST_IDS;
             sendError(apdu, KMError.OK);
-            break;
+            return;
 
           case INS_PROVISION_SHARED_SECRET_CMD:
             processProvisionSharedSecretCmd(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SHARED_SECRET;
             sendError(apdu, KMError.OK);
-            break;
+            return;
 
           case INS_LOCK_PROVISIONING_CMD:
             if (isProvisioningComplete()) {
               provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED;
               keymasterState = KMKeymasterApplet.ACTIVE_STATE;
               sendError(apdu, KMError.OK);
-              return;
             } else {
               ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
             }
-            break;
+            return;
         }
       }
 
@@ -359,15 +351,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                     && (!seProvider.isDeviceRebooted())) {
               ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
             }
-            seProvider.setDeviceBooted(false);
+            seProvider.clearDeviceBooted(false);
             processSetBootParamsCmd(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_BOOT_PARAM;
             sendError(apdu, KMError.OK);
-            break;
+            return;
 
           case INS_GET_PROVISION_STATUS_CMD:
             processGetProvisionStatusCmd(apdu);
-            break;
+            return;
         }
       }
 
@@ -444,6 +436,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           default:
             ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
         }
+      } else {
+        ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
       }
     } catch (KMException exception) {
       freeOperations();

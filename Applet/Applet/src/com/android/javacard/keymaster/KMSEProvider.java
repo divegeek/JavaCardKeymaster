@@ -524,5 +524,5 @@ public interface KMSEProvider {
    * This function is supposed to be used to reset the device booted stated after set boot param is handled
    * @param resetBootFlag is false if event has been handled
    */
-  void setDeviceBooted(boolean resetBootFlag);
+  void clearDeviceBooted(boolean resetBootFlag);
 }
