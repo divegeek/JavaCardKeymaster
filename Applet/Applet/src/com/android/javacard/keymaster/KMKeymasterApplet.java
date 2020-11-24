@@ -351,9 +351,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                     && (!seProvider.isDeviceRebooted())) {
               ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
             }
-            seProvider.clearDeviceBooted(false);
             processSetBootParamsCmd(apdu);
             provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_BOOT_PARAM;
+            seProvider.clearDeviceBooted(false);
             sendError(apdu, KMError.OK);
             return;
 
@@ -639,29 +639,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short srcOffset = apdu.getOffsetCdata();
     bufferLength = apdu.getIncomingLength();
     short bytesRead = 0;
-    // Receive data
-    if (bufferLength > MAX_IO_LENGTH) {
-      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    }
-
-    short context = KMByteBlob.instance(KMDecoder.CONTEXT_LEN);
-    Util.arrayFillNonAtomic(
-        KMByteBlob.cast(context).getBuffer(),
-        KMByteBlob.cast(context).getStartOff(),
-        KMByteBlob.cast(context).length(),
-        (byte) 0);
+    // tmpVariables[1] holds the total length + Header length.
+    tmpVariables[1] = decoder.readCertificateChainLengthAndHeaderLen(srcBuffer,
+            srcOffset, recvLen);
     while (recvLen > 0 && ((short) bytesRead <= bufferLength)) {
-      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, bufferStartOffset, recvLen);
-      decoder.incrementalReceiveAndValidateCertificateChain(
-          KMByteBlob.cast(context).getBuffer(),
-          KMByteBlob.cast(context).getStartOff(),
-          KMByteBlob.cast(context).length(),
-          buffer,
-          bufferStartOffset,
-          recvLen);
-      seProvider.persistPartialCertificateChain(buffer, bufferStartOffset, recvLen, bufferLength);
+      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, bufferStartOffset,
+              recvLen);
+      seProvider.persistPartialCertificateChain(buffer, bufferStartOffset,
+              recvLen, bufferLength);
       bytesRead += recvLen;
       recvLen = apdu.receiveBytes(srcOffset);
+    }
+    if (tmpVariables[1] != bytesRead) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
   }
 
