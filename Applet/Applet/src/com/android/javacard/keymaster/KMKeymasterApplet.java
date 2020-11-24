@@ -639,16 +639,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short srcOffset = apdu.getOffsetCdata();
     bufferLength = apdu.getIncomingLength();
     short bytesRead = 0;
+    Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, bufferStartOffset,
+            recvLen);
     // tmpVariables[1] holds the total length + Header length.
-    tmpVariables[1] = decoder.readCertificateChainLengthAndHeaderLen(srcBuffer,
-            srcOffset, recvLen);
+    tmpVariables[1] = decoder.readCertificateChainLengthAndHeaderLen(buffer,
+            bufferStartOffset, recvLen);
     while (recvLen > 0 && ((short) bytesRead <= bufferLength)) {
-      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, bufferStartOffset,
-              recvLen);
       seProvider.persistPartialCertificateChain(buffer, bufferStartOffset,
               recvLen, bufferLength);
       bytesRead += recvLen;
       recvLen = apdu.receiveBytes(srcOffset);
+      if (recvLen > 0)
+        Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, bufferStartOffset,
+              recvLen);
     }
     if (tmpVariables[1] != bytesRead) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);

@@ -15,9 +15,6 @@
  */
 package com.android.javacard.keymaster;
 
-import javacard.framework.AID;
-import javacard.framework.ISO7816;
-import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -107,8 +104,6 @@ public class AndroidSEProvider implements KMSEProvider {
   public static final short TMP_ARRAY_SIZE = 256;
   public static final short NUM_OF_CERTS = 1;
   public static final short CERT_CHAIN_MAX_SIZE = 2050;//First 2 bytes for length.
-  private static final byte[] aidArr = new byte[] {
-    (byte)0xA0, 0x00, 0x00, 0x00, 0x63};
 
   final byte[] CIPHER_ALGS = {
           Cipher.ALG_AES_BLOCK_128_CBC_NOPAD,
@@ -1131,52 +1126,6 @@ public class AndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public boolean isBackupRestoreSupported() {
-    return true;
-  }
-
-  @Override
-  public void backup(byte[] buf, short start, short len) {
-    short certChainLen = Util.getShort(certificateChain, (short) 0);
-    certChainLen += 2; //including the length of certifcate.
-    AID aid = JCSystem.lookupAID(aidArr, (short) 0, (byte) aidArr.length);
-    if (null == aid)
-      ISOException.throwIt(ISO7816.SW_FUNC_NOT_SUPPORTED);
-    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem
-        .getAppletShareableInterfaceObject(aid, (byte) 0);
-    backupStore.backupProviderData(certificateChain, (short)0, certChainLen);
-    backupStore.backup(buf, (short) start, len);
-  }
-
-  @Override
-  public short restore(byte[] buf, short start) {
-    AID aid = JCSystem.lookupAID(aidArr, (short) 0, (byte) aidArr.length);
-    if (null == aid)
-      ISOException.throwIt(ISO7816.SW_FUNC_NOT_SUPPORTED);
-    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem
-        .getAppletShareableInterfaceObject(aid, (byte) 0);
-    short len = backupStore.restore(buf, (short) start);
-    short heapOff = KMRepository.instance().alloc(CERT_CHAIN_MAX_SIZE);
-    short certChainLen = backupStore.restoreProviderData(KMRepository
-        .instance().getHeap(), heapOff);
-    JCSystem.beginTransaction();
-    Util.arrayCopy(KMRepository.instance().getHeap(), heapOff,
-        certificateChain, (short) 0, certChainLen);
-    JCSystem.commitTransaction();
-
-    return len;
-  }
-
-  @Override
-  public boolean isBackupAvailable() {
-    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
-    if(null == aid)
-      return false;
-    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
-    return backupStore.isBackupAvailable();
-  }
-
-  @Override
   public short cmacKdf(byte[] keyMaterial, short keyMaterialStart,
       short keyMaterialLen, byte[] label, short labelStart, short labelLen,
       byte[] context, short contextStart, short contextLength, byte[] keyBuf,
@@ -1187,6 +1136,7 @@ public class AndroidSEProvider implements KMSEProvider {
   }
 
   //This function supports multi-part request data.
+  @Override
   public void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen) {
     //  _____________________________________________________
     // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 | 3 Bytes | Cert2|...
@@ -1204,22 +1154,6 @@ public class AndroidSEProvider implements KMSEProvider {
     Util.setShort(certificateChain, (short) 0, (short) (len + persistedLen));
     Util.arrayCopyNonAtomic(buf, offset, certificateChain,
             (short) (persistedLen+2), len);
-    JCSystem.commitTransaction();
-  }
-
-  @Override
-  public void persistCertificateChain(byte[] buf, short offset, short len) {
-    //  _____________________________________________________
-    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 | 3 Bytes | Cert2|...
-    // |_________|________|_________|_______|_________|______|
-    // First two bytes holds the length of the total buffer.
-    // CBOR format:
-    // Next single byte holds the array header.
-    // Next 3 bytes holds the Byte array header with the cert1 length.
-    // Next 3 bytes holds the Byte array header with the cert2 length.
-    JCSystem.beginTransaction();
-    Util.setShort(certificateChain, (short)0, len);
-    Util.arrayCopyNonAtomic(buf, offset, certificateChain, (short)2, len);
     JCSystem.commitTransaction();
   }
 
@@ -1254,6 +1188,4 @@ public class AndroidSEProvider implements KMSEProvider {
   public void clearDeviceBooted(boolean resetBootFlag) {
     // To be filled
   }
-
-
 }

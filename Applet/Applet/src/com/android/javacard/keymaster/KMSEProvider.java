@@ -429,52 +429,8 @@ public interface KMSEProvider {
   KMAttestationCert getAttestationCert(boolean rsaCert);
 
   /**
-   * This operation indicates whether SE Provider supports backup and restore functionality required
-   * for upgrading the applet.
-   *
-   * @return true if backup and restore is supported.
-   */
-  boolean isBackupRestoreSupported();
-
-  /**
-   * This operation passes the data that needs to be backup to SE Provider. The exact mechanism to
-   * backup the data is SE provider implementation specific.
-   *
-   * @param buf is the data buffer.
-   * @param start is the start of the data.
-   * @param len is the length of the data.
-   */
-  void backup(byte[] buf, short start, short len);
-
-  /**
-   * This operation retrieves the backed up data from SE Provider.
-   *
-   * @param buf is the data buffer.
-   * @param start is the start of the data.
-   * @return the length of the data buffer in bytes.
-   */
-  short restore(byte[] buf, short start);
-
-  /**
-   * This operation returns true if backup is available, otherwise false
-   * if backup is not available.
-   *
-   * @return true if backup is available, false if no backup.
-   */
-  boolean isBackupAvailable();
-
-  /**
-   * This operation persists the certificate chain in the persistent memory.
-   *
-   * @param buf buffer containing certificate chain.
-   * @param offset is the start of the buffer.
-   * @param len is the length of the buffer.
-   */
-  void persistCertificateChain(byte[] buf, short offset, short len);
-
-  /**
    * This operation persists the certificate chain in the persistent memory
-   * in multiple requets.
+   * in multiple requests.
    *
    * @param buf buffer containing certificate chain.
    * @param offset is the start of the buffer.
