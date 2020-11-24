@@ -70,7 +70,6 @@ public class KMJcardSimulator implements KMSEProvider {
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   private static final short CERT_CHAIN_MAX_SIZE = 2050;//First 2 bytes for length.
-  public static final short NUM_OF_CERTS = 1;
 
 
   public static boolean jcardSim = false;
@@ -1234,11 +1233,6 @@ public class KMJcardSimulator implements KMSEProvider {
   @Override
   public short getCertificateChainLength() {
    return Util.getShort(certificateChain, (short)0);
-  }
-
-  @Override
-  public short getNumberOfCerts() {
-    return NUM_OF_CERTS;
   }
 
   @Override

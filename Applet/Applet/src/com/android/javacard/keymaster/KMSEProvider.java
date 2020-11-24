@@ -456,13 +456,6 @@ public interface KMSEProvider {
   short getCertificateChainLength();
 
   /**
-   * This function returns the number certificates in the cert chain.
-   *
-   * @return the number of certificates in cert chain.
-   */
-  short getNumberOfCerts();
-
-  /**
    * This function tells if boot signal event is supported or not.
    *
    * @return true if supported, false otherwise.

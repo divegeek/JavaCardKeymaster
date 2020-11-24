@@ -102,7 +102,6 @@ public class AndroidSEProvider implements KMSEProvider {
   public static final byte KEYSIZE_128_OFFSET = 0x00;
   public static final byte KEYSIZE_256_OFFSET = 0x01;
   public static final short TMP_ARRAY_SIZE = 256;
-  public static final short NUM_OF_CERTS = 1;
   public static final short CERT_CHAIN_MAX_SIZE = 2050;//First 2 bytes for length.
 
   final byte[] CIPHER_ALGS = {
@@ -1167,11 +1166,6 @@ public class AndroidSEProvider implements KMSEProvider {
   @Override
   public short getCertificateChainLength() {
    return Util.getShort(certificateChain, (short)0);
-  }
-
-  @Override
-  public short getNumberOfCerts() {
-    return NUM_OF_CERTS;
   }
 
   @Override
