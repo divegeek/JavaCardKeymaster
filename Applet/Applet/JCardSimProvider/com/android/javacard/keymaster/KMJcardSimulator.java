@@ -162,7 +162,6 @@ public class KMJcardSimulator implements KMSEProvider {
 
    
   public DESKey createTDESKey() {
-    // TODO check whether 168 bit or 192 bit
     byte[] rndNum = new byte[24];
     newRandomNumber(rndNum, (short) 0, (short)rndNum.length);
     return createTDESKey(rndNum, (short)0, (short)rndNum.length);
@@ -683,13 +682,9 @@ public class KMJcardSimulator implements KMSEProvider {
   public KMCipher createRsaDecipher(short padding, short digest, byte[] secret, short secretStart,
                                     short secretLength, byte[] modBuffer, short modOff, short modLength) {
     byte cipherAlg = mapCipherAlg(KMType.RSA, (byte)padding, (byte)0);
-    // TODO implement OAEP algorithm using SunJCE.
     if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
       return createRsaOAEP256Cipher(KMType.DECRYPT,(byte)digest,secret,secretStart,secretLength,modBuffer,modOff,modLength);
     }
-    /*else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
-    else cipherAlg = Cipher.ALG_RSA_NOPAD;
-     */
     Cipher rsaCipher = Cipher.getInstance(cipherAlg,false);
     RSAPrivateKey key = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_2048, false);
     key.setExponent(secret,secretStart,secretLength);
@@ -870,7 +865,6 @@ public class KMJcardSimulator implements KMSEProvider {
         key = KeyBuilder.buildKey(KeyBuilder.TYPE_DES,len,false);
         ((DESKey) key).setKey(secret,secretStart);
         symmCipher = Cipher.getInstance((byte)cipherAlg, false);
-        //TODO Consume only 8 bytes of iv. the random number for iv is of 16 bytes.
         //While sending back the iv send only 8 bytes.
         symmCipher.init(key, mapPurpose(purpose), ivBuffer, ivStart, (short)8);
         break;
@@ -1090,12 +1084,10 @@ public class KMJcardSimulator implements KMSEProvider {
       trng.nextBytes(pool, (short) 0, (short) pool.length);
     } catch (CryptoException exp) {
       if (exp.getReason() == CryptoException.NO_SUCH_ALGORITHM) {
-        // TODO change this when possible
         // simulator does not support TRNG algorithm. So, PRNG algorithm (deprecated) is used.
         trng = RandomData.getInstance(RandomData.ALG_PSEUDO_RANDOM);
         trng.nextBytes(pool, (short) 0, (short) pool.length);
       } else {
-        // TODO change this to proper error code
         ISOException.throwIt(ISO7816.SW_UNKNOWN);
       }
     }

@@ -133,7 +133,6 @@ public class KMIntegerTag extends KMTag {
     return false;
   }
 
-  // TODO this should be combined with validateKey to actually isValidTag {tagType, tagKey} pair.
   private static boolean validateTagType(short tagType) {
     return (tagType == DATE_TAG) || (tagType == UINT_TAG) || (tagType == ULONG_TAG);
   }

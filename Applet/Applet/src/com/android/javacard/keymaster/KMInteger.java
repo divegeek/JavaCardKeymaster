@@ -18,7 +18,6 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -159,10 +158,8 @@ public class KMInteger extends KMType {
     short num2Buf = repository.alloc((short)8);
     Util.arrayFillNonAtomic(repository.getHeap(),num1Buf,(short)8,(byte)0);
     Util.arrayFillNonAtomic(repository.getHeap(),num2Buf,(short)8,(byte)0);
-    short numPtr = KMInteger.cast(num1).getStartOff();
     short len = KMInteger.cast(num1).length();
     KMInteger.cast(num1).getValue(repository.getHeap(),(short)(num1Buf+(short)(8-len)),len);
-    numPtr = KMInteger.cast(num2).getStartOff();
     len = KMInteger.cast(num2).length();
     KMInteger.cast(num2).getValue(repository.getHeap(),(short)(num2Buf+(short)(8-len)),len);
     return Util.arrayCompare(

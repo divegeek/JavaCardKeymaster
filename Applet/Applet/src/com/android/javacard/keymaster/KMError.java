@@ -83,4 +83,13 @@ public class KMError {
   public static short UNIMPLEMENTED = 100;
   public static short VERSION_MISMATCH = 101;
   public static short UNKNOWN_ERROR = 1000;
+
+  //Extended errors
+  public static short SW_CONDITIONS_NOT_SATISFIED = 1001;
+  public static short UNSUPPORTED_CLA = 1002;
+  public static short INVALID_P1P2 = 1002;
+  public static short UNSUPPORTED_INSTRUCTION = 1002;
+  public static short CMD_NOT_ALLOWED = 1002;
+  public static short SW_WRONG_LENGTH = 1002;
+  public static short INVALID_DATA = 1002;
 }

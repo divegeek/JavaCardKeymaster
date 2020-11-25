@@ -368,8 +368,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
           KMByteBlob.cast(notAfter).getStartOff(),
           KMByteBlob.cast(notAfter).length());
     } else {
-      // TODO move this to keymaster applet
-      // pushBytes(repo.getCertDataBuffer(), repo.getCertExpiryTime(), repo.getCertExpiryTimeLen());
+      KMException.throwIt(KMError.INVALID_DATA);
     }
     pushTimeHeader(KMByteBlob.cast(notAfter).length());
     pushBytes(
@@ -567,7 +566,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
         break;
       case KMType.UINT_ARRAY_TAG:
       case KMType.ULONG_ARRAY_TAG:
-        // TODO According to keymaster hal only one user secure id is used but this conflicts with
+        // According to keymaster hal only one user secure id is used but this conflicts with
         //  tag type which is ULONG-REP. Currently this is encoded as SET OF INTEGERS
         val = KMIntegerArrayTag.cast(tag).getValues();
         pushIntegerArrayTag(tagId, val);
@@ -602,29 +601,16 @@ public class KMAttestationCertImpl implements KMAttestationCert {
         KMByteBlob.cast(verifiedHash).getBuffer(),
         KMByteBlob.cast(verifiedHash).getStartOff(),
         KMByteBlob.cast(verifiedHash).length());
-    /*
-    // verified boot state
-    // TODO change this once verifiedBootState is supported in repo
-    if (repo.selfSignedBootFlag) val = KMType.SELF_SIGNED_BOOT;
-    else if (repo.verifiedBootFlag) val = KMType.VERIFIED_BOOT;
-    else val = KMType.UNVERIFIED_BOOT;
 
-    pushEnumerated(val);
-
-     */
     pushEnumerated(verifiedState);
-    // device locked
-    /*val = 0x00;
-    if (repo.deviceLockedFlag) val = (byte) 0xFF;
-    pushBoolean(val);
-     */
+
     pushBoolean(deviceLocked);
     // verified boot Key
     pushOctetString(
         KMByteBlob.cast(verifiedBootKey).getBuffer(),
         KMByteBlob.cast(verifiedBootKey).getStartOff(),
         KMByteBlob.cast(verifiedBootKey).length());
-    // pushOctetString(repo.verifiedBootKey, (short) 0, (short) repo.verifiedBootKey.length);
+
     // Finally sequence header
     pushSequenceHeader((short) (last - stackPtr));
     // ... and tag Id
@@ -645,27 +631,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     pushLength(len);
     pushByte((byte) 0x01);
   }
-  /*
-    // All Attestation Id tags are byte tags/octet strings
-    private static boolean pushAttIds(short tagId) {
-      if(!repo.isAttIdSupported()) return true;
-      byte index = 0;
-      while (index < repo.ATT_ID_TABLE_SIZE) {
-        if (repo.getAttIdLen(index) != 0) {
-      	if(tagId == repo.getAttIdTag(index)) {
-            pushBytesTag(
-                repo.getAttIdTag(index),
-                repo.getAttIdBuffer(index),
-                repo.getAttIdOffset(index),
-                repo.getAttIdLen(index));
-            return true;
-      	}
-        }
-        index++;
-      }
-      return false;
-    }
-  */
+
   // Only SET of INTEGERS supported are padding, digest, purpose and blockmode
   // All of these are enum array tags i.e. byte long values
   private static void pushEnumArrayTag(short tagId, byte[] buf, short start, short len) {
@@ -797,13 +763,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     short last = stackPtr;
     // if (repo.getAuthKeyId() == 0) return;
     if (authKey == 0) return;
-    /*
-     pushKeyIdentifier(
-         repo.getCertDataBuffer(),
-         repo.getAuthKeyId(),
-         repo.getAuthKeyIdLen()); // key identifier is [0]'th tagged in a sequence
 
-    */
     pushKeyIdentifier(
         KMByteBlob.cast(authKey).getBuffer(),
         KMByteBlob.cast(authKey).getStartOff(),
@@ -984,15 +944,4 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     }
     return uniqueId(timeOffset);
   }
-
-  /* private static void print(byte[] buf, short start, short length){
-    StringBuilder sb = new StringBuilder();
-    for(int i = start; i < (start+length); i++){
-      sb.append(String.format("%02X", buf[i])) ;
-      //if((i-start)%16 == 0 && (i-start) != 0) sb.append(String.format("\n"));
-    }
-    System.out.println(sb.toString());
-  }
-
-  */
 }

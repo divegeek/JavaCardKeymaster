@@ -192,8 +192,6 @@ public class KMDecoder {
 
   private short decodeEnumArrayTag(short exp) {
     readTagKey(KMEnumArrayTag.cast(exp).getTagType());
-    // The value must be byte blob
-    // TODO check this out.
     return KMEnumArrayTag.instance(this.tagKey, decode(KMEnumArrayTag.cast(exp).getValues()));
   }
 
@@ -250,7 +248,6 @@ public class KMDecoder {
   private short decodeEnumTag(short exp) {
     readTagKey(KMEnumTag.cast(exp).getTagType());
     // Enum Tag value will always be integer with max 1 byte length.
-    // TODO Check this out.
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
@@ -273,7 +270,6 @@ public class KMDecoder {
   private short decodeBoolTag(short exp) {
     readTagKey(KMBoolTag.cast(exp).getTagType());
     // BOOL Tag is a leaf node and it must always have tiny encoded uint value = 1.
-    // TODO check this out.
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }

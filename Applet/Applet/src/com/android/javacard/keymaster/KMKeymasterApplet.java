@@ -235,6 +235,28 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.onUninstall();
   }
 
+  private short mapISOErrorToKMError(short reason) {
+    switch (reason) {
+      case ISO7816.SW_CLA_NOT_SUPPORTED:
+        return KMError.UNSUPPORTED_CLA;
+      case ISO7816.SW_CONDITIONS_NOT_SATISFIED:
+        return KMError.SW_CONDITIONS_NOT_SATISFIED;
+      case ISO7816.SW_COMMAND_NOT_ALLOWED:
+        return KMError.CMD_NOT_ALLOWED;
+      case ISO7816.SW_DATA_INVALID:
+        return KMError.INVALID_DATA;
+      case ISO7816.SW_INCORRECT_P1P2:
+        return KMError.INVALID_P1P2;
+      case ISO7816.SW_INS_NOT_SUPPORTED:
+        return KMError.UNSUPPORTED_INSTRUCTION;
+      case ISO7816.SW_WRONG_LENGTH:
+        return KMError.SW_WRONG_LENGTH;
+      case ISO7816.SW_UNKNOWN:
+      default:
+        return KMError.UNKNOWN_ERROR;
+    }
+  }
+
   /**
    * Processes an incoming APDU and handles it using command objects.
    *
@@ -421,6 +443,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       sendError(apdu, KMException.reason);
       exception.clear();
     } catch (ISOException exp) {
+      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
       freeOperations();
     } finally {
       resetData();
@@ -542,6 +565,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
+  //TODO VTS 4.0 addLargeEntropy fails, as the input buffer is 2k
+  //TODO Need to fix this issue by introducing stackIndex which
+  //increase bottom to top on internal memory.
   private void processAddRngEntropyCmd(APDU apdu) {
     // Receive the incoming request fully from the master.
     receiveIncoming(apdu);
@@ -557,6 +583,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     seProvider.addRngEntropy(blob.getBuffer(), blob.getStartOff(), blob.length());
+    sendError(apdu, KMError.OK);
   }
 
   private void processGetCertChainCmd(APDU apdu) {
@@ -916,9 +943,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             tmpVariables[6]);
         tmpVariables[3] += tmpVariables[6]; // increment the concat index
       } else if (tmpVariables[7] == 0) {
-        // TODO according to hal specs seed should always be empty. Confirm this.
-        // The seed we are passing is of zero length so if seed length is zero
-        // the seed generated here is found.
         tmpVariables[7] = 1;
       }
       // if nonce is present get nonce - 32 bytes
@@ -1257,8 +1281,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // parse key blob
     parseEncryptedKeyBlob(scratchPad);
-    // TODO This below code is added to pass one of the VTS 4.1 tests.
-    // TODO Need to confirm with Shawn and modify this accordingly.
+    // This below code is added to pass one of the VTS 4.1 tests.
     tmpVariables[0] =
         KMKeyParameters.findTag(
             KMType.BOOL_TAG, KMType.DEVICE_UNIQUE_ATTESTATION, data[KEY_PARAMETERS]);
@@ -2009,7 +2032,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       if (op.getAlgorithm() == KMType.RSA) {
         KMException.throwIt(KMError.OPERATION_CANCELLED);
       }
-      // TODO refactor and optimize this
       tmpVariables[0] = KMByteBlob.cast(data[INPUT_DATA]).length();
       short additionalExpOutLen = 0;
       if (op.getAlgorithm() == KMType.AES) {
@@ -2364,8 +2386,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           }
           op.setMacLength(macLen);
         }
-        // TODO Ignore MAC_LENGTH tag for other modes of operation.
-        // else if(macLen != KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
         break;
       case KMType.DES:
         if (param == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
@@ -2566,8 +2586,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                     KMByteBlob.cast(data[PUB_KEY]).length()));
           }
         } catch (CryptoException exp) {
-          // TODO remove this
-          // Javacard does not support NO digest based signing.
           KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
         }
         break;
@@ -2633,8 +2651,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                   (short) 0,
                   (short) 0));
         } catch (CryptoException exp) {
-          // TODO remove the following
-          // Javacard does not support NO digest based signing.
           KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
         }
         break;
@@ -2844,7 +2860,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
       // before generating key, check whether max count reached
       if (repository.getKeyBlobCount() > KMRepository.MAX_BLOB_STORAGE) {
-        // TODO which error to return?
         KMException.throwIt(KMError.UNKNOWN_ERROR);
       }
       repository.persistAuthTag(data[AUTH_TAG]);
@@ -3165,12 +3180,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMKeyParameters.instance(tmpVariables[1]);
   }
 
-  // TODO Add Signature verification.
-  // This command is executed after every reboot of Android OS.
-  // TODO After every reboot the first command to be executed should be
-  // processSetBootParams, but there is no signal/notification triggered
-  // inside the applet when the android device reboots. So this check is not
-  // implemented.
+  // This command is executed to set the boot parameters.
   private void processSetBootParamsCmd(APDU apdu) {
     receiveIncoming(apdu);
     byte[] scratchPad = apdu.getBuffer();
@@ -3355,7 +3365,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
       // before generating key, check whether max count reached
       if (repository.getKeyBlobCount() > KMRepository.MAX_BLOB_STORAGE) {
-        // TODO which error to return?
         KMException.throwIt(KMError.UNKNOWN_ERROR);
       }
       repository.persistAuthTag(data[AUTH_TAG]);
@@ -3667,9 +3676,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // make key characteristics - returns key characteristics in data[KEY_CHARACTERISTICS]
     makeKeyCharacteristics(scratchPad);
     // make root of trust blob
-    // data[ROT] =
-    //    KMByteBlob.instance(
-    //       repository.verifiedBootKey, (short) 0, (short) repository.verifiedBootKey.length);
     data[ROT] = repository.getVerifiedBootKey();
 
     // make hidden key params list
@@ -3685,7 +3691,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_AUTH_TAG, data[AUTH_TAG]);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_NONCE, data[NONCE]);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_KEYCHAR, data[KEY_CHARACTERISTICS]);
-    tmpVariables[0] = repository.alloc((short) 1024); // TODO use buffer
+    tmpVariables[0] = repository.alloc((short) 1024);
     tmpVariables[1] = encoder.encode(data[KEY_BLOB], repository.getHeap(), tmpVariables[0]);
     data[KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), tmpVariables[0], tmpVariables[1]);
   }
