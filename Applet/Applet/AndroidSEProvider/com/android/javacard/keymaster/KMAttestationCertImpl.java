@@ -166,21 +166,36 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     return this;
   }
 
-  @Override
-  public KMAttestationCert uniqueId(short obj) {
+  private KMAttestationCert uniqueId(short obj) {
     uniqueId = obj;
     return this;
   }
 
   @Override
-  public KMAttestationCert notBefore(short obj) {
-    notBefore = obj;
+  public KMAttestationCert notBefore(short obj, byte[] scratchpad) {
+    // convert milliseconds to UTC date
+    notBefore = KMUtils.convertToDate(obj, scratchpad, true);
     return this;
   }
 
   @Override
-  public KMAttestationCert notAfter(short obj) {
-    notAfter = obj;
+  public KMAttestationCert notAfter(short usageExpiryTimeObj,
+          short certExpirtyTimeObj, byte[] scratchPad, short tmpVar) {
+    if (usageExpiryTimeObj != KMType.INVALID_VALUE) {
+      // compare if the expiry time is greater then 2051 then use generalized
+      // time format else use utc time format.
+      usageExpiryTimeObj = KMIntegerTag.cast(usageExpiryTimeObj).getValue();
+      tmpVar = KMInteger.uint_64(KMUtils.firstJan2051, (short) 0);
+      if (KMInteger.compare(usageExpiryTimeObj, tmpVar) >= 0)
+        usageExpiryTimeObj = KMUtils.convertToDate(usageExpiryTimeObj, scratchPad,
+                false);
+      else
+        usageExpiryTimeObj = KMUtils
+                .convertToDate(usageExpiryTimeObj, scratchPad, true);
+      notAfter = usageExpiryTimeObj;
+    } else {
+      notAfter = certExpirtyTimeObj;
+    }
     return this;
   }
 
@@ -933,6 +948,41 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       pushLength((short)(last - stackPtr));
       length -= (short)(ECDSA_MAX_SIG_LEN - sigLen);
     }
+  }
+
+  @Override
+  public KMAttestationCert makeUniqueId(byte[] scratchPad, short scratchPadOff,
+          byte[] creationTime, short timeOffset, short creationTimeLen,
+          byte[] attestAppId, short appIdOff, short attestAppIdLen,
+          byte resetSinceIdRotation, byte[] key, short keyOff, short keyLen) {
+    // Concatenate T||C||R
+    // temporal count T
+    short temp = KMUtils.countTemporalCount(creationTime, timeOffset,
+            creationTimeLen, scratchPad, scratchPadOff);
+    Util.setShort(scratchPad, (short) scratchPadOff, temp);
+    temp = scratchPadOff;
+    scratchPadOff += 2;
+
+    // Application Id C
+    Util.arrayCopyNonAtomic(attestAppId, appIdOff, scratchPad, scratchPadOff,
+            attestAppIdLen);
+    scratchPadOff += attestAppIdLen;
+
+    // Reset After Rotation R
+    scratchPad[scratchPadOff] = resetSinceIdRotation;
+    scratchPadOff++;
+
+    timeOffset = KMByteBlob.instance((short) 32);
+    appIdOff = KMSEProviderImpl.instance().hmacSign(key, keyOff, keyLen,
+            scratchPad, /* data */
+            temp, /* data start */
+            scratchPadOff, /* data length */
+            KMByteBlob.cast(timeOffset).getBuffer(), /* signature buffer */
+            KMByteBlob.cast(timeOffset).getStartOff()); /* signature start */
+    if (appIdOff != 32) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    return uniqueId(timeOffset);
   }
 
   /* private static void print(byte[] buf, short start, short length){
