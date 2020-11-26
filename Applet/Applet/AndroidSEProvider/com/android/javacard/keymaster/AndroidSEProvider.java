@@ -15,6 +15,7 @@
  */
 package com.android.javacard.keymaster;
 
+import org.globalplatform.upgrade.Element;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -159,12 +160,10 @@ public class AndroidSEProvider implements KMSEProvider {
   private static AndroidSEProvider androidSEProvider = null;
 
   public static AndroidSEProvider getInstance() {
-    if (androidSEProvider == null)
-      androidSEProvider = new AndroidSEProvider();
     return androidSEProvider;
   }
 
-  private AndroidSEProvider() {
+  public AndroidSEProvider(boolean isUpgrading) {
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
@@ -200,7 +199,9 @@ public class AndroidSEProvider implements KMSEProvider {
     // Random number generator initialisation.
     rng = RandomData.getInstance(RandomData.ALG_KEYGENERATION);
     //Allocate buffer for certificate chain.
-    certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
+    if(!isUpgrading)
+      certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
+    androidSEProvider = this;
   }
 
   public void clean() {
@@ -1182,4 +1183,26 @@ public class AndroidSEProvider implements KMSEProvider {
   public void clearDeviceBooted(boolean resetBootFlag) {
     // To be filled
   }
+
+  @Override
+  public void onSave(Element element) {
+    element.write(certificateChain);
+  }
+
+  @Override
+  public void onRestore(Element element) {
+    certificateChain = (byte[]) element.readObject();
+  }
+
+  @Override
+  public short getBackupPrimitiveByteCount() {
+    return (short) 0;
+  }
+
+  @Override
+  public short getBackupObjectCount() {
+    return (short) 1;
+  }
+
+
 }

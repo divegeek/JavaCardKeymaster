@@ -16,6 +16,8 @@
 
 package com.android.javacard.keymaster;
 
+import org.globalplatform.upgrade.Element;
+
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
@@ -25,7 +27,7 @@ import javacard.framework.Util;
  * KMRepository class manages persistent and volatile memory usage by the applet. Note the repository
  * is only used by applet and it is not intended to be used by seProvider.
  */
-public class KMRepository {
+public class KMRepository implements KMUpgradable {
   // Data table configuration
   public static final short DATA_INDEX_SIZE = 31;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
@@ -99,8 +101,8 @@ public class KMRepository {
     return repository;
   }
 
-  public KMRepository() {
-    newDataTable();
+  public KMRepository(boolean isUpgrading) {
+    newDataTable(isUpgrading);
     heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
     heapIndex = 0;
     operationStateTable = new Object[MAX_OPS];
@@ -275,10 +277,12 @@ public class KMRepository {
   }
 
 
-  private void newDataTable(){
-    if(dataTable == null) {
-      dataTable = new byte[DATA_MEM_SIZE];
-      dataIndex = (short)(DATA_INDEX_SIZE*DATA_INDEX_ENTRY_SIZE);
+  private void newDataTable(boolean isUpgrading){
+    if (!isUpgrading) {
+      if (dataTable == null) {
+        dataTable = new byte[DATA_MEM_SIZE];
+        dataIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
+      }
     }
   }
 
@@ -648,5 +652,29 @@ public class KMRepository {
       index++;
     }
     return count;
+  }
+
+  @Override
+  public void onSave(Element ele) {
+    ele.write(dataIndex);
+    ele.write(dataTable);
+  }
+
+  @Override
+  public void onRestore(Element ele) {
+    dataIndex = ele.readShort();
+    dataTable = (byte[]) ele.readObject();
+  }
+
+  @Override
+  public short getBackupPrimitiveByteCount() {
+    // dataIndex
+    return (short) 2;
+  }
+
+  @Override
+  public short getBackupObjectCount() {
+    // dataTable
+    return (short) 1;
   }
 }
