@@ -102,8 +102,9 @@ public class KMKeyParameters extends KMType {
   }
 
   // KDF, ECIES_SINGLE_HASH_MODE missing from types.hal
-  public static short makeHwEnforced(
-      short keyParamsPtr, byte origin, short osVersionObjPtr, short osPatchObjPtr, byte[] scratchPad) {
+  public static short makeHwEnforced(short keyParamsPtr, byte origin,
+          short osVersionObjPtr, short osPatchObjPtr, short vendorPatchObjPtr,
+          short bootPatchObjPtr, byte[] scratchPad) {
     final short[] hwEnforcedTagArr = {
       // HW Enforced
       KMType.ENUM_TAG, KMType.ORIGIN,
@@ -165,6 +166,12 @@ public class KMKeyParameters extends KMType {
     arrInd += 2;
     short osPatchTag = KMIntegerTag.instance(KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, osPatchObjPtr);
     Util.setShort(scratchPad, arrInd, osPatchTag);
+    arrInd += 2;
+    short vendorPatchTag = KMIntegerTag.instance(KMType.UINT_TAG, KMType.VENDOR_PATCH_LEVEL, vendorPatchObjPtr);
+    Util.setShort(scratchPad, arrInd, vendorPatchTag);
+    arrInd += 2;
+    short bootPatchTag = KMIntegerTag.instance(KMType.UINT_TAG, KMType.BOOT_PATCH_LEVEL, bootPatchObjPtr);
+    Util.setShort(scratchPad, arrInd, bootPatchTag);
     arrInd += 2;
     return createKeyParameters(scratchPad, (short) (arrInd / 2));
   }
