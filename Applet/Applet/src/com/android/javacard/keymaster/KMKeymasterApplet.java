@@ -602,7 +602,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     seProvider.readCertificateChain(buffer, (short) (bufferStartOffset + 2));
     // Encode cert chain.
     encoder.encodeCertChain(buffer, bufferStartOffset, bufferLength);
-    sendOutgoing(apdu);
+    // Send data
+    apdu.setOutgoing();
+    apdu.setOutgoingLength(bufferLength);
+    apdu.sendBytesLong(buffer, bufferStartOffset, bufferLength);
   }
 
 
