@@ -889,7 +889,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     tbsLength = (short) (tbsLength - tbsOffset);
     pushSequenceHeader((short) (last - stackPtr));
     certStart = stackPtr;
-    short sigLen = KMSEProviderImpl.instance()
+    short sigLen = AndroidSEProvider.getInstance()
         .ecSign256(
                 KMByteBlob.cast(signPriv).getBuffer(),
                 KMByteBlob.cast(signPriv).getStartOff(),
@@ -933,7 +933,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     scratchPadOff++;
 
     timeOffset = KMByteBlob.instance((short) 32);
-    appIdOff = KMSEProviderImpl.instance().hmacSign(key, keyOff, keyLen,
+    appIdOff = AndroidSEProvider.getInstance().hmacSign(key, keyOff, keyLen,
             scratchPad, /* data */
             temp, /* data start */
             scratchPadOff, /* data length */

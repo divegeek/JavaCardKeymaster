@@ -26,12 +26,13 @@ import javacard.framework.Util;
 import javacard.security.CryptoException;
 import javacardx.apdu.ExtendedLength;
 
+import org.globalplatform.upgrade.*;
 /**
  * KMKeymasterApplet implements the javacard applet. It creates repository and other install time
  * objects. It also implements the keymaster state machine and handles javacard applet life cycle
  * events.
  */
-public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLength {
+public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLength, OnUpgradeListener {
   // Constants.
   public static final byte AES_BLOCK_SIZE = 16;
   public static final byte DES_BLOCK_SIZE = 8;
@@ -182,20 +183,21 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   /** Registers this applet. */
   protected KMKeymasterApplet() {
-    seProvider = KMSEProviderImpl.instance();
+    boolean isUpgrading = UpgradeManager.isUpgrading();
+    seProvider = KMSEProviderImpl.instance(isUpgrading);
+    repository = new KMRepository(isUpgrading);
     byte[] buf = JCSystem.makeTransientByteArray((short) 32, JCSystem.CLEAR_ON_DESELECT);
-    keymasterState = KMKeymasterApplet.INIT_STATE;
     data = JCSystem.makeTransientShortArray((short) DATA_ARRAY_SIZE, JCSystem.CLEAR_ON_RESET);
-    repository = new KMRepository();
     tmpVariables =
         JCSystem.makeTransientShortArray((short) TMP_VARIABLE_ARRAY_SIZE, JCSystem.CLEAR_ON_RESET);
-    seProvider.getTrueRandomNumber(buf, (short) 0, KMRepository.MASTER_KEY_SIZE);
-    repository.initMasterKey(buf, (short) 0, KMRepository.MASTER_KEY_SIZE);
-    seProvider.newRandomNumber(buf, (short) 0, KMRepository.SHARED_SECRET_KEY_SIZE);
+    if(!isUpgrading) {
+      keymasterState = KMKeymasterApplet.INIT_STATE;
+      seProvider.getTrueRandomNumber(buf, (short) 0, KMRepository.MASTER_KEY_SIZE);
+      repository.initMasterKey(buf, (short)0, KMRepository.MASTER_KEY_SIZE);
+    }
     KMType.initialize();
     encoder = new KMEncoder();
     decoder = new KMDecoder();
-    register();
   }
 
   /**
@@ -206,7 +208,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    * @param bLength the length in bytes of the parameter data in bArray
    */
   public static void install(byte[] bArray, short bOffset, byte bLength) {
-    new KMKeymasterApplet();
+    new KMKeymasterApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
   }
 
   /**
@@ -3964,5 +3966,53 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       buf[(short) (result + index)] = (byte) (tmp & (byte) 0xFF);
       index--;
     }
+  }
+
+  @Override
+  public void onCleanup() {
+  }
+
+  @Override
+  public void onConsolidate() {
+  }
+
+  @Override
+  public void onRestore(Element element) {
+    element.initRead();
+    provisionStatus = element.readByte();
+    keymasterState = element.readByte();
+    repository.onRestore(element);
+    seProvider.onRestore(element);
+  }
+
+  @Override
+  public Element onSave() {
+    // SEProvider count
+    short primitiveCount = seProvider.getBackupPrimitiveByteCount();
+    short objectCount = seProvider.getBackupObjectCount();
+    //Repository count
+    primitiveCount += repository.getBackupPrimitiveByteCount();
+    objectCount += repository.getBackupObjectCount();
+    //KMKeymasterApplet count
+    primitiveCount += computePrimitveDataSize();
+    objectCount += computeObjectCount();
+
+    // Create element.
+    Element element = UpgradeManager.createElement(Element.TYPE_SIMPLE,
+            primitiveCount, objectCount);
+    element.write(provisionStatus);
+    element.write(keymasterState);
+    repository.onSave(element);
+    seProvider.onSave(element);
+    return element;
+  }
+
+  private short computePrimitveDataSize() {
+    // provisionStatus + keymasterState
+    return (short) 2;
+  }
+
+  private short computeObjectCount() {
+    return (short) 0;
   }
 }

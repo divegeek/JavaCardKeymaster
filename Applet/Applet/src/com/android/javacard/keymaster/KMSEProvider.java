@@ -1,12 +1,14 @@
 package com.android.javacard.keymaster;
 
+import org.globalplatform.upgrade.Element;
+
 /**
  * KMSEProvider is facade to use SE specific methods. The main intention of this interface is to
  * abstract the cipher, signature and backup and restore related functions. The instance of this
  * interface is created by the singleton KMSEProviderImpl class for each provider. At a time there
  * can be only one provider in the applet package.
  */
-public interface KMSEProvider {
+public interface KMSEProvider extends KMUpgradable {
   /**
    * Create a symmetric key instance. If the algorithm and/or keysize are not supported then it
    * should throw a CryptoException.

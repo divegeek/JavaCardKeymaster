@@ -58,6 +58,8 @@ import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.globalplatform.upgrade.Element;
+
 /**
  * Simulator only supports 512 bit RSA key pair, 128 AES Key, 128 bit 3Des key, less then 256 bit EC
  * Key, and upto 512 bit HMAC key. Also simulator does not support TRNG, so this implementation just
@@ -83,6 +85,12 @@ public class KMJcardSimulator implements KMSEProvider {
   private static byte[] rndNum;
   private byte[] certificateChain;
 
+  private static KMJcardSimulator jCardSimulator = null;
+
+  public static KMJcardSimulator getInstance() {
+    return jCardSimulator;
+  }
+
   // Implements Oracle Simulator based restricted crypto provider
   public KMJcardSimulator() {
     // Various Keys
@@ -102,6 +110,7 @@ public class KMJcardSimulator implements KMSEProvider {
     // various ciphers
     //Allocate buffer for certificate chain.
     certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
+    jCardSimulator = this;
   }
 
    
@@ -1278,5 +1287,29 @@ public class KMJcardSimulator implements KMSEProvider {
   @Override
   public void clearDeviceBooted(boolean resetBootFlag) {
     // To be filled
+  }
+
+  @Override
+  public void onSave(Element ele) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public void onRestore(Element ele) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public short getBackupPrimitiveByteCount() {
+    // TODO Auto-generated method stub
+    return 0;
+  }
+
+  @Override
+  public short getBackupObjectCount() {
+    // TODO Auto-generated method stub
+    return 0;
   }
 }
