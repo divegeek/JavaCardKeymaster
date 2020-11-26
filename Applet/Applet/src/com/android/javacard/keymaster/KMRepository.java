@@ -29,7 +29,7 @@ import javacard.framework.Util;
  */
 public class KMRepository implements KMUpgradable {
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 31;
+  public static final short DATA_INDEX_SIZE = 33;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_MEM_SIZE = 2048;
   public static final short HEAP_SIZE = 10000;
@@ -55,19 +55,21 @@ public class KMRepository implements KMUpgradable {
   public static final byte CERT_EXPIRY_TIME = 15;
   public static final byte BOOT_OS_VERSION = 16;
   public static final byte BOOT_OS_PATCH = 17;
-  public static final byte BOOT_VERIFIED_BOOT_KEY = 18;
-  public static final byte BOOT_VERIFIED_BOOT_HASH = 19;
-  public static final byte BOOT_VERIFIED_BOOT_STATE = 20;
-  public static final byte BOOT_DEVICE_LOCKED_STATUS = 21;
-  public static final byte BOOT_DEVICE_LOCKED_TIME = 22;
-  public static final byte AUTH_TAG_1 = 23;
-  public static final byte AUTH_TAG_2 = 24;
-  public static final byte AUTH_TAG_3 = 25;
-  public static final byte AUTH_TAG_4 = 26;
-  public static final byte AUTH_TAG_5 = 27;
-  public static final byte AUTH_TAG_6 = 28;
-  public static final byte AUTH_TAG_7 = 29;
-  public static final byte AUTH_TAG_8 = 30;
+  public static final byte VENDOR_PATCH_LEVEL = 18;
+  public static final byte BOOT_PATCH_LEVEL = 19;
+  public static final byte BOOT_VERIFIED_BOOT_KEY = 20;
+  public static final byte BOOT_VERIFIED_BOOT_HASH = 21;
+  public static final byte BOOT_VERIFIED_BOOT_STATE = 22;
+  public static final byte BOOT_DEVICE_LOCKED_STATUS = 23;
+  public static final byte BOOT_DEVICE_LOCKED_TIME = 24;
+  public static final byte AUTH_TAG_1 = 25;
+  public static final byte AUTH_TAG_2 = 26;
+  public static final byte AUTH_TAG_3 = 27;
+  public static final byte AUTH_TAG_4 = 28;
+  public static final byte AUTH_TAG_5 = 29;
+  public static final byte AUTH_TAG_6 = 30;
+  public static final byte AUTH_TAG_7 = 31;
+  public static final byte AUTH_TAG_8 = 32;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -76,6 +78,8 @@ public class KMRepository implements KMUpgradable {
   public static final short COMPUTED_HMAC_KEY_SIZE = 32;
   public static final short OS_VERSION_SIZE = 4;
   public static final short OS_PATCH_SIZE = 4;
+  public static final short VENDOR_PATCH_SIZE = 4;
+  public static final short BOOT_PATCH_SIZE = 4;
   public static final short DEVICE_LOCK_TS_SIZE = 8;
   public static final short DEVICE_LOCK_FLAG_SIZE = 1;
   public static final short BOOT_STATE_SIZE = 1;
@@ -551,6 +555,26 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
+  public short getVendorPatchLevel(){
+    short blob = readData(VENDOR_PATCH_LEVEL);
+    if (blob != 0) {
+      return KMInteger.uint_32(
+          KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
+    }else{
+      return KMInteger.uint_32(zero,(short)0);
+    }
+  }
+
+  public short getBootPatchLevel(){
+    short blob = readData(BOOT_PATCH_LEVEL);
+    if (blob != 0) {
+      return KMInteger.uint_32(
+          KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
+    }else{
+      return KMInteger.uint_32(zero,(short)0);
+    }
+  }
+
   public short getOsPatch(){
     short blob = readData(BOOT_OS_PATCH);
     if (blob != 0) {
@@ -597,6 +621,18 @@ public class KMRepository implements KMUpgradable {
   public void setOsVersion(byte[] buf, short start, short len){
     if(len != OS_VERSION_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     writeDataEntry(BOOT_OS_VERSION,buf,start,len);
+  }
+
+  public void setVendorPatchLevel(byte[] buf, short start, short len) {
+    if (len != VENDOR_PATCH_SIZE)
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    writeDataEntry(VENDOR_PATCH_LEVEL, buf, start, len);
+  }
+
+  public void setBootPatchLevel(byte[] buf, short start, short len) {
+    if (len != BOOT_PATCH_SIZE)
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    writeDataEntry(BOOT_PATCH_LEVEL, buf, start, len);
   }
 
   public void setDeviceLock(boolean flag){

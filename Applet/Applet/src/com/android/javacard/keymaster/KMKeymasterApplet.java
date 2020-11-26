@@ -1052,7 +1052,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // parse existing key blob
     parseEncryptedKeyBlob(scratchPad);
     // validate characteristics to be upgraded.
-    // TODO currently only os version and os patch level are upgraded.
     tmpVariables[0] =
         KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_VERSION, data[HW_PARAMETERS]);
     tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
@@ -1079,6 +1078,33 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         tmpVariables[5] = KMError.INVALID_ARGUMENT;
       }
     }
+    //Compare vendor patch levels
+    tmpVariables[1] =
+            KMKeyParameters.findTag(KMType.UINT_TAG, KMType.VENDOR_PATCH_LEVEL, data[HW_PARAMETERS]);
+    tmpVariables[1] = KMIntegerTag.cast(tmpVariables[1]).getValue();
+    tmpVariables[2] = repository.getVendorPatchLevel();
+    if (tmpVariables[1] != KMType.INVALID_VALUE) {
+      // The key characteristics should have had vendor patch level < vendor patch level stored in javacard
+      // then only upgrade is allowed.
+      if (KMInteger.compare(tmpVariables[1], tmpVariables[2]) != -1) {
+        // Key Should not be upgraded, but error code should be OK, As per VTS.
+        tmpVariables[5] = KMError.INVALID_ARGUMENT;
+      }
+    }
+    //Compare boot patch levels
+    tmpVariables[1] =
+            KMKeyParameters.findTag(KMType.UINT_TAG, KMType.BOOT_PATCH_LEVEL, data[HW_PARAMETERS]);
+    tmpVariables[1] = KMIntegerTag.cast(tmpVariables[1]).getValue();
+    tmpVariables[2] = repository.getBootPatchLevel();
+    if (tmpVariables[1] != KMType.INVALID_VALUE) {
+      // The key characteristics should have had boot patch level < boot patch level stored in javacard
+      // then only upgrade is allowed.
+      if (KMInteger.compare(tmpVariables[1], tmpVariables[2]) != -1) {
+        // Key Should not be upgraded, but error code should be OK, As per VTS.
+        tmpVariables[5] = KMError.INVALID_ARGUMENT;
+      }
+    }
+
     boolean blobPersisted = false;
     if (tmpVariables[5] != KMError.INVALID_ARGUMENT) {
       if (repository.validateAuthTag(data[AUTH_TAG])) {
@@ -3195,26 +3221,32 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Argument 2 OS Patch level
     // short osPatchExp = KMIntegerTag.exp(KMType.UINT_TAG);
     tmpVariables[1] = KMInteger.exp();
-    // Argument 3 Verified Boot Key
+    // Argument 3 Vendor Patch level
+    tmpVariables[2] = KMInteger.exp();
+    // Argument 4 Boot Patch level
+    tmpVariables[3] = KMInteger.exp();
+    // Argument 5 Verified Boot Key
     // short bootKeyExp = KMByteBlob.exp();
-    tmpVariables[2] = KMByteBlob.exp();
-    // Argument 4 Verified Boot Hash
+    tmpVariables[4] = KMByteBlob.exp();
+    // Argument 6 Verified Boot Hash
     // short bootHashExp = KMByteBlob.exp();
-    tmpVariables[3] = KMByteBlob.exp();
-    // Argument 5 Verified Boot State
+    tmpVariables[5] = KMByteBlob.exp();
+    // Argument 7 Verified Boot State
     // short bootStateExp = KMEnum.instance(KMType.VERIFIED_BOOT_STATE);
-    tmpVariables[4] = KMEnum.instance(KMType.VERIFIED_BOOT_STATE);
-    // Argument 6 Device Locked
+    tmpVariables[6] = KMEnum.instance(KMType.VERIFIED_BOOT_STATE);
+    // Argument 8 Device Locked
     // short deviceLockedExp = KMEnum.instance(KMType.DEVICE_LOCKED);
-    tmpVariables[5] = KMEnum.instance(KMType.DEVICE_LOCKED);
+    tmpVariables[7] = KMEnum.instance(KMType.DEVICE_LOCKED);
     // Array of expected arguments
-    short argsProto = KMArray.instance((short) 6);
+    short argsProto = KMArray.instance((short) 8);
     KMArray.cast(argsProto).add((short) 0, tmpVariables[0]);
     KMArray.cast(argsProto).add((short) 1, tmpVariables[1]);
     KMArray.cast(argsProto).add((short) 2, tmpVariables[2]);
     KMArray.cast(argsProto).add((short) 3, tmpVariables[3]);
     KMArray.cast(argsProto).add((short) 4, tmpVariables[4]);
     KMArray.cast(argsProto).add((short) 5, tmpVariables[5]);
+    KMArray.cast(argsProto).add((short) 6, tmpVariables[6]);
+    KMArray.cast(argsProto).add((short) 7, tmpVariables[7]);
     // Decode the arguments
     // System.out.println("Process boot params buffer: "+byteArrayToHexString(buffer));
     short args = decoder.decode(argsProto, buffer, bufferStartOffset, bufferLength);
@@ -3222,22 +3254,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] = KMArray.cast(args).get((short) 0);
     // short osPatchTagPtr = KMArray.cast(args).get((short) 1);
     tmpVariables[1] = KMArray.cast(args).get((short) 1);
-    // short verifiedBootKeyPtr = KMArray.cast(args).get((short) 2);
+    // short vendorPatchTagPtr = KMArray.cast(args).get((short) 2);
     tmpVariables[2] = KMArray.cast(args).get((short) 2);
-    // short verifiedBootHashPtr = KMArray.cast(args).get((short) 3);
+    // short BootPatchTagPtr = KMArray.cast(args).get((short) 3);
     tmpVariables[3] = KMArray.cast(args).get((short) 3);
-    // short verifiedBootStatePtr = KMArray.cast(args).get((short) 4);
+    // short verifiedBootKeyPtr = KMArray.cast(args).get((short) 4);
     tmpVariables[4] = KMArray.cast(args).get((short) 4);
-    // short deviceLockedPtr = KMArray.cast(args).get((short) 5);
+    // short verifiedBootHashPtr = KMArray.cast(args).get((short) 5);
     tmpVariables[5] = KMArray.cast(args).get((short) 5);
-    if (KMByteBlob.cast(tmpVariables[2]).length() > KMRepository.BOOT_KEY_MAX_SIZE) {
+    // short verifiedBootStatePtr = KMArray.cast(args).get((short) 6);
+    tmpVariables[6] = KMArray.cast(args).get((short) 6);
+    // short deviceLockedPtr = KMArray.cast(args).get((short) 7);
+    tmpVariables[7] = KMArray.cast(args).get((short) 7);
+    if (KMByteBlob.cast(tmpVariables[4]).length() > KMRepository.BOOT_KEY_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    if (KMByteBlob.cast(tmpVariables[3]).length() > KMRepository.BOOT_HASH_MAX_SIZE) {
+    if (KMByteBlob.cast(tmpVariables[5]).length() > KMRepository.BOOT_HASH_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    // Begin transaction
-    // JCSystem.beginTransaction();
+
     repository.setOsVersion(
         KMInteger.cast(tmpVariables[0]).getBuffer(),
         KMInteger.cast(tmpVariables[0]).getStartOff(),
@@ -3246,46 +3281,31 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMInteger.cast(tmpVariables[1]).getBuffer(),
         KMInteger.cast(tmpVariables[1]).getStartOff(),
         KMInteger.cast(tmpVariables[1]).length());
-    // KMInteger.cast(tmpVariables[0]).value(repository.osVersion, (short) 0);
-    // KMInteger.cast(tmpVariables[1]).value(repository.osPatch, (short) 0);
 
-    // KMInteger.cast(valPtr).getValue(repository.osVersion, (short) 0, (short) 4);
-    // valPtr = KMIntegerTag.cast(tmpVariables[1]).getValue();
-    // KMInteger.cast(valPtr).getValue(repository.osPatch, (short) 0, (short) 4);
+    repository.setVendorPatchLevel(
+        KMInteger.cast(tmpVariables[2]).getBuffer(),
+        KMInteger.cast(tmpVariables[2]).getStartOff(),
+        KMInteger.cast(tmpVariables[2]).length());
 
-    // repository.actualBootKeyLength = KMByteBlob.cast(tmpVariables[2]).length();
-    // KMByteBlob.cast(tmpVariables[2])
-    //    .getValue(repository.verifiedBootKey, (short) 0, repository.actualBootKeyLength);
+    repository.setBootPatchLevel(
+            KMInteger.cast(tmpVariables[3]).getBuffer(),
+            KMInteger.cast(tmpVariables[3]).getStartOff(),
+            KMInteger.cast(tmpVariables[3]).length());
+
     repository.setVerifiedBootKey(
-        KMByteBlob.cast(tmpVariables[2]).getBuffer(),
-        KMByteBlob.cast(tmpVariables[2]).getStartOff(),
-        KMByteBlob.cast(tmpVariables[2]).length());
+        KMByteBlob.cast(tmpVariables[4]).getBuffer(),
+        KMByteBlob.cast(tmpVariables[4]).getStartOff(),
+        KMByteBlob.cast(tmpVariables[4]).length());
 
-    // repository.actualBootHashLength = KMByteBlob.cast(tmpVariables[3]).length();
-    // KMByteBlob.cast(tmpVariables[3])
-    //    .getValue(repository.verifiedBootHash, (short) 0, repository.actualBootHashLength);
     repository.setVerifiedBootHash(
-        KMByteBlob.cast(tmpVariables[3]).getBuffer(),
-        KMByteBlob.cast(tmpVariables[3]).getStartOff(),
-        KMByteBlob.cast(tmpVariables[3]).length());
+        KMByteBlob.cast(tmpVariables[5]).getBuffer(),
+        KMByteBlob.cast(tmpVariables[5]).getStartOff(),
+        KMByteBlob.cast(tmpVariables[5]).length());
 
-    byte enumVal = KMEnum.cast(tmpVariables[4]).getVal();
+    byte enumVal = KMEnum.cast(tmpVariables[6]).getVal();
     repository.setBootState(enumVal);
-    /*
-    if (enumVal == KMTag.SELF_SIGNED_BOOT) {
-      repository.selfSignedBootFlag = true;
-      repository.verifiedBootFlag = false;
-    } else if(enumVal == KMType.VERIFIED_BOOT) {
-      repository.selfSignedBootFlag = false;
-      repository.verifiedBootFlag = true;
-    }else {
-      repository.selfSignedBootFlag = false;
-      repository.verifiedBootFlag = false;
-    }
 
-     */
-    enumVal = KMEnum.cast(tmpVariables[5]).getVal();
-    // repository.deviceLockedFlag = (enumVal == KMType.DEVICE_LOCKED_TRUE);
+    enumVal = KMEnum.cast(tmpVariables[7]).getVal();
     repository.setDeviceLock(enumVal == KMType.DEVICE_LOCKED_TRUE);
 
     // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
@@ -3664,12 +3684,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static void makeKeyCharacteristics(byte[] scratchPad) {
     tmpVariables[0] = repository.getOsPatch();
     tmpVariables[1] = repository.getOsVersion();
+    tmpVariables[2] = repository.getVendorPatchLevel();
+    tmpVariables[3] = repository.getBootPatchLevel();
     data[HW_PARAMETERS] =
         KMKeyParameters.makeHwEnforced(
             data[KEY_PARAMETERS],
             (byte) data[ORIGIN],
             tmpVariables[1],
             tmpVariables[0],
+            tmpVariables[2],
+            tmpVariables[3],
             scratchPad);
     data[SW_PARAMETERS] = KMKeyParameters.makeSwEnforced(data[KEY_PARAMETERS], scratchPad);
     data[KEY_CHARACTERISTICS] = KMKeyCharacteristics.instance();
