@@ -43,27 +43,47 @@ public interface KMAttestationCert {
   /**
    * Set uniqueId received from CA certificate during provisioning.
    *
-   * @param obj Ths is a KMByteBlob containing uniqueId.
-   * @return instance of KMAttestationCert
+   * @param scratchpad Buffer to store intermediate results.
+   * @param scratchPadOff Start offset of the scratchpad buffer.
+   * @param creationTime This buffer contains the CREATION_TIME value.
+   * @param creationTimeOff Start offset of creattionTime buffer.
+   * @param creationTimeLen Length of the creationTime buffer.
+   * @param attestAppId This buffer contains the ATTESTATION_APPLICATION_ID value.
+   * @param attestAppIdOff Start offset of the attestAppId buffer.
+   * @param attestAppIdLen Length of the attestAppId buffer.
+   * @param resetSinceIdRotation This holds the information of RESET_SINCE_ID_ROTATION.
+   * @param key This buffer contains the master secret.
+   * @param keyOff Start offset of the master key.
+   * @param keyLen Length of the master key.
+   * @return instance of KMAttestationCert.
    */
-  KMAttestationCert uniqueId(short obj);
+  KMAttestationCert makeUniqueId(byte[] scratchpad, short scratchPadOff, byte[] creationTime,
+          short creationTimeOff, short creationTimeLen, byte[] attestAppId,
+          short attestAppIdOff, short attestAppIdLen, byte resetSinceIdRotation,
+          byte[] key, short keyOff, short keyLen);
 
   /**
    * Set start time received from creation/activation time tag. Used for certificate's valid period.
    *
-   * @param obj Ths is a KMByteBlob containing start time.
-   * @return instance of KMAttestationCert
+   * @param obj This is a KMByteBlob object containing start time.
+   * @param scratchpad Buffer to store intermediate results.
+   * @return instance of KMAttestationCert.
    */
-  KMAttestationCert notBefore(short obj);
+  KMAttestationCert notBefore(short obj, byte[] scratchpad);
+
 
   /**
    * Set expiry time received from expiry time tag or ca certificates expiry time.
    * Used for certificate's valid period.
    *
-   * @param obj Ths is a KMByteBlob containing expiry time.
+   * @param usageExpiryTimeObj This is a KMByteBlob containing expiry time.
+   * @param certExpirtyTimeObj This is a KMByteblob containing expirty time extracted from certificate.
+   * @param scratchpad Buffer to store intermediate results.
+   * @param offset Variable used to store intermediate results.
    * @return instance of KMAttestationCert
    */
-  KMAttestationCert notAfter(short obj);
+  KMAttestationCert notAfter(short usageExpiryTimeObj,
+          short certExpirtyTimeObj, byte[] scratchPad, short offset);
 
   /**
    * Set device lock status received during booting time or due to device lock command.
@@ -121,11 +141,10 @@ public interface KMAttestationCert {
   /**
    * Set signing key to be used to sign the cert.
    *
-   * @param privateKey Ths is rsa 2048 bit private key.
-   * @param modulus Ths is rsa 2048 bit modulus.
+   * @param privateKey This is ECPrivateKey with curve P-256.
    * @return instance of KMAttestationCert
    */
-  KMAttestationCert signingKey(short privateKey, short modulus);
+  KMAttestationCert signingKey(short privateKey);
 
   /**
    * Get the start of the certificate

@@ -478,7 +478,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     pushSequenceHeader((short) (last - stackPtr));
   }
 
-  //TODO refactor following method
   private static void pushSWParams() {
     short last = stackPtr;
     // ATTESTATION_APPLICATION_ID 709 is softwareEnforced.
@@ -488,21 +487,27 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     };
     byte index = 0;
     do {
+      /*
+       if(tagIds[index] == KMType.ATTESTATION_APPLICATION_ID) {
+      pushAttIds(tagIds[index]);
+      continue;
+       }
+        */
       pushParams(swParams, swParamsIndex, tagIds[index]);
     } while (++index < tagIds.length);
     pushSequenceHeader((short) (last - stackPtr));
   }
 
-  //TODO refactor following method
   private static void pushHWParams() {
     short last = stackPtr;
-    // Attestation IDs are not included. As per VTS Attestation IDs are not supported currently.
+    // Attestation ids are not included. As per VTS attestation ids are not supported currenlty.
     short[] tagIds = {
-      719, 718, 706, 705, 704, 703, 702, 701, 601, 600, 509, 508, 507, 506, 505, 504, 503, 402, 401, 400, 303,
+      706, 705, 704, 703, 702, 701, 601, 600, 509, 508, 507, 506, 505, 504, 503, 402, 401, 400, 303,
       200, 10, 6, 5, 3, 2, 1
     };
     byte index = 0;
     do {
+      // if(pushAttIds(tagIds[index])) continue;
       if (tagIds[index] == KMType.ROOT_OF_TRUST) {
         pushRoT();
         continue;
@@ -884,7 +889,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     tbsLength = (short) (tbsLength - tbsOffset);
     pushSequenceHeader((short) (last - stackPtr));
     certStart = stackPtr;
-    short sigLen = KMJcardSimulator.getInstance()
+    short sigLen = AndroidSEProvider.getInstance()
         .ecSign256(
                 KMByteBlob.cast(signPriv).getBuffer(),
                 KMByteBlob.cast(signPriv).getStartOff(),
@@ -928,7 +933,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     scratchPadOff++;
 
     timeOffset = KMByteBlob.instance((short) 32);
-    appIdOff = KMJcardSimulator.getInstance().hmacSign(key, keyOff, keyLen,
+    appIdOff = AndroidSEProvider.getInstance().hmacSign(key, keyOff, keyLen,
             scratchPad, /* data */
             temp, /* data start */
             scratchPadOff, /* data length */

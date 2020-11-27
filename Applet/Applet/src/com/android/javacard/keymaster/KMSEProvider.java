@@ -1,12 +1,14 @@
 package com.android.javacard.keymaster;
 
+import org.globalplatform.upgrade.Element;
+
 /**
  * KMSEProvider is facade to use SE specific methods. The main intention of this interface is to
  * abstract the cipher, signature and backup and restore related functions. The instance of this
  * interface is created by the singleton KMSEProviderImpl class for each provider. At a time there
  * can be only one provider in the applet package.
  */
-public interface KMSEProvider {
+public interface KMSEProvider extends KMUpgradable {
   /**
    * Create a symmetric key instance. If the algorithm and/or keysize are not supported then it
    * should throw a CryptoException.
@@ -326,15 +328,11 @@ public interface KMSEProvider {
       short outputDataStart);
 
   /**
-   * This is a oneshot operation that decrypts the data using RSA algorithm with oaep256 padding.
-   * The public exponent is always 0x010001.
+   * This is a oneshot operation that signs the data using EC private key.
    *
-   * @param privExp is the private exponent (2048 bit) buffer.
-   * @param privExpStart is the start of the private exponent buffer.
-   * @param privExpLength is the length of the private exponent buffer in bytes.
-   * @param modBuffer is the modulus (2048 bit) buffer.
-   * @param modOff is the start of the modulus buffer.
-   * @param modLength is the length of the modulus buffer in bytes.
+   * @param secret is the private key of P-256 curve.
+   * @param secretStart is the start of the private key buffer.
+   * @param secretLength is the length of the private buffer in bytes.
    * @param inputDataBuf is the buffer of the input data.
    * @param inputDataStart is the start of the input data buffer.
    * @param inputDataLength is the length of the inpur data buffer in bytes.
@@ -342,18 +340,15 @@ public interface KMSEProvider {
    * @param outputDataStart is the start of the output data buffer.
    * @return length of the decrypted data.
    */
-  short rsaSignPKCS1256(
-      byte[] privExp,
-      short privExpStart,
-      short privExpLength,
-      byte[] modBuffer,
-      short modOff,
-      short modLength,
-      byte[] inputDataBuf,
-      short inputDataStart,
-      short inputDataLength,
-      byte[] outputDataBuf,
-      short outputDataStart);
+  public short ecSign256(
+          byte[] secret,
+          short secretStart,
+          short secretLength,
+          byte[] inputDataBuf,
+          short inputDataStart,
+          short inputDataLength,
+          byte[] outputDataBuf,
+          short outputDataStart);
 
   /**
    * This creates a persistent operation for signing, verify, encryption and decryption using HMAC,
@@ -436,29 +431,49 @@ public interface KMSEProvider {
   KMAttestationCert getAttestationCert(boolean rsaCert);
 
   /**
-   * This operation indicates whether SE Provider supports backup and restore functionality required
-   * for upgrading the applet.
+   * This operation persists the certificate chain in the persistent memory
+   * in multiple requests.
    *
-   * @return true if backup and restore is supported.
+   * @param buf buffer containing certificate chain.
+   * @param offset is the start of the buffer.
+   * @param len is the length of the buffer.
+   * @param totalLen is the total length of cert chain.
    */
-  boolean isBackupRestoreSupported();
+  public void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen);
 
   /**
-   * This operation passes the data that needs to be backup to SE Provider. The exact mechanism to
-   * backup the data is SE provider implementation specific.
+   * The operation reads the certificate chain from persistent memory.
    *
-   * @param buf is the data buffer.
-   * @param start is the start of the data.
-   * @param len is the length of the data.
-   */
-  void backup(byte[] buf, short start, short len);
-
-  /**
-   * This operation retrieves the backed up data from SE Provider.
-   *
-   * @param buf is the data buffer.
-   * @param start is the start of the data.
+   * @param buf is the start of data buffer.
+   * @param offset is the start of the data.
    * @return the length of the data buffer in bytes.
    */
-  short restore(byte[] buf, short start);
+  short readCertificateChain(byte[] buf, short offset);
+
+  /**
+   * This function returns the cert chain length.
+   *
+   * @return length of the certificate chain.
+   */
+  short getCertificateChainLength();
+
+  /**
+   * This function tells if boot signal event is supported or not.
+   *
+   * @return true if supported, false otherwise.
+   */
+  boolean isBootSignalEventSupported();
+
+  /**
+   * This function tells if the device is booted or not.
+   *
+   * @return true if device booted, false otherwise.
+   */
+  boolean isDeviceRebooted();
+
+  /**
+   * This function is supposed to be used to reset the device booted stated after set boot param is handled
+   * @param resetBootFlag is false if event has been handled
+   */
+  void clearDeviceBooted(boolean resetBootFlag);
 }

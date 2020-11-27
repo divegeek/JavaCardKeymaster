@@ -146,7 +146,6 @@ public class KMEcdsa256NoDigestSignature extends Signature {
 			Util.arrayCopyNonAtomic(sig, (short)0, bytes1, i2, (short)sig.length);
 			return (short)sig.length;
 		} catch (SignatureException e) {
-			// TODO Auto-generated catch block
 			CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 		}
     return len;
@@ -165,7 +164,6 @@ public class KMEcdsa256NoDigestSignature extends Signature {
     	update(bytes, i , i1);
 	    return sunSigner.verify(bytes1, i2, i3);
 		} catch (SignatureException e) {
-			// TODO Auto-generated catch block
 			CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
 		}
     return false;

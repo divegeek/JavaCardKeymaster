@@ -26,7 +26,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
-import javacard.framework.AID;
+
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
@@ -46,6 +46,7 @@ import javacard.security.RandomData;
 import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
 import javacardx.crypto.Cipher;
+
 import javax.crypto.AEADBadTagException;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
@@ -56,6 +57,8 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 import javax.crypto.spec.SecretKeySpec;
+
+import org.globalplatform.upgrade.Element;
 
 /**
  * Simulator only supports 512 bit RSA key pair, 128 AES Key, 128 bit 3Des key, less then 256 bit EC
@@ -68,8 +71,7 @@ public class KMJcardSimulator implements KMSEProvider {
   public static final short MAX_RND_NUM_SIZE = 64;
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  private static final int AES_GCM_KEY_SIZE = 16;
-  private static final byte[] aidArr = new byte[]{ (byte)0xA0, 0x00, 0x00, 0x00, 0x63};
+  private static final short CERT_CHAIN_MAX_SIZE = 2050;//First 2 bytes for length.
 
 
   public static boolean jcardSim = false;
@@ -81,6 +83,13 @@ public class KMJcardSimulator implements KMSEProvider {
   private static Cipher aesRngCipher;
   private static byte[] entropyPool;
   private static byte[] rndNum;
+  private byte[] certificateChain;
+
+  private static KMJcardSimulator jCardSimulator = null;
+
+  public static KMJcardSimulator getInstance() {
+    return jCardSimulator;
+  }
 
   // Implements Oracle Simulator based restricted crypto provider
   public KMJcardSimulator() {
@@ -99,7 +108,9 @@ public class KMJcardSimulator implements KMSEProvider {
     }
     aesRngKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
     // various ciphers
-
+    //Allocate buffer for certificate chain.
+    certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
+    jCardSimulator = this;
   }
 
    
@@ -160,7 +171,6 @@ public class KMJcardSimulator implements KMSEProvider {
 
    
   public DESKey createTDESKey() {
-    // TODO check whether 168 bit or 192 bit
     byte[] rndNum = new byte[24];
     newRandomNumber(rndNum, (short) 0, (short)rndNum.length);
     return createTDESKey(rndNum, (short)0, (short)rndNum.length);
@@ -567,17 +577,6 @@ public class KMJcardSimulator implements KMSEProvider {
   }
 
   @Override
-  public short rsaSignPKCS1256(byte[] secret, short secretStart, short secretLength,
-                               byte[] modBuffer, short modOff, short modLength,
-                               byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-                               byte[] outputDataBuf, short outputDataStart) {
-    Signature signer = createRsaSigner(
-      KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN, secret,secretStart,secretLength, modBuffer,modOff,modLength);
-    return signer.sign(
-      inputDataBuf, inputDataStart, inputDataLength, outputDataBuf, outputDataStart);
-  }
-
-  @Override
   public KMOperation initSymmetricOperation(byte purpose, byte alg, byte digest, byte padding, byte blockMode,
                                             byte[] keyBuf, short keyStart, short keyLength,
                                             byte[] ivBuf, short ivStart, short ivLength, short macLength) {
@@ -692,13 +691,9 @@ public class KMJcardSimulator implements KMSEProvider {
   public KMCipher createRsaDecipher(short padding, short digest, byte[] secret, short secretStart,
                                     short secretLength, byte[] modBuffer, short modOff, short modLength) {
     byte cipherAlg = mapCipherAlg(KMType.RSA, (byte)padding, (byte)0);
-    // TODO implement OAEP algorithm using SunJCE.
     if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
       return createRsaOAEP256Cipher(KMType.DECRYPT,(byte)digest,secret,secretStart,secretLength,modBuffer,modOff,modLength);
     }
-    /*else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
-    else cipherAlg = Cipher.ALG_RSA_NOPAD;
-     */
     Cipher rsaCipher = Cipher.getInstance(cipherAlg,false);
     RSAPrivateKey key = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_2048, false);
     key.setExponent(secret,secretStart,secretLength);
@@ -879,7 +874,6 @@ public class KMJcardSimulator implements KMSEProvider {
         key = KeyBuilder.buildKey(KeyBuilder.TYPE_DES,len,false);
         ((DESKey) key).setKey(secret,secretStart);
         symmCipher = Cipher.getInstance((byte)cipherAlg, false);
-        //TODO Consume only 8 bytes of iv. the random number for iv is of 16 bytes.
         //While sending back the iv send only 8 bytes.
         symmCipher.init(key, mapPurpose(purpose), ivBuffer, ivStart, (short)8);
         break;
@@ -1099,12 +1093,10 @@ public class KMJcardSimulator implements KMSEProvider {
       trng.nextBytes(pool, (short) 0, (short) pool.length);
     } catch (CryptoException exp) {
       if (exp.getReason() == CryptoException.NO_SUCH_ALGORITHM) {
-        // TODO change this when possible
         // simulator does not support TRNG algorithm. So, PRNG algorithm (deprecated) is used.
         trng = RandomData.getInstance(RandomData.ALG_PSEUDO_RANDOM);
         trng.nextBytes(pool, (short) 0, (short) pool.length);
       } else {
-        // TODO change this to proper error code
         ISOException.throwIt(ISO7816.SW_UNKNOWN);
       }
     }
@@ -1187,9 +1179,6 @@ public class KMJcardSimulator implements KMSEProvider {
     if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
       return createRsaOAEP256Cipher(KMType.ENCRYPT, (byte)digest, null,(short)0,(short)0,modBuffer,modOff,modLength);
     }
-    /*else if(padding == KMCipher.PAD_PKCS1) cipherAlg = Cipher.ALG_RSA_PKCS1;
-    else cipherAlg = Cipher.ALG_RSA_NOPAD;
-    */
     Cipher rsaCipher = Cipher.getInstance(cipherAlg,false);
     RSAPublicKey key = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
     byte[] exponent = new byte[]{0x01,0x00,0x01};
@@ -1203,14 +1192,9 @@ public class KMJcardSimulator implements KMSEProvider {
     return inst;
   }
 
-   
   public Signature createRsaVerifier(short digest, short padding, byte[] modBuffer, short modOff, short modLength) {
     short alg = mapSignature256Alg(KMType.RSA,(byte)padding);
     if(digest == KMType.DIGEST_NONE || padding == KMType.PADDING_NONE) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    /*else if(padding == KMCipher.PAD_PKCS1_PSS) alg = Signature.ALG_RSA_SHA_256_PKCS1_PSS;
-    else if(padding == KMCipher.PAD_PKCS1) alg = Signature.ALG_RSA_SHA_256_PKCS1;
-    else CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-     */
     Signature rsaVerifier = Signature.getInstance((byte)alg, false);
     RSAPublicKey key = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
     byte[] exponent = new byte[]{0x01,0x00,0x01};
@@ -1220,7 +1204,6 @@ public class KMJcardSimulator implements KMSEProvider {
     return rsaVerifier;
   }
 
-   
   public Signature createEcVerifier(short digest, byte[] pubKey, short pubKeyStart, short pubKeyLength) {
     short alg = mapSignature256Alg(KMType.EC, (byte)0);
     Signature ecVerifier;
@@ -1236,52 +1219,97 @@ public class KMJcardSimulator implements KMSEProvider {
     return ecVerifier;
   }
 
-
-  @Override
-  public boolean isBackupRestoreSupported() {
-    return true;
-  }
-
   @Override
   public KMAttestationCert getAttestationCert(boolean rsaCert) {
     //certBuilder.reset();
     return KMAttestationCertImpl.instance(rsaCert);
   }
 
-  @Override
-  public void backup(byte[] buf, short start, short len) {
-    byte[] data = new byte[len];
-    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
-    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
-    Util.arrayCopyNonAtomic(buf,start,data,(short)0,len);
-    backupStore.backup(data,(short)0,len);
-  }
-
-  @Override
-  public short restore(byte[] buf, short start) {
-    byte[] data = new byte[2200];
-    AID aid = JCSystem.lookupAID(aidArr,(short)0,(byte)aidArr.length);
-    KMBackupRestoreAgent backupStore = (KMBackupRestoreAgent) JCSystem.getAppletShareableInterfaceObject(aid,(byte)0);
-    short len = backupStore.restore(data,(short)0);
-    Util.arrayCopyNonAtomic(data,(short)0,buf,start,len);
+  public short readCertificateChain(byte[] buf, short offset) {
+    short len = Util.getShort(certificateChain, (short)0);
+    Util.arrayCopyNonAtomic(certificateChain, (short)2, buf, offset, len);
     return len;
   }
 
-  /*
-  private static void print (String lab, byte[] b, short s, short l){
-    byte[] i = new byte[l];
-    Util.arrayCopyNonAtomic(b,s,i,(short)0,l);
-    print(lab,i);
+  @Override
+  public short getCertificateChainLength() {
+   return Util.getShort(certificateChain, (short)0);
   }
-  private static void print(String label, byte[] buf){
-    System.out.println(label+": ");
-    StringBuilder sb = new StringBuilder();
-    for(int i = 0; i < buf.length; i++){
-      sb.append(String.format(" 0x%02X", buf[i])) ;
-      if(((i-1)%38 == 0) && ((i-1) >0)){
-        sb.append(";\n");
-      }
+
+  @Override
+  public short ecSign256(byte[] secret, short secretStart, short secretLength,
+      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+      byte[] outputDataBuf, short outputDataStart) {
+
+    ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(
+        KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
+    key.setS(secret, secretStart, secretLength);
+
+    Signature signer = Signature
+        .getInstance(Signature.ALG_ECDSA_SHA_256, false);
+    signer.init(key, Signature.MODE_SIGN);
+    return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
+        outputDataBuf, outputDataStart);
+  }
+
+  @Override
+  public void persistPartialCertificateChain(byte[] buf, short offset,
+      short len, short totalLen) {
+    //  _____________________________________________________
+    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 | 3 Bytes | Cert2|...
+    // |_________|________|_________|_______|_________|______|
+    // First two bytes holds the length of the total buffer.
+    // CBOR format:
+    // Next single byte holds the array header.
+    // Next 3 bytes holds the Byte array header with the cert1 length.
+    // Next 3 bytes holds the Byte array header with the cert2 length.
+    short persistedLen = Util.getShort(certificateChain, (short) 0);
+    if (persistedLen > totalLen) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
-    System.out.println(sb.toString());
-  }*/
+    JCSystem.beginTransaction();
+    Util.setShort(certificateChain, (short) 0, (short) (len + persistedLen));
+    Util.arrayCopyNonAtomic(buf, offset, certificateChain,
+            (short) (persistedLen+2), len);
+    JCSystem.commitTransaction();
+  }
+
+  @Override
+  public boolean isBootSignalEventSupported() {
+    return false;
+  }
+
+  @Override
+  public boolean isDeviceRebooted() {
+    return false;
+  }
+
+  @Override
+  public void clearDeviceBooted(boolean resetBootFlag) {
+    // To be filled
+  }
+
+  @Override
+  public void onSave(Element ele) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public void onRestore(Element ele) {
+    // TODO Auto-generated method stub
+
+  }
+
+  @Override
+  public short getBackupPrimitiveByteCount() {
+    // TODO Auto-generated method stub
+    return 0;
+  }
+
+  @Override
+  public short getBackupObjectCount() {
+    // TODO Auto-generated method stub
+    return 0;
+  }
 }

@@ -30,7 +30,6 @@ public class KMEncoder {
 
   // masks
   private static final byte ADDITIONAL_MASK = 0x1F;
-  private static final byte MAJOR_TYPE_MASK = (byte) 0xE0;
 
   // value length
   private static final byte UINT8_LENGTH = (byte) 0x18;
@@ -39,8 +38,7 @@ public class KMEncoder {
   private static final byte UINT64_LENGTH = (byte) 0x1B;
   private static final short TINY_PAYLOAD = 0x17;
   private static final short SHORT_PAYLOAD =  0x100;
-
-  // TODO move the following to transient memory.
+  //TODO make this static.
   private byte[] buffer;
   private short startOff;
   private short length;
@@ -79,6 +77,16 @@ public class KMEncoder {
     push(object);
     encode();
     return (short)(this.startOff - startOff);
+  }
+
+  // array{KMError.OK,Array{KMByteBlobs}}
+  public void encodeCertChain(byte[] buffer, short offset, short length) {
+    this.buffer = buffer;
+    this.startOff = offset;
+    this.length = (short)(offset+3);
+
+    writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
+    writeByte(UINT_TYPE); // Error.OK
   }
 
   //array{KMError.OK,Array{KMByteBlobs}}
