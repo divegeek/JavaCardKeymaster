@@ -343,7 +343,7 @@ public class KMEncoder {
   }
 
   private void writeBytes(byte[] buf, short start, short len){
-    Util.arrayCopy(buf, start, buffer, startOff, len);
+    Util.arrayCopyNonAtomic(buf, start, buffer, startOff, len);
     incrementStartOff(len);
   }
   private void writeShort(short val){

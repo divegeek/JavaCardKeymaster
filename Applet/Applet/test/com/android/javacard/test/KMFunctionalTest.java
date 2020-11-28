@@ -17,7 +17,8 @@
 package com.android.javacard.test;
 
 import com.android.javacard.keymaster.KMArray;
-import com.android.javacard.keymaster.KMBackupStoreApplet;
+import com.android.javacard.keymaster.KMAttestationCert;
+import com.android.javacard.keymaster.KMAttestationCertImpl;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
@@ -43,22 +44,359 @@ import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import javacard.framework.Util;
+
+import java.security.spec.PKCS8EncodedKeySpec;
+
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 import org.junit.Assert;
 import org.junit.Test;
 
 public class KMFunctionalTest {
-  private static final byte[] X509Issuer = {
-    0x30, 0x76, 0x31, 0x0B, 0x30, 0x09, 0x06, 0x03, 0x55, 0x04, 0x06, 0x13, 0x02, 0x55, 0x53, 0x31,
-    0x13, 0x30, 0x11, 0x06, 0x03, 0x55, 0x04, 0x08, 0x0C, 0x0A, 0x43, 0x61, 0x6C, 0x69, 0x66, 0x6F,
-    0x72, 0x6E, 0x69, 0x61, 0x31, 0x15, 0x30, 0x13, 0x06, 0x03, 0x55, 0x04, 0x0A, 0x0C, 0x0C, 0x47,
-    0x6F, 0x6F, 0x67, 0x6C, 0x65, 0x2C, 0x20, 0x49, 0x6E, 0x63, 0x2E, 0x31, 0x10, 0x30, 0x0E, 0x06,
-    0x03, 0x55, 0x04, 0x0B, 0x0C, 0x07, 0x41, 0x6E, 0x64, 0x72, 0x6F, 0x69, 0x64, 0x31, 0x29, 0x30,
-    0x27, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0C, 0x20, 0x41, 0x6E, 0x64, 0x72, 0x6F, 0x69, 0x64, 0x20,
-    0x53, 0x6F, 0x66, 0x74, 0x77, 0x61, 0x72, 0x65, 0x20, 0x41, 0x74, 0x74, 0x65, 0x73, 0x74, 0x61,
-    0x74, 0x69, 0x6F, 0x6E, 0x20, 0x4B, 0x65, 0x79
-  };
+  private static final byte INS_BEGIN_KM_CMD = 0x00;
+  private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = INS_BEGIN_KM_CMD + 1; //0x01
+  private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = INS_BEGIN_KM_CMD + 2; //0x02
+  private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = INS_BEGIN_KM_CMD + 3; //0x03
+  private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_BEGIN_KM_CMD + 4; //0x04
+  private static final byte INS_PROVISION_SHARED_SECRET_CMD = INS_BEGIN_KM_CMD + 5; //0x05
+  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD + 6; //0x06
+  private static final byte INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 7; //0x07
+  private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 8; //0x08
+  // Top 32 commands are reserved for provisioning.
+  private static final byte INS_END_KM_PROVISION_CMD = 0x20;
+
+  private static final byte INS_GENERATE_KEY_CMD = INS_END_KM_PROVISION_CMD + 1;  //0x21
+  private static final byte INS_IMPORT_KEY_CMD = INS_END_KM_PROVISION_CMD + 2;    //0x22
+  private static final byte INS_IMPORT_WRAPPED_KEY_CMD = INS_END_KM_PROVISION_CMD + 3; //0x23
+  private static final byte INS_EXPORT_KEY_CMD = INS_END_KM_PROVISION_CMD + 4; //0x24
+  private static final byte INS_ATTEST_KEY_CMD = INS_END_KM_PROVISION_CMD + 5; //0x25
+  private static final byte INS_UPGRADE_KEY_CMD = INS_END_KM_PROVISION_CMD + 6; //0x26
+  private static final byte INS_DELETE_KEY_CMD = INS_END_KM_PROVISION_CMD + 7; //0x27
+  private static final byte INS_DELETE_ALL_KEYS_CMD = INS_END_KM_PROVISION_CMD + 8; //0x28
+  private static final byte INS_ADD_RNG_ENTROPY_CMD = INS_END_KM_PROVISION_CMD + 9; //0x29
+  private static final byte INS_COMPUTE_SHARED_HMAC_CMD = INS_END_KM_PROVISION_CMD + 10; //0x2A
+  private static final byte INS_DESTROY_ATT_IDS_CMD = INS_END_KM_PROVISION_CMD + 11;  //0x2B
+  private static final byte INS_VERIFY_AUTHORIZATION_CMD = INS_END_KM_PROVISION_CMD + 12; //0x2C
+  private static final byte INS_GET_HMAC_SHARING_PARAM_CMD = INS_END_KM_PROVISION_CMD + 13; //0x2D
+  private static final byte INS_GET_KEY_CHARACTERISTICS_CMD = INS_END_KM_PROVISION_CMD + 14; //0x2E
+  private static final byte INS_GET_HW_INFO_CMD = INS_END_KM_PROVISION_CMD + 15; //0x2F
+  private static final byte INS_BEGIN_OPERATION_CMD = INS_END_KM_PROVISION_CMD + 16;  //0x30
+  private static final byte INS_UPDATE_OPERATION_CMD = INS_END_KM_PROVISION_CMD + 17;  //0x31
+  private static final byte INS_FINISH_OPERATION_CMD = INS_END_KM_PROVISION_CMD + 18; //0x32
+  private static final byte INS_ABORT_OPERATION_CMD = INS_END_KM_PROVISION_CMD + 19; //0x33
+  private static final byte INS_DEVICE_LOCKED_CMD = INS_END_KM_PROVISION_CMD + 20;//0x34
+  private static final byte INS_EARLY_BOOT_ENDED_CMD = INS_END_KM_PROVISION_CMD + 21; //0x35
+  private static final byte INS_GET_CERT_CHAIN_CMD = INS_END_KM_PROVISION_CMD + 22; //0x36
+
+  private static final byte[] kEcPrivKey = {
+          (byte) 0x21, (byte) 0xe0, (byte) 0x86, (byte) 0x43, (byte) 0x2a,
+          (byte) 0x15, (byte) 0x19, (byte) 0x84, (byte) 0x59, (byte) 0xcf,
+          (byte) 0x36, (byte) 0x3a, (byte) 0x50, (byte) 0xfc, (byte) 0x14,
+          (byte) 0xc9, (byte) 0xda, (byte) 0xad, (byte) 0xf9, (byte) 0x35,
+          (byte) 0xf5, (byte) 0x27, (byte) 0xc2, (byte) 0xdf, (byte) 0xd7,
+          (byte) 0x1e, (byte) 0x4d, (byte) 0x6d, (byte) 0xbc, (byte) 0x42,
+          (byte) 0xe5, (byte) 0x44 };
+  private static final byte[] kEcPubKey = {
+          (byte) 0x04, (byte) 0xeb, (byte) 0x9e, (byte) 0x79, (byte) 0xf8,
+          (byte) 0x42, (byte) 0x63, (byte) 0x59, (byte) 0xac, (byte) 0xcb,
+          (byte) 0x2a, (byte) 0x91, (byte) 0x4c, (byte) 0x89, (byte) 0x86,
+          (byte) 0xcc, (byte) 0x70, (byte) 0xad, (byte) 0x90, (byte) 0x66,
+          (byte) 0x93, (byte) 0x82, (byte) 0xa9, (byte) 0x73, (byte) 0x26,
+          (byte) 0x13, (byte) 0xfe, (byte) 0xac, (byte) 0xcb, (byte) 0xf8,
+          (byte) 0x21, (byte) 0x27, (byte) 0x4c, (byte) 0x21, (byte) 0x74,
+          (byte) 0x97, (byte) 0x4a, (byte) 0x2a, (byte) 0xfe, (byte) 0xa5,
+          (byte) 0xb9, (byte) 0x4d, (byte) 0x7f, (byte) 0x66, (byte) 0xd4,
+          (byte) 0xe0, (byte) 0x65, (byte) 0x10, (byte) 0x66, (byte) 0x35,
+          (byte) 0xbc, (byte) 0x53, (byte) 0xb7, (byte) 0xa0, (byte) 0xa3,
+          (byte) 0xa6, (byte) 0x71, (byte) 0x58, (byte) 0x3e, (byte) 0xdb,
+          (byte) 0x3e, (byte) 0x11, (byte) 0xae, (byte) 0x10, (byte) 0x14 };
+
+  private static final byte[] kEcAttestCert = {
+          0x30, (byte) 0x82, (byte) 0x02, (byte) 0x78, (byte) 0x30, (byte) 0x82,
+          (byte) 0x02, (byte) 0x1e, (byte) 0xa0, (byte) 0x03, (byte) 0x02,
+          (byte) 0x01, (byte) 0x02, (byte) 0x02, (byte) 0x02, (byte) 0x10, 0x01,
+          (byte) 0x30, (byte) 0x0a, (byte) 0x06, (byte) 0x08, (byte) 0x2a,
+          (byte) 0x86, (byte) 0x48, (byte) 0xce, (byte) 0x3d, (byte) 0x04,
+          (byte) 0x03, (byte) 0x02, (byte) 0x30, (byte) 0x81, (byte) 0x98, 0x31,
+          (byte) 0x0b, (byte) 0x30, (byte) 0x09, (byte) 0x06, (byte) 0x03,
+          (byte) 0x55, (byte) 0x04, (byte) 0x06, (byte) 0x13, (byte) 0x02,
+          (byte) 0x55, (byte) 0x53, (byte) 0x31, (byte) 0x13, (byte) 0x30, 0x11,
+          (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x08,
+          (byte) 0x0c, (byte) 0x0a, (byte) 0x43, (byte) 0x61, (byte) 0x6c,
+          (byte) 0x69, (byte) 0x66, (byte) 0x6f, (byte) 0x72, (byte) 0x6e, 0x69,
+          (byte) 0x61, (byte) 0x31, (byte) 0x16, (byte) 0x30, (byte) 0x14,
+          (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x07,
+          (byte) 0x0c, (byte) 0x0d, (byte) 0x4d, (byte) 0x6f, (byte) 0x75, 0x6e,
+          (byte) 0x74, (byte) 0x61, (byte) 0x69, (byte) 0x6e, (byte) 0x20,
+          (byte) 0x56, (byte) 0x69, (byte) 0x65, (byte) 0x77, (byte) 0x31,
+          (byte) 0x15, (byte) 0x30, (byte) 0x13, (byte) 0x06, (byte) 0x03, 0x55,
+          (byte) 0x04, (byte) 0x0a, (byte) 0x0c, (byte) 0x0c, (byte) 0x47,
+          (byte) 0x6f, (byte) 0x6f, (byte) 0x67, (byte) 0x6c, (byte) 0x65,
+          (byte) 0x2c, (byte) 0x20, (byte) 0x49, (byte) 0x6e, (byte) 0x63, 0x2e,
+          (byte) 0x31, (byte) 0x10, (byte) 0x30, (byte) 0x0e, (byte) 0x06,
+          (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x0b, (byte) 0x0c,
+          (byte) 0x07, (byte) 0x41, (byte) 0x6e, (byte) 0x64, (byte) 0x72, 0x6f,
+          (byte) 0x69, (byte) 0x64, (byte) 0x31, (byte) 0x33, (byte) 0x30,
+          (byte) 0x31, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04,
+          (byte) 0x03, (byte) 0x0c, (byte) 0x2a, (byte) 0x41, (byte) 0x6e, 0x64,
+          (byte) 0x72, (byte) 0x6f, (byte) 0x69, (byte) 0x64, (byte) 0x20,
+          (byte) 0x4b, (byte) 0x65, (byte) 0x79, (byte) 0x73, (byte) 0x74,
+          (byte) 0x6f, (byte) 0x72, (byte) 0x65, (byte) 0x20, (byte) 0x53, 0x6f,
+          (byte) 0x66, (byte) 0x74, (byte) 0x77, (byte) 0x61, (byte) 0x72,
+          (byte) 0x65, (byte) 0x20, (byte) 0x41, (byte) 0x74, (byte) 0x74,
+          (byte) 0x65, (byte) 0x73, (byte) 0x74, (byte) 0x61, (byte) 0x74, 0x69,
+          (byte) 0x6f, (byte) 0x6e, (byte) 0x20, (byte) 0x52, (byte) 0x6f,
+          (byte) 0x6f, (byte) 0x74, (byte) 0x30, (byte) 0x1e, (byte) 0x17,
+          (byte) 0x0d, (byte) 0x31, (byte) 0x36, (byte) 0x30, (byte) 0x31, 0x31,
+          (byte) 0x31, (byte) 0x30, (byte) 0x30, (byte) 0x34, (byte) 0x36,
+          (byte) 0x30, (byte) 0x39, (byte) 0x5a, (byte) 0x17, (byte) 0x0d,
+          (byte) 0x32, (byte) 0x36, (byte) 0x30, (byte) 0x31, (byte) 0x30, 0x38,
+          (byte) 0x30, (byte) 0x30, (byte) 0x34, (byte) 0x36, (byte) 0x30,
+          (byte) 0x39, (byte) 0x5a, (byte) 0x30, (byte) 0x81, (byte) 0x88,
+          (byte) 0x31, (byte) 0x0b, (byte) 0x30, (byte) 0x09, (byte) 0x06, 0x03,
+          (byte) 0x55, (byte) 0x04, (byte) 0x06, (byte) 0x13, (byte) 0x02,
+          (byte) 0x55, (byte) 0x53, (byte) 0x31, (byte) 0x13, (byte) 0x30,
+          (byte) 0x11, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04, 0x08,
+          (byte) 0x0c, (byte) 0x0a, (byte) 0x43, (byte) 0x61, (byte) 0x6c,
+          (byte) 0x69, (byte) 0x66, (byte) 0x6f, (byte) 0x72, (byte) 0x6e,
+          (byte) 0x69, (byte) 0x61, (byte) 0x31, (byte) 0x15, (byte) 0x30, 0x13,
+          (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x0a,
+          (byte) 0x0c, (byte) 0x0c, (byte) 0x47, (byte) 0x6f, (byte) 0x6f,
+          (byte) 0x67, (byte) 0x6c, (byte) 0x65, (byte) 0x2c, (byte) 0x20, 0x49,
+          (byte) 0x6e, (byte) 0x63, (byte) 0x2e, (byte) 0x31, (byte) 0x10,
+          (byte) 0x30, (byte) 0x0e, (byte) 0x06, (byte) 0x03, (byte) 0x55,
+          (byte) 0x04, (byte) 0x0b, (byte) 0x0c, (byte) 0x07, (byte) 0x41, 0x6e,
+          (byte) 0x64, (byte) 0x72, (byte) 0x6f, (byte) 0x69, (byte) 0x64,
+          (byte) 0x31, (byte) 0x3b, (byte) 0x30, (byte) 0x39, (byte) 0x06,
+          (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x03, (byte) 0x0c, 0x32,
+          (byte) 0x41, (byte) 0x6e, (byte) 0x64, (byte) 0x72, (byte) 0x6f,
+          (byte) 0x69, (byte) 0x64, (byte) 0x20, (byte) 0x4b, (byte) 0x65,
+          (byte) 0x79, (byte) 0x73, (byte) 0x74, (byte) 0x6f, (byte) 0x72, 0x65,
+          (byte) 0x20, (byte) 0x53, (byte) 0x6f, (byte) 0x66, (byte) 0x74,
+          (byte) 0x77, (byte) 0x61, (byte) 0x72, (byte) 0x65, (byte) 0x20,
+          (byte) 0x41, (byte) 0x74, (byte) 0x74, (byte) 0x65, (byte) 0x73, 0x74,
+          (byte) 0x61, (byte) 0x74, (byte) 0x69, (byte) 0x6f, (byte) 0x6e,
+          (byte) 0x20, (byte) 0x49, (byte) 0x6e, (byte) 0x74, (byte) 0x65,
+          (byte) 0x72, (byte) 0x6d, (byte) 0x65, (byte) 0x64, (byte) 0x69, 0x61,
+          (byte) 0x74, (byte) 0x65, (byte) 0x30, (byte) 0x59, (byte) 0x30,
+          (byte) 0x13, (byte) 0x06, (byte) 0x07, (byte) 0x2a, (byte) 0x86,
+          (byte) 0x48, (byte) 0xce, (byte) 0x3d, (byte) 0x02, (byte) 0x01, 0x06,
+          (byte) 0x08, (byte) 0x2a, (byte) 0x86, (byte) 0x48, (byte) 0xce,
+          (byte) 0x3d, (byte) 0x03, (byte) 0x01, (byte) 0x07, (byte) 0x03,
+          (byte) 0x42, (byte) 0x00, (byte) 0x04, (byte) 0xeb, (byte) 0x9e, 0x79,
+          (byte) 0xf8, (byte) 0x42, (byte) 0x63, (byte) 0x59, (byte) 0xac,
+          (byte) 0xcb, (byte) 0x2a, (byte) 0x91, (byte) 0x4c, (byte) 0x89,
+          (byte) 0x86, (byte) 0xcc, (byte) 0x70, (byte) 0xad, (byte) 0x90, 0x66,
+          (byte) 0x93, (byte) 0x82, (byte) 0xa9, (byte) 0x73, (byte) 0x26,
+          (byte) 0x13, (byte) 0xfe, (byte) 0xac, (byte) 0xcb, (byte) 0xf8,
+          (byte) 0x21, (byte) 0x27, (byte) 0x4c, (byte) 0x21, (byte) 0x74,
+          (byte) 0x97, (byte) 0x4a, (byte) 0x2a, (byte) 0xfe, (byte) 0xa5,
+          (byte) 0xb9, (byte) 0x4d, (byte) 0x7f, (byte) 0x66, (byte) 0xd4,
+          (byte) 0xe0, (byte) 0x65, (byte) 0x10, (byte) 0x66, (byte) 0x35,
+          (byte) 0xbc, 0x53, (byte) 0xb7, (byte) 0xa0, (byte) 0xa3, (byte) 0xa6,
+          (byte) 0x71, (byte) 0x58, (byte) 0x3e, (byte) 0xdb, (byte) 0x3e,
+          (byte) 0x11, (byte) 0xae, (byte) 0x10, (byte) 0x14, (byte) 0xa3,
+          (byte) 0x66, 0x30, (byte) 0x64, (byte) 0x30, (byte) 0x1d, (byte) 0x06,
+          (byte) 0x03, (byte) 0x55, (byte) 0x1d, (byte) 0x0e, (byte) 0x04,
+          (byte) 0x16, (byte) 0x04, (byte) 0x14, (byte) 0x3f, (byte) 0xfc,
+          (byte) 0xac, (byte) 0xd6, (byte) 0x1a, (byte) 0xb1, (byte) 0x3a,
+          (byte) 0x9e, (byte) 0x81, (byte) 0x20, (byte) 0xb8, (byte) 0xd5,
+          (byte) 0x25, (byte) 0x1c, (byte) 0xc5, (byte) 0x65, (byte) 0xbb,
+          (byte) 0x1e, (byte) 0x91, (byte) 0xa9, (byte) 0x30, (byte) 0x1f,
+          (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x1d, (byte) 0x23,
+          (byte) 0x04, (byte) 0x18, (byte) 0x30, (byte) 0x16, (byte) 0x80,
+          (byte) 0x14, (byte) 0xc8, (byte) 0xad, (byte) 0xe9, (byte) 0x77,
+          (byte) 0x4c, (byte) 0x45, (byte) 0xc3, (byte) 0xa3, (byte) 0xcf,
+          (byte) 0x0d, (byte) 0x16, (byte) 0x10, (byte) 0xe4, (byte) 0x79,
+          (byte) 0x43, (byte) 0x3a, (byte) 0x21, (byte) 0x5a, 0x30, (byte) 0xcf,
+          (byte) 0x30, (byte) 0x12, (byte) 0x06, (byte) 0x03, (byte) 0x55,
+          (byte) 0x1d, (byte) 0x13, (byte) 0x01, (byte) 0x01, (byte) 0xff,
+          (byte) 0x04, (byte) 0x08, (byte) 0x30, (byte) 0x06, 0x01, (byte) 0x01,
+          (byte) 0xff, (byte) 0x02, (byte) 0x01, (byte) 0x00, (byte) 0x30,
+          (byte) 0x0e, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x1d,
+          (byte) 0x0f, (byte) 0x01, (byte) 0x01, (byte) 0xff, 0x04, (byte) 0x04,
+          (byte) 0x03, (byte) 0x02, (byte) 0x02, (byte) 0x84, (byte) 0x30,
+          (byte) 0x0a, (byte) 0x06, (byte) 0x08, (byte) 0x2a, (byte) 0x86,
+          (byte) 0x48, (byte) 0xce, (byte) 0x3d, (byte) 0x04, 0x03, (byte) 0x02,
+          (byte) 0x03, (byte) 0x48, (byte) 0x00, (byte) 0x30, (byte) 0x45,
+          (byte) 0x02, (byte) 0x20, (byte) 0x4b, (byte) 0x8a, (byte) 0x9b,
+          (byte) 0x7b, (byte) 0xee, (byte) 0x82, (byte) 0xbc, (byte) 0xc0,
+          (byte) 0x33, (byte) 0x87, (byte) 0xae, (byte) 0x2f, (byte) 0xc0,
+          (byte) 0x89, (byte) 0x98, (byte) 0xb4, (byte) 0xdd, (byte) 0xc3,
+          (byte) 0x8d, (byte) 0xab, (byte) 0x27, (byte) 0x2a, (byte) 0x45,
+          (byte) 0x9f, (byte) 0x69, (byte) 0x0c, (byte) 0xc7, (byte) 0xc3,
+          (byte) 0x92, (byte) 0xd4, (byte) 0x0f, (byte) 0x8e, (byte) 0x02,
+          (byte) 0x21, (byte) 0x00, (byte) 0xee, (byte) 0xda, (byte) 0x01,
+          (byte) 0x5d, (byte) 0xb6, (byte) 0xf4, (byte) 0x32, (byte) 0xe9,
+          (byte) 0xd4, (byte) 0x84, (byte) 0x3b, (byte) 0x62, (byte) 0x4c,
+          (byte) 0x94, (byte) 0x04, (byte) 0xef, (byte) 0x3a, (byte) 0x7c,
+          (byte) 0xcc, (byte) 0xbd, 0x5e, (byte) 0xfb, (byte) 0x22, (byte) 0xbb,
+          (byte) 0xe7, (byte) 0xfe, (byte) 0xb9, (byte) 0x77, (byte) 0x3f,
+          (byte) 0x59, (byte) 0x3f, (byte) 0xfb, };
+
+      private static final byte[] kEcAttestRootCert = {
+              0x30, (byte) 0x82, (byte) 0x02, (byte) 0x8b, (byte) 0x30,
+              (byte) 0x82, (byte) 0x02, (byte) 0x32, (byte) 0xa0, (byte) 0x03,
+              (byte) 0x02, (byte) 0x01, (byte) 0x02, (byte) 0x02, (byte) 0x09,
+              (byte) 0x00, (byte) 0xa2, (byte) 0x05, (byte) 0x9e, (byte) 0xd1,
+              (byte) 0x0e, (byte) 0x43, (byte) 0x5b, (byte) 0x57, (byte) 0x30,
+              (byte) 0x0a, (byte) 0x06, (byte) 0x08, (byte) 0x2a, (byte) 0x86,
+              (byte) 0x48, (byte) 0xce, 0x3d, (byte) 0x04, (byte) 0x03,
+              (byte) 0x02, (byte) 0x30, (byte) 0x81, (byte) 0x98, (byte) 0x31,
+              (byte) 0x0b, (byte) 0x30, (byte) 0x09, (byte) 0x06, (byte) 0x03,
+              (byte) 0x55, (byte) 0x04, (byte) 0x06, 0x13, (byte) 0x02,
+              (byte) 0x55, (byte) 0x53, (byte) 0x31, (byte) 0x13, (byte) 0x30,
+              (byte) 0x11, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04,
+              (byte) 0x08, (byte) 0x0c, (byte) 0x0a, (byte) 0x43, 0x61,
+              (byte) 0x6c, (byte) 0x69, (byte) 0x66, (byte) 0x6f, (byte) 0x72,
+              (byte) 0x6e, (byte) 0x69, (byte) 0x61, (byte) 0x31, (byte) 0x16,
+              (byte) 0x30, (byte) 0x14, (byte) 0x06, (byte) 0x03, (byte) 0x55,
+              0x04, (byte) 0x07, (byte) 0x0c, (byte) 0x0d, (byte) 0x4d,
+              (byte) 0x6f, (byte) 0x75, (byte) 0x6e, (byte) 0x74, (byte) 0x61,
+              (byte) 0x69, (byte) 0x6e, (byte) 0x20, (byte) 0x56, (byte) 0x69,
+              (byte) 0x65, 0x77, (byte) 0x31, (byte) 0x15, (byte) 0x30,
+              (byte) 0x13, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04,
+              (byte) 0x0a, (byte) 0x0c, (byte) 0x0c, (byte) 0x47, (byte) 0x6f,
+              (byte) 0x6f, (byte) 0x67, 0x6c, (byte) 0x65, (byte) 0x2c,
+              (byte) 0x20, (byte) 0x49, (byte) 0x6e, (byte) 0x63, (byte) 0x2e,
+              (byte) 0x31, (byte) 0x10, (byte) 0x30, (byte) 0x0e, (byte) 0x06,
+              (byte) 0x03, (byte) 0x55, (byte) 0x04, 0x0b, (byte) 0x0c,
+              (byte) 0x07, (byte) 0x41, (byte) 0x6e, (byte) 0x64, (byte) 0x72,
+              (byte) 0x6f, (byte) 0x69, (byte) 0x64, (byte) 0x31, (byte) 0x33,
+              (byte) 0x30, (byte) 0x31, (byte) 0x06, (byte) 0x03, 0x55,
+              (byte) 0x04, (byte) 0x03, (byte) 0x0c, (byte) 0x2a, (byte) 0x41,
+              (byte) 0x6e, (byte) 0x64, (byte) 0x72, (byte) 0x6f, (byte) 0x69,
+              (byte) 0x64, (byte) 0x20, (byte) 0x4b, (byte) 0x65, (byte) 0x79,
+              0x73, (byte) 0x74, (byte) 0x6f, (byte) 0x72, (byte) 0x65,
+              (byte) 0x20, (byte) 0x53, (byte) 0x6f, (byte) 0x66, (byte) 0x74,
+              (byte) 0x77, (byte) 0x61, (byte) 0x72, (byte) 0x65, (byte) 0x20,
+              (byte) 0x41, 0x74, (byte) 0x74, (byte) 0x65, (byte) 0x73,
+              (byte) 0x74, (byte) 0x61, (byte) 0x74, (byte) 0x69, (byte) 0x6f,
+              (byte) 0x6e, (byte) 0x20, (byte) 0x52, (byte) 0x6f, (byte) 0x6f,
+              (byte) 0x74, (byte) 0x30, 0x1e, (byte) 0x17, (byte) 0x0d,
+              (byte) 0x31, (byte) 0x36, (byte) 0x30, (byte) 0x31, (byte) 0x31,
+              (byte) 0x31, (byte) 0x30, (byte) 0x30, (byte) 0x34, (byte) 0x33,
+              (byte) 0x35, (byte) 0x30, (byte) 0x5a, 0x17, (byte) 0x0d,
+              (byte) 0x33, (byte) 0x36, (byte) 0x30, (byte) 0x31, (byte) 0x30,
+              (byte) 0x36, (byte) 0x30, (byte) 0x30, (byte) 0x34, (byte) 0x33,
+              (byte) 0x35, (byte) 0x30, (byte) 0x5a, (byte) 0x30, (byte) 0x81,
+              (byte) 0x98, (byte) 0x31, (byte) 0x0b, (byte) 0x30, (byte) 0x09,
+              (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x06,
+              (byte) 0x13, (byte) 0x02, (byte) 0x55, (byte) 0x53, (byte) 0x31,
+              0x13, (byte) 0x30, (byte) 0x11, (byte) 0x06, (byte) 0x03,
+              (byte) 0x55, (byte) 0x04, (byte) 0x08, (byte) 0x0c, (byte) 0x0a,
+              (byte) 0x43, (byte) 0x61, (byte) 0x6c, (byte) 0x69, (byte) 0x66,
+              (byte) 0x6f, 0x72, (byte) 0x6e, (byte) 0x69, (byte) 0x61,
+              (byte) 0x31, (byte) 0x16, (byte) 0x30, (byte) 0x14, (byte) 0x06,
+              (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x07, (byte) 0x0c,
+              (byte) 0x0d, (byte) 0x4d, 0x6f, (byte) 0x75, (byte) 0x6e,
+              (byte) 0x74, (byte) 0x61, (byte) 0x69, (byte) 0x6e, (byte) 0x20,
+              (byte) 0x56, (byte) 0x69, (byte) 0x65, (byte) 0x77, (byte) 0x31,
+              (byte) 0x15, (byte) 0x30, (byte) 0x13, 0x06, (byte) 0x03,
+              (byte) 0x55, (byte) 0x04, (byte) 0x0a, (byte) 0x0c, (byte) 0x0c,
+              (byte) 0x47, (byte) 0x6f, (byte) 0x6f, (byte) 0x67, (byte) 0x6c,
+              (byte) 0x65, (byte) 0x2c, (byte) 0x20, (byte) 0x49, 0x6e,
+              (byte) 0x63, (byte) 0x2e, (byte) 0x31, (byte) 0x10, (byte) 0x30,
+              (byte) 0x0e, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04,
+              (byte) 0x0b, (byte) 0x0c, (byte) 0x07, (byte) 0x41, (byte) 0x6e,
+              0x64, (byte) 0x72, (byte) 0x6f, (byte) 0x69, (byte) 0x64,
+              (byte) 0x31, (byte) 0x33, (byte) 0x30, (byte) 0x31, (byte) 0x06,
+              (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x03, (byte) 0x0c,
+              (byte) 0x2a, 0x41, (byte) 0x6e, (byte) 0x64, (byte) 0x72,
+              (byte) 0x6f, (byte) 0x69, (byte) 0x64, (byte) 0x20, (byte) 0x4b,
+              (byte) 0x65, (byte) 0x79, (byte) 0x73, (byte) 0x74, (byte) 0x6f,
+              (byte) 0x72, (byte) 0x65, 0x20, (byte) 0x53, (byte) 0x6f,
+              (byte) 0x66, (byte) 0x74, (byte) 0x77, (byte) 0x61, (byte) 0x72,
+              (byte) 0x65, (byte) 0x20, (byte) 0x41, (byte) 0x74, (byte) 0x74,
+              (byte) 0x65, (byte) 0x73, (byte) 0x74, 0x61, (byte) 0x74,
+              (byte) 0x69, (byte) 0x6f, (byte) 0x6e, 0x77, (byte) 0x1f,
+              (byte) 0x44, (byte) 0x22, (byte) 0x6d, (byte) 0xbd, (byte) 0xb1,
+              (byte) 0xaf, (byte) 0xfa, (byte) 0x16, (byte) 0xcb, (byte) 0xc7,
+              (byte) 0xad, (byte) 0xc5, (byte) 0x77, (byte) 0xd2, (byte) 0x20,
+              (byte) 0x52, (byte) 0x6f, (byte) 0x6f, (byte) 0x74, (byte) 0x30,
+              (byte) 0x59, (byte) 0x30, (byte) 0x13, (byte) 0x06, (byte) 0x07,
+              0x2a, (byte) 0x86, (byte) 0x48, (byte) 0xce, (byte) 0x3d,
+              (byte) 0x02, (byte) 0x01, (byte) 0x06, (byte) 0x08, (byte) 0x2a,
+              (byte) 0x86, (byte) 0x48, (byte) 0xce, (byte) 0x3d, (byte) 0x03,
+              (byte) 0x01, 0x07, (byte) 0x03, (byte) 0x42, (byte) 0x00,
+              (byte) 0x04, (byte) 0xee, (byte) 0x5d, (byte) 0x5e, (byte) 0xc7,
+              (byte) 0xe1, (byte) 0xc0, (byte) 0xdb, (byte) 0x6d, (byte) 0x03,
+              (byte) 0xa6, (byte) 0x7e, (byte) 0xe6, (byte) 0xb6, (byte) 0x1b,
+              (byte) 0xec, (byte) 0x4d, (byte) 0x6a, (byte) 0x5d, (byte) 0x6a,
+              (byte) 0x68, (byte) 0x2e, (byte) 0x0f, (byte) 0xff, (byte) 0x7f,
+              (byte) 0x49, (byte) 0x0e, (byte) 0x7d, 0x56, (byte) 0x9c,
+              (byte) 0xaa, (byte) 0xb7, (byte) 0xb0, (byte) 0x2d, (byte) 0x54,
+              (byte) 0x01, (byte) 0x5d, (byte) 0x3e, (byte) 0x43, (byte) 0x2b,
+              (byte) 0x2a, (byte) 0x8e, (byte) 0xd7, (byte) 0x4e, (byte) 0xec,
+              (byte) 0x48, (byte) 0x75, (byte) 0x41, (byte) 0xa4, (byte) 0xa3,
+              (byte) 0x63, (byte) 0x30, (byte) 0x61, (byte) 0x30, (byte) 0x1d,
+              (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x1d, (byte) 0x0e,
+              0x04, (byte) 0x16, (byte) 0x04, (byte) 0x14, (byte) 0xc8,
+              (byte) 0xad, (byte) 0xe9, (byte) 0x77, (byte) 0x4c, (byte) 0x45,
+              (byte) 0xc3, (byte) 0xa3, (byte) 0xcf, (byte) 0x0d, (byte) 0x16,
+              (byte) 0x10, (byte) 0xe4, (byte) 0x79, (byte) 0x43, (byte) 0x3a,
+              (byte) 0x21, (byte) 0x5a, (byte) 0x30, (byte) 0xcf, (byte) 0x30,
+              (byte) 0x1f, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x1d,
+              (byte) 0x23, (byte) 0x04, 0x18, (byte) 0x30, (byte) 0x16,
+              (byte) 0x80, (byte) 0x14, (byte) 0xc8, (byte) 0xad, (byte) 0xe9,
+              (byte) 0x77, (byte) 0x4c, (byte) 0x45, (byte) 0xc3, (byte) 0xa3,
+              (byte) 0xcf, (byte) 0x0d, (byte) 0x16, 0x10, (byte) 0xe4,
+              (byte) 0x79, (byte) 0x43, (byte) 0x3a, (byte) 0x21, (byte) 0x5a,
+              (byte) 0x30, (byte) 0xcf, (byte) 0x30, (byte) 0x0f, (byte) 0x06,
+              (byte) 0x03, (byte) 0x55, (byte) 0x1d, (byte) 0x13, 0x01,
+              (byte) 0x01, (byte) 0xff, (byte) 0x04, (byte) 0x05, (byte) 0x30,
+              (byte) 0x03, (byte) 0x01, (byte) 0x01, (byte) 0xff, (byte) 0x30,
+              (byte) 0x0e, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x1d,
+              0x0f, (byte) 0x01, (byte) 0x01, (byte) 0xff, (byte) 0x04,
+              (byte) 0x04, (byte) 0x03, (byte) 0x02, (byte) 0x02, (byte) 0x84,
+              (byte) 0x30, (byte) 0x0a, (byte) 0x06, (byte) 0x08, (byte) 0x2a,
+              (byte) 0x86, 0x48, (byte) 0xce, (byte) 0x3d, (byte) 0x04,
+              (byte) 0x03, (byte) 0x02, (byte) 0x03, (byte) 0x47, (byte) 0x00,
+              (byte) 0x30, (byte) 0x44, (byte) 0x02, (byte) 0x20, (byte) 0x35,
+              (byte) 0x21, (byte) 0xa3, (byte) 0xef, (byte) 0x8b, (byte) 0x34,
+              (byte) 0x46, (byte) 0x1e, (byte) 0x9c, (byte) 0xd5, (byte) 0x60,
+              (byte) 0xf3, (byte) 0x1d, (byte) 0x58, (byte) 0x89, (byte) 0x20,
+              (byte) 0x6a, (byte) 0xdc, (byte) 0xa3, 0x65, (byte) 0x41,
+              (byte) 0xf6, (byte) 0x0d, (byte) 0x9e, (byte) 0xce, (byte) 0x8a,
+              (byte) 0x19, (byte) 0x8c, (byte) 0x66, (byte) 0x48, (byte) 0x60,
+              (byte) 0x7b, (byte) 0x02, (byte) 0x20, (byte) 0x4d, 0x0b,
+              (byte) 0xf3, (byte) 0x51, (byte) 0xd9, (byte) 0x30, (byte) 0x7c,
+              (byte) 0x7d, (byte) 0x5b, (byte) 0xda, (byte) 0x35, (byte) 0x34,
+              (byte) 0x1d, (byte) 0xa8, (byte) 0x47, (byte) 0x1b, (byte) 0x63,
+              (byte) 0xa5, (byte) 0x85, (byte) 0x65, (byte) 0x3c, (byte) 0xad,
+              (byte) 0x4f, (byte) 0x24, (byte) 0xa7, (byte) 0xe7, (byte) 0x4d,
+              (byte) 0xaf, (byte) 0x41, (byte) 0x7d, (byte) 0xf1,
+              (byte) 0xbf, };
+
+      private static final byte[] X509Issuer = {
+              (byte) 0x30, (byte) 0x81, (byte) 0x88, (byte) 0x31, (byte) 0x0b,
+              (byte) 0x30, (byte) 0x09, (byte) 0x06, (byte) 0x03, (byte) 0x55,
+              (byte) 0x04, (byte) 0x06, (byte) 0x13, (byte) 0x02, (byte) 0x55,
+              (byte) 0x53, (byte) 0x31, (byte) 0x13, (byte) 0x30, (byte) 0x11,
+              (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x08,
+              (byte) 0x0c, (byte) 0x0a, (byte) 0x43, (byte) 0x61, (byte) 0x6c,
+              (byte) 0x69, (byte) 0x66, (byte) 0x6f, (byte) 0x72, (byte) 0x6e,
+              (byte) 0x69, (byte) 0x61, (byte) 0x31, (byte) 0x15, (byte) 0x30,
+              (byte) 0x13, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04,
+              (byte) 0x0a, (byte) 0x0c, (byte) 0x0c, (byte) 0x47, (byte) 0x6f,
+              (byte) 0x6f, (byte) 0x67, (byte) 0x6c, (byte) 0x65, (byte) 0x2c,
+              (byte) 0x20, (byte) 0x49, (byte) 0x6e, (byte) 0x63, (byte) 0x2e,
+              (byte) 0x31, (byte) 0x10, (byte) 0x30, (byte) 0x0e, (byte) 0x06,
+              (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x0b, (byte) 0x0c,
+              (byte) 0x07, (byte) 0x41, (byte) 0x6e, (byte) 0x64, (byte) 0x72,
+              (byte) 0x6f, (byte) 0x69, (byte) 0x64, (byte) 0x31, (byte) 0x3b,
+              (byte) 0x30, (byte) 0x39, (byte) 0x06, (byte) 0x03, (byte) 0x55,
+              (byte) 0x04, (byte) 0x03, (byte) 0x0c, (byte) 0x32, (byte) 0x41,
+              (byte) 0x6e, (byte) 0x64, (byte) 0x72, (byte) 0x6f, (byte) 0x69,
+              (byte) 0x64, (byte) 0x20, (byte) 0x4b, (byte) 0x65, (byte) 0x79,
+              (byte) 0x73, (byte) 0x74, (byte) 0x6f, (byte) 0x72, (byte) 0x65,
+              (byte) 0x20, (byte) 0x53, (byte) 0x6f, (byte) 0x66, (byte) 0x74,
+              (byte) 0x77, (byte) 0x61, (byte) 0x72, (byte) 0x65, (byte) 0x20,
+              (byte) 0x41, (byte) 0x74, (byte) 0x74, (byte) 0x65, (byte) 0x73,
+              (byte) 0x74, (byte) 0x61, (byte) 0x74, (byte) 0x69, (byte) 0x6f,
+              (byte) 0x6e, (byte) 0x20, (byte) 0x49, (byte) 0x6e, (byte) 0x74,
+              (byte) 0x65, (byte) 0x72, (byte) 0x6d, (byte) 0x65, (byte) 0x64,
+              (byte) 0x69, (byte) 0x61, (byte) 0x74, (byte) 0x65 };
   // AttestationApplicationId ::= SEQUENCE {
   //     *     packageInfoRecords SET OF PackageInfoRecord,
   //     *     signatureDigests   SET OF OCTET_STRING,
@@ -71,8 +409,8 @@ public class KMFunctionalTest {
   private static final byte[] attAppId = {0x30, 0x10, 0x31, 0x0B, 0x30, 0x04, 0x05, 'A', 'B', 'C',
     'D', 'E', 0x02, 0x01, 0x01, 0x31, 0x02, 0x04, 0x00};
   private static final byte[] attChallenge = {'c','h','a','l','l','e','n','g','e'};
-  private static final byte[] expiryTime = {0x32,0x30,0x35,0x37,0x30,0x31,0x30,0x31,0x30,0x30,0x30,0x30,0x30,0x30,0x5A};
-  private static final byte[] authKeyId = {1,2,3,4,5,6,7,8,9,1,2,3,4,5,6,7,8,9,1,2};
+  private static final byte[] expiryTime = {(byte)0x32, (byte)0x36, (byte)0x30, (byte)0x31, (byte)0x30, (byte)0x38, (byte)0x30, (byte)0x30, (byte)0x34, (byte)0x36, (byte)0x30, (byte)0x39, (byte)0x5a};
+  private static final byte[] authKeyId = { (byte)0x80, (byte)0x14, (byte)0xc8, (byte)0xad, (byte)0xe9, (byte)0x77, (byte)0x4c, (byte)0x45, (byte)0xc3, (byte)0xa3, (byte)0xcf, (byte)0x0d, (byte)0x16, (byte)0x10, (byte)0xe4, (byte)0x79, (byte)0x43, (byte)0x3a, (byte)0x21, (byte)0x5a, (byte)0x30, (byte)0xcf};
 
   private KMSEProvider sim;
   private CardSimulator simulator;
@@ -81,8 +419,8 @@ public class KMFunctionalTest {
   private KMSEProvider cryptoProvider;
 
   public KMFunctionalTest(){
-    cryptoProvider = KMSEProviderImpl.instance();
-    sim = KMSEProviderImpl.instance();
+    cryptoProvider = KMSEProviderImpl.instance(false);
+    sim = KMSEProviderImpl.instance(false);
     simulator = new CardSimulator();
     encoder = new KMEncoder();
     decoder = new KMDecoder();
@@ -96,151 +434,201 @@ public class KMFunctionalTest {
     simulator.selectApplet(appletAID);
     // provision attest key
     provisionCmd(simulator);
-    // set bootup parameters
-    setBootParams(simulator,(short)1,(short)1);
   }
 
-  private void initBackUpStore(){
-    // Create simulator
-    AID appletAID2 = AIDUtil.create("A000000063");
-    simulator.installApplet(appletAID2, KMBackupStoreApplet.class);
-    //simulator.selectApplet(appletAID2);
-  }
-
-  private void setBootParams(CardSimulator simulator, short osVersion, short osPatchLevel){
+  private void setBootParams(CardSimulator simulator, short osVersion,
+          short osPatchLevel, short vendorPatchLevel, short bootPatchLevel) {
     // Argument 1 OS Version
     short versionPtr = KMInteger.uint_16(osVersion);
-//    short versionTagPtr = KMIntegerTag.instance(KMType.UINT_TAG, KMType.OS_VERSION,versionPatchPtr);
+    // short versionTagPtr = KMIntegerTag.instance(KMType.UINT_TAG,
+    // KMType.OS_VERSION,versionPatchPtr);
     // Argument 2 OS Patch level
     short patchPtr = KMInteger.uint_16(osPatchLevel);
+    short vendorpatchPtr = KMInteger.uint_16((short) vendorPatchLevel);
+    short bootpatchPtr = KMInteger.uint_16((short) bootPatchLevel);
     // Argument 3 Verified Boot Key
     byte[] bootKeyHash = "00011122233344455566677788899900".getBytes();
-    short bootKeyPtr = KMByteBlob.instance(bootKeyHash,(short)0, (short)bootKeyHash.length);
+    short bootKeyPtr = KMByteBlob.instance(bootKeyHash, (short) 0,
+            (short) bootKeyHash.length);
     // Argument 4 Verified Boot Hash
-    short bootHashPtr = KMByteBlob.instance(bootKeyHash,(short)0, (short)bootKeyHash.length);
+    short bootHashPtr = KMByteBlob.instance(bootKeyHash, (short) 0,
+            (short) bootKeyHash.length);
     // Argument 5 Verified Boot State
-    short bootStatePtr = KMEnum.instance(KMType.VERIFIED_BOOT_STATE,KMType.VERIFIED_BOOT);
+    short bootStatePtr = KMEnum.instance(KMType.VERIFIED_BOOT_STATE,
+            KMType.VERIFIED_BOOT);
     // Argument 6 Device Locked
-    short deviceLockedPtr = KMEnum.instance(KMType.DEVICE_LOCKED, KMType.DEVICE_LOCKED_FALSE);
+    short deviceLockedPtr = KMEnum.instance(KMType.DEVICE_LOCKED,
+            KMType.DEVICE_LOCKED_FALSE);
     // Arguments
-    short arrPtr = KMArray.instance((short) 6);
+    short arrPtr = KMArray.instance((short) 8);
     KMArray vals = KMArray.cast(arrPtr);
-    vals.add((short)0, versionPtr);
+    vals.add((short) 0, versionPtr);
     vals.add((short) 1, patchPtr);
-    vals.add((short) 2, bootKeyPtr);
-    vals.add((short) 3, bootHashPtr);
-    vals.add((short) 4, bootStatePtr);
-    vals.add((short) 5, deviceLockedPtr);
-    CommandAPDU apdu = encodeApdu((byte)0x24, arrPtr);
+    vals.add((short) 2, vendorpatchPtr);
+    vals.add((short) 3, bootpatchPtr);
+    vals.add((short) 4, bootKeyPtr);
+    vals.add((short) 5, bootHashPtr);
+    vals.add((short) 6, bootStatePtr);
+    vals.add((short) 7, deviceLockedPtr);
+    CommandAPDU apdu = encodeApdu((byte) INS_SET_BOOT_PARAMS_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
 
   }
 
-  //TODO change this
-  private void provisionCmd(CardSimulator simulator) {
-/*    // Argument 1
-    short arrPtr = KMArray.instance((short) 1);
-    KMArray vals = KMArray.cast(arrPtr);
-    vals.add((short) 0, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
-    short keyparamsPtr = KMKeyParameters.instance(arrPtr);
-    // Argument 2
-    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.X509);
-    // Argument 3
-    byte[] byteBlob = new byte[48];
-    for (short i = 0; i < 48; i++) {
-      byteBlob[i] = (byte) i;
-    }
-    short keyBlobPtr = KMByteBlob.instance(byteBlob, (short) 0, (short)byteBlob.length);
-    // Array of expected arguments
-    short argPtr = KMArray.instance((short) 3);
-    KMArray arg = KMArray.cast(argPtr);
-    arg.add((short) 0, keyparamsPtr);
-    arg.add((short) 1, keyFormatPtr);
-    arg.add((short) 2, keyBlobPtr);
-    CommandAPDU apdu = encodeApdu((byte)0x23, argPtr);
+  private void provisionSigningCertificate(CardSimulator simulator) {
+    short byteBlobPtr = KMByteBlob.instance(
+            (short) (kEcAttestCert.length + kEcAttestRootCert.length));
+    Util.arrayCopyNonAtomic(kEcAttestCert, (short) 0,
+            KMByteBlob.cast(byteBlobPtr).getBuffer(),
+            KMByteBlob.cast(byteBlobPtr).getStartOff(),
+            (short) kEcAttestCert.length);
+    Util.arrayCopyNonAtomic(kEcAttestRootCert, (short) 0,
+            KMByteBlob.cast(byteBlobPtr).getBuffer(),
+            (short) (KMByteBlob.cast(byteBlobPtr).getStartOff()
+                    + kEcAttestCert.length),
+            (short) kEcAttestRootCert.length);
+    CommandAPDU apdu = encodeApdu(
+            (byte) INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD, byteBlobPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
-*/
-/*    KeyPair rsaKeyPair = cryptoProvider.createRsaKeyPair();
-    byte[] pub = new byte[4];
-    short len = ((RSAPublicKey)rsaKeyPair.getPublic()).getExponent(pub,(short)1);
-    byte[] priv = new byte[256];
-    byte[] mod = new byte[256];
-    len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getModulus(mod,(short)0);
-    len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getExponent(priv,(short)0);
-*/
-    byte[] sharedKeySecret = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-    byte[] pub = new byte[]{0x00,0x01,0x00,0x01};
-    byte[] mod = new byte[256];
-    byte[] priv = new byte[256];
-    short[] lengths = new short[2];
-    cryptoProvider.createAsymmetricKey(KMType.RSA,priv,(short)0,(short)256,mod,(short)0, (short)256,lengths);
-    short arrPtr = KMArray.instance((short)15);
-    short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
-    short keySize = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short)2048));
-    short byteBlob = KMByteBlob.instance((short)1);
-    KMByteBlob.cast(byteBlob).add((short)0, KMType.SHA2_256);
+  }
+
+  private void provisionSigningKey(CardSimulator simulator) {
+    // KeyParameters.
+    short arrPtr = KMArray.instance((short) 4);
+    short ecCurve = KMEnumTag.instance(KMType.ECCURVE, KMType.P_256);
+    short byteBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.SHA2_256);
     short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
-    short rsaPubExpTag = KMIntegerTag.instance(KMType.ULONG_TAG,KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pub, (short)0));
-    short byteBlob1 = KMByteBlob.instance((short)1);
-    KMByteBlob.cast(byteBlob1).add((short)0, KMType.RSA_PKCS1_1_5_SIGN);
-    short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob1);
-    short byteBlob2 = KMByteBlob.instance((short)1);
-    KMByteBlob.cast(byteBlob2).add((short)0, KMType.ATTEST_KEY);
+    short byteBlob2 = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob2).add((short) 0, KMType.ATTEST_KEY);
     short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob2);
-    KMArray.cast(arrPtr).add((short)0, boolTag);
-    KMArray.cast(arrPtr).add((short)1, keySize);
-    KMArray.cast(arrPtr).add((short)2, digest);
-    KMArray.cast(arrPtr).add((short)3, rsaPubExpTag);
-    KMArray.cast(arrPtr).add((short)4, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
-    KMArray.cast(arrPtr).add((short)5, padding);
-    KMArray.cast(arrPtr).add((short)6, purpose);
-    byte[] buf = "Attestation Id".getBytes();
-    //Attestatation Ids.
-    KMArray.cast(arrPtr).add((short)7, KMByteTag.instance(KMType.ATTESTATION_ID_BRAND,
-      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
-    KMArray.cast(arrPtr).add((short)8, KMByteTag.instance(KMType.ATTESTATION_ID_PRODUCT,
-      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
-    KMArray.cast(arrPtr).add((short)9, KMByteTag.instance(KMType.ATTESTATION_ID_DEVICE,
-      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
-    KMArray.cast(arrPtr).add((short)10, KMByteTag.instance(KMType.ATTESTATION_ID_MODEL,
-      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
-    KMArray.cast(arrPtr).add((short)11, KMByteTag.instance(KMType.ATTESTATION_ID_IMEI,
-      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
-    KMArray.cast(arrPtr).add((short)12, KMByteTag.instance(KMType.ATTESTATION_ID_MEID,
-      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
-    KMArray.cast(arrPtr).add((short)13, KMByteTag.instance(KMType.ATTESTATION_ID_MANUFACTURER,
-      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
-    KMArray.cast(arrPtr).add((short)14, KMByteTag.instance(KMType.ATTESTATION_ID_SERIAL,
-      KMByteBlob.instance(buf,(short)0, (short)buf.length)));
+    KMArray.cast(arrPtr).add((short) 0, ecCurve);
+    KMArray.cast(arrPtr).add((short) 1, digest);
+    KMArray.cast(arrPtr).add((short) 2,
+            KMEnumTag.instance(KMType.ALGORITHM, KMType.EC));
+    KMArray.cast(arrPtr).add((short) 3, purpose);
     short keyParams = KMKeyParameters.instance(arrPtr);
-    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.RAW);// Note: VTS uses PKCS8
-    short keyBlob = KMArray.instance((short)2);
-    KMArray.cast(keyBlob).add((short)0, KMByteBlob.instance(priv,(short)0,(short)256));
-    KMArray.cast(keyBlob).add((short)1, KMByteBlob.instance(mod,(short)0,(short)256));
-    byte[] blob = new byte[620];
-    short len = encoder.encode(keyBlob,blob,(short)0);
-    keyBlob = KMByteBlob.instance(blob, (short)0, len);
-    arrPtr = KMArray.instance((short)7);
-    KMArray arg = KMArray.cast(arrPtr);
-    arg.add((short) 0, keyParams);
-    arg.add((short)1, keyFormatPtr);
-    arg.add((short)2, keyBlob);
-    short byteBlob3 = KMByteBlob.instance(X509Issuer, (short)0, (short)X509Issuer.length);
-    arg.add((short)3, byteBlob3);
-    short byteBlob4 = KMByteBlob.instance(expiryTime, (short)0, (short)expiryTime.length);
-    arg.add((short)4, byteBlob4);
-    short byteBlob5 = KMByteBlob.instance(authKeyId, (short)0, (short)authKeyId.length);
-    arg.add((short)5, byteBlob5);
-    short byteBlob6 = KMByteBlob.instance(sharedKeySecret, (short)0, (short)sharedKeySecret.length);
-    arg.add((short)6, byteBlob6);
-    CommandAPDU apdu = encodeApdu((byte)0x23, arrPtr);
+    // Note: VTS uses PKCS8 KeyFormat RAW
+    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.RAW);
+
+    // Key
+    short signKeyPtr = KMArray.instance((short) 2);
+    KMArray.cast(signKeyPtr).add((short) 0, KMByteBlob.instance(kEcPrivKey,
+            (short) 0, (short) kEcPrivKey.length));
+    KMArray.cast(signKeyPtr).add((short) 1, KMByteBlob.instance(kEcPubKey,
+            (short) 0, (short) kEcPubKey.length));
+    byte[] keyBuf = new byte[120];
+    short len = encoder.encode(signKeyPtr, keyBuf, (short) 0);
+    short signKeyBstr = KMByteBlob.instance(keyBuf, (short) 0, len);
+
+    short finalArrayPtr = KMArray.instance((short) 3);
+    KMArray.cast(finalArrayPtr).add((short) 0, keyParams);
+    KMArray.cast(finalArrayPtr).add((short) 1, keyFormatPtr);
+    KMArray.cast(finalArrayPtr).add((short) 2, signKeyBstr);
+
+    CommandAPDU apdu = encodeApdu((byte) INS_PROVISION_ATTESTATION_KEY_CMD,
+            finalArrayPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
+  }
+
+  private void provisionCertificateParams(CardSimulator simulator) {
+
+    short arrPtr = KMArray.instance((short) 3);
+    short byteBlob1 = KMByteBlob.instance(X509Issuer, (short) 0,
+            (short) X509Issuer.length);
+    KMArray.cast(arrPtr).add((short) 0, byteBlob1);
+    short byteBlob2 = KMByteBlob.instance(expiryTime, (short) 0,
+            (short) expiryTime.length);
+    KMArray.cast(arrPtr).add((short) 1, byteBlob2);
+    short byteBlob3 = KMByteBlob.instance(authKeyId, (short) 0,
+            (short) authKeyId.length);
+    KMArray.cast(arrPtr).add((short) 2, byteBlob3);
+
+    CommandAPDU apdu = encodeApdu(
+            (byte) INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    Assert.assertEquals(0x9000, response.getSW());
+  }
+
+  private void provisionSharedSecret(CardSimulator simulator) {
+    byte[] sharedKeySecret = {
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    short arrPtr = KMArray.instance((short) 1);
+    short byteBlob = KMByteBlob.instance(sharedKeySecret, (short) 0,
+            (short) sharedKeySecret.length);
+    KMArray.cast(arrPtr).add((short) 0, byteBlob);
+
+    CommandAPDU apdu = encodeApdu((byte) INS_PROVISION_SHARED_SECRET_CMD,
+            arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    Assert.assertEquals(0x9000, response.getSW());
+  }
+
+  private void provisionAttestIds(CardSimulator simulator) {
+    short arrPtr = KMArray.instance((short) 8);
+
+    byte[] buf = "Attestation Id".getBytes();
+
+    KMArray.cast(arrPtr).add((short) 0,
+            KMByteTag.instance(KMType.ATTESTATION_ID_BRAND,
+                    KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    KMArray.cast(arrPtr).add((short) 1,
+            KMByteTag.instance(KMType.ATTESTATION_ID_PRODUCT,
+                    KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    KMArray.cast(arrPtr).add((short) 2,
+            KMByteTag.instance(KMType.ATTESTATION_ID_DEVICE,
+                    KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    KMArray.cast(arrPtr).add((short) 3,
+            KMByteTag.instance(KMType.ATTESTATION_ID_MODEL,
+                    KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    KMArray.cast(arrPtr).add((short) 4,
+            KMByteTag.instance(KMType.ATTESTATION_ID_IMEI,
+                    KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    KMArray.cast(arrPtr).add((short) 5,
+            KMByteTag.instance(KMType.ATTESTATION_ID_MEID,
+                    KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    KMArray.cast(arrPtr).add((short) 6,
+            KMByteTag.instance(KMType.ATTESTATION_ID_MANUFACTURER,
+                    KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    KMArray.cast(arrPtr).add((short) 7,
+            KMByteTag.instance(KMType.ATTESTATION_ID_SERIAL,
+                    KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    short outerArrPtr = KMArray.instance((short) 1);
+    KMArray.cast(outerArrPtr).add((short) 0, keyParams);
+    CommandAPDU apdu = encodeApdu((byte) INS_PROVISION_ATTEST_IDS_CMD,
+            outerArrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    Assert.assertEquals(0x9000, response.getSW());
+  }
+
+  private void provisionLocked(CardSimulator simulator) {
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_LOCK_PROVISIONING_CMD,
+            0x40, 0x00);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    Assert.assertEquals(0x9000, response.getSW());
+  }
+
+  private void provisionCmd(CardSimulator simulator) {
+    provisionSigningKey(simulator);
+    provisionSigningCertificate(simulator);
+    provisionCertificateParams(simulator);
+    provisionSharedSecret(simulator);
+    provisionAttestIds(simulator);
+    // set bootup parameters
+    setBootParams(simulator,(short)1,(short)1, (short)0, (short)0);
+    provisionLocked(simulator);
   }
 
   private void cleanUp(){
@@ -255,7 +643,7 @@ public class KMFunctionalTest {
     simulator.deleteApplet(appletAID);
   }
   private CommandAPDU encodeApdu(byte ins, short cmd){
-    byte[] buf = new byte[2048];
+    byte[] buf = new byte[2500];
     buf[0] = (byte)0x80;
     buf[1] = ins;
     buf[2] = (byte)0x40;
@@ -269,19 +657,6 @@ public class KMFunctionalTest {
     return new CommandAPDU(apdu);
   }
 
-  @Test
-  public void testBackupRestore(){
-    init();
-    initBackUpStore();
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x27, 0x40, 0x00);
-    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
-    byte[] data = response.getBytes();
-    Assert.assertEquals(data[0], KMError.OK);
-    commandAPDU = new CommandAPDU(0x80, 0x28, 0x40, 0x00);
-    response = simulator.transmitCommand(commandAPDU);
-    data = response.getBytes();
-    Assert.assertEquals(data[0], KMError.OK);
-  }
   @Test
   public void testAesImportKeySuccess() {
     init();
@@ -312,7 +687,7 @@ public class KMFunctionalTest {
     arg.add((short) 0, keyParams);
     arg.add((short)1, keyFormatPtr);
     arg.add((short)2, keyBlob);
-    CommandAPDU apdu = encodeApdu((byte)0x11, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_IMPORT_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -373,7 +748,7 @@ public class KMFunctionalTest {
     arg.add((short) 0, keyParams);
     arg.add((short)1, keyFormatPtr);
     arg.add((short)2, keyBlob);
-    CommandAPDU apdu = encodeApdu((byte)0x11, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_IMPORT_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -454,7 +829,7 @@ public class KMFunctionalTest {
     arg.add((short) 0, keyParams);
     arg.add((short)1, keyFormatPtr);
     arg.add((short)2, keyBlob);
-    CommandAPDU apdu = encodeApdu((byte)0x11, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_IMPORT_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -602,7 +977,7 @@ public class KMFunctionalTest {
     short req = KMArray.instance((short)2);
     KMArray.cast(req).add((short)0, KMInteger.uint_8((byte)1));
     KMArray.cast(req).add((short)1, verToken);
-    CommandAPDU apdu = encodeApdu((byte)0x25,req);
+    CommandAPDU apdu = encodeApdu((byte)INS_DEVICE_LOCKED_CMD,req);
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 1);
     KMArray.cast(ret).add((short) 0, KMInteger.exp());
@@ -706,7 +1081,7 @@ public class KMFunctionalTest {
     arg.add((short) 0, keyParams);
     arg.add((short)1, keyFormatPtr);
     arg.add((short)2, keyBlob);
-    CommandAPDU apdu = encodeApdu((byte)0x11, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_IMPORT_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -837,7 +1212,7 @@ public class KMFunctionalTest {
     arrPtr = KMArray.instance((short)1);
     KMArray arg = KMArray.cast(arrPtr);
     arg.add((short) 0, keyParams);
-    CommandAPDU apdu = encodeApdu((byte)0x10, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GENERATE_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
@@ -890,7 +1265,7 @@ public class KMFunctionalTest {
     arrPtr = KMArray.instance((short)1);
     KMArray arg = KMArray.cast(arrPtr);
     arg.add((short) 0, keyParams);
-    CommandAPDU apdu = encodeApdu((byte)0x10, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GENERATE_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
@@ -957,7 +1332,7 @@ public class KMFunctionalTest {
     arrPtr = KMArray.instance((short)1);
     KMArray arg = KMArray.cast(arrPtr);
     arg.add((short) 0, keyParams);
-    CommandAPDU apdu = encodeApdu((byte)0x10, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GENERATE_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
@@ -1024,7 +1399,7 @@ public class KMFunctionalTest {
     arrPtr = KMArray.instance((short)1);
     KMArray arg = KMArray.cast(arrPtr);
     arg.add((short) 0, keyParams);
-    CommandAPDU apdu = encodeApdu((byte)0x10, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GENERATE_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -1078,7 +1453,7 @@ public class KMFunctionalTest {
     arrPtr = KMArray.instance((short)1);
     KMArray arg = KMArray.cast(arrPtr);
     arg.add((short) 0, keyParams);
-    CommandAPDU apdu = encodeApdu((byte)0x10, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GENERATE_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -1129,7 +1504,7 @@ public class KMFunctionalTest {
     arrPtr = KMArray.instance((short)1);
     KMArray arg = KMArray.cast(arrPtr);
     arg.add((short) 0, keyParams);
-    CommandAPDU apdu = encodeApdu((byte)0x10, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GENERATE_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -1183,7 +1558,7 @@ public class KMFunctionalTest {
     KMArray.cast(arr).add((short)1,params2);
     short arrPtr = KMArray.instance((short)1);
     KMArray.cast(arrPtr).add((short)0,arr);
-    CommandAPDU apdu = encodeApdu((byte)0x19, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_COMPUTE_SHARED_HMAC_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
@@ -1202,7 +1577,7 @@ public class KMFunctionalTest {
   @Test
   public void testGetHmacSharingParams(){
     init();
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1C, 0x40, 0x00);
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_GET_HMAC_SHARING_PARAM_CMD, 0x40, 0x00);
     //print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     KMDecoder dec = new KMDecoder();
@@ -1225,7 +1600,7 @@ public class KMFunctionalTest {
     cleanUp();
   }
   public short getHmacSharingParams(){
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1C, 0x40, 0x00);
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_GET_HMAC_SHARING_PARAM_CMD, 0x40, 0x00);
     //print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     KMDecoder dec = new KMDecoder();
@@ -1319,7 +1694,7 @@ public class KMFunctionalTest {
     KMArray.cast(arr).add((short) 9, KMByteBlob.instance(authData,(short)0,(short)authData.length)); // Wrapped Key ASSOCIATED AUTH DATA
     KMArray.cast(arr).add((short) 10, KMInteger.uint_8((byte)0)); // Password Sid
     KMArray.cast(arr).add((short) 11, KMInteger.uint_8((byte)0)); // Biometric Sid
-    CommandAPDU apdu = encodeApdu((byte)0x12, arr);
+    CommandAPDU apdu = encodeApdu((byte)INS_IMPORT_WRAPPED_KEY_CMD, arr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     ret = KMArray.instance((short) 3);
@@ -1366,7 +1741,7 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short)0, keyBlob);
     KMArray.cast(arrPtr).add((short)1, KMByteBlob.instance(clientId,(short)0, (short)clientId.length));
     KMArray.cast(arrPtr).add((short)2, KMByteBlob.instance(appData,(short)0, (short)appData.length));
-    CommandAPDU apdu = encodeApdu((byte)0x1D, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GET_KEY_CHARACTERISTICS_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     ret = KMArray.instance((short) 2);
@@ -1393,7 +1768,7 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short)0, keyBlob);
     KMArray.cast(arrPtr).add((short)1, KMByteBlob.instance((short)0));
     KMArray.cast(arrPtr).add((short)2, KMByteBlob.instance((short)0));
-    CommandAPDU apdu = encodeApdu((byte)0x1D, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GET_KEY_CHARACTERISTICS_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     ret = KMArray.instance((short) 2);
@@ -1439,7 +1814,7 @@ public class KMFunctionalTest {
     keyBlobPtr = KMArray.cast(ret2).get((short)1);
     byte[] keyBlob2 = new byte[KMByteBlob.cast(keyBlobPtr).length()];
     len = KMByteBlob.cast(keyBlobPtr).getValues(keyBlob2, (short)0);
-    CommandAPDU apdu = new CommandAPDU(0x80, 0x17, 0x40, 0x00);
+    CommandAPDU apdu = new CommandAPDU(0x80, INS_DELETE_ALL_KEYS_CMD, 0x40, 0x00);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
@@ -1458,7 +1833,7 @@ public class KMFunctionalTest {
   private short deleteKey(short keyBlob) {
     short arrPtr = KMArray.instance((short)1);
     KMArray.cast(arrPtr).add((short)0, keyBlob);
-    CommandAPDU apdu = encodeApdu((byte)0x16, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_DELETE_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
@@ -1468,7 +1843,7 @@ public class KMFunctionalTest {
   private short abort(short opHandle) {
     short arrPtr = KMArray.instance((short)1);
     KMArray.cast(arrPtr).add((short)0, opHandle);
-    CommandAPDU apdu = encodeApdu((byte)0x22, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_ABORT_OPERATION_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
@@ -1480,7 +1855,7 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short)0, keyBlob);
     KMArray.cast(arrPtr).add((short)1, KMByteBlob.instance((short)0));
     KMArray.cast(arrPtr).add((short)2, KMByteBlob.instance((short)0));
-    CommandAPDU apdu = encodeApdu((byte)0x1D, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_GET_KEY_CHARACTERISTICS_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 2);
@@ -1764,7 +2139,7 @@ public class KMFunctionalTest {
     short args = KMArray.instance((short)2);
     KMArray.cast(args).add((short)0, KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
     KMArray.cast(args).add((short)1, keyParams);
-    CommandAPDU apdu = encodeApdu((byte)0x14, args);
+    CommandAPDU apdu = encodeApdu((byte)INS_ATTEST_KEY_CMD, args);
     //print(apdu.getBytes(),(short)0,(short)apdu.getBytes().length);
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 2);
@@ -1800,7 +2175,7 @@ public class KMFunctionalTest {
     osPatch = KMIntegerTag.cast(osPatch).getValue();
     Assert.assertEquals(KMInteger.cast(osVersion).getShort(), 1);
     Assert.assertEquals(KMInteger.cast(osPatch).getShort(), 1);
-    setBootParams(simulator,(short) 2,(short)2);
+    setBootParams(simulator,(short) 2,(short)2, (short)1, (short)1);
     ret = upgradeKey(KMByteBlob.instance(keyBlob, (short)0, (short)keyBlob.length),null, null);
     keyBlobPtr = KMArray.cast(ret).get((short)1);
     ret = getKeyCharacteristics(keyBlobPtr);
@@ -1818,7 +2193,7 @@ public class KMFunctionalTest {
   @Test
   public void testDestroyAttIds(){
     init();
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, 0x1A, 0x40, 0x00);
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_DESTROY_ATT_IDS_CMD, 0x40, 0x00);
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     byte[] respBuf = response.getBytes();
     Assert.assertEquals(respBuf[0], 0);
@@ -1841,7 +2216,7 @@ public class KMFunctionalTest {
     short arr = KMArray.instance((short)2);
     KMArray.cast(arr).add((short)0,keyBlobPtr);
     KMArray.cast(arr).add((short)1,keyParams);
-    CommandAPDU apdu = encodeApdu((byte)0x15, arr);
+    CommandAPDU apdu = encodeApdu((byte)INS_UPGRADE_KEY_CMD, arr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 2);
@@ -2216,7 +2591,7 @@ public class KMFunctionalTest {
       hwToken = KMHardwareAuthToken.instance();
     }
     KMArray.cast(arrPtr).add((short)3, hwToken);
-    CommandAPDU apdu = encodeApdu((byte)0x1F, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_BEGIN_OPERATION_CMD, arrPtr);
     //print(apdu.getBytes(),(short)0,(short)apdu.getBytes().length);
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -2261,7 +2636,7 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short)3, signatureTag);
     KMArray.cast(arrPtr).add((short)4, hwToken);
     KMArray.cast(arrPtr).add((short)5, verToken);
-    CommandAPDU apdu = encodeApdu((byte)0x21, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_FINISH_OPERATION_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -2293,7 +2668,7 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short)2, data);
     KMArray.cast(arrPtr).add((short)3, hwToken);
     KMArray.cast(arrPtr).add((short)4, verToken);
-    CommandAPDU apdu = encodeApdu((byte)0x20, arrPtr);
+    CommandAPDU apdu = encodeApdu((byte)INS_UPDATE_OPERATION_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 4);
