@@ -97,6 +97,7 @@ public class KMRepository implements KMUpgradable {
   private short heapIndex;
   private byte[] dataTable;
   private short dataIndex;
+  private short reclaimIndex;
 
   // Singleton instance
   private static KMRepository repository;
@@ -109,6 +110,7 @@ public class KMRepository implements KMUpgradable {
     newDataTable(isUpgrading);
     heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
     heapIndex = 0;
+    reclaimIndex = HEAP_SIZE;
     operationStateTable = new Object[MAX_OPS];
     // create and initialize operation state table.
     byte index = 0;
@@ -252,6 +254,7 @@ public class KMRepository implements KMUpgradable {
   public void clean() {
     Util.arrayFillNonAtomic(heap, (short) 0, heapIndex, (byte) 0);
     heapIndex = 0;
+    reclaimIndex = HEAP_SIZE;
   }
 
   public void onDeselect() {}
@@ -264,8 +267,38 @@ public class KMRepository implements KMUpgradable {
     return readData(MASTER_KEY);
   }
 
+  // This function uses memory from the back of the heap(transient memory). Call
+  // reclaimMemory function immediately after the use.
+  public short allocReclaimableMemory(short length) {
+    // TODO Verify the below condition (HEAP_SIZE/2)
+    if ((((short) (reclaimIndex - length)) <= heapIndex)
+            || (length >= HEAP_SIZE / 2)) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    reclaimIndex -= length;
+    return reclaimIndex;
+  }
+
+  // Reclaims the memory back.
+  public void reclaimMemory(short length) {
+    if (reclaimIndex < heapIndex) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    reclaimIndex += length;
+  }
+
+  public short allocAvailableMemory() {
+    if (heapIndex >= heap.length) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    short index = heapIndex;
+    heapIndex = (short) heap.length;
+    return index;
+  }
+
   public short alloc(short length) {
-    if (((short) (heapIndex + length)) > heap.length) {
+    if ((((short) (heapIndex + length)) > heap.length) ||
+            (((short) (heapIndex + length)) > reclaimIndex)) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     heapIndex += length;
