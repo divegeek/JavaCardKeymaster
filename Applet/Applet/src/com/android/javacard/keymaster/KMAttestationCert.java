@@ -11,7 +11,7 @@ public interface KMAttestationCert {
   /**
    * Set verified boot hash.
    *
-   * @param obj Ths is a KMByteBlob containing hash
+   * @param obj This is a KMByteBlob containing hash
    * @return instance of KMAttestationCert
    */
   KMAttestationCert verifiedBootHash(short obj);
@@ -19,7 +19,7 @@ public interface KMAttestationCert {
   /**
    * Set verified boot key received during booting up.
    *
-   * @param obj Ths is a KMByteBlob containing verified boot key.
+   * @param obj This is a KMByteBlob containing verified boot key.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert verifiedBootKey(short obj);
@@ -27,7 +27,7 @@ public interface KMAttestationCert {
   /**
    * Set verified boot state received during booting up.
    *
-   * @param val Ths is a byte containing verified boot state value.
+   * @param val This is a byte containing verified boot state value.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert verifiedBootState(byte val);
@@ -35,7 +35,7 @@ public interface KMAttestationCert {
   /**
    * Set authentication key Id from CA Certificate set during provisioning.
    *
-   * @param obj Ths is a KMByteBlob containing authentication Key Id.
+   * @param obj This is a KMByteBlob containing authentication Key Id.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert authKey(short obj);
@@ -88,7 +88,7 @@ public interface KMAttestationCert {
   /**
    * Set device lock status received during booting time or due to device lock command.
    *
-   * @param val Ths is true if device is locked.
+   * @param val This is true if device is locked.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert deviceLocked(boolean val);
@@ -96,7 +96,7 @@ public interface KMAttestationCert {
   /**
    * Set public key to be attested received from attestKey command.
    *
-   * @param obj Ths is KMByteBlob containing the public key.
+   * @param obj This is KMByteBlob containing the public key.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert publicKey(short obj);
@@ -104,7 +104,7 @@ public interface KMAttestationCert {
   /**
    * Set attestation challenge received from attestKey command.
    *
-   * @param obj Ths is KMByteBlob containing the attestation challenge.
+   * @param obj This is KMByteBlob containing the attestation challenge.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert attestationChallenge(short obj);
@@ -123,7 +123,7 @@ public interface KMAttestationCert {
   /**
    * Set ASN.1 encoded X509 issuer field received from attestation key CA cert.
    *
-   * @param obj Ths is KMByteBlob containing the issuer.
+   * @param obj This is KMByteBlob containing the issuer.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert issuer(short obj);
@@ -131,9 +131,9 @@ public interface KMAttestationCert {
   /**
    * Set byte buffer to be used to generate certificate.
    *
-   * @param buf Ths is byte[] buffer.
-   * @param bufStart Ths is short start offset.
-   * @param maxLen Ths is short length of the buffer.
+   * @param buf This is byte[] buffer.
+   * @param bufStart This is short start offset.
+   * @param maxLen This is short length of the buffer.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert buffer(byte[] buf, short bufStart, short maxLen);
