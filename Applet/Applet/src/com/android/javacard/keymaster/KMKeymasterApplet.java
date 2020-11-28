@@ -570,9 +570,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
-  //TODO VTS 4.0 addLargeEntropy fails, as the input buffer is 2k
-  //TODO Need to fix this issue by introducing stackIndex which
-  //increase bottom to top on internal memory.
   private void processAddRngEntropyCmd(APDU apdu) {
     // Receive the incoming request fully from the master.
     receiveIncoming(apdu);
