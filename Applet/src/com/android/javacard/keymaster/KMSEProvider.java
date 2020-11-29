@@ -476,4 +476,11 @@ public interface KMSEProvider extends KMUpgradable {
    * @param resetBootFlag is false if event has been handled
    */
   void clearDeviceBooted(boolean resetBootFlag);
+
+  /**
+   * This function tells if applet is upgrading or not.
+   *
+   * @return true if upgrading, otherwise false.
+   */
+  boolean isUpgrading();
 }

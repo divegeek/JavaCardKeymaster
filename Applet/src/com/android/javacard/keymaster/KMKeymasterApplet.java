@@ -26,7 +26,6 @@ import javacard.framework.Util;
 import javacard.security.CryptoException;
 import javacardx.apdu.ExtendedLength;
 
-import org.globalplatform.upgrade.*;
 /**
  * KMKeymasterApplet implements the javacard applet. It creates repository and other install time
  * objects. It also implements the keymaster state machine and handles javacard applet life cycle
@@ -182,8 +181,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   /** Registers this applet. */
   protected KMKeymasterApplet(KMSEProvider seImpl) {
-    boolean isUpgrading = UpgradeManager.isUpgrading();
     seProvider = seImpl;
+    boolean isUpgrading = seImpl.isUpgrading();
     repository = new KMRepository(isUpgrading);
     byte[] buf = JCSystem.makeTransientByteArray((short) 32, JCSystem.CLEAR_ON_DESELECT);
     data = JCSystem.makeTransientShortArray((short) DATA_ARRAY_SIZE, JCSystem.CLEAR_ON_RESET);

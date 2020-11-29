@@ -87,9 +87,9 @@ public class KMError {
   //Extended errors
   public static short SW_CONDITIONS_NOT_SATISFIED = 1001;
   public static short UNSUPPORTED_CLA = 1002;
-  public static short INVALID_P1P2 = 1002;
-  public static short UNSUPPORTED_INSTRUCTION = 1002;
-  public static short CMD_NOT_ALLOWED = 1002;
-  public static short SW_WRONG_LENGTH = 1002;
-  public static short INVALID_DATA = 1002;
+  public static short INVALID_P1P2 = 1003;
+  public static short UNSUPPORTED_INSTRUCTION = 1004;
+  public static short CMD_NOT_ALLOWED = 1005;
+  public static short SW_WRONG_LENGTH = 1006;
+  public static short INVALID_DATA = 1007;
 }

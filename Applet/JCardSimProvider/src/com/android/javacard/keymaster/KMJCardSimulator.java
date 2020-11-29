@@ -1312,4 +1312,10 @@ public class KMJCardSimulator implements KMSEProvider {
     // TODO Auto-generated method stub
     return 0;
   }
+
+  @Override
+  public boolean isUpgrading() {
+    // TODO Auto-generated method stub
+    return false;
+  }
 }
