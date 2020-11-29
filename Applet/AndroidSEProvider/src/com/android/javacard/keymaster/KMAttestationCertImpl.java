@@ -482,9 +482,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     short last = stackPtr;
     // ATTESTATION_APPLICATION_ID 709 is softwareEnforced.
     short[] tagIds = {
-      709, 706, 705, 704, 703, 702, 701, 601, 600, 509, 508, 507, 506, 505, 504, 503, 402, 401, 400,
-      303, 200, 10, 6, 5, 3, 2, 1
-    };
+            KMType.ATTESTATION_APPLICATION_ID, KMType.CREATION_DATETIME,
+            KMType.USAGE_EXPIRE_DATETIME, KMType.ORIGINATION_EXPIRE_DATETIME,
+            KMType.ACTIVE_DATETIME, KMType.UNLOCKED_DEVICE_REQUIRED };
     byte index = 0;
     do {
       /*
@@ -502,9 +502,15 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     short last = stackPtr;
     // Attestation ids are not included. As per VTS attestation ids are not supported currenlty.
     short[] tagIds = {
-      706, 705, 704, 703, 702, 701, 601, 600, 509, 508, 507, 506, 505, 504, 503, 402, 401, 400, 303,
-      200, 10, 6, 5, 3, 2, 1
-    };
+            KMType.BOOT_PATCH_LEVEL, KMType.VENDOR_PATCH_LEVEL,
+            KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
+            KMType.ORIGIN, KMType.APPLICATION_ID,
+            KMType.TRUSTED_CONFIRMATION_REQUIRED,
+            KMType.TRUSTED_USER_PRESENCE_REQUIRED, KMType.ALLOW_WHILE_ON_BODY,
+            KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE, KMType.NO_AUTH_REQUIRED,
+            KMType.ROLLBACK_RESISTANCE, KMType.RSA_PUBLIC_EXPONENT,
+            KMType.ECCURVE, KMType.PADDING, KMType.DIGEST, KMType.KEYSIZE,
+            KMType.ALGORITHM, KMType.PURPOSE };
     byte index = 0;
     do {
       // if(pushAttIds(tagIds[index])) continue;

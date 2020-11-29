@@ -16,6 +16,8 @@
 package com.android.javacard.keymaster;
 
 import org.globalplatform.upgrade.Element;
+import org.globalplatform.upgrade.UpgradeManager;
+
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -163,7 +165,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return androidSEProvider;
   }
 
-  public KMAndroidSEProvider(boolean isUpgrading) {
+  public KMAndroidSEProvider() {
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
@@ -199,7 +201,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // Random number generator initialisation.
     rng = RandomData.getInstance(RandomData.ALG_KEYGENERATION);
     //Allocate buffer for certificate chain.
-    if(!isUpgrading)
+    if(!isUpgrading())
       certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
     androidSEProvider = this;
   }
@@ -1204,5 +1206,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return (short) 1;
   }
 
-
+  @Override
+  public  boolean isUpgrading() {
+    return UpgradeManager.isUpgrading();
+  }
 }

@@ -7,7 +7,7 @@ import org.globalplatform.upgrade.UpgradeManager;
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
 
     KMAndroidSEApplet(){
-      super(new KMAndroidSEProvider(true));
+      super(new KMAndroidSEProvider());
     }
     /**
      * Installs this applet.
