@@ -246,6 +246,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
+  protected void validateApduHeader(APDU apdu) {
+    // Read the apdu header and buffer.
+    byte[] apduBuffer = apdu.getBuffer();
+    byte apduClass = apduBuffer[ISO7816.OFFSET_CLA];
+    short P1P2 = Util.getShort(apduBuffer, ISO7816.OFFSET_P1);
+
+    // Validate APDU Header.
+    if ((apduClass != CLA_ISO7816_NO_SM_NO_CHAN)) {
+      ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
+    }
+
+    // Validate P1P2.
+    if (P1P2 != KMKeymasterApplet.KM_HAL_VERSION) {
+      ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+    }
+  }
+
   /**
    * Processes an incoming APDU and handles it using command objects.
    *
@@ -267,24 +284,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           return;
         }
       }
-      // Read the apdu header and buffer.
-      byte[] apduBuffer = apdu.getBuffer();
-      byte apduClass = apduBuffer[ISO7816.OFFSET_CLA];
-      byte apduIns = apduBuffer[ISO7816.OFFSET_INS];
-      short P1P2 = Util.getShort(apduBuffer, ISO7816.OFFSET_P1);
-      buffer = repository.getHeap();
       // Validate APDU Header.
-      if ((apduClass != CLA_ISO7816_NO_SM_NO_CHAN)) {
-        ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
-      }
+      validateApduHeader(apdu);
 
-      if (P1P2 != KMKeymasterApplet.KM_HAL_VERSION) {
-        ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
-      }
+      byte[] apduBuffer = apdu.getBuffer();
+      byte apduIns = apduBuffer[ISO7816.OFFSET_INS];
+
       // Validate whether INS can be supported
       if (!(apduIns > INS_BEGIN_KM_CMD && apduIns < INS_END_KM_CMD)) {
         ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
+      buffer = repository.getHeap();
       // Process the apdu
       if (keymasterState == KMKeymasterApplet.IN_PROVISION_STATE) {
         switch (apduIns) {
