@@ -86,6 +86,8 @@ pubModulus);
 ErrorCode ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>&
 publicKey, EcCurve& eccurve);
 
+ErrorCode getCertificateChain(std::vector<uint8_t>& chainBuffer, std::vector<std::vector<uint8_t>>& certChain);
+
 class KmParamSet : public keymaster_key_param_set_t {
     public:
         explicit KmParamSet(const hidl_vec<KeyParameter>& keyParams)
