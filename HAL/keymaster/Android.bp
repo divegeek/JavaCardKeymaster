@@ -27,6 +27,7 @@ cc_binary {
         "4.1/JavacardSoftKeymasterContext.cpp",
         "4.1/JavacardOperationContext.cpp",
         "4.1/CommonUtils.cpp",
+        "4.1/Provision.cpp",
     ],
     local_include_dirs: [
         "include",
