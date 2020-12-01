@@ -27,6 +27,10 @@
 #include <keymaster/km_openssl/ec_key.h>
 #include <android-base/logging.h>
 
+#define TAG_SEQUENCE 0x30
+#define LENGTH_MASK 0x80
+#define LENGTH_VALUE_MASK 0x7F
+
 namespace keymaster {
 namespace V4_1 {
 namespace javacard {
@@ -219,6 +223,52 @@ pubModulus) {
         return errorCode;
     }
     EVP_PKEY_free(pkey);
+    return ErrorCode::OK;
+}
+
+ErrorCode getCertificateChain(std::vector<uint8_t>& chainBuffer, std::vector<std::vector<uint8_t>>& certChain) {
+    uint8_t *data = chainBuffer.data();
+    int index = 0;
+    uint32_t length = 0;
+    while (index < chainBuffer.size()) {
+        std::vector<uint8_t> temp;
+        if(data[index] == TAG_SEQUENCE) {
+            //read next byte
+            if (0 == (data[index+1] & LENGTH_MASK)) {
+                length = (uint32_t)data[index];
+                //Add SEQ and Length fields
+                length += 2;
+            } else {
+                int additionalBytes = data[index+1] & LENGTH_VALUE_MASK;
+                if (additionalBytes == 0x01) {
+                    length = data[index+2];
+                    //Add SEQ and Length fields
+                    length += 3;
+                } else if (additionalBytes == 0x02) {
+                    length = (data[index+2] << 8 | data[index+3]);
+                    //Add SEQ and Length fields
+                    length += 4;
+                } else if (additionalBytes == 0x04) {
+                    length = data[index+2] << 24;
+                    length |= data[index+3] << 16;
+                    length |= data[index+4] << 8;
+                    length |= data[index+5];
+                    //Add SEQ and Length fields
+                    length += 6;
+                } else {
+                    //Length is larger than uint32_t max limit.
+                    return ErrorCode::UNKNOWN_ERROR;
+                }
+            }
+            temp.insert(temp.end(), (data+index), (data+index+length));
+            index += length;
+
+            certChain.push_back(std::move(temp));
+        } else {
+            //SEQUENCE TAG MISSING.
+            return ErrorCode::UNKNOWN_ERROR;
+        }
+    }
     return ErrorCode::OK;
 }
 
