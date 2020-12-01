@@ -85,16 +85,6 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     Return<V41ErrorCode> deviceLocked(bool passwordOnly, const VerificationToken& verificationToken) override;
     Return<V41ErrorCode> earlyBootEnded() override;
 
-    //Set Boot Params
-    /* This method should be called at the time when HAL is initialized for the first time */
-    static ErrorCode setBootParams(uint32_t osVersion, uint32_t osPatchLevel, const std::vector<uint8_t>& verifiedBootKey,
-std::vector<uint8_t>& verifiedBootKeyHash, keymaster_verified_boot_t kmVerifiedBoot, bool deviceLocked);
-
-    //Provision Method
-    /* Reference for vendor to provision the javacard. This should happen only once at the time of production.*/
-    static ErrorCode provision(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyformat, const hidl_vec<uint8_t>&
-keyData);
-
 protected:
     CborConverter cborConverter_;
 	
