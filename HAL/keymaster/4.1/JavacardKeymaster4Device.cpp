@@ -31,6 +31,7 @@
 #include <JavacardKeymaster4Device.h>
 #include <JavacardSoftKeymasterContext.h>
 #include <CommonUtils.h>
+#include <Provision.h>
 #include <android-base/logging.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -44,16 +45,14 @@
 #define APDU_P1  0x40
 #define APDU_P2  0x00
 #define APDU_RESP_STATUS_OK 0x9000
-#define ROOT_RSA_KEY   "/data/data/rsa_key.der"
-#define ROOT_RSA_CERT  "/data/data/certificate_rsa.der"
-/*This property is used to check if javacard is already provisioned or not */
-#define KM_JAVACARD_PROVISIONED_PROPERTY "keymaster.javacard.provisioned"
+
+#define INS_BEGIN_KM_CMD 0x00
+#define INS_END_KM_PROVISION_CMD 0x20
+#define INS_END_KM_CMD 0x7F
 
 namespace keymaster {
 namespace V4_1 {
 namespace javacard {
-//This key is used as master key for computing Hmac shared secret.
-constexpr uint8_t kFakeKeyAgreementKey[32] = {};
 
 static std::unique_ptr<se_transport::TransportFactory> pTransportFactory = nullptr;
 constexpr size_t kOperationTableSize = 4;
@@ -63,29 +62,29 @@ struct KM_AUTH_LIST_Delete {
 };
 
 enum class Instruction {
-    INS_GENERATE_KEY_CMD = 0x10,
-    INS_IMPORT_KEY_CMD = 0x11,
-    INS_IMPORT_WRAPPED_KEY_CMD = 0x12,
-    INS_EXPORT_KEY_CMD = 0x13,
-    INS_ATTEST_KEY_CMD = 0x14,
-    INS_UPGRADE_KEY_CMD = 0x15,
-    INS_DELETE_KEY_CMD = 0x16,
-    INS_DELETE_ALL_KEYS_CMD = 0x17,
-    INS_ADD_RNG_ENTROPY_CMD = 0x18,
-    INS_COMPUTE_SHARED_HMAC_CMD = 0x19,
-    INS_DESTROY_ATT_IDS_CMD = 0x1A,
-    INS_VERIFY_AUTHORIZATION_CMD = 0x1B,
-    INS_GET_HMAC_SHARING_PARAM_CMD = 0x1C,
-    INS_GET_KEY_CHARACTERISTICS_CMD = 0x1D,
-    INS_GET_HW_INFO_CMD = 0x1E,
-    INS_BEGIN_OPERATION_CMD = 0x1F,
-    INS_UPDATE_OPERATION_CMD = 0x20,
-    INS_FINISH_OPERATION_CMD = 0x21,
-    INS_ABORT_OPERATION_CMD = 0x22,
-    INS_PROVISION_CMD = 0x23,
-    INS_SET_BOOT_PARAMS_CMD = 0x24,
-    INS_DEVICE_LOCKED_CMD = 0x25,
-    INS_EARLY_BOOT_ENDED_CMD = 0x26,
+    // Keymaster commands
+    INS_GENERATE_KEY_CMD = INS_END_KM_PROVISION_CMD+1,
+    INS_IMPORT_KEY_CMD = INS_END_KM_PROVISION_CMD+2,
+    INS_IMPORT_WRAPPED_KEY_CMD = INS_END_KM_PROVISION_CMD+3,
+    INS_EXPORT_KEY_CMD = INS_END_KM_PROVISION_CMD+4,
+    INS_ATTEST_KEY_CMD = INS_END_KM_PROVISION_CMD+5,
+    INS_UPGRADE_KEY_CMD = INS_END_KM_PROVISION_CMD+6,
+    INS_DELETE_KEY_CMD = INS_END_KM_PROVISION_CMD+7,
+    INS_DELETE_ALL_KEYS_CMD = INS_END_KM_PROVISION_CMD+8,
+    INS_ADD_RNG_ENTROPY_CMD = INS_END_KM_PROVISION_CMD+9,
+    INS_COMPUTE_SHARED_HMAC_CMD = INS_END_KM_PROVISION_CMD+10,
+    INS_DESTROY_ATT_IDS_CMD = INS_END_KM_PROVISION_CMD+11,
+    INS_VERIFY_AUTHORIZATION_CMD = INS_END_KM_PROVISION_CMD+12,
+    INS_GET_HMAC_SHARING_PARAM_CMD = INS_END_KM_PROVISION_CMD+13,
+    INS_GET_KEY_CHARACTERISTICS_CMD = INS_END_KM_PROVISION_CMD+14,
+    INS_GET_HW_INFO_CMD = INS_END_KM_PROVISION_CMD+15,
+    INS_BEGIN_OPERATION_CMD = INS_END_KM_PROVISION_CMD+16,
+    INS_UPDATE_OPERATION_CMD = INS_END_KM_PROVISION_CMD+17,
+    INS_FINISH_OPERATION_CMD = INS_END_KM_PROVISION_CMD+18,
+    INS_ABORT_OPERATION_CMD = INS_END_KM_PROVISION_CMD+19,
+    INS_DEVICE_LOCKED_CMD = INS_END_KM_PROVISION_CMD+20,
+    INS_EARLY_BOOT_ENDED_CMD = INS_END_KM_PROVISION_CMD+21,
+    INS_GET_CERT_CHAIN_CMD = INS_END_KM_PROVISION_CMD+22
 };
 
 static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFactoryInstance() {
@@ -95,29 +94,6 @@ static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFacto
         pTransportFactory->openConnection();
     }
     return pTransportFactory;
-}
-
-static inline bool readDataFromFile(const char *filename, std::vector<uint8_t>& data) {
-    FILE *fp;
-    bool ret = true;
-    fp = fopen(filename, "rb");
-    if(fp == NULL) {
-        LOG(ERROR) << "Failed to open file: " << filename;
-        return false;
-    }
-    fseek(fp, 0L, SEEK_END);
-    long int filesize = ftell(fp);
-    rewind(fp);
-    std::unique_ptr<uint8_t[]> buf(new uint8_t[filesize]);
-    if( 0 == fread(buf.get(), filesize, 1, fp)) {
-        LOG(ERROR) << "No Content in the file: " << filename;
-        ret = false;
-    }
-    if(true == ret) {
-        data.insert(data.begin(), buf.get(), buf.get() + filesize);
-    }
-    fclose(fp);
-    return ret;
 }
 
 static inline bool findTag(const hidl_vec<KeyParameter>& params, Tag tag) {
@@ -138,84 +114,6 @@ static inline bool getTag(const hidl_vec<KeyParameter>& params, Tag tag, KeyPara
         }
     }
     return false;
-}
-
-static inline X509* parseDerCertificate(const char* filename) {
-    X509 *x509 = NULL;
-    std::vector<uint8_t> certData;
-
-    /* Read the Root certificate */
-    if(!readDataFromFile(filename, certData)) {
-        LOG(ERROR) << " Failed to read the Root certificate";
-        return NULL;
-    }
-    /* Create BIO instance from certificate data */
-    BIO *bio = BIO_new_mem_buf(certData.data(), certData.size());
-    if(bio == NULL) {
-        LOG(ERROR) << " Failed to create BIO from buffer.";
-        return NULL;
-    }
-    /* Create X509 instance from BIO */
-    x509 = d2i_X509_bio(bio, NULL);
-    if(x509 == NULL) {
-        LOG(ERROR) << " Failed to get X509 instance from BIO.";
-        return NULL;
-    }
-    BIO_free(bio);
-    return x509;
-}
-
-static inline void getDerSubjectName(X509* x509, std::vector<uint8_t>& subject) {
-    uint8_t *subjectDer = NULL;
-    X509_NAME* asn1Subject = X509_get_subject_name(x509);
-    if(asn1Subject == NULL) {
-        LOG(ERROR) << " Failed to read the subject.";
-        return;
-    }
-    /* Convert X509_NAME to der encoded subject */
-    int len = i2d_X509_NAME(asn1Subject, &subjectDer);
-    if (len < 0) {
-        LOG(ERROR) << " Failed to get readable name from X509_NAME.";
-        return;
-    }
-    subject.insert(subject.begin(), subjectDer, subjectDer+len);
-}
-
-static inline void getAuthorityKeyIdentifier(X509* x509, std::vector<uint8_t>& authKeyId) {
-    long xlen;
-    int tag, xclass;
-
-    int loc = X509_get_ext_by_NID(x509, NID_authority_key_identifier, -1);
-    X509_EXTENSION *ext = X509_get_ext(x509, loc);
-    if(ext == NULL) {
-        LOG(ERROR) << " Failed to read authority key identifier.";
-        return;
-    }
-
-    ASN1_OCTET_STRING *asn1AuthKeyId = X509_EXTENSION_get_data(ext);
-    const uint8_t *strAuthKeyId = ASN1_STRING_get0_data(asn1AuthKeyId);
-    int strAuthKeyIdLen = ASN1_STRING_length(asn1AuthKeyId);
-    int ret = ASN1_get_object(&strAuthKeyId, &xlen, &tag, &xclass, strAuthKeyIdLen);
-    if (ret == 0x80 || strAuthKeyId == NULL) {
-        LOG(ERROR) << "Failed to get the auth key identifier from ASN1 sequence.";
-        return;
-    }
-    authKeyId.insert(authKeyId.begin(), strAuthKeyId, strAuthKeyId + xlen);
-}
-
-static inline void getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate) {
-    const ASN1_TIME* notAfter = X509_get0_notAfter(x509);
-    if(notAfter == NULL) {
-        LOG(ERROR) << " Failed to read expiry time.";
-        return;
-    }
-    int strNotAfterLen = ASN1_STRING_length(notAfter);
-    const uint8_t *strNotAfter = ASN1_STRING_get0_data(notAfter);
-    if(strNotAfter == NULL) {
-        LOG(ERROR) << " Failed to read expiry time from ASN1 string.";
-        return;
-    }
-    notAfterDate.insert(notAfterDate.begin(), strNotAfter, strNotAfter + strNotAfterLen);
 }
 
 ErrorCode encodeParametersVerified(const VerificationToken& verificationToken, std::vector<uint8_t>& asn1ParamsVerified) {
@@ -316,7 +214,8 @@ keyFormat, std::vector<uint8_t>& wrappedKeyDescription) {
     return ErrorCode::OK;
 }
 
-ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut) {
+ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut, bool
+extendedOutput=false) {
     apduOut.push_back(static_cast<uint8_t>(APDU_CLS)); //CLS
     apduOut.push_back(static_cast<uint8_t>(ins)); //INS
     apduOut.push_back(static_cast<uint8_t>(APDU_P1)); //P1
@@ -341,6 +240,8 @@ ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData
             apduOut.insert(apduOut.end(), inputData.begin(), inputData.end());
         //Expected length of output
         apduOut.push_back(static_cast<uint8_t>(0x00));//Accepting complete length of output at a time
+        if(extendedOutput)
+            apduOut.push_back(static_cast<uint8_t>(0x00));
 
     } else {
         return (ErrorCode::INSUFFICIENT_BUFFER_SPACE);
@@ -354,175 +255,30 @@ uint16_t getStatus(std::vector<uint8_t>& inputData) {
     return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
 }
 
-ErrorCode initiateProvision() {
-    /* This is just a reference implemenation */
-    std::string brand("Google");
-    std::string device("Pixel 3A");
-    std::string product("Pixel");
-    std::string serial("UGYJFDjFeRuBEH");
-    std::string imei("987080543071019");
-    std::string meid("27863510227963");
-    std::string manufacturer("Foxconn");
-    std::string model("HD1121");
-    AuthorizationSet authSet(AuthorizationSetBuilder()
-            .Authorization(TAG_ALGORITHM, KM_ALGORITHM_RSA)
-            .Authorization(TAG_PADDING, KM_PAD_RSA_PKCS1_1_5_SIGN)
-            .Authorization(TAG_DIGEST, KM_DIGEST_SHA_2_256)
-            .Authorization(TAG_KEY_SIZE, 2048)
-            .Authorization(TAG_PURPOSE, static_cast<keymaster_purpose_t>(0x7F)) /* The value 0x7F is not present in types.hal */
-            .Authorization(TAG_ATTESTATION_ID_BRAND, brand.data(), brand.size())
-            .Authorization(TAG_ATTESTATION_ID_DEVICE, device.data(), device.size())
-            .Authorization(TAG_ATTESTATION_ID_PRODUCT, product.data(), product.size())
-            .Authorization(TAG_ATTESTATION_ID_SERIAL, serial.data(), serial.size())
-            .Authorization(TAG_ATTESTATION_ID_IMEI, imei.data(), imei.size())
-            .Authorization(TAG_ATTESTATION_ID_MEID, meid.data(), meid.size())
-            .Authorization(TAG_ATTESTATION_ID_MANUFACTURER, manufacturer.data(), manufacturer.size())
-            .Authorization(TAG_ATTESTATION_ID_MODEL, model.data(), model.size()));
-
-    hidl_vec<KeyParameter> keyParams = kmParamSet2Hidl(authSet);
-    std::vector<uint8_t> data;
-    if(!readDataFromFile(ROOT_RSA_KEY, data)) {
-        LOG(ERROR) << " Failed to read the Root rsa key";
-        return ErrorCode::UNKNOWN_ERROR;
-    }
-    return JavacardKeymaster4Device::provision(keyParams, KeyFormat::PKCS8, data);
-}
-
-Return<ErrorCode> setBootParams() {
-    std::vector<uint8_t> verifiedBootKey(32, 0);
-    std::vector<uint8_t> verifiedBootKeyHash(32, 0);
-
-    return JavacardKeymaster4Device::setBootParams(GetOsVersion(), GetOsPatchlevel(), verifiedBootKey, verifiedBootKeyHash,
-            KM_VERIFIED_BOOT_UNVERIFIED, 0/*deviceLocked*/);
-}
-
-ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response) {
+ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response, bool
+        extendedOutput=false) {
     ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> apdu;
 
-    if(!android::base::GetBoolProperty(KM_JAVACARD_PROVISIONED_PROPERTY, false)) {
-        if(ErrorCode::OK != (ret = setBootParams())) {
-            LOG(ERROR) << "Failed to set boot params";
-            return ret;
-        }
-
-        if(ErrorCode::OK != (ret = initiateProvision())) {
-            LOG(ERROR) << "Failed to provision the device";
-            return ret;
-        }
-        android::base::SetProperty(KM_JAVACARD_PROVISIONED_PROPERTY, "true");
+    // TODO In real scenario the provision happens in the factory. In that case this
+    // below code is not required. This is just used for simulation.
+    if (ErrorCode::OK != (ret = provision(getTransportFactoryInstance()))) {
+        LOG(ERROR) << "Failed to provision the device";
+        return ret;
     }
 
-    ret = constructApduMessage(ins, inData, apdu);
+    ret = constructApduMessage(ins, inData, apdu, extendedOutput);
     if(ret != ErrorCode::OK) return ret;
 
     if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
         return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
     }
 
-    if((response.size() < 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
+    // Response size should be greater than 2. Cbor output data followed by two bytes of APDU status.
+    if((response.size() <= 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
         return (ErrorCode::UNKNOWN_ERROR);
     }
     return (ErrorCode::OK);//success
-}
-
-ErrorCode JavacardKeymaster4Device::provision(const hidl_vec<KeyParameter>& keyParams, KeyFormat keyFormat, const hidl_vec<uint8_t>&
-        keyData) {
-    cppbor::Array array;
-    cppbor::Array subArray;
-    std::unique_ptr<Item> item;
-    std::vector<uint8_t> apdu;
-    hidl_vec<uint8_t> keyBlob;
-    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    Instruction ins = Instruction::INS_PROVISION_CMD;
-    std::vector<uint8_t> response;
-    CborConverter cborConverter;
-    X509 *x509 = NULL;
-    std::vector<uint8_t> subject;
-    std::vector<uint8_t> authorityKeyIdentifier;
-    std::vector<uint8_t> notAfter;
-    std::vector<uint8_t> masterKey(kFakeKeyAgreementKey, kFakeKeyAgreementKey +
-    sizeof(kFakeKeyAgreementKey)/sizeof(kFakeKeyAgreementKey[0]));
-
-    /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
-    /* Get X509 certificate instance for the root certificate.*/
-    if(NULL == (x509 = parseDerCertificate(ROOT_RSA_CERT))) {
-        return errorCode;
-    }
-
-    if(ErrorCode::OK != (errorCode = prepareCborArrayFromKeyData(keyParams, keyFormat, keyData, subArray))) {
-        return errorCode;
-    }
-    /* Get subject in DER */
-    getDerSubjectName(x509, subject);
-    /* Get AuthorityKeyIdentifier */
-    getAuthorityKeyIdentifier(x509, authorityKeyIdentifier);
-    /* Get Expirty Time */
-    getNotAfter(x509, notAfter);
-    /*Free X509 */
-    X509_free(x509);
-
-    /* construct cbor */
-    cborConverter.addKeyparameters(array, keyParams);
-    array.add(static_cast<uint32_t>(KeyFormat::RAW));
-    std::vector<uint8_t> encodedArray = subArray.encode();
-    cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
-    array.add(bstr);
-    array.add(subject);
-    array.add(notAfter);
-    array.add(authorityKeyIdentifier);
-    array.add(masterKey);
-    std::vector<uint8_t> cborData = array.encode();
-
-    if(ErrorCode::OK != (errorCode = constructApduMessage(ins, cborData, apdu)))
-        return errorCode;
-
-    if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
-        return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
-    }
-
-    if((response.size() < 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
-        return (ErrorCode::UNKNOWN_ERROR);
-    }
-
-    if((response.size() > 2)) {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
-                true);
-    }
-    return errorCode;
-}
-
-ErrorCode JavacardKeymaster4Device::setBootParams(uint32_t osVersion, uint32_t osPatchLevel, const std::vector<uint8_t>& verifiedBootKey,
-        std::vector<uint8_t>& verifiedBootKeyHash, keymaster_verified_boot_t kmVerifiedBoot, bool deviceLocked) {
-    cppbor::Array array;
-    std::vector<uint8_t> apdu;
-    std::vector<uint8_t> response;
-    Instruction ins = Instruction::INS_SET_BOOT_PARAMS_CMD;
-    array.add(osVersion).
-        add(osPatchLevel).
-        /* Verified Boot Key */
-        add(verifiedBootKey).
-        /* Verified Boot Hash */
-        add(verifiedBootKeyHash).
-        /* boot state */
-        add(static_cast<uint32_t>(kmVerifiedBoot)).
-        /* device locked */
-        add(static_cast<uint32_t>(deviceLocked));
-    std::vector<uint8_t> cborData = array.encode();
-
-    ErrorCode ret = constructApduMessage(ins, cborData, apdu);
-    if(ret != ErrorCode::OK) return ret;
-
-    if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
-        return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
-    }
-
-    if((response.size() < 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
-        return (ErrorCode::UNKNOWN_ERROR);
-    }
-    return ErrorCode::OK;
-
 }
 
 JavacardKeymaster4Device::JavacardKeymaster4Device(): softKm_(new ::keymaster::AndroidKeymaster(
@@ -548,23 +304,21 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
     hidl_string jcKeymasterAuthor;
 
     ErrorCode ret = sendData(Instruction::INS_GET_HW_INFO_CMD, input, resp);
-    if(ret == ErrorCode::SECURE_HW_COMMUNICATION_FAILED) {
+    if(ret != ErrorCode::OK) {
         //Socket not connected.
         _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
         return Void();
     } else {
-        if((ret == ErrorCode::OK) && (resp.size() > 2)) {
-            //Skip last 2 bytes in cborData, it contains status.
-            std::tie(item, ret) = cborConverter_.decodeData(std::vector<uint8_t>(resp.begin(), resp.end()-2),
-                    true);
-            if (item != nullptr) {
-                std::vector<uint8_t> temp;
-                if(!cborConverter_.getUint64(item, 0, securityLevel) ||
-                        !cborConverter_.getBinaryArray(item, 1, jcKeymasterName) ||
-                        !cborConverter_.getBinaryArray(item, 2, jcKeymasterAuthor)) {
-                    _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
-                    return Void();
-                }
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, ret) = cborConverter_.decodeData(std::vector<uint8_t>(resp.begin(), resp.end()-2),
+                true);
+        if (item != nullptr) {
+            std::vector<uint8_t> temp;
+            if(!cborConverter_.getUint64(item, 0, securityLevel) ||
+                    !cborConverter_.getBinaryArray(item, 1, jcKeymasterName) ||
+                    !cborConverter_.getBinaryArray(item, 2, jcKeymasterAuthor)) {
+                _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
+                return Void();
             }
         }
         _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
@@ -582,9 +336,8 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
     std::unique_ptr<Item> item;
     HmacSharingParameters hmacSharingParameters;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-
     errorCode = sendData(Instruction::INS_GET_HMAC_SHARING_PARAM_CMD, input, cborData);
-    if(errorCode == ErrorCode::SECURE_HW_COMMUNICATION_FAILED) {
+    if(errorCode != ErrorCode::OK) {
         auto response = softKm_->GetHmacSharingParameters();
         ::android::hardware::keymaster::V4_0::HmacSharingParameters params;
         params.seed.setToExternal(const_cast<uint8_t*>(response.params.seed.data),
@@ -594,14 +347,12 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
         _hidl_cb(legacy_enum_conversion(response.error), params);
         return Void();
     } else {
-        if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
-            //Skip last 2 bytes in cborData, it contains status.
-            std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborData.begin(), cborData.end()-2),
-                    true);
-            if (item != nullptr) {
-                if(!cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters)) {
-                    errorCode = ErrorCode::UNKNOWN_ERROR;
-                }
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborData.begin(), cborData.end()-2),
+                true);
+        if (item != nullptr) {
+            if(!cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters)) {
+                errorCode = ErrorCode::UNKNOWN_ERROR;
             }
         }
         _hidl_cb(errorCode, hmacSharingParameters);
@@ -636,7 +387,7 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(Instruction::INS_COMPUTE_SHARED_HMAC_CMD, cborData, cborOutData);
-    if(errorCode == ErrorCode::SECURE_HW_COMMUNICATION_FAILED) {
+    if(errorCode != ErrorCode::OK) {
         ComputeSharedHmacRequest request;
         request.params_array.params_array = new keymaster::HmacSharingParameters[params.size()];
         request.params_array.num_params = params.size();
@@ -657,17 +408,15 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
         return Void();
 
     } else {
-        if((errorCode == ErrorCode::OK) && (cborData.size() > 2)) {
-            //Skip last 2 bytes in cborData, it contains status.
-            std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                    true);
-            if (item != nullptr) {
-                std::vector<uint8_t> bstr;
-                if(!cborConverter_.getBinaryArray(item, 1, bstr)) {
-                    errorCode = ErrorCode::UNKNOWN_ERROR;
-                } else {
-                    sharingCheck = bstr;
-                }
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                true);
+        if (item != nullptr) {
+            std::vector<uint8_t> bstr;
+            if(!cborConverter_.getBinaryArray(item, 1, bstr)) {
+                errorCode = ErrorCode::UNKNOWN_ERROR;
+            } else {
+                sharingCheck = bstr;
             }
         }
         _hidl_cb(errorCode, sharingCheck);
@@ -693,8 +442,7 @@ Return<ErrorCode> JavacardKeymaster4Device::addRngEntropy(const hidl_vec<uint8_t
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(Instruction::INS_ADD_RNG_ENTROPY_CMD, cborData, cborOutData);
-
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -726,7 +474,7 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
 
     errorCode = sendData(Instruction::INS_GENERATE_KEY_CMD, cborData, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -772,7 +520,7 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
 
     errorCode = sendData(Instruction::INS_IMPORT_KEY_CMD, cborData, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -822,12 +570,12 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
     cborConverter_.addKeyparameters(array, unwrappingParams);
     array.add(std::vector<uint8_t>(wrappedKeyDescription));
     array.add(passwordSid);
-    array.add(biometricSid); /* TODO if biometricSid optional if user not sent this don't encode this cbor format */
+    array.add(biometricSid);
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(Instruction::INS_IMPORT_WRAPPED_KEY_CMD, cborData, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -860,7 +608,7 @@ Return<void> JavacardKeymaster4Device::getKeyCharacteristics(const hidl_vec<uint
 
     errorCode = sendData(Instruction::INS_GET_KEY_CHARACTERISTICS_CMD, cborData, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -909,6 +657,8 @@ Return<void> JavacardKeymaster4Device::exportKey(KeyFormat exportFormat, const h
     return Void();
 }
 
+
+
 Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToAttest, const hidl_vec<KeyParameter>& attestParams, attestKey_cb _hidl_cb) {
     cppbor::Array array;
     std::unique_ptr<Item> item;
@@ -920,10 +670,9 @@ Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToA
     array.add(std::vector<uint8_t>(keyToAttest));
     cborConverter_.addKeyparameters(array, attestParams);
     std::vector<uint8_t> cborData = array.encode();
-
     errorCode = sendData(Instruction::INS_ATTEST_KEY_CMD, cborData, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         std::vector<std::vector<uint8_t>> temp;
         std::vector<uint8_t> rootCert;
         //Skip last 2 bytes in cborData, it contains status.
@@ -933,14 +682,26 @@ Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToA
             if(!cborConverter_.getMultiBinaryArray(item, 1, temp)) {
                 errorCode = ErrorCode::UNKNOWN_ERROR;
             } else {
-                if(readDataFromFile(ROOT_RSA_CERT, rootCert)) {
-                    temp.push_back(std::move(rootCert));
-                    certChain.resize(temp.size());
-                    for(int i = 0; i < temp.size(); i++) {
-                        certChain[i] = temp[i];
+                cborData.clear();
+                cborOutData.clear();
+                errorCode = sendData(Instruction::INS_GET_CERT_CHAIN_CMD, cborData, cborOutData, true);
+                if(errorCode == ErrorCode::OK) {
+                    //Skip last 2 bytes in cborData, it contains status.
+                    std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                            true);
+                    if (item != nullptr) {
+                        std::vector<uint8_t> chain;
+                        if(!cborConverter_.getBinaryArray(item, 1, chain)) {
+                            errorCode = ErrorCode::UNKNOWN_ERROR;
+                        } else {
+                            if(ErrorCode::OK == (errorCode = getCertificateChain(chain, temp))) {
+                                certChain.resize(temp.size());
+                                for(int i = 0; i < temp.size(); i++) {
+                                    certChain[i] = temp[i];
+                                }
+                            }
+                        }
                     }
-                } else {
-                    LOG(ERROR) << "No root certificate found";
                 }
             }
         }
@@ -962,7 +723,7 @@ Return<void> JavacardKeymaster4Device::upgradeKey(const hidl_vec<uint8_t>& keyBl
 
     errorCode = sendData(Instruction::INS_UPGRADE_KEY_CMD, cborData, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -985,7 +746,7 @@ Return<ErrorCode> JavacardKeymaster4Device::deleteKey(const hidl_vec<uint8_t>& k
     std::vector<uint8_t> cborData = array.encode();
     errorCode = sendData(Instruction::INS_DELETE_KEY_CMD, cborData, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -1001,7 +762,7 @@ Return<ErrorCode> JavacardKeymaster4Device::deleteAllKeys() {
 
     errorCode = sendData(Instruction::INS_DELETE_ALL_KEYS_CMD, input, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -1017,7 +778,7 @@ Return<ErrorCode> JavacardKeymaster4Device::destroyAttestationIds() {
 
     errorCode = sendData(Instruction::INS_DESTROY_ATT_IDS_CMD, input, cborOutData);
 
-    if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -1090,7 +851,7 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
         errorCode = ErrorCode::UNKNOWN_ERROR;
         if(getTag(keyCharacteristics.hardwareEnforced, Tag::ALGORITHM, param)) {
             errorCode = sendData(Instruction::INS_BEGIN_OPERATION_CMD, cborData, cborOutData);
-            if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+            if(errorCode == ErrorCode::OK) {
                 //Skip last 2 bytes in cborData, it contains status.
                 std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                         true);
@@ -1164,7 +925,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
 
             errorCode = sendData(Instruction::INS_UPDATE_OPERATION_CMD, cborData, cborOutData);
 
-            if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+            if(errorCode == ErrorCode::OK) {
                 //Skip last 2 bytes in cborData, it contains status.
                 std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                         true);
@@ -1276,7 +1037,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
 
             errorCode = sendData(ins, cborData, cborOutData);
 
-            if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+            if(errorCode == ErrorCode::OK) {
                 //Skip last 2 bytes in cborData, it contains status.
                 std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                         true);
@@ -1326,7 +1087,7 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
 
         errorCode = sendData(Instruction::INS_ABORT_OPERATION_CMD, cborData, cborOutData);
 
-        if((errorCode == ErrorCode::OK) && (cborOutData.size() > 2)) {
+        if(errorCode == ErrorCode::OK) {
             //Skip last 2 bytes in cborData, it contains status.
             std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                     true);
@@ -1355,10 +1116,9 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
     cborConverter_.addVerificationToken(array, verificationToken, asn1ParamsVerified);
     std::vector<uint8_t> cborData = array.encode();
 
-    /* TODO DeviceLocked command handled inside HAL */
     ret = sendData(Instruction::INS_DEVICE_LOCKED_CMD, cborData, cborOutData);
 
-    if((ret == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(ret == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData<::android::hardware::keymaster::V4_1::ErrorCode>(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
@@ -1375,7 +1135,7 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
 
     ErrorCode ret = sendData(Instruction::INS_EARLY_BOOT_ENDED_CMD, cborInput, cborOutData);
 
-    if((ret == ErrorCode::OK) && (cborOutData.size() > 2)) {
+    if(ret == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData<::android::hardware::keymaster::V4_1::ErrorCode>(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true);
