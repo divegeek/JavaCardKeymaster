@@ -15,6 +15,32 @@
 
 
 cc_binary {
+    name: "provision_tool",
+    relative_install_path: "hw",
+    vendor: true,
+    srcs: [
+        "4.1/provision_tool.cpp",
+        "4.1/CommonUtils.cpp",
+        "4.1/CborConverter.cpp",
+    ],
+    shared_libs: [
+        "libdl",
+        "libcutils",
+        "libutils",
+        "libbase",
+        "libhardware",
+        "libhidlbase",
+        "libkeymaster_messages",
+        "libkeymaster_portable",
+        "android.hardware.keymaster@4.1",
+        "android.hardware.keymaster@4.0",
+        "libcppbor",
+        "libjc_transport",
+        "libcrypto",
+    ],
+}
+
+cc_binary {
     name: "android.hardware.keymaster@4.1-javacard.service",
     relative_install_path: "hw",
     vendor: true,
