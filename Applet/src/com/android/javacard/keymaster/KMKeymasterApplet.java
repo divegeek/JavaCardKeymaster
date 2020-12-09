@@ -644,6 +644,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processProvisionAttestationCertChainCmd(APDU apdu) {
+    tmpVariables[0] = seProvider.getCertificateChainLength();
+    if (tmpVariables[0] != 0) {
+      //Clear the previous certificate chain.
+      seProvider.clearCertificateChain();
+    }
     byte[] srcBuffer = apdu.getBuffer();
     short recvLen = apdu.setIncomingAndReceive();
     short srcOffset = apdu.getOffsetCdata();
