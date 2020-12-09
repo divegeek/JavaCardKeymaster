@@ -37,6 +37,7 @@ cc_binary {
         "libcppbor",
         "libjc_transport",
         "libcrypto",
+        "libjsoncpp",
     ],
 }
 
