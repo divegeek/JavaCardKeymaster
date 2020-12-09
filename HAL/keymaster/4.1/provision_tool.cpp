@@ -16,17 +16,25 @@
  */
 
 #include <iostream>
+#include <fstream>
 #include <unistd.h>
 #include <getopt.h>
 #include <utils/StrongPointer.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+#include <openssl/bio.h>
+#include <openssl/asn1.h>
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 #include <keymaster/authorization_set.h>
 #include <android-base/properties.h>
+#include <android-base/logging.h>
 #include <cppbor.h>
 #include <cppbor_parse.h>
 #include <CborConverter.h>
 #include <CommonUtils.h>
 #include <TransportFactory.h>
+#include <json/reader.h>
+#include <json/value.h>
 
 #define BUFFER_MAX_LENGTH 256
 #define SB_KEYMASTER_SERVICE "javacard"
@@ -35,6 +43,8 @@
 #define APDU_P1  0x40
 #define APDU_P2  0x00
 #define APDU_RESP_STATUS_OK 0x9000
+#define MAX_ATTEST_IDS_SIZE 8
+#define SHARED_SECRET_SIZE 32
 
 enum class Instruction {
     // Provisioning commands
@@ -60,6 +70,7 @@ enum ProvisionStatus {
 };
 
 using ::android::hardware::keymaster::V4_0::ErrorCode;
+using ::android::hardware::keymaster::V4_0::EcCurve;
 using ::android::hardware::keymaster::V4_0::HardwareAuthenticatorType;
 using ::android::hardware::keymaster::V4_0::HardwareAuthToken;
 using ::android::hardware::keymaster::V4_0::HmacSharingParameters;
@@ -77,6 +88,7 @@ using se_transport::TransportFactory;
 
 static sp<IKeymasterDevice> sbKeymaster;
 static TransportFactory *pTransportFactory;
+Json::Value root;
 
 constexpr char hex_value[256] = {0, 0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  //
                                  0, 0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  //
@@ -95,9 +107,9 @@ constexpr char hex_value[256] = {0, 0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0,
                                  0, 0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  //
                                  0, 0,  0,  0,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-std::string hex2str(const uint8_t* a, size_t len) { 
+std::string hex2str(std::string a) { 
     std::string b;
-    size_t num = len / 2; 
+    size_t num = a.size() / 2;
     b.resize(num);
     for (size_t i = 0; i < num; i++) {
         b[i] = (hex_value[a[i * 2] & 0xFF] << 4) + (hex_value[a[i * 2 + 1] & 0xFF]);
@@ -110,9 +122,103 @@ static ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& in
 extendedOutput);
 static ErrorCode sendProvisionData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response, bool
 extendedOutput);
-static Tag mapAttestKeyToAttestTag(const char* key);
+static Tag mapAttestKeyToAttestTag(std::string key);
+bool parseJsonFile(const char* filename);
 
+static bool readDataFromFile(const char *filename, std::vector<uint8_t>& data) {
+    FILE *fp;
+    bool ret = true;
+    fp = fopen(filename, "rb");
+    if(fp == NULL) {
+        printf("\nFailed to open file: \n");
+        return false;
+    }
+    fseek(fp, 0L, SEEK_END);
+    long int filesize = ftell(fp);
+    rewind(fp);
+    std::unique_ptr<uint8_t[]> buf(new uint8_t[filesize]);
+    if( 0 == fread(buf.get(), filesize, 1, fp)) {
+        printf("\n No content in the file \n");
+        ret = false;
+    }
+    if(true == ret) {
+        data.insert(data.end(), buf.get(), buf.get() + filesize);
+    }
+    fclose(fp);
+    return ret;
+}
 
+static inline X509* parseDerCertificate(std::vector<uint8_t>& certData) {
+    X509 *x509 = NULL;
+
+    /* Create BIO instance from certificate data */
+    BIO *bio = BIO_new_mem_buf(certData.data(), certData.size());
+    if(bio == NULL) {
+        LOG(ERROR) << " Failed to create BIO from buffer.";
+        return NULL;
+    }
+    /* Create X509 instance from BIO */
+    x509 = d2i_X509_bio(bio, NULL);
+    if(x509 == NULL) {
+        LOG(ERROR) << " Failed to get X509 instance from BIO.";
+        return NULL;
+    }
+    BIO_free(bio);
+    return x509;
+}
+
+static inline void getDerSubjectName(X509* x509, std::vector<uint8_t>& subject) {
+    uint8_t *subjectDer = NULL;
+    X509_NAME* asn1Subject = X509_get_subject_name(x509);
+    if(asn1Subject == NULL) {
+        LOG(ERROR) << " Failed to read the subject.";
+        return;
+    }
+    /* Convert X509_NAME to der encoded subject */
+    int len = i2d_X509_NAME(asn1Subject, &subjectDer);
+    if (len < 0) {
+        LOG(ERROR) << " Failed to get readable name from X509_NAME.";
+        return;
+    }
+    subject.insert(subject.begin(), subjectDer, subjectDer+len);
+}
+
+static inline void getAuthorityKeyIdentifier(X509* x509, std::vector<uint8_t>& authKeyId) {
+    long xlen;
+    int tag, xclass;
+
+    int loc = X509_get_ext_by_NID(x509, NID_authority_key_identifier, -1);
+    X509_EXTENSION *ext = X509_get_ext(x509, loc);
+    if(ext == NULL) {
+        LOG(ERROR) << " Failed to read authority key identifier.";
+        return;
+    }
+
+    ASN1_OCTET_STRING *asn1AuthKeyId = X509_EXTENSION_get_data(ext);
+    const uint8_t *strAuthKeyId = ASN1_STRING_get0_data(asn1AuthKeyId);
+    int strAuthKeyIdLen = ASN1_STRING_length(asn1AuthKeyId);
+    int ret = ASN1_get_object(&strAuthKeyId, &xlen, &tag, &xclass, strAuthKeyIdLen);
+    if (ret == 0x80 || strAuthKeyId == NULL) {
+        LOG(ERROR) << "Failed to get the auth key identifier from ASN1 sequence.";
+        return;
+    }
+    authKeyId.insert(authKeyId.begin(), strAuthKeyId, strAuthKeyId + xlen);
+}
+
+static inline void getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate) {
+    const ASN1_TIME* notAfter = X509_get0_notAfter(x509);
+    if(notAfter == NULL) {
+        LOG(ERROR) << " Failed to read expiry time.";
+        return;
+    }
+    int strNotAfterLen = ASN1_STRING_length(notAfter);
+    const uint8_t *strNotAfter = ASN1_STRING_get0_data(notAfter);
+    if(strNotAfter == NULL) {
+        LOG(ERROR) << " Failed to read expiry time from ASN1 string.";
+        return;
+    }
+    notAfterDate.insert(notAfterDate.begin(), strNotAfter, strNotAfter + strNotAfterLen);
+}
 
 static inline uint16_t getStatus(std::vector<uint8_t>& inputData) {
     //Last two bytes are the status SW0SW1
@@ -128,10 +234,8 @@ static inline TransportFactory* getTransportFactoryInstance() {
     return pTransportFactory;
 }
 
-static Tag  mapAttestKeyToAttestTag(const char* key) {
-    //keymaster_tag_t tag = KM_TAG_INVALID;
+static Tag  mapAttestKeyToAttestTag(std::string keyStr) {
     Tag tag = Tag::INVALID;
-    std::string keyStr(key);
 
     if (0 == keyStr.compare("brand")) {
         tag = Tag::ATTESTATION_ID_BRAND;
@@ -218,115 +322,205 @@ extendedOutput=false) {
 }
 
 void usage() {
-    printf("Usage:\n");
-    printf("provision --attest_ids <file> --shared_secret <32 bytes secret> --set_boot_params <file> --lock_provision"
-    "--provision_status\n");
-    printf("\n\n");
-    printf("Options:\n");
+    printf("Usage: provision_tool [options]\n");
+    printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
-    printf("-a, --attest_ids FILE \n");
-    printf("\t Syntax for attest_ids inside the file:\n");
-    printf("\t brand=Google\n");
-    printf("\t device=Pixel 3A\n");
-    printf("\t product=Pixel\n");
-    printf("\t serial=UGYJFDjFeRuBEH\n");
-    printf("\t imei=987080543071019\n");
-    printf("\t meid=27863510227963\n");
-    printf("\t manufacturer=Foxconn\n");
-    printf("\t model=HD1121\n");
-    printf("-s, --shared_secret  <32 bytes secret>  \n");
-    //TODO include set_boot_params
-    printf("\t The value of shared secret should be a 32 bytes in HEX\n");
-    printf("-p, --provision_status  Prints the provision status.\n");
-    printf("-l, --lock_provision    Locks the provision commands.\n");
+    printf("-a, --all jsonFile \t Executes all the provision commands \n");
+    printf("-k, --attest_key jsonFile \t Provision attestation key \n");
+    printf("-c, --cert_chain jsonFile \t Provision attestation certificate chain \n");
+    printf("-p, --cert_params jsonFile \t Provision attestation certificate parameters \n");
+    printf("-i, --attest_ids jsonFile \t Provision attestation IDs \n");
+    printf("-r, --shared_secret jsonFile \t Provion shared secret  \n");
+    printf("-b, --set_boot_params jsonFile \t Provion boot parameters  \n");
+    printf("-s, --provision_status \t Prints the provision status.\n");
+    printf("-l, --lock_provision  \t  Locks the provision commands.\n");
 }
 
-bool provisionAttestationIds(const char* filename) {
-    CborConverter cborConverter;
-    cppbor::Array array;
-    Instruction ins = Instruction::INS_PROVISION_ATTEST_IDS_CMD;
-    ErrorCode errorCode = ErrorCode::OK;
-    std::vector<uint8_t> response;
-	FILE *fp;
-    char tempChar;
-    int tempIndex = 0;
-    uint8_t buf[BUFFER_MAX_LENGTH];
-	bool ret = true;
-	fp = fopen(filename, "rb");
-
-	if(fp == NULL) {
-		std::cout << "Failed to open file: " << filename;
-        return false;
-	}
-    std::vector<KeyParameter> params;
-    KeyParameter parameter;
-    Tag tag;
-    while((tempChar = fgetc(fp))) {
-        if (tempChar == '\n' || tempChar == EOF) {
-            buf[tempIndex] = '\0';
-            tempIndex = 0;
-            if(0 != strlen((const char*)buf)) {
-                std::vector<uint8_t> blob(buf, buf + strlen((const char*)buf));
-                parameter.blob = std::move(blob);
-                params.push_back(parameter);
-            }
-            parameter = KeyParameter();
-            // Decide to break or continue
-            if(tempChar == EOF)
-                break;
-            else
-                continue;
-
-        } else if (tempChar == '=') {
-            buf[tempIndex] = '\0';
-            tempIndex = 0;
-            if(Tag::INVALID == (tag = mapAttestKeyToAttestTag((const char*)buf))) {
-                ret = false;
-                printf("\n Invalid TAG \n");
-                break;
-            }
-            parameter.tag = tag;
-            printf("Key: %s", buf);
-            continue;
-        }
-        buf[tempIndex++] = tempChar;
-    }
-	fclose(fp);
-    if(!ret) 
+bool getBootParameterIntValue(Json::Value& bootParamsObj, const char* key, uint32_t *value) {
+    bool ret = false;
+    Json::Value val = bootParamsObj[key];
+    if(val.empty())
         return ret;
 
-    hidl_vec<KeyParameter> attestParams(params);
+    if(!val.isInt())
+        return ret;
 
-    //Encode input data into CBOR.
-    cborConverter.addKeyparameters(array, attestParams);
-    std::vector<uint8_t> cborData = array.encode();
+    *value = (uint32_t)val.asInt();
 
-    if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
-        ret = false;
-        printf("\n Failed to provision attestation ids error: %d\n", uint32_t(errorCode));
+    return true;
+}
+
+bool getBootParameterBlobValue(Json::Value& bootParamsObj, const char* key, std::vector<uint8_t>& blob) {
+    bool ret = false;
+    Json::Value val = bootParamsObj[key];
+    if(val.empty())
+        return ret;
+
+    if(!val.isString())
+        return ret;
+
+    std::string blobStr = hex2str(val.asString());
+
+    for(char ch : blobStr) {
+        blob.push_back((uint8_t)ch);
     }
-	return ret;
+
+    return true;
+}
+
+bool setBootParameters(const char* filename) {
+    Json::Value bootParamsObj;
+    bool ret = false;
+
+    if(!parseJsonFile(filename))
+        return ret;
+
+    bootParamsObj = root.get("set_boot_params", bootParamsObj);
+    if (!bootParamsObj.isNull()) {
+        cppbor::Array array;
+        ErrorCode errorCode = ErrorCode::OK;
+        std::vector<uint8_t> apdu;
+        std::vector<uint8_t> response;
+        Instruction ins = Instruction::INS_SET_BOOT_PARAMS_CMD;
+        uint32_t value;
+        std::vector<uint8_t> blob;
+
+        if(!getBootParameterIntValue(bootParamsObj, "os_version", &value)) {
+            printf("\n Invalid value for os_version or os_version tag missing\n");
+            return ret;
+        }
+        array.add(value);
+        if(!getBootParameterIntValue(bootParamsObj, "os_patch_level", &value)) {
+            printf("\n Invalid value for os_patch_level or os_patch_level tag missing\n");
+            return ret;
+        }
+        array.add(value);
+        if(!getBootParameterIntValue(bootParamsObj, "vendor_patch_level", &value)) {
+            printf("\n Invalid value for vendor_patch_level or vendor_patch_level tag missing\n");
+            return ret;
+        }
+        array.add(value);
+        if(!getBootParameterIntValue(bootParamsObj, "boot_patch_level", &value)) {
+            printf("\n Invalid value for boot_patch_level or boot_patch_level tag missing\n");
+            return ret;
+        }
+        array.add(value);
+        if(!getBootParameterBlobValue(bootParamsObj, "verified_boot_key", blob)) {
+            printf("\n Invalid value for verified_boot_key or verified_boot_key tag missing\n");
+            return ret;
+        }
+        array.add(blob);
+        blob.clear();
+        if(!getBootParameterBlobValue(bootParamsObj, "verified_boot_key_hash", blob)) {
+            printf("\n Invalid value for verified_boot_key_hash or verified_boot_key_hash tag missing\n");
+            return ret;
+        }
+        array.add(blob);
+        blob.clear();
+        if(!getBootParameterIntValue(bootParamsObj, "boot_state", &value)) {
+            printf("\n Invalid value for boot_state or boot_state tag missing\n");
+            return ret;
+        }
+        array.add(value);
+        if(!getBootParameterIntValue(bootParamsObj, "device_locked", &value)) {
+            printf("\n Invalid value for device_locked or device_locked tag missing\n");
+            return ret;
+        }
+        array.add(value);
+
+        std::vector<uint8_t> cborData = array.encode();
+
+        if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
+            printf("\n Failed to set boot parameters errorCode:%d\n", errorCode);
+            return ret;
+        }
+
+    } else {
+        return ret;
+    }
+    printf("\n SE successfully accepted boot paramters \n");
+    return true;
+}
+
+bool provisionAttestationIds(const char *filename) {
+    Json::Value attestIds;
+    bool ret = false;
+
+    if(!parseJsonFile(filename))
+        return ret;
+
+    attestIds = root.get("attest_ids", attestIds);
+    if (!attestIds.isNull()) {
+        if (attestIds.size() != MAX_ATTEST_IDS_SIZE) {
+            return ret;
+        }
+        Json::Value value;
+        std::vector<uint8_t> temp;
+        int i = 0;
+        std::vector<KeyParameter> params(attestIds.size());
+        Json::Value::Members keys = attestIds.getMemberNames();
+        Tag tag;
+        for(std::string key : keys) {
+            if(Tag::INVALID == (tag = mapAttestKeyToAttestTag(key))) {
+                break;
+            }
+            value = attestIds[key];
+            if(value.empty()) {
+                break;
+            }
+            params[i].tag = tag;
+            for(char ch : value.asString()) {
+                temp.push_back((uint8_t)ch);
+            }
+            params[i].blob.resize(temp.size());
+            params[i].blob = temp;
+            temp.clear();
+            i++;
+        }
+
+        if(i != MAX_ATTEST_IDS_SIZE)
+            return ret;
+
+        CborConverter cborConverter;
+        cppbor::Array array;
+        Instruction ins = Instruction::INS_PROVISION_ATTEST_IDS_CMD;
+        ErrorCode errorCode = ErrorCode::OK;
+        std::vector<uint8_t> response;
+        hidl_vec<KeyParameter> attestParams(params);
+
+        //Encode input data into CBOR.
+        cborConverter.addKeyparameters(array, attestParams);
+        std::vector<uint8_t> cborData = array.encode();
+
+        if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
+            printf("\n Failed to provision attestation ids error: %d\n", uint32_t(errorCode));
+            return ret;
+        }
+    } else {
+        return ret;
+    }
+    printf("\n provisioned attestation ids successfully \n");
+    return true;
 }
 
 bool lockProvision() {
-	bool ret = true;
+	bool ret = false;
     cppbor::Array array;
     Instruction ins = Instruction::INS_LOCK_PROVISIONING_CMD;
     ErrorCode errorCode = ErrorCode::OK;
     std::vector<uint8_t> cborData;
     std::vector<uint8_t> response;
-    printf("\n lock provision\n");
-
 
     if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
-        ret = false;
         printf("\n Failed to lock provisioning error: %d\n", uint32_t(errorCode));
+        return ret;
     }
-	return ret;
+    printf("\n Successfully locked provisioning process. Now SE doesn't accept any further provision commands. \n");
+	return true;
 }
 
 bool getProvisionStatus() {
-	bool ret = true;
+	bool ret = false;
     CborConverter cborConverter;
     cppbor::Array array;
     Instruction ins = Instruction::INS_GET_PROVISION_STATUS_CMD;
@@ -334,12 +528,10 @@ bool getProvisionStatus() {
     std::vector<uint8_t> cborData;
     std::vector<uint8_t> response;
     std::unique_ptr<Item> item;
-    printf("\nget provision sttus\n");
-
 
     if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
-        ret = false;
         printf("\n Failed to get provision status error: %d\n", uint32_t(errorCode));
+        return ret;
     }
     std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
             true);
@@ -347,53 +539,287 @@ bool getProvisionStatus() {
         uint64_t status;
 
         if(!cborConverter.getUint64(item, 1, status)) {
-            ret = false;
             printf("\n Failed to get the status value \n");
+            return ret;
         } else {
-            printf("\n Current provision status: %ld", status);
+            printf("\nCurrent provision status: %ld\n", status);
         }
+    } else {
+        return ret;
     }
-	return ret;
+	return true;
 }
 
-bool provisionSharedSecret(const uint8_t* secret) {
-    bool ret = true;
-    cppbor::Array array;
-    Instruction ins = Instruction::INS_PROVISION_SHARED_SECRET_CMD;
-    ErrorCode errorCode = ErrorCode::OK;
-    std::vector<uint8_t> response;
-    std::string str = hex2str(secret, strlen((const char*)secret));
-    //Length of the secret should be 32 bytes.
-    if(32 != str.length()) {
+bool provisionSharedSecret(const char* filename) {
+    Json::Value sharedSecret;
+    bool ret = false;
+
+    if(!parseJsonFile(filename))
+        return ret;
+
+    sharedSecret = root.get("shared_secret", sharedSecret);
+    if (!sharedSecret.isNull()) {
+        cppbor::Array array;
+        Instruction ins = Instruction::INS_PROVISION_SHARED_SECRET_CMD;
+        ErrorCode errorCode = ErrorCode::OK;
+        std::vector<uint8_t> response;
+        std::string str = sharedSecret.asString();
+        std::string secret = hex2str(str);
+
+        //Length of the secret should be 32 bytes.
+        if(SHARED_SECRET_SIZE != secret.size()) {
+            return ret;
+        }
+        std::vector<uint8_t> input(secret.data(), secret.data() + secret.length());
+
+        //Encode input data into CBOR.
+        array.add(input);
+        std::vector<uint8_t> cborData = array.encode();
+
+        if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
+            printf("\n Failed to provision shared secret error: %d\n", uint32_t(errorCode));
+            return ret;
+        }
+    } else {
+        return ret;
+    }
+    printf("\n Provisioned shared secret successfully \n");
+    return true;
+}
+
+static bool provisionAttestationKey(const char* filename) {
+    Json::Value keyFile;
+    bool ret = false;
+
+    if(!parseJsonFile(filename))
+        return ret;
+
+    keyFile = root.get("attest_key", keyFile);
+    if (!keyFile.isNull()) {
+        ErrorCode errorCode = ErrorCode::OK;
+        CborConverter cborConverter;
+        cppbor::Array array;
+        cppbor::Array subArray;
+        std::vector<uint8_t> data;
+        std::vector<uint8_t> privKey;
+        std::vector<uint8_t> pubKey;
+        Instruction ins = Instruction::INS_PROVISION_ATTESTATION_KEY_CMD;
+        EcCurve curve;
+        std::vector<uint8_t> response;
+
+        std::string keyFileName = keyFile.asString();
+        if(!readDataFromFile(keyFileName.data(), data)) {
+            printf("\n Failed to read the Root ec key\n");
+            return ret;
+        }
+        keymaster::AuthorizationSet authSetKeyParams(keymaster::AuthorizationSetBuilder()
+                .Authorization(keymaster::TAG_ALGORITHM, KM_ALGORITHM_EC)
+                .Authorization(keymaster::TAG_DIGEST, KM_DIGEST_SHA_2_256)
+                .Authorization(keymaster::TAG_EC_CURVE, KM_EC_CURVE_P_256)
+                .Authorization(keymaster::TAG_PURPOSE, static_cast<keymaster_purpose_t>(0x7F))); /* The value 0x7F is not present in types.hal */
+        // Read the ECKey from the file.         
+        hidl_vec<KeyParameter> keyParams = keymaster::V4_1::javacard::kmParamSet2Hidl(authSetKeyParams);
+
+        if(ErrorCode::OK != (errorCode = keymaster::V4_1::javacard::ecRawKeyFromPKCS8(data, privKey, pubKey, curve))) {
+            printf("\n Failed to convert PKCS8 to RAW key\n");
+            return ret;
+        }
+        subArray.add(privKey);
+        subArray.add(pubKey);
+        std::vector<uint8_t> encodedArray = subArray.encode();
+        cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
+
+        //Encode data.
+        cborConverter.addKeyparameters(array, keyParams);
+        array.add(static_cast<uint32_t>(KeyFormat::RAW));
+        array.add(bstr);
+
+        std::vector<uint8_t> cborData = array.encode();
+
+        if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
+            printf("\n Failed to provision attestation key\n");
+            return ret;
+        }
+    } else {
+        return ret;
+    }
+    printf("\n Provisioned attestation key successfully\n");
+    return true;
+}
+
+bool provisionAttestationCertificateChain(const char* filename) {
+    Json::Value certChainFile;
+    bool ret = false;
+
+    if(!parseJsonFile(filename))
+        return ret;
+
+    certChainFile = root.get("attest_cert_chain", certChainFile);
+    if (!certChainFile.isNull()) {
+        ErrorCode errorCode = ErrorCode::OK;
+        cppbor::Array array;
+        Instruction ins = Instruction::INS_PROVISION_CERT_CHAIN_CMD;
+        std::vector<uint8_t> response;
+
+        std::vector<uint8_t> certData;
+        std::string strCertChain = certChainFile.asString();
+        /* Read the Root certificate */
+        if(!readDataFromFile(strCertChain.data(), certData)) {
+            printf("\n Failed to read the Root certificate\n");
+            return ret;
+        }
+        cppbor::Bstr certChain(certData.begin(), certData.end());
+        std::vector<uint8_t> cborData = certChain.encode();
+
+        if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
+            printf("\n Failed to provision cert chain errorCode:%d\n", static_cast<int32_t>(errorCode));
+            return ret;
+        }
+    } else {
+        return ret;
+    }
+    printf("\n Provisioned attestation certificate chain successfully\n");
+    return true;
+}
+
+bool provisionAttestationCertificateParams(const char* filename) {
+    Json::Value certChainFile;
+    bool ret = false;
+
+    if(!parseJsonFile(filename))
+        return ret;
+
+    certChainFile = root.get("attest_cert_chain", certChainFile);
+    if (!certChainFile.isNull()) {
+        ErrorCode errorCode = ErrorCode::OK;
+        cppbor::Array array;
+        Instruction ins = Instruction::INS_PROVISION_CERT_PARAMS_CMD;
+        std::vector<uint8_t> response;
+        X509 *x509 = NULL;
+        std::vector<uint8_t> subject;
+        std::vector<uint8_t> authorityKeyIdentifier;
+        std::vector<uint8_t> notAfter;
+        std::vector<uint8_t> certData;
+        std::vector<std::vector<uint8_t>> certChain;
+
+
+        std::string strCertChain = certChainFile.asString();
+        /* Read the Root certificate */
+        if(!readDataFromFile(strCertChain.data(), certData)) {
+            printf("\n Failed to read the Root certificate\n");
+            return ret;
+        }
+
+        // Get first certificate from chain of certificates.
+        if(ErrorCode::OK != (errorCode =keymaster::V4_1::javacard::getCertificateChain(certData, certChain))) {
+            printf("\n Failed to parse the certificate chain \n");
+            return ret;
+        }
+
+        if(certChain.size() == 0) {
+            printf("\n Length of the certificate chain is 0\n");
+            return ret;
+        }
+
+
+        /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
+        /* Get X509 certificate instance for the root certificate.*/
+        if(NULL == (x509 = parseDerCertificate(certChain[0]))) {
+            printf("\n Failed to parse the DER certificate \n");
+            return ret;
+        }
+
+        /* Get subject in DER */
+        getDerSubjectName(x509, subject);
+        /* Get AuthorityKeyIdentifier */
+        getAuthorityKeyIdentifier(x509, authorityKeyIdentifier);
+        /* Get Expirty Time */
+        getNotAfter(x509, notAfter);
+        /*Free X509 */
+        X509_free(x509);
+
+        array.add(subject);
+        array.add(notAfter);
+        array.add(authorityKeyIdentifier);
+        std::vector<uint8_t> cborData = array.encode();
+
+        if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
+            printf("\n Failed to provision cert params errorCode:%d\n", static_cast<int32_t>(errorCode));
+            return ret;
+        }
+    } else {
+        return ret;
+    }
+    printf("\n Provisioned attestation certificate parameters successfully\n");
+    return true;
+}
+
+bool provision(const char* filename) {
+
+    if(!provisionAttestationKey(filename)) {
+        printf("\n Failed to provision attestation Key\n");
         return false;
     }
-    std::vector<uint8_t> input(str.data(), str.data() + str.length());
-
-    //Encode input data into CBOR.
-    array.add(input);
-    std::vector<uint8_t> cborData = array.encode();
-
-    if(ErrorCode::OK != (errorCode = sendProvisionData(ins, cborData, response))) {
-        ret = false;
-        printf("\n Failed to provision shared secret error: %d\n", uint32_t(errorCode));
+    if(!provisionAttestationCertificateChain(filename)) {
+        printf("\n Failed to provision certificate chain\n");
+        return false;
     }
-	return ret;
+    if(!provisionAttestationCertificateParams(filename)) {
+        printf("\n Failed to provision certificate paramters\n");
+        return false;
+    }
+    if(!provisionSharedSecret(filename)) {
+        printf("\n Failed to provision shared secret\n");
+        return false;
+    }
+    if(!provisionAttestationIds(filename)) {
+        printf("\n Failed to provision attestation ids\n");
+        return false;
+    }
+    if(!setBootParameters(filename)) {
+        printf("\n Failed to set boot parameters\n");
+        return false;
+    }
+    return true;
+}
+
+bool parseJsonFile(const char* filename) {
+    std::stringstream buffer;
+    Json::Reader jsonReader;
+
+    if(!root.empty()) {
+        printf("\n Already parsed \n");
+        return true;
+    }
+    std::ifstream stream(filename);
+    buffer << stream.rdbuf();
+    if(jsonReader.parse(buffer.str(), root)) {
+        printf("\n Parsed json file successfully\n");
+        return true;
+    } else {
+        printf("\n Failed to parse json file\n");
+        return false;
+    }
 }
 
 int main(int argc, char* argv[])
 {
 	int c;
 	struct option longOpts[] = {
-		{"attest_ids",       required_argument, NULL, 'a'},
-		{"shared_secret",    required_argument, NULL, 's'},
+		{"all",              required_argument, NULL, 'a'},
+		{"attest_key",       required_argument, NULL, 'k'},
+		{"cert_chain",       required_argument, NULL, 'c'},
+		{"cert_params",       required_argument, NULL,'p'},
+		{"attest_ids",       required_argument, NULL, 'i'},
+		{"shared_secret",    required_argument, NULL, 'r'},
 		{"set_boot_params",  required_argument, NULL, 'b'},
-		{"provision_status", no_argument,       NULL, 'p'},
+		{"provision_status", no_argument,       NULL, 's'},
 		{"lock_provision",   no_argument,       NULL, 'l'},
 		{"help",             no_argument,       NULL, 'h'},
         {0,0,0,0}
 	};
-    sbKeymaster = IKeymasterDevice::getService(SB_KEYMASTER_SERVICE);
 
+    sbKeymaster = IKeymasterDevice::getService(SB_KEYMASTER_SERVICE);
     if(NULL == sbKeymaster) {
         printf("\n Failed to get StrongBox Keymaster service\n");
         exit(0);
@@ -410,16 +836,35 @@ int main(int argc, char* argv[])
     }
 
 	/* getopt_long stores the option index here. */
-	while ((c = getopt_long(argc, argv, ":plha:s:", longOpts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, ":slha:k:c:p:i:r:b:", longOpts, NULL)) != -1) {
 		switch(c) {
-			case 'a':
-				printf("\n attest_ids filename:%s\n", optarg);
+            case 'a':
+                //all
+                provision(optarg);
+                break;
+            case 'k':
+                //attest key
+                provisionAttestationKey(optarg);
+                break;
+            case 'c':
+                //attest certchain
+                provisionAttestationCertificateChain(optarg);
+                break;
+            case 'p':
+                //attest cert params
+                provisionAttestationCertificateParams(optarg);
+                break;
+			case 'i':
                 provisionAttestationIds(optarg);
 				break;
-			case 's':
-                provisionSharedSecret((const uint8_t*)optarg);
+			case 'r':
+                provisionSharedSecret(optarg);
 				break;
-			case 'p':
+            case 'b':
+                //set boot params
+                setBootParameters(optarg);
+                break;
+			case 's':
                 getProvisionStatus();
 				break;
 			case 'l':
@@ -428,9 +873,6 @@ int main(int argc, char* argv[])
 			case 'h':
                 usage();
 				break;
-            case 0:
-                printf("\n set 0\n");
-                break;
 			case ':':
 				printf("\n missing argument\n");
                 usage();
