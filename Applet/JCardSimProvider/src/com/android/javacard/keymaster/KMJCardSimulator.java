@@ -1253,6 +1253,13 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
+  public void clearCertificateChain() {
+    JCSystem.beginTransaction();
+    Util.arrayFillNonAtomic(certificateChain, (short)0, CERT_CHAIN_MAX_SIZE, (byte) 0);
+    JCSystem.commitTransaction();
+  }
+
+  @Override
   public void persistPartialCertificateChain(byte[] buf, short offset,
       short len, short totalLen) {
     //  _____________________________________________________

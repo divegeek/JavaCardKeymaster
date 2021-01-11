@@ -644,6 +644,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processProvisionAttestationCertChainCmd(APDU apdu) {
+    tmpVariables[0] = seProvider.getCertificateChainLength();
+    if (tmpVariables[0] != 0) {
+      //Clear the previous certificate chain.
+      seProvider.clearCertificateChain();
+    }
     byte[] srcBuffer = apdu.getBuffer();
     short recvLen = apdu.setIncomingAndReceive();
     short srcOffset = apdu.getOffsetCdata();
@@ -912,12 +917,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[2] = KMKeyCharacteristics.exp();
     KMArray.cast(tmpVariables[1]).add(KMKeymasterApplet.KEY_BLOB_KEYCHAR, tmpVariables[2]);
     KMArray.cast(tmpVariables[1]).add(KMKeymasterApplet.KEY_BLOB_PUB_KEY, KMByteBlob.exp());
-    data[KEY_BLOB] =
-        decoder.decodeArray(
-            tmpVariables[1],
-            KMByteBlob.cast(data[KEY_BLOB]).getBuffer(),
-            KMByteBlob.cast(data[KEY_BLOB]).getStartOff(),
-            KMByteBlob.cast(data[KEY_BLOB]).length());
+    try {
+      data[KEY_BLOB] = decoder.decodeArray(tmpVariables[1],
+              KMByteBlob.cast(data[KEY_BLOB]).getBuffer(),
+              KMByteBlob.cast(data[KEY_BLOB]).getStartOff(),
+              KMByteBlob.cast(data[KEY_BLOB]).length());
+    } catch (ISOException e) {
+      // As per VTS, deleteKey should return KMError.OK but in case if
+      // input is empty then VTS accepts UNIMPLEMENTED errorCode as well.
+      KMException.throwIt(KMError.UNIMPLEMENTED);
+    }
     tmpVariables[0] = KMArray.cast(data[KEY_BLOB]).length();
     if (tmpVariables[0] < 4) {
       KMException.throwIt(KMError.INVALID_KEY_BLOB);

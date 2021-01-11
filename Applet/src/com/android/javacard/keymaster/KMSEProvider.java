@@ -442,6 +442,11 @@ public interface KMSEProvider extends KMUpgradable {
   public void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen);
 
   /**
+   * This operation clears the certificate chain from persistent memory.
+   */
+  public void clearCertificateChain();
+
+  /**
    * The operation reads the certificate chain from persistent memory.
    *
    * @param buf is the start of data buffer.
