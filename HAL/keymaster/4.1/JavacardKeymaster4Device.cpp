@@ -304,14 +304,10 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
     hidl_string jcKeymasterAuthor;
 
     ErrorCode ret = sendData(Instruction::INS_GET_HW_INFO_CMD, input, resp);
-    if(ret != ErrorCode::OK) {
-        //Socket not connected.
-        _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
-        return Void();
-    } else {
+    if (ret == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, ret) = cborConverter_.decodeData(std::vector<uint8_t>(resp.begin(), resp.end()-2),
-                true);
+                false);
         if (item != nullptr) {
             std::vector<uint8_t> temp;
             if(!cborConverter_.getUint64(item, 0, securityLevel) ||
@@ -324,29 +320,23 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
         _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
         return Void();
     }
+#ifdef TRANSCEIVE_VIA_SOCKET
+    else {
+        //TODO Should we throw fatal error here.?
+        _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
+        return Void();
+    }
+#endif
 }
 
 Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingParameters_cb _hidl_cb) {
-    /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
-     * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to getHmacSharing
-     * parameters.
-     */
     std::vector<uint8_t> cborData;
     std::vector<uint8_t> input;
     std::unique_ptr<Item> item;
     HmacSharingParameters hmacSharingParameters;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     errorCode = sendData(Instruction::INS_GET_HMAC_SHARING_PARAM_CMD, input, cborData);
-    if(errorCode != ErrorCode::OK) {
-        auto response = softKm_->GetHmacSharingParameters();
-        ::android::hardware::keymaster::V4_0::HmacSharingParameters params;
-        params.seed.setToExternal(const_cast<uint8_t*>(response.params.seed.data),
-                response.params.seed.data_length);
-        static_assert(sizeof(response.params.nonce) == params.nonce.size(), "Nonce sizes don't match");
-        memcpy(params.nonce.data(), response.params.nonce, params.nonce.size());
-        _hidl_cb(legacy_enum_conversion(response.error), params);
-        return Void();
-    } else {
+    if (ErrorCode::OK == errorCode) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborData.begin(), cborData.end()-2),
                 true);
@@ -355,16 +345,26 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
                 errorCode = ErrorCode::UNKNOWN_ERROR;
             }
         }
-        _hidl_cb(errorCode, hmacSharingParameters);
-        return Void();
     }
+#ifdef TRANSCEIVE_VIA_SOCKET
+    /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
+     * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to getHmacSharing
+     * parameters.
+     */
+    else {
+        auto response = softKm_->GetHmacSharingParameters();
+        hmacSharingParameters.seed.setToExternal(const_cast<uint8_t*>(response.params.seed.data),
+                response.params.seed.data_length);
+        static_assert(sizeof(response.params.nonce) == hmacSharingParameters.nonce.size(), "Nonce sizes don't match");
+        memcpy(hmacSharingParameters.nonce.data(), response.params.nonce, hmacSharingParameters.nonce.size());
+        errorCode = legacy_enum_conversion(response.error);
+    }
+#endif
+    _hidl_cb(errorCode, hmacSharingParameters);
+    return Void();
 }
 
 Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacSharingParameters>& params, computeSharedHmac_cb _hidl_cb) {
-    /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
-     * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to
-     * computeSharedHmac.
-     */
     cppbor::Array array;
     std::unique_ptr<Item> item;
     std::vector<uint8_t> cborOutData;
@@ -387,7 +387,25 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(Instruction::INS_COMPUTE_SHARED_HMAC_CMD, cborData, cborOutData);
-    if(errorCode != ErrorCode::OK) {
+    if (ErrorCode::OK == errorCode) {
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                true);
+        if (item != nullptr) {
+            std::vector<uint8_t> bstr;
+            if(!cborConverter_.getBinaryArray(item, 1, bstr)) {
+                errorCode = ErrorCode::UNKNOWN_ERROR;
+            } else {
+                sharingCheck = bstr;
+            }
+        }
+    }
+#ifdef TRANSCEIVE_VIA_SOCKET
+    /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
+     * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to
+     * computeSharedHmac.
+     */
+    else {
         ComputeSharedHmacRequest request;
         request.params_array.params_array = new keymaster::HmacSharingParameters[params.size()];
         request.params_array.num_params = params.size();
@@ -401,29 +419,13 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
         }
 
         auto response = softKm_->ComputeSharedHmac(request);
-        hidl_vec<uint8_t> sharing_check;
-        if (response.error == KM_ERROR_OK) sharing_check = kmBlob2hidlVec(response.sharing_check);
-
-        _hidl_cb(legacy_enum_conversion(response.error), sharing_check);
-        return Void();
-
-    } else {
-        //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData(std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                true);
-        if (item != nullptr) {
-            std::vector<uint8_t> bstr;
-            if(!cborConverter_.getBinaryArray(item, 1, bstr)) {
-                errorCode = ErrorCode::UNKNOWN_ERROR;
-            } else {
-                sharingCheck = bstr;
-            }
-        }
-        _hidl_cb(errorCode, sharingCheck);
-        return Void();
+        if (response.error == KM_ERROR_OK) sharingCheck = kmBlob2hidlVec(response.sharing_check);
+        errorCode = legacy_enum_conversion(response.error);
     }
-
-}
+#endif
+    _hidl_cb(errorCode, sharingCheck);
+    return Void();
+ }
 
 Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t , const hidl_vec<KeyParameter>& , const HardwareAuthToken& , verifyAuthorization_cb _hidl_cb) {
     VerificationToken verificationToken;
@@ -1061,8 +1063,10 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
                         sendDataCallback))) {
             output = tempOut;
         }
+        if (ErrorCode::OK != errorCode) {
+            abort(operationHandle);
+        }
     }
-    abort(operationHandle);
     _hidl_cb(errorCode, outParams, output);
     return Void();
 }

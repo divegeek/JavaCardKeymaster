@@ -49,6 +49,11 @@ cc_binary {
         "libjc_transport",
         "libcrypto",
     ],
+    product_variables: {
+        debuggable: {
+            cflags: ["-DTRANSCEIVE_VIA_SOCKET"]
+       }
+    }
 }
 
 cc_library {
