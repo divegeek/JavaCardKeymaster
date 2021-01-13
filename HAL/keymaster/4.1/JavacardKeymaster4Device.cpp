@@ -142,7 +142,7 @@ static ErrorCode generateOperationHandle(uint64_t& oprHandle) {
         }
     }
     if (cnt == MAX_COUNTER_VALUE) {
-        LOG(ERROR) << "generateOperationHandle TOO_MANY_OPERATIONS";
+        LOG(ERROR) << "generateOperationHandle TOO_MANY_OPERATIONS error.";
         return ErrorCode::TOO_MANY_OPERATIONS;
     }
     oprHandle = cnt;
@@ -1032,7 +1032,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t halGeneratedOprHandle, co
             output = tempOut;
         }
         if(ErrorCode::OK != errorCode) {
-            abort(operationHandle);
+            abort(halGeneratedOprHandle);
         }
     }
     if(ErrorCode::OK != errorCode) {
@@ -1129,7 +1129,6 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t halGeneratedOprHandle, co
             cborConverter_.addHardwareAuthToken(array, authToken);
             cborConverter_.addVerificationToken(array, verificationToken, asn1ParamsVerified);
             std::vector<uint8_t> cborData = array.encode();
-
             errorCode = sendData(ins, cborData, cborOutData);
 
             if(errorCode == ErrorCode::OK) {
@@ -1157,7 +1156,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t halGeneratedOprHandle, co
             output = tempOut;
         }
         if (ErrorCode::OK != errorCode) {
-            abort(operationHandle);
+            abort(halGeneratedOprHandle);
         }
     }
     deleteOprHandleEntry(halGeneratedOprHandle);
