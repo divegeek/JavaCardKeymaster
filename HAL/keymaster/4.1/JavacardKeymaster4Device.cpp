@@ -49,6 +49,9 @@
 #define INS_BEGIN_KM_CMD 0x00
 #define INS_END_KM_PROVISION_CMD 0x20
 #define INS_END_KM_CMD 0x7F
+#define MAX_COUNTER_VALUE 25
+#define SW_KM_OPR 0UL
+#define SB_KM_OPR 1UL
 
 namespace keymaster {
 namespace V4_1 {
@@ -56,6 +59,7 @@ namespace javacard {
 
 static std::unique_ptr<se_transport::TransportFactory> pTransportFactory = nullptr;
 constexpr size_t kOperationTableSize = 4;
+std::map<uint64_t, uint64_t> operationTable;
 
 struct KM_AUTH_LIST_Delete {
     void operator()(KM_AUTH_LIST* p) { KM_AUTH_LIST_free(p); }
@@ -114,6 +118,63 @@ static inline bool getTag(const hidl_vec<KeyParameter>& params, Tag tag, KeyPara
         }
     }
     return false;
+}
+
+static ErrorCode generateOperationHandle(uint64_t& oprHandle) {
+    std::map<uint64_t, uint64_t>::iterator it;
+    //Check if oprHandleCnt is present in operationTable
+    uint64_t cnt = 1;
+    uint64_t mask;
+    for(; cnt < MAX_COUNTER_VALUE; cnt++) {
+        mask = cnt | (SB_KM_OPR << 56);
+        it = operationTable.find(mask);
+        if (it == operationTable.end()) {
+            //NO HW Operation found with this operation handle.
+            //Check for SW.
+            mask = cnt | (SW_KM_OPR << 56);
+            it = operationTable.find(mask);
+            if (it != operationTable.end())
+                continue;
+            else
+                break;
+        } else {
+            continue;
+        }
+    }
+    if (cnt == MAX_COUNTER_VALUE) {
+        LOG(ERROR) << "generateOperationHandle TOO_MANY_OPERATIONS";
+        return ErrorCode::TOO_MANY_OPERATIONS;
+    }
+    oprHandle = cnt;
+    return ErrorCode::OK;
+}
+
+static ErrorCode createOprHandleEntry(uint64_t origOprHandle, uint64_t mask/* SW or HW */, uint64_t& generatedOprHandle) {
+    ErrorCode errorCode = ErrorCode::OK;
+    if (ErrorCode::OK != (errorCode = generateOperationHandle(generatedOprHandle))) {
+        return errorCode;
+    }
+    //mask the operationhandle
+    generatedOprHandle |= (mask << 56);
+    operationTable[generatedOprHandle] = origOprHandle;
+    return errorCode;
+}
+
+static ErrorCode getOrigOperationHandle(uint64_t generatedOprHandle, uint64_t& origOprHandle) {
+    std::map<uint64_t, uint64_t>::iterator it = operationTable.find(generatedOprHandle);
+    if (it == operationTable.end()) {
+        return ErrorCode::INVALID_OPERATION_HANDLE;
+    }
+    origOprHandle = it->second;
+    return ErrorCode::OK;
+}
+
+static bool isStrongboxOperation(uint64_t generatedOprHandle) {
+    return (SB_KM_OPR == (generatedOprHandle >> 56));
+}
+
+static void deleteOprHandleEntry(uint64_t generatedOprHandle) {
+    operationTable.erase(generatedOprHandle);
 }
 
 ErrorCode encodeParametersVerified(const VerificationToken& verificationToken, std::vector<uint8_t>& asn1ParamsVerified) {
@@ -793,12 +854,13 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     hidl_vec<KeyParameter> outParams;
     uint64_t operationHandle = 0;
     hidl_vec<KeyParameter> resultParams;
+    uint64_t generatedOpHandle = 0;
 
     if(keyBlob.size() == 0) {
         _hidl_cb(ErrorCode::INVALID_ARGUMENT, resultParams, operationHandle);
         return Void();
     }
-
+    /* Asymmetric public key operations are handled by softkeymaster. */
     if (KeyPurpose::ENCRYPT == purpose || KeyPurpose::VERIFY == purpose) {
         BeginOperationRequest request;
         request.purpose = legacy_enum_conversion(purpose);
@@ -806,13 +868,17 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
         request.additional_params.Reinitialize(KmParamSet(inParams));
 
         BeginOperationResponse response;
+        /* For Symmetric key operation, the BeginOperation returns KM_ERROR_INCOMPATIBLE_ALGORITHM error. */
         softKm_->BeginOperation(request, &response);
 
         if (response.error == KM_ERROR_OK) {
             resultParams = kmParamSet2Hidl(response.output_params);
         }
         if (response.error != KM_ERROR_INCOMPATIBLE_ALGORITHM) { /*Incompatible algorithm could be handled by JavaCard*/
-            _hidl_cb(legacy_enum_conversion(response.error), resultParams, response.op_handle);
+            errorCode = legacy_enum_conversion(response.error);
+            if (errorCode == ErrorCode::OK)
+                errorCode = createOprHandleEntry(response.op_handle, SW_KM_OPR, generatedOpHandle);
+            _hidl_cb(errorCode, resultParams, generatedOpHandle);
             return Void();
         }
     }
@@ -871,29 +937,40 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
             }
         }
     }
-    _hidl_cb(errorCode, outParams, operationHandle);
+    if (ErrorCode::OK == errorCode)
+        errorCode = createOprHandleEntry(operationHandle, SB_KM_OPR, generatedOpHandle);
+    _hidl_cb(errorCode, outParams, generatedOpHandle);
     return Void();
 }
 
-Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hidl_vec<KeyParameter>& inParams, const hidl_vec<uint8_t>& input, const HardwareAuthToken& authToken, const VerificationToken& verificationToken, update_cb _hidl_cb) {
+Return<void> JavacardKeymaster4Device::update(uint64_t halGeneratedOprHandle, const hidl_vec<KeyParameter>& inParams, const hidl_vec<uint8_t>& input, const HardwareAuthToken& authToken, const VerificationToken& verificationToken, update_cb _hidl_cb) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    UpdateOperationRequest request;
-    request.op_handle = operationHandle;
-    request.input.Reinitialize(input.data(), input.size());
-    request.additional_params.Reinitialize(KmParamSet(inParams));
-
-    UpdateOperationResponse response;
-    softKm_->UpdateOperation(request, &response);
-
     uint32_t inputConsumed = 0;
     hidl_vec<KeyParameter> outParams;
     hidl_vec<uint8_t> output;
-    errorCode = legacy_enum_conversion(response.error);
-    if (response.error == KM_ERROR_OK) {
-        inputConsumed = response.input_consumed;
-        outParams = kmParamSet2Hidl(response.output_params);
-        output = kmBuffer2hidlVec(response.output);
-    } else if(response.error == KM_ERROR_INVALID_OPERATION_HANDLE) {
+    uint64_t operationHandle;
+    UpdateOperationResponse response;
+    if (ErrorCode::OK != (errorCode = getOrigOperationHandle(halGeneratedOprHandle, operationHandle))) {
+        _hidl_cb(errorCode, inputConsumed, outParams, output);
+        return Void();
+    }
+
+    if (!isStrongboxOperation(halGeneratedOprHandle)) {
+        /* SW keymaster (Public key operation) */
+        UpdateOperationRequest request;
+        request.op_handle = operationHandle;
+        request.input.Reinitialize(input.data(), input.size());
+        request.additional_params.Reinitialize(KmParamSet(inParams));
+
+        softKm_->UpdateOperation(request, &response);
+        errorCode = legacy_enum_conversion(response.error);
+        if (response.error == KM_ERROR_OK) {
+            inputConsumed = response.input_consumed;
+            outParams = kmParamSet2Hidl(response.output_params);
+            output = kmBuffer2hidlVec(response.output);
+        }
+    } else {
+        /* Strongbox Keymaster operation */
         std::vector<uint8_t> tempOut;
         /* OperationContext calls this below sendDataCallback callback function. This callback
          * may be called multiple times if the input data is larger than MAX_ALLOWED_INPUT_SIZE.
@@ -954,32 +1031,48 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
             inputConsumed = input.size();
             output = tempOut;
         }
+        if(ErrorCode::OK != errorCode) {
+            abort(operationHandle);
+        }
     }
     if(ErrorCode::OK != errorCode) {
-        abort(operationHandle);
+        deleteOprHandleEntry(halGeneratedOprHandle);
     }
+
     _hidl_cb(errorCode, inputConsumed, outParams, output);
     return Void();
 }
 
-Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hidl_vec<KeyParameter>& inParams, const hidl_vec<uint8_t>& input, const hidl_vec<uint8_t>& signature, const HardwareAuthToken& authToken, const VerificationToken& verificationToken, finish_cb _hidl_cb) {
+Return<void> JavacardKeymaster4Device::finish(uint64_t halGeneratedOprHandle, const hidl_vec<KeyParameter>& inParams, const hidl_vec<uint8_t>& input, const hidl_vec<uint8_t>& signature, const HardwareAuthToken& authToken, const VerificationToken& verificationToken, finish_cb _hidl_cb) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    FinishOperationRequest request;
-    request.op_handle = operationHandle;
-    request.input.Reinitialize(input.data(), input.size());
-    request.signature.Reinitialize(signature.data(), signature.size());
-    request.additional_params.Reinitialize(KmParamSet(inParams));
-
-    FinishOperationResponse response;
-    softKm_->FinishOperation(request, &response);
-
+    uint64_t operationHandle;
     hidl_vec<KeyParameter> outParams;
     hidl_vec<uint8_t> output;
-    errorCode = legacy_enum_conversion(response.error);
-    if (response.error == KM_ERROR_OK) {
-        outParams = kmParamSet2Hidl(response.output_params);
-        output = kmBuffer2hidlVec(response.output);
-    } else if (response.error == KM_ERROR_INVALID_OPERATION_HANDLE) {
+    FinishOperationResponse response;
+
+    if (ErrorCode::OK != (errorCode = getOrigOperationHandle(halGeneratedOprHandle, operationHandle))) {
+        _hidl_cb(errorCode, outParams, output);
+        return Void();
+    }
+
+    if (!isStrongboxOperation(halGeneratedOprHandle)) {
+        /* SW keymaster (Public key operation) */
+        FinishOperationRequest request;
+        request.op_handle = operationHandle;
+        request.input.Reinitialize(input.data(), input.size());
+        request.signature.Reinitialize(signature.data(), signature.size());
+        request.additional_params.Reinitialize(KmParamSet(inParams));
+
+        //FinishOperationResponse response;
+        softKm_->FinishOperation(request, &response);
+
+        errorCode = legacy_enum_conversion(response.error);
+        if (response.error == KM_ERROR_OK) {
+            outParams = kmParamSet2Hidl(response.output_params);
+            output = kmBuffer2hidlVec(response.output);
+        }
+    } else {
+        /* Strongbox Keymaster operation */
         std::vector<uint8_t> tempOut;
         bool aadTag = false;
         /* OperationContext calls this below sendDataCallback callback function. This callback
@@ -1067,12 +1160,17 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
             abort(operationHandle);
         }
     }
+    deleteOprHandleEntry(halGeneratedOprHandle);
     _hidl_cb(errorCode, outParams, output);
     return Void();
 }
 
-Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
+Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t halGeneratedOprHandle) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+    uint64_t operationHandle;
+    if (ErrorCode::OK != (errorCode = getOrigOperationHandle(halGeneratedOprHandle, operationHandle))) {
+        return errorCode;
+    }
     AbortOperationRequest request;
     request.op_handle = operationHandle;
 
@@ -1099,6 +1197,7 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
     }
     /* Delete the entry on this operationHandle */
     oprCtx_->clearOperationData(operationHandle);
+    deleteOprHandleEntry(halGeneratedOprHandle);
     return errorCode;
 }
 
