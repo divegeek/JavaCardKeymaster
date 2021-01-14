@@ -15,33 +15,6 @@
 
 
 cc_binary {
-    name: "provision_tool",
-    relative_install_path: "hw",
-    vendor: true,
-    srcs: [
-        "4.1/provision_tool.cpp",
-        "4.1/CommonUtils.cpp",
-        "4.1/CborConverter.cpp",
-    ],
-    shared_libs: [
-        "libdl",
-        "libcutils",
-        "libutils",
-        "libbase",
-        "libhardware",
-        "libhidlbase",
-        "libkeymaster_messages",
-        "libkeymaster_portable",
-        "android.hardware.keymaster@4.1",
-        "android.hardware.keymaster@4.0",
-        "libcppbor",
-        "libjc_transport",
-        "libcrypto",
-        "libjsoncpp",
-    ],
-}
-
-cc_binary {
     name: "android.hardware.keymaster@4.1-javacard.service",
     relative_install_path: "hw",
     vendor: true,
@@ -50,10 +23,8 @@ cc_binary {
     srcs: [
         "4.1/service.cpp",
         "4.1/JavacardKeymaster4Device.cpp",
-        "4.1/CborConverter.cpp",
         "4.1/JavacardSoftKeymasterContext.cpp",
         "4.1/JavacardOperationContext.cpp",
-        "4.1/CommonUtils.cpp",
         "4.1/Provision.cpp",
     ],
     local_include_dirs: [
@@ -75,6 +46,7 @@ cc_binary {
         "android.hardware.keymaster@4.0",
         "libjc_transport",
         "libcrypto",
+        "libjc_common",
     ],
 }
 
@@ -128,5 +100,37 @@ cc_library {
         "libbinder",
         "libbase",
         "liblog",
+    ],
+}
+
+cc_library {
+    name: "libjc_common",
+    vendor_available: true,
+    srcs: [
+        "4.1/CommonUtils.cpp",
+        "4.1/CborConverter.cpp",
+    ],
+    local_include_dirs: [
+        "include",
+    ],
+    export_include_dirs: [
+        "include"
+    ],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libdl",
+        "libbase",
+        "libutils",
+        "libhardware",
+        "libhidlbase",
+	    "libsoftkeymasterdevice",
+        "libkeymaster_messages",
+	    "libkeymaster_portable",
+        "libcppbor",
+        "android.hardware.keymaster@4.1",
+        "android.hardware.keymaster@4.0",
+        "libjc_transport",
+	    "libcrypto",
     ],
 }
