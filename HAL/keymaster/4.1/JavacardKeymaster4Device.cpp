@@ -266,7 +266,6 @@ ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<ui
         LOG(ERROR) << "Failed to provision the device";
         return ret;
     }
-
     ret = constructApduMessage(ins, inData, apdu, extendedOutput);
     if(ret != ErrorCode::OK) return ret;
 

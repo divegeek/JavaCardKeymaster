@@ -819,6 +819,7 @@ int main(int argc, char* argv[])
         {0,0,0,0}
 	};
 
+printf("\n main step0 \n");
     sbKeymaster = IKeymasterDevice::getService(SB_KEYMASTER_SERVICE);
     if(NULL == sbKeymaster) {
         printf("\n Failed to get StrongBox Keymaster service\n");
@@ -834,7 +835,7 @@ int main(int argc, char* argv[])
         printf("\n Invalid command \n");
         usage();
     }
-
+printf("\n main step1 \n");
 	/* getopt_long stores the option index here. */
 	while ((c = getopt_long(argc, argv, ":slha:k:c:p:i:r:b:", longOpts, NULL)) != -1) {
 		switch(c) {
