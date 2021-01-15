@@ -123,6 +123,7 @@ ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr
                 memset(oprData.data.buf, 0x00, sizeof(oprData.data.buf));
                 oprData.data.buf_len = 0;
             }
+            return ErrorCode::OK;
         }
     }
     input = actualInput;
@@ -342,7 +343,7 @@ ErrorCode OperationContext::handleInternalUpdate(uint64_t operHandle, uint8_t* d
                     return errorCode;
                 }
             } else {
-                //For strongbox keymaster, in NoDigest case the length of the input message for RSA should be more than
+                //For strongbox keymaster, in NoDigest case the length of the input message for RSA should not be more than
                 //256 and for EC it should not be more than 32. This validation is already happening in
                 //validateInputData function. Just for safety sake we are checking the length to MAX_BUF_SIZE.
                 if(operationTable[operHandle].data.buf_len <= MAX_BUF_SIZE) {
