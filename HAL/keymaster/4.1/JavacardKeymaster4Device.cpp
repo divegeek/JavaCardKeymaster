@@ -1163,6 +1163,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t halGeneratedOprHandle, co
     }
     /* Delete the entry from operation table. */
     deleteOprHandleEntry(halGeneratedOprHandle);
+    oprCtx_->clearOperationData(operationHandle);
     _hidl_cb(errorCode, outParams, output);
     return Void();
 }
