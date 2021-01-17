@@ -49,6 +49,13 @@ cc_binary {
         "libjc_transport",
         "libcrypto",
     ],
+    product_variables: {
+        debuggable: {
+            cflags: [
+            "-DVTS_EMULATOR",
+            ]
+       }
+    }
 }
 
 cc_library {
