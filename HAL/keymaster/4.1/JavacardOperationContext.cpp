@@ -23,7 +23,6 @@
 #define DES_BLOCK_SIZE           8
 #define RSA_INPUT_MSG_LEN      256
 #define EC_INPUT_MSG_LEN        32
-#define MAX_RSA_BUFFER_SIZE    256
 #define MAX_EC_BUFFER_SIZE      32
 
 namespace keymaster {
@@ -104,11 +103,10 @@ ErrorCode OperationContext::validateInputData(uint64_t operHandle, Operation opr
     }
 
     if(KeyPurpose::DECRYPT == oprData.info.purpose && Algorithm::RSA == oprData.info.alg) {
-        if((oprData.data.buf_len+actualInput.size()) > MAX_RSA_BUFFER_SIZE) {
+        if((oprData.data.buf_len+actualInput.size()) > RSA_INPUT_MSG_LEN) {
             return ErrorCode::INVALID_INPUT_LENGTH;
         }
     }
-
     if(opr == Operation::Finish) {
         //If it is observed in finish operation that buffered data + input data exceeds the MAX_ALLOWED_INPUT_SIZE then
         //combine both the data in a single buffer. This helps in making sure that no data is left out in the buffer after
@@ -171,7 +169,6 @@ ErrorCode OperationContext::update(uint64_t operHandle, const std::vector<uint8_
 ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_t>& actualInput, sendDataToSE_cb cb) {
     ErrorCode errorCode = ErrorCode::OK;
     std::vector<uint8_t> input;
-
     /* Validate the input data */
     if(ErrorCode::OK != (errorCode = validateInputData(operHandle, Operation::Finish, actualInput, input))) {
         return errorCode;
@@ -214,15 +211,25 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
     return errorCode;
 }
 
-/* This function is called for only Symmetric operations */
+ /*
+  * This function is called for only Symmetric operations. It calculates the length of the data to be sent to the Applet
+  * by considering data from both of the sources i.e. buffered data and input data. Only block aligned length of data is
+  * sent to the Applet i.e. multiples of 16 for AES or multiples of 8 for DES/TDES. It first Copies the data to the out
+  * buffer from buffered data and then the remaining from the input data. If the buffered data is empty then it copies
+  * data to out buffer from only input and similarly if the input is empty then it copies from only buffer. Incase if
+  * only a portion of the input data is consumed then the remaining portion of input data is buffered. For AES/TDES
+  * Decryption operations with PKCS7 padding and for AES GCM operations a block size of data is always buffered. This is
+  * done to make sure that there will be always a block size of data left for finish operation so that the Applet may
+  * remove the PKCS7 padding if any or get the tag data for AES GCM operation for authentication purpose. Once the data
+  * from the buffer is consumed then the buffer is cleared.
+  */
 ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* input, size_t input_len,
         Operation opr, std::vector<uint8_t>& out) {
-    size_t dataToSELen = 0;
+    size_t dataToSELen = 0;/*Length of the data to be send to the Applet.*/
     size_t inputConsumed = 0;/*Length of the data consumed from input */
     size_t blockSize = 0;
     BufferedData& data = operationTable[operHandle].data;
     int bufIndex = data.buf_len;
-
     if(Algorithm::AES == operationTable[operHandle].info.alg) {
         blockSize = AES_BLOCK_SIZE;
     } else if(Algorithm::TRIPLE_DES == operationTable[operHandle].info.alg) {
@@ -265,6 +272,8 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, uint8_t* in
     if(dataToSELen > 0) {
         //If buffer length is greater than the data length to be send to SE, then input data consumed is 0.
         //That means all the data to be send to SE is consumed from the buffer.
+        //The buffer length might become greater than dataToSELen in the cases where we are saving the last block of
+        //data i.e. AES/TDES Decryption with PKC7Padding or AES GCM Decryption operations.
         inputConsumed = (data.buf_len > dataToSELen) ? 0 : (dataToSELen - data.buf_len);
 
         //Copy the buffer to be send to SE.
@@ -301,7 +310,6 @@ ErrorCode OperationContext::handleInternalUpdate(uint64_t operHandle, uint8_t* d
         sendDataToSE_cb cb, bool finish) {
     ErrorCode errorCode = ErrorCode::OK;
     std::vector<uint8_t> out;
-
     if(Algorithm::AES == operationTable[operHandle].info.alg ||
             Algorithm::TRIPLE_DES == operationTable[operHandle].info.alg) {
         /*Symmetric */
@@ -345,16 +353,14 @@ ErrorCode OperationContext::handleInternalUpdate(uint64_t operHandle, uint8_t* d
             } else {
                 //For strongbox keymaster, in NoDigest case the length of the input message for RSA should not be more than
                 //256 and for EC it should not be more than 32. This validation is already happening in
-                //validateInputData function. Just for safety sake we are checking the length to MAX_BUF_SIZE.
-                if(operationTable[operHandle].data.buf_len <= MAX_BUF_SIZE) {
-                    size_t bufIndex = operationTable[operHandle].data.buf_len;
-                    size_t pos = 0;
-                    for(; (pos < len) && (pos < (MAX_BUF_SIZE-bufIndex)); pos++)
-                    {
-                        operationTable[operHandle].data.buf[bufIndex+pos] = data[pos];
-                    }
-                    operationTable[operHandle].data.buf_len += pos;
+                //validateInputData function.
+                size_t bufIndex = operationTable[operHandle].data.buf_len;
+                size_t pos = 0;
+                for(; pos < len; ++pos)
+                {
+                    operationTable[operHandle].data.buf[bufIndex+pos] = data[pos];
                 }
+                operationTable[operHandle].data.buf_len += pos;
             }
         } else { /* With Digest */
             for(size_t j=0; j < len; ++j)
