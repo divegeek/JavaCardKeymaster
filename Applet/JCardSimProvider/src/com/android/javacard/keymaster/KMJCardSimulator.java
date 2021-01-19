@@ -66,7 +66,7 @@ import org.globalplatform.upgrade.Element;
  * creates its own RNG using PRNG.
  */
 public class KMJCardSimulator implements KMSEProvider {
-  public static final short AES_GCM_TAG_LENGTH = 12;
+  public static final short AES_GCM_TAG_LENGTH = 16;
   public static final short AES_GCM_NONCE_LENGTH = 12;
   public static final short MAX_RND_NUM_SIZE = 64;
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
@@ -483,31 +483,7 @@ public class KMJCardSimulator implements KMSEProvider {
   public void getTrueRandomNumber(byte[] buf, short start, short length) {
     Util.arrayCopy(entropyPool,(short)0,buf,start,length);
   }
-
-  @Override
-  public short aesCCMSign(
-    byte[] bufIn,
-    short bufInStart,
-    short buffInLength,
-    byte[] masterKeySecret,
-    short masterKeyStart,
-    short masterKeyLen,
-    byte[] bufOut,
-    short bufStart) {
-    if (masterKeyLen > 16) {
-      return -1;
-    }
-    AESKey key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
-    key.setKey(masterKeySecret, masterKeyStart);
-    byte[] in = new byte[buffInLength];
-    Util.arrayCopyNonAtomic(bufIn, bufInStart,in,(short)0,buffInLength);
-    kdf.init(key, Signature.MODE_SIGN);
-    short len = kdf.sign(bufIn, bufInStart, buffInLength, bufOut, bufStart);
-    byte[] out = new byte[len];
-    Util.arrayCopyNonAtomic(bufOut, bufStart,out,(short)0,len);
-    return len;
-  }
-   
+  
   public HMACKey cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label,
                          short labelStart, short labelLen, byte[] context, short contextStart, short contextLength) {
     // This is hardcoded to requirement - 32 byte output with two concatenated 16 bytes K1 and K2.

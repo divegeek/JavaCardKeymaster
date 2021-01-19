@@ -100,6 +100,38 @@ public class KMKeyParameters extends KMType {
     }
     return ret;
   }
+  
+  public static boolean hasUnsupportedTags(short keyParamsPtr) {
+    final short[] tagArr = {
+            // Unsupported tags.
+            KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
+            KMType.BOOL_TAG, KMType.TRUSTED_USER_PRESENCE_REQUIRED,
+            KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY,
+            KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS,
+          };
+    byte index = 0;
+    short tagInd;
+    short tagPtr;
+    short tagKey;
+    short tagType;
+    short arrPtr = KMKeyParameters.cast(keyParamsPtr).getVals();
+    short len = KMArray.cast(arrPtr).length();
+    while (index < len) {
+      tagInd = 0;
+      tagPtr = KMArray.cast(arrPtr).get(index);
+      tagKey = KMTag.getKey(tagPtr);
+      tagType = KMTag.getTagType(tagPtr);
+      while (tagInd < (short) tagArr.length) {
+        if ((tagArr[tagInd] == tagType)
+            && (tagArr[(short) (tagInd + 1)] == tagKey)) {
+          return true;
+        }
+        tagInd += 2;
+      }
+      index++;
+    }
+    return false;
+  }
 
   // KDF, ECIES_SINGLE_HASH_MODE missing from types.hal
   public static short makeHwEnforced(short keyParamsPtr, byte origin,
