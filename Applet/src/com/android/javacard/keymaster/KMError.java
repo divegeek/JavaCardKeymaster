@@ -92,4 +92,13 @@ public class KMError {
   public static short CMD_NOT_ALLOWED = 1005;
   public static short SW_WRONG_LENGTH = 1006;
   public static short INVALID_DATA = 1007;
+  //Crypto errors
+  public static short CRYPTO_ILLEGAL_USE = 1008;
+  public static short CRYPTO_ILLEGAL_VALUE = 1009;
+  public static short CRYPTO_INVALID_INIT = 1010;
+  public static short CRYPTO_NO_SUCH_ALGORITHM = 1011;
+  public static short CRYPTO_UNINITIALIZED_KEY = 1012;
+  //Generic Unknown error.
+  public static short GENERIC_UNKNOWN_ERROR = 1013;
+  
 }

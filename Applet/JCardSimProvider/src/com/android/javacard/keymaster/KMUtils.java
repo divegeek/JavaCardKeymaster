@@ -102,6 +102,7 @@ public class KMUtils {
       Util.arrayCopyNonAtomic(oneMonthMsec, (short) 0, scratchPad, (short) 8,
               (short) 8);
       monthCount = divide(scratchPad, (short) 0, (short) 8, (short) 16);
+      monthCount =+ 1;
       Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
               (short) 8);
     }

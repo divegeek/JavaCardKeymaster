@@ -84,7 +84,7 @@ public class KMRepository implements KMUpgradable {
   public static final short DEVICE_LOCK_FLAG_SIZE = 1;
   public static final short BOOT_STATE_SIZE = 1;
   public static final short MAX_BLOB_STORAGE = 8;
-  public static final short AUTH_TAG_LENGTH = 12;
+  public static final short AUTH_TAG_LENGTH = 16;
   public static final short AUTH_TAG_ENTRY_SIZE = 15;
   public static final short MAX_OPS = 4;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
