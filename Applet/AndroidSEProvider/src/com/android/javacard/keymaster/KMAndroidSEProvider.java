@@ -1143,6 +1143,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // Next single byte holds the array header.
     // Next 3 bytes holds the Byte array header with the cert1 length.
     // Next 3 bytes holds the Byte array header with the cert2 length.
+    if (totalLen > CERT_CHAIN_MAX_SIZE) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
     short persistedLen = Util.getShort(certificateChain, (short) 0);
     if (persistedLen > totalLen) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
