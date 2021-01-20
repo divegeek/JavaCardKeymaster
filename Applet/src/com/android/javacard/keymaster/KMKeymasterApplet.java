@@ -1624,7 +1624,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // Authorize the finish operation
     authorizeUpdateFinishOperation(op, scratchPad);
-    // Finish trusted Confirmation operation
     switch (op.getPurpose()) {
       case KMType.SIGN:
       case KMType.VERIFY:

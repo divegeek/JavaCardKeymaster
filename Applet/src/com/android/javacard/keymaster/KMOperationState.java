@@ -28,7 +28,7 @@ import javacard.framework.Util;
 public class KMOperationState {
 
   public static final byte MAX_DATA = 20;
-  public static final byte MAX_REFS = 2;
+  public static final byte MAX_REFS = 1;
   private static final byte DATA = 0;
   private static final byte REFS = 1;
   // byte type
@@ -53,9 +53,6 @@ public class KMOperationState {
 
   // Object References
   private static final byte OPERATION = 0;
-  private static final byte HMAC_SIGNER = 1;
-
-  private static KMOperation hmacSigner; // used for trusted confirmation.
   private static KMOperation op;
   private static byte[] data;
   private static Object[] slot;
@@ -85,14 +82,13 @@ public class KMOperationState {
     Util.arrayCopy((byte[]) slot[DATA], (short) 0, data, (short) 0, (short) data.length);
     Object[] ops = ((Object[]) slot[REFS]);
     op = (KMOperation) ops[OPERATION];
-    hmacSigner = (KMOperation) ops[HMAC_SIGNER];
     KMOperationState.slot = slot;
     return opState;
   }
 
   public void persist() {
     if (!dFlag) return;
-    KMRepository.instance().persistOperation(data, Util.getShort(data, OP_HANDLE), op, hmacSigner);
+    KMRepository.instance().persistOperation(data, Util.getShort(data, OP_HANDLE), op);
     dFlag = false;
   }
 
@@ -104,21 +100,8 @@ public class KMOperationState {
     return Util.getShort(data, KEY_SIZE);
   }
 
-  public void setTrustedConfirmationSigner(KMOperation hmacSigner) {
-    KMOperationState.hmacSigner = hmacSigner;
-  }
-
-  public KMOperation getTrustedConfirmationSigner() {
-    return KMOperationState.hmacSigner;
-  }
-
-  public boolean isTrustedConfirmationRequired() {
-    return KMOperationState.hmacSigner != null;
-  }
-
   public void reset() {
     dFlag = false;
-    hmacSigner = null;
     op = null;
     slot = null;
     Util.arrayFillNonAtomic(
@@ -135,7 +118,6 @@ public class KMOperationState {
     Util.arrayFillNonAtomic(
         (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length, (byte) 0);
     ops[OPERATION] = null;
-    ops[HMAC_SIGNER] = null;
     JCSystem.commitTransaction();
     reset();
   }
