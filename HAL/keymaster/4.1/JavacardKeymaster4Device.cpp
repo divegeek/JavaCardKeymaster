@@ -96,19 +96,19 @@ enum class Instruction {
 
 //Extended error codes
 enum ExtendedErrors {
-    SW_CONDITIONS_NOT_SATISFIED = -1001,
-    UNSUPPORTED_CLA = -1002,
-    INVALID_P1P2 = -1003,
-    UNSUPPORTED_INSTRUCTION = -1004,
-    CMD_NOT_ALLOWED = -1005,
-    SW_WRONG_LENGTH = -1006,
-    INVALID_DATA = -1007,
-    CRYPTO_ILLEGAL_USE = -1008,
-    CRYPTO_ILLEGAL_VALUE = -1009,
-    CRYPTO_INVALID_INIT = -1010,
-    CRYPTO_NO_SUCH_ALGORITHM = -1011,
-    CRYPTO_UNINITIALIZED_KEY = -1012,
-    GENERIC_UNKNOWN_ERROR = -1013
+    SW_CONDITIONS_NOT_SATISFIED = -10001,
+    UNSUPPORTED_CLA = -10002,
+    INVALID_P1P2 = -10003,
+    UNSUPPORTED_INSTRUCTION = -10004,
+    CMD_NOT_ALLOWED = -10005,
+    SW_WRONG_LENGTH = -10006,
+    INVALID_DATA = -10007,
+    CRYPTO_ILLEGAL_USE = -10008,
+    CRYPTO_ILLEGAL_VALUE = -10009,
+    CRYPTO_INVALID_INIT = -10010,
+    CRYPTO_NO_SUCH_ALGORITHM = -10011,
+    CRYPTO_UNINITIALIZED_KEY = -10012,
+    GENERIC_UNKNOWN_ERROR = -10013
 };
 
 static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFactoryInstance() {
@@ -176,7 +176,8 @@ static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const 
     std::unique_ptr<Item> item(nullptr);
     T errorCode = T::OK;
     std::tie(item, errorCode) = cb.decodeData<T>(response, hasErrorCode);
-    if (ErrorCode::OK != errorCode)
+
+    if (T::OK != errorCode)
         errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
     return {std::move(item), errorCode};
 }
@@ -1285,8 +1286,8 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
 
     if(ret == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData<::android::hardware::keymaster::V4_1::ErrorCode>(
-                std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true);
+        std::tie(item, errorCode) = decodeData<::android::hardware::keymaster::V4_1::ErrorCode>(
+                cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true);
     }
     return errorCode;
 }
@@ -1302,8 +1303,8 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
 
     if(ret == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = cborConverter_.decodeData<::android::hardware::keymaster::V4_1::ErrorCode>(
-                std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true);
+        std::tie(item, errorCode) = decodeData<::android::hardware::keymaster::V4_1::ErrorCode>(
+                cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true);
     }
     return errorCode;
 }
