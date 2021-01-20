@@ -148,7 +148,7 @@ public class KMRepository implements KMUpgradable {
   }
 
   //TODO refactor following method
-  public void persistOperation(byte[] data, short opHandle, KMOperation op, KMOperation hmacSigner) {
+  public void persistOperation(byte[] data, short opHandle, KMOperation op) {
   	short index = 0;
     byte[] opId;
     //Update an existing operation state.
@@ -160,7 +160,6 @@ public class KMRepository implements KMUpgradable {
         Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length);
         Object[] ops = ((Object[]) slot[1]);
         ops[0] = op;
-        ops[1] = hmacSigner;
         JCSystem.commitTransaction();
         return;
     	}
@@ -178,7 +177,6 @@ public class KMRepository implements KMUpgradable {
         Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length);
         Object[] ops = ((Object[]) slot[1]);
         ops[0] = op;
-        ops[1] = hmacSigner;
         JCSystem.commitTransaction();
       	break;
       }

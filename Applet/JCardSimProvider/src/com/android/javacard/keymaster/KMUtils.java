@@ -13,23 +13,23 @@ public class KMUtils {
   public static final byte[] oneDayMsec = {
           0, 0, 0, 0, 0x05, 0x26, 0x5C, 0x00 }; // 86400000 msec
   public static final byte[] oneMonthMsec = {
-          0, 0, 0, 0, (byte) 0x9A, 0x7E, (byte) 0xC8, 0x00 }; // 2592000000 msec
+          0, 0, 0, 0, (byte) 0x9C,(byte) 0xBE, (byte) 0xBD, 0x50}; // 2629746000 msec
   public static final byte[] oneYearMsec = {
-          0, 0, 0, 0x07, 0x57, (byte) 0xB1, 0x2C, 0x00 }; // 31536000000 msec
+          0, 0, 0, 0x75, (byte) 0x8F, 0x0D, (byte) 0xFC, 0x00 }; // 31556952000 msec
   // Leap year + 3 yrs
   public static final byte[] fourYrsMsec = {
-          0, 0, 0, 0x1D, 0x63, (byte) 0xEB, 0x0C, 0x00 }; // 126230400000 msec
+          0, 0, 0, 0x1D, 0x63, (byte) 0xC3, 0x7F, 0x00 }; // 126227808000 msec
   public static final byte[] firstJan2020 = {
-          0, 0, 0x01, 0x6F, 0x60, 0x1E, 0x5C, 0x00 }; // 1577865600000 msec
+          0, 0, 0x01, 0x76, (byte) 0xBB, 0x3E, (byte) 0x70, 0x40 }; // 1609459200000 msec
   public static final byte[] firstJan2051 = {
-          0, 0, 0x02, 0x53, 0x27, (byte) 0xC5, (byte) 0x90, 0x00 }; // 2556172800000
+          0, 0, 0x02, 0x53, 0x26, (byte) 0x0E, (byte) 0x1C, 0x00 }; // 2556144000000
                                                                     // msec
 
   // --------------------------------------
   public static short convertToDate(short time, byte[] scratchPad,
           boolean utcFlag) {
     short yrsCount = 0;
-    short monthCount = 0;
+    short monthCount = 1;
     short dayCount = 0;
     short hhCount = 0;
     short mmCount = 0;
@@ -102,7 +102,7 @@ public class KMUtils {
       Util.arrayCopyNonAtomic(oneMonthMsec, (short) 0, scratchPad, (short) 8,
               (short) 8);
       monthCount = divide(scratchPad, (short) 0, (short) 8, (short) 16);
-      monthCount =+ 1;
+      monthCount++;
       Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
               (short) 8);
     }
