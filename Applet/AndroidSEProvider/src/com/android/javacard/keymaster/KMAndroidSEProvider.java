@@ -643,8 +643,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // encrypt the secret
     aesGcmCipher.doFinal(encSecret, encSecretStart, encSecretLen, secret,
         secretStart);
-    verification = aesGcmCipher.verifyTag(authTag, authTagStart, (short) 12,
-        (short) 12);
+    verification = aesGcmCipher.verifyTag(authTag, authTagStart, (short) authTagLen,
+        (short) AES_GCM_TAG_LENGTH);
     return verification;
   }
 
