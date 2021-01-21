@@ -29,7 +29,7 @@ import javacard.framework.Util;
  */
 public class KMRepository implements KMUpgradable {
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 33;
+  public static final short DATA_INDEX_SIZE = 32;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_MEM_SIZE = 2048;
   public static final short HEAP_SIZE = 10000;
@@ -50,26 +50,25 @@ public class KMRepository implements KMUpgradable {
   public static final byte ATT_ID_MANUFACTURER = 6;
   public static final byte ATT_ID_MODEL = 7;
   public static final byte ATT_EC_KEY = 12;
-  public static final byte CERT_AUTH_KEY_ID = 13;
-  public static final byte CERT_ISSUER = 14;
-  public static final byte CERT_EXPIRY_TIME = 15;
-  public static final byte BOOT_OS_VERSION = 16;
-  public static final byte BOOT_OS_PATCH = 17;
-  public static final byte VENDOR_PATCH_LEVEL = 18;
-  public static final byte BOOT_PATCH_LEVEL = 19;
-  public static final byte BOOT_VERIFIED_BOOT_KEY = 20;
-  public static final byte BOOT_VERIFIED_BOOT_HASH = 21;
-  public static final byte BOOT_VERIFIED_BOOT_STATE = 22;
-  public static final byte BOOT_DEVICE_LOCKED_STATUS = 23;
-  public static final byte BOOT_DEVICE_LOCKED_TIME = 24;
-  public static final byte AUTH_TAG_1 = 25;
-  public static final byte AUTH_TAG_2 = 26;
-  public static final byte AUTH_TAG_3 = 27;
-  public static final byte AUTH_TAG_4 = 28;
-  public static final byte AUTH_TAG_5 = 29;
-  public static final byte AUTH_TAG_6 = 30;
-  public static final byte AUTH_TAG_7 = 31;
-  public static final byte AUTH_TAG_8 = 32;
+  public static final byte CERT_ISSUER = 13;
+  public static final byte CERT_EXPIRY_TIME = 14;
+  public static final byte BOOT_OS_VERSION = 15;
+  public static final byte BOOT_OS_PATCH = 16;
+  public static final byte VENDOR_PATCH_LEVEL = 17;
+  public static final byte BOOT_PATCH_LEVEL = 18;
+  public static final byte BOOT_VERIFIED_BOOT_KEY = 19;
+  public static final byte BOOT_VERIFIED_BOOT_HASH = 20;
+  public static final byte BOOT_VERIFIED_BOOT_STATE = 21;
+  public static final byte BOOT_DEVICE_LOCKED_STATUS = 22;
+  public static final byte BOOT_DEVICE_LOCKED_TIME = 23;
+  public static final byte AUTH_TAG_1 = 24;
+  public static final byte AUTH_TAG_2 = 25;
+  public static final byte AUTH_TAG_3 = 26;
+  public static final byte AUTH_TAG_4 = 27;
+  public static final byte AUTH_TAG_5 = 28;
+  public static final byte AUTH_TAG_6 = 29;
+  public static final byte AUTH_TAG_7 = 30;
+  public static final byte AUTH_TAG_8 = 31;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -567,13 +566,6 @@ public class KMRepository implements KMUpgradable {
     writeDataEntry(CERT_EXPIRY_TIME, buf,start,len);
   }
 
-  public short getAuthKeyId() {
-    return readData(CERT_AUTH_KEY_ID);
-  }
-
-  public void setAuthKeyId(byte[] buf, short start, short len) {
-    writeDataEntry(CERT_AUTH_KEY_ID,buf,start,len);
-  }
   private static final byte[] zero = {0,0,0,0,0,0,0,0};
 
   public short getOsVersion(){

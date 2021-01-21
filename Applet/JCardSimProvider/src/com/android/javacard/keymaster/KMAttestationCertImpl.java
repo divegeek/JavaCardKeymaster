@@ -30,8 +30,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte[] androidExtn = {
     0x06, 0x0A, 0X2B, 0X06, 0X01, 0X04, 0X01, (byte) 0XD6, 0X79, 0X02, 0X01, 0X11
   };
-  // Authority Key Identifier Extn - 2.5.29.35
-  private static final byte[] authKeyIdExtn = {0x06, 0x03, 0X55, 0X1D, 0X23};
 
   private static final short ECDSA_MAX_SIG_LEN = 72;
   //Signature algorithm identifier - always ecdsaWithSha256 - 1.2.840.10045.4.3.2
@@ -95,7 +93,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static short verifiedBootKey;
   private static byte verifiedState;
   private static short verifiedHash;
-  private static short authKey;
   private static short issuer;
   private static short signPriv;
 
@@ -138,19 +135,12 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     verifiedState = 0;
     rsaCert = true;
     deviceLocked = 0;
-    authKey = 0;
     signPriv = 0;
   }
 
   @Override
   public KMAttestationCert verifiedBootHash(short obj) {
     verifiedHash = obj;
-    return this;
-  }
-
-  @Override
-  public KMAttestationCert authKey(short obj) {
-    authKey = obj;
     return this;
   }
 
@@ -259,46 +249,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     }
   }
 
-  private static void encodeCert(
-      short buf,
-      short keyChar,
-      short uniqueId,
-      short notBefore,
-      short notAfter,
-      short pubKey,
-      short attChallenge,
-      short attAppId,
-      boolean rsaCert) {
-    init();
-    stack = KMByteBlob.cast(buf).getBuffer();
-    start = KMByteBlob.cast(buf).getStartOff();
-    length = KMByteBlob.cast(buf).length();
-    stackPtr = (short) (start + length);
-    /*    KMAttestationCertImpl.attChallenge = attChallenge;
-       KMAttestationCertImpl.attAppId = attAppId;
-       KMAttestationCertImpl.hwParams = KMKeyCharacteristics.cast(keyChar).getHardwareEnforced();
-       KMAttestationCertImpl.swParams = KMKeyCharacteristics.cast(keyChar).getSoftwareEnforced();
-       KMAttestationCertImpl.notBefore = notBefore;
-       KMAttestationCertImpl.notAfter = notAfter;
-       KMAttestationCertImpl.pubKey = pubKey;
-       KMAttestationCertImpl.uniqueId = uniqueId;
-
-    */
-    short last = stackPtr;
-    decrementStackPtr((short) 256);
-    signatureOffset = stackPtr;
-    pushBitStringHeader((byte) 0, (short) (last - stackPtr));
-    // signatureOffset = pushSignature(null, (short) 0, (short) 256);
-    pushAlgorithmId(X509SignAlgIdentifier);
-    tbsLength = stackPtr;
-    pushTbsCert(rsaCert);
-    tbsOffset = stackPtr;
-    tbsLength = (short) (tbsLength - tbsOffset);
-    pushSequenceHeader((short) (last - stackPtr));
-    // print(stack, stackPtr, (short)(last - stackPtr));
-    certStart = stackPtr;
-  }
-
   private static void pushTbsCert(boolean rsaCert) {
     short last = stackPtr;
     pushExtensions();
@@ -335,7 +285,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     short last = stackPtr;
     //    byte keyusage = 0;
     //    byte unusedBits = 8;
-    pushAuthKeyId();
     /*
     if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.SIGN, hwParams)) {
       keyusage = (byte) (keyusage | keyUsageSign);
@@ -594,7 +543,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   //      }
   private static void pushRoT() {
     short last = stackPtr;
-    byte val = 0x00;
     // verified boot hash
     // pushOctetString(repo.verifiedBootHash, (short) 0, (short) repo.verifiedBootHash.length);
     pushOctetString(
@@ -758,37 +706,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     pushSequenceHeader((short) (last - stackPtr));
   }
 
-  // SEQUENCE {ObjId, OCTET STRING{SEQUENCE{[0]keyIdentifier}}}
-  private static void pushAuthKeyId() {
-    short last = stackPtr;
-    // if (repo.getAuthKeyId() == 0) return;
-    if (authKey == 0) return;
-
-    pushKeyIdentifier(
-        KMByteBlob.cast(authKey).getBuffer(),
-        KMByteBlob.cast(authKey).getStartOff(),
-        KMByteBlob.cast(authKey).length());
-    pushSequenceHeader((short) (last - stackPtr));
-    pushOctetStringHeader((short) (last - stackPtr));
-    pushBytes(authKeyIdExtn, (short) 0, (short) authKeyIdExtn.length); // ObjId
-    pushSequenceHeader((short) (last - stackPtr));
-  }
-
-  private static void pushKeyIdentifier(byte[] buf, short start, short len) {
-    pushBytes(buf, start, len); // keyIdentifier
-    pushLength(len); // len
-    pushByte((byte) 0x80); // Context specific tag [0]
-  }
-
   private static void pushAlgorithmId(byte[] algId) {
     pushBytes(algId, (short) 0, (short) algId.length);
-  }
-
-  private static short pushSignature(byte[] buf, short start, short len) {
-    pushBytes(buf, start, len);
-    short signatureOff = stackPtr;
-    pushBitStringHeader((byte) 0, len);
-    return signatureOff;
   }
 
   private static void pushIntegerHeader(short len) {
