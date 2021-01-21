@@ -15,7 +15,7 @@ public class KMUtils {
   public static final byte[] oneMonthMsec = {
           0, 0, 0, 0, (byte) 0x9C,(byte) 0xBE, (byte) 0xBD, 0x50}; // 2629746000 msec
   public static final byte[] oneYearMsec = {
-          0, 0, 0, 0x75, (byte) 0x8F, 0x0D, (byte) 0xFC, 0x00 }; // 31556952000 msec
+          0, 0, 0, 0x07, 0x58, (byte) 0xF0, (byte) 0xDF, (byte) 0xC0 }; // 31556952000 msec
   // Leap year + 3 yrs
   public static final byte[] fourYrsMsec = {
           0, 0, 0, 0x1D, 0x63, (byte) 0xC3, 0x7F, 0x00 }; // 126227808000 msec
