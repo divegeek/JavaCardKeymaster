@@ -20,7 +20,7 @@ public class KMUtils {
   public static final byte[] fourYrsMsec = {
           0, 0, 0, 0x1D, 0x63, (byte) 0xC3, 0x7F, 0x00 }; // 126227808000 msec
   public static final byte[] firstJan2020 = {
-          0, 0, 0x01, 0x76, (byte) 0xBB, 0x3E, (byte) 0x70, 0x40 }; // 1609459200000 msec
+    0, 0, 0x01, 0x6F, 0x5E, 0x66, (byte)0xE8, 0x00 }; // 1577836800000 msec
   public static final byte[] firstJan2051 = {
           0, 0, 0x02, 0x53, 0x26, (byte) 0x0E, (byte) 0x1C, 0x00 }; // 2556144000000
                                                                     // msec
