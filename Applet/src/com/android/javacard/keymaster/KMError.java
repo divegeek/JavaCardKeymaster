@@ -85,11 +85,20 @@ public class KMError {
   public static short UNKNOWN_ERROR = 1000;
 
   //Extended errors
-  public static short SW_CONDITIONS_NOT_SATISFIED = 1001;
-  public static short UNSUPPORTED_CLA = 1002;
-  public static short INVALID_P1P2 = 1003;
-  public static short UNSUPPORTED_INSTRUCTION = 1004;
-  public static short CMD_NOT_ALLOWED = 1005;
-  public static short SW_WRONG_LENGTH = 1006;
-  public static short INVALID_DATA = 1007;
+  public static short SW_CONDITIONS_NOT_SATISFIED = 10001;
+  public static short UNSUPPORTED_CLA = 10002;
+  public static short INVALID_P1P2 = 10003;
+  public static short UNSUPPORTED_INSTRUCTION = 10004;
+  public static short CMD_NOT_ALLOWED = 10005;
+  public static short SW_WRONG_LENGTH = 10006;
+  public static short INVALID_DATA = 10007;
+  //Crypto errors
+  public static short CRYPTO_ILLEGAL_USE = 10008;
+  public static short CRYPTO_ILLEGAL_VALUE = 10009;
+  public static short CRYPTO_INVALID_INIT = 10010;
+  public static short CRYPTO_NO_SUCH_ALGORITHM = 10011;
+  public static short CRYPTO_UNINITIALIZED_KEY = 10012;
+  //Generic Unknown error.
+  public static short GENERIC_UNKNOWN_ERROR = 10013;
+  
 }
