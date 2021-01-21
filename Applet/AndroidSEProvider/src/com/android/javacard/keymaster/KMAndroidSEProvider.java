@@ -100,7 +100,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
           (byte) 0x25, (byte) 0x51 };
   static final short secp256r1_H = 1;
   // --------------------------------------------------------------
-  public static final short AES_GCM_TAG_LENGTH = 12;
+  public static final short AES_GCM_TAG_LENGTH = 16;
   public static final short AES_GCM_NONCE_LENGTH = 12;
   public static final byte KEYSIZE_128_OFFSET = 0x00;
   public static final byte KEYSIZE_256_OFFSET = 0x01;
@@ -608,7 +608,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short authTagStart, short authTagLen) {
 
     if (authTagLen != AES_GCM_TAG_LENGTH) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
     if (nonceLen != AES_GCM_NONCE_LENGTH) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -1116,18 +1116,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public short aesCCMSign(byte[] bufIn, short bufInStart, short buffInLength,
-      byte[] masterKeySecret, short masterKeyStart, short masterKeyLen,
-      byte[] bufOut, short bufStart) {
-    if (masterKeyLen > 16) {
-      return -1;
-    }
-    aesKeys[KEYSIZE_128_OFFSET].setKey(masterKeySecret, (short) masterKeyStart);
-    kdf.init(aesKeys[KEYSIZE_128_OFFSET], Signature.MODE_SIGN);
-    return kdf.sign(bufIn, bufInStart, buffInLength, bufOut, bufStart);
-  }
-
-  @Override
   public short cmacKdf(byte[] keyMaterial, short keyMaterialStart,
       short keyMaterialLen, byte[] label, short labelStart, short labelLen,
       byte[] context, short contextStart, short contextLength, byte[] keyBuf,
@@ -1155,6 +1143,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // Next single byte holds the array header.
     // Next 3 bytes holds the Byte array header with the cert1 length.
     // Next 3 bytes holds the Byte array header with the cert2 length.
+    if (totalLen > CERT_CHAIN_MAX_SIZE) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
     short persistedLen = Util.getShort(certificateChain, (short) 0);
     if (persistedLen > totalLen) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);

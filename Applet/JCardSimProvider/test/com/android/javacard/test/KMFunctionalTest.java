@@ -59,7 +59,7 @@ public class KMFunctionalTest {
   private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = INS_BEGIN_KM_CMD + 2; //0x02
   private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = INS_BEGIN_KM_CMD + 3; //0x03
   private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_BEGIN_KM_CMD + 4; //0x04
-  private static final byte INS_PROVISION_SHARED_SECRET_CMD = INS_BEGIN_KM_CMD + 5; //0x05
+  private static final byte INS_PROVISION_PRESHARED_SECRET_CMD = INS_BEGIN_KM_CMD + 5; //0x05
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD + 6; //0x06
   private static final byte INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 7; //0x07
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 8; //0x08
@@ -538,16 +538,13 @@ public class KMFunctionalTest {
 
   private void provisionCertificateParams(CardSimulator simulator) {
 
-    short arrPtr = KMArray.instance((short) 3);
+    short arrPtr = KMArray.instance((short) 2);
     short byteBlob1 = KMByteBlob.instance(X509Issuer, (short) 0,
             (short) X509Issuer.length);
     KMArray.cast(arrPtr).add((short) 0, byteBlob1);
     short byteBlob2 = KMByteBlob.instance(expiryTime, (short) 0,
             (short) expiryTime.length);
     KMArray.cast(arrPtr).add((short) 1, byteBlob2);
-    short byteBlob3 = KMByteBlob.instance(authKeyId, (short) 0,
-            (short) authKeyId.length);
-    KMArray.cast(arrPtr).add((short) 2, byteBlob3);
 
     CommandAPDU apdu = encodeApdu(
             (byte) INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD, arrPtr);
@@ -565,7 +562,7 @@ public class KMFunctionalTest {
             (short) sharedKeySecret.length);
     KMArray.cast(arrPtr).add((short) 0, byteBlob);
 
-    CommandAPDU apdu = encodeApdu((byte) INS_PROVISION_SHARED_SECRET_CMD,
+    CommandAPDU apdu = encodeApdu((byte) INS_PROVISION_PRESHARED_SECRET_CMD,
             arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
@@ -1622,11 +1619,11 @@ public class KMFunctionalTest {
     byte[] nonce = new byte[12];
     cryptoProvider.newRandomNumber(nonce,(short)0,(short)12);
     byte[] authData = "Auth Data".getBytes();
-    byte[] authTag = new byte[12];
+    byte[] authTag = new byte[16];
     cryptoProvider.aesGCMEncrypt(transportKeyMaterial,(short)0,(short)32,wrappedKey,
       (short)0,(short)16,encWrappedKey,(short)0,
       nonce,(short)0, (short)12,authData,(short)0,(short)authData.length,
-      authTag, (short)0, (short)12);
+      authTag, (short)0, (short)16);
     byte[] maskingKey = {1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0};
     byte[] maskedTransportKey = new byte[32];
     for(int i=0; i< maskingKey.length;i++){
