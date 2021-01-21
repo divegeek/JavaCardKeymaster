@@ -49,7 +49,7 @@ enum class Instruction {
     INS_PROVISION_CERT_CHAIN_CMD = INS_BEGIN_KM_CMD+2,
     INS_PROVISION_CERT_PARAMS_CMD = INS_BEGIN_KM_CMD+3,
     INS_PROVISION_ATTEST_IDS_CMD = INS_BEGIN_KM_CMD+4,
-    INS_PROVISION_SHARED_SECRET_CMD = INS_BEGIN_KM_CMD+5,
+    INS_PROVISION_PRESHARED_SECRET_CMD = INS_BEGIN_KM_CMD+5,
     INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD+6,
     INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD+7,
     INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD+8,
@@ -61,7 +61,7 @@ enum ProvisionStatus {
     PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x02,
     PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04,
     PROVISION_STATUS_ATTEST_IDS = 0x08,
-    PROVISION_STATUS_SHARED_SECRET = 0x10,
+    PROVISION_STATUS_PRESHARED_SECRET = 0x10,
     PROVISION_STATUS_BOOT_PARAM = 0x20,
     PROVISION_STATUS_PROVISIONING_LOCKED = 0x40,
 };
@@ -406,7 +406,7 @@ static ErrorCode provisionAttestationIDs(std::unique_ptr<se_transport::Transport
 static ErrorCode provisionSharedSecret(std::unique_ptr<se_transport::TransportFactory>& transport) {
     ErrorCode errorCode = ErrorCode::OK;
     cppbor::Array array;
-    Instruction ins = Instruction::INS_PROVISION_SHARED_SECRET_CMD;
+    Instruction ins = Instruction::INS_PROVISION_PRESHARED_SECRET_CMD;
     std::vector<uint8_t> response;
     std::vector<uint8_t> masterKey(kFakeKeyAgreementKey, kFakeKeyAgreementKey +
             sizeof(kFakeKeyAgreementKey)/sizeof(kFakeKeyAgreementKey[0]));
@@ -484,7 +484,7 @@ static bool isSEProvisioned(uint64_t status) {
 
     if(status != (ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY | ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN |
                 ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS | ProvisionStatus::PROVISION_STATUS_ATTEST_IDS |
-                ProvisionStatus::PROVISION_STATUS_SHARED_SECRET | ProvisionStatus::PROVISION_STATUS_BOOT_PARAM
+                ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET | ProvisionStatus::PROVISION_STATUS_BOOT_PARAM
                 |ProvisionStatus::PROVISION_STATUS_PROVISIONING_LOCKED)) {
         ret = false;
     }
