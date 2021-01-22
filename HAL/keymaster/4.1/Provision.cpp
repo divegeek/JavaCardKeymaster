@@ -454,12 +454,13 @@ static ErrorCode setBootParameters(std::unique_ptr<se_transport::TransportFactor
 }
 
 static bool isSEProvisioned(uint64_t status) {
-    bool ret = true;
-
-    if(status != (ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY | ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN |
-                ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS | ProvisionStatus::PROVISION_STATUS_ATTEST_IDS |
-                ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET | ProvisionStatus::PROVISION_STATUS_BOOT_PARAM)) {
-        ret = false;
+    bool ret = false;
+    if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) &&
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN)) &&
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) &&
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) &&
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM))) {
+        ret = true;
     }
     return ret;
 }
