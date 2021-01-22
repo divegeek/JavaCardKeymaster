@@ -458,8 +458,7 @@ static bool isSEProvisioned(uint64_t status) {
 
     if(status != (ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY | ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN |
                 ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS | ProvisionStatus::PROVISION_STATUS_ATTEST_IDS |
-                ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET | ProvisionStatus::PROVISION_STATUS_BOOT_PARAM
-                |ProvisionStatus::PROVISION_STATUS_PROVISIONING_LOCKED)) {
+                ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET | ProvisionStatus::PROVISION_STATUS_BOOT_PARAM)) {
         ret = false;
     }
     return ret;
