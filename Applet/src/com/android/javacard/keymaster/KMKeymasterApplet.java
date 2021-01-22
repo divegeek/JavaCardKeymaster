@@ -901,7 +901,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void processDeleteAllKeysCmd(APDU apdu) {
 
     // No arguments
-    repository.removeAllAuthTags();
     // Send ok
     sendError(apdu, KMError.OK);
   }
@@ -942,12 +941,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] = KMArray.cast(data[KEY_BLOB]).length();
     if (tmpVariables[0] < 4) {
       KMException.throwIt(KMError.INVALID_KEY_BLOB);
-    }
-    // Validate Auth Tag
-    data[AUTH_TAG] = KMArray.cast(data[KEY_BLOB]).get(KEY_BLOB_AUTH_TAG);
-    if (repository.validateAuthTag(data[AUTH_TAG])) {
-      // delete the auth tag
-      repository.removeAuthTag(data[AUTH_TAG]);
     }
     // Send ok
     sendError(apdu, KMError.OK);
@@ -1156,19 +1149,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
     }
 
-    boolean blobPersisted = false;
     if (tmpVariables[5] != KMError.INVALID_ARGUMENT) {
-      if (repository.validateAuthTag(data[AUTH_TAG])) {
-        repository.removeAuthTag(data[AUTH_TAG]);
-        blobPersisted = true;
-      }
       // copy origin
       data[ORIGIN] = KMEnumTag.getValue(KMType.ORIGIN, data[HW_PARAMETERS]);
       // create new key blob with current os version etc.
       createEncryptedKeyBlob(scratchPad);
-      if (blobPersisted) {
-        repository.persistAuthTag(data[AUTH_TAG]);
-      }
     } else {
       data[KEY_BLOB] = KMByteBlob.instance((short) 0);
     }
@@ -2452,7 +2437,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeDigest(op);
     authorizePadding(op);
     authorizeBlockModeAndMacLength(op);
-    authorizeKeyUsageForCount();
     if (!validateHwToken(data[HW_TOKEN], scratchPad)) {
       data[HW_TOKEN] = KMType.INVALID_VALUE;
     }
@@ -2798,25 +2782,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(ptr).length());
   }
 
-  private void authorizeKeyUsageForCount() {
-    // TODO currently only short usageLimit supported - max count 32K.
-    short usageLimit =
-        KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT, data[HW_PARAMETERS]);
-    if (usageLimit == KMType.INVALID_VALUE) return;
-    // get current counter
-    short usage = repository.getRateLimitedKeyCount(data[AUTH_TAG]);
-    if (usage != KMType.INVALID_VALUE) {
-      if (usage < usageLimit) {
-        KMException.throwIt(KMError.KEY_MAX_OPS_EXCEEDED);
-      }
-      // increment the counter and store it back.
-      usage++;
-      repository.setRateLimitedKeyCount(data[AUTH_TAG], usage);
-    } else {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
-  }
-
   private void processImportKeyCmd(APDU apdu) {
     // Receive the incoming request fully from the master into buffer.
     receiveIncoming(apdu);
@@ -2863,6 +2828,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[3] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
+
+    //Check if the tags are supported.
+    if(KMKeyParameters.hasUnsupportedTags(data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.UNSUPPORTED_TAG);
+    }
     // Check algorithm and dispatch to appropriate handler.
     switch (tmpVariables[3]) {
       case KMType.RSA:
@@ -2886,15 +2856,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // create key blob
     createEncryptedKeyBlob(scratchPad);
-    tmpVariables[0] =
-        KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT, data[KEY_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE) {
-      // before generating key, check whether max count reached
-      if (repository.getKeyBlobCount() > KMRepository.MAX_BLOB_STORAGE) {
-        KMException.throwIt(KMError.UNKNOWN_ERROR);
-      }
-      repository.persistAuthTag(data[AUTH_TAG]);
-    }
 
     // prepare the response
     tmpVariables[0] = KMArray.instance((short) 3);
@@ -3406,16 +3367,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // create key blob
     data[ORIGIN] = KMType.GENERATED;
     createEncryptedKeyBlob(scratchPad);
-
-    tmpVariables[0] =
-        KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT, data[KEY_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE) {
-      // before generating key, check whether max count reached
-      if (repository.getKeyBlobCount() > KMRepository.MAX_BLOB_STORAGE) {
-        KMException.throwIt(KMError.UNKNOWN_ERROR);
-      }
-      repository.persistAuthTag(data[AUTH_TAG]);
-    }
 
     // prepare the response
     tmpVariables[0] = KMArray.instance((short) 3);

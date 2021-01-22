@@ -29,7 +29,7 @@ import javacard.framework.Util;
  */
 public class KMRepository implements KMUpgradable {
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 32;
+  public static final short DATA_INDEX_SIZE = 24;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_MEM_SIZE = 2048;
   public static final short HEAP_SIZE = 10000;
@@ -61,14 +61,6 @@ public class KMRepository implements KMUpgradable {
   public static final byte BOOT_VERIFIED_BOOT_STATE = 21;
   public static final byte BOOT_DEVICE_LOCKED_STATUS = 22;
   public static final byte BOOT_DEVICE_LOCKED_TIME = 23;
-  public static final byte AUTH_TAG_1 = 24;
-  public static final byte AUTH_TAG_2 = 25;
-  public static final byte AUTH_TAG_3 = 26;
-  public static final byte AUTH_TAG_4 = 27;
-  public static final byte AUTH_TAG_5 = 28;
-  public static final byte AUTH_TAG_6 = 29;
-  public static final byte AUTH_TAG_7 = 30;
-  public static final byte AUTH_TAG_8 = 31;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -82,9 +74,6 @@ public class KMRepository implements KMUpgradable {
   public static final short DEVICE_LOCK_TS_SIZE = 8;
   public static final short DEVICE_LOCK_FLAG_SIZE = 1;
   public static final short BOOT_STATE_SIZE = 1;
-  public static final short MAX_BLOB_STORAGE = 8;
-  public static final short AUTH_TAG_LENGTH = 16;
-  public static final short AUTH_TAG_ENTRY_SIZE = 15;
   public static final short MAX_OPS = 4;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
@@ -398,120 +387,6 @@ public class KMRepository implements KMUpgradable {
     return readData(COMPUTED_HMAC_KEY);
   }
 
-  private byte readAuthTagState(byte[] buf, short offset) {
-    return buf[offset];
-  }
-
-  private void writeAuthTagState(byte[] buf, short offset, byte state) {
-    buf[offset] = state;
-  }
-
-  public void persistAuthTag(short authTag) {
-    if (KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH)
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    short authTagEntry = alloc(AUTH_TAG_ENTRY_SIZE);
-    short offset = alloc(AUTH_TAG_ENTRY_SIZE);
-    writeAuthTagState(
-        KMByteBlob.cast(authTagEntry).getBuffer(),
-        KMByteBlob.cast(authTagEntry).getStartOff(),
-        (byte) 1);
-    Util.arrayCopyNonAtomic(
-        KMByteBlob.cast(authTag).getBuffer(),
-        KMByteBlob.cast(authTag).getStartOff(),
-        getHeap(), authTagEntry, AUTH_TAG_LENGTH);
-    Util.setShort(getHeap(), (short) (authTagEntry + AUTH_TAG_LENGTH +1),
-        (short) 0);
-    short index = 0;
-    while (index < MAX_BLOB_STORAGE) {
-      if (dataLength((short) (index + AUTH_TAG_1)) != 0) {
-        readDataEntry((short) (index + AUTH_TAG_1), getHeap(), offset);
-        if (0 == readAuthTagState(getHeap(), offset)) {
-          writeDataEntry((short) (index + AUTH_TAG_1),
-              KMByteBlob.cast(authTagEntry).getBuffer(),
-              KMByteBlob.cast(authTagEntry).getStartOff(),
-              AUTH_TAG_ENTRY_SIZE);
-          break;
-        }
-      } else {
-        writeDataEntry((short) (index + AUTH_TAG_1),
-            KMByteBlob.cast(authTagEntry).getBuffer(),
-            KMByteBlob.cast(authTagEntry).getStartOff(),
-            AUTH_TAG_ENTRY_SIZE);
-        break;
-      }
-      index++;
-    }
-  }
-
-  public boolean validateAuthTag(short authTag) {
-    short tag = findTag(authTag);
-    return tag !=KMType.INVALID_VALUE;
-  }
-
-  public void removeAuthTag(short authTag) {
-    short tag = findTag(authTag);
-    if(tag ==KMType.INVALID_VALUE) KMException.throwIt(KMError.UNKNOWN_ERROR);
-    clearDataEntry(tag);
-  }
-
-  public void removeAllAuthTags() {
-    short index = 0;
-    while (index < MAX_BLOB_STORAGE) {
-      clearDataEntry((short)(index+AUTH_TAG_1));
-      index++;
-    }
-  }
-
-  private short findTag(short authTag) {
-    if(KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH)KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    short index = 0;
-    short found;
-    short offset = alloc(AUTH_TAG_ENTRY_SIZE);
-    while (index < MAX_BLOB_STORAGE) {
-      if (dataLength((short)(index+AUTH_TAG_1)) != 0) {
-        readDataEntry((short)(index+AUTH_TAG_1),
-            getHeap(), offset);
-        found =
-          Util.arrayCompare(
-            getHeap(),
-            (short)(offset+1),
-            KMByteBlob.cast(authTag).getBuffer(),
-            KMByteBlob.cast(authTag).getStartOff(),
-            AUTH_TAG_LENGTH);
-        if(found == 0)return (short)(index+AUTH_TAG_1);
-      }
-      index++;
-    }
-    return KMType.INVALID_VALUE;
-  }
-
-  public short getRateLimitedKeyCount(short authTag) {
-    short tag = findTag(authTag);
-    short blob;
-    if (tag != KMType.INVALID_VALUE) {
-      blob = readData(tag);
-      return Util.getShort(KMByteBlob.cast(blob).getBuffer(),
-        (short)(KMByteBlob.cast(blob).getStartOff()+AUTH_TAG_LENGTH+1));
-    }
-    return KMType.INVALID_VALUE;
-  }
-
-  public void setRateLimitedKeyCount(short authTag, short val) {
-    short tag = findTag(authTag);
-    if (tag != KMType.INVALID_VALUE) {
-      short dataPtr = readData(tag);
-      Util.setShort(
-          KMByteBlob.cast(dataPtr).getBuffer(),
-          (short)(KMByteBlob.cast(dataPtr).getStartOff()+AUTH_TAG_LENGTH+1),
-          val);
-      writeDataEntry(tag,
-          KMByteBlob.cast(dataPtr).getBuffer(),
-          KMByteBlob.cast(dataPtr).getStartOff(),
-          KMByteBlob.cast(dataPtr).length());
-    }
-  }
-
-
   public void persistAttestationKey(short secret) {
     writeDataEntry(ATT_EC_KEY,
       KMByteBlob.cast(secret).getBuffer(),
@@ -701,16 +576,6 @@ public class KMRepository implements KMUpgradable {
     short start = alloc(BOOT_STATE_SIZE);
     (getHeap())[start] = state;
     writeDataEntry(BOOT_VERIFIED_BOOT_STATE,getHeap(),start,BOOT_STATE_SIZE);
-  }
-
-  public short getKeyBlobCount(){
-    byte index = 0;
-    byte count = 0;
-    while(index < MAX_BLOB_STORAGE){
-      if(dataLength((short)(index+AUTH_TAG_1)) != 0) count++;
-      index++;
-    }
-    return count;
   }
 
   @Override
