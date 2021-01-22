@@ -68,20 +68,21 @@ public class KMOperationState {
     return prototype;
   }
 
-  public static KMOperationState instance(short opId, Object[] slot) {
+  public static KMOperationState instance(short opHandle, Object[] slot) {
     KMOperationState opState = proto();
     opState.reset();
-    Util.setShort(data, OP_HANDLE, opId);
+    Util.setShort(data, OP_HANDLE, opHandle);
     KMOperationState.slot = slot;
     return opState;
   }
 
-  public static KMOperationState read(Object[] slot) {
+  public static KMOperationState read(byte[] oprHandle, short off, Object[] slot) {
     KMOperationState opState = proto();
     opState.reset();
     Util.arrayCopy((byte[]) slot[DATA], (short) 0, data, (short) 0, (short) data.length);
     Object[] ops = ((Object[]) slot[REFS]);
     op = (KMOperation) ops[OPERATION];
+    Util.setShort(data, OP_HANDLE, KMInteger.uint_64(oprHandle, off));
     KMOperationState.slot = slot;
     return opState;
   }
@@ -123,10 +124,6 @@ public class KMOperationState {
   }
 
   public short getHandle() {
-    return KMInteger.uint_16(Util.getShort(KMOperationState.data, OP_HANDLE));
-  }
-
-  public short handle() {
     return Util.getShort(KMOperationState.data, OP_HANDLE);
   }
 
