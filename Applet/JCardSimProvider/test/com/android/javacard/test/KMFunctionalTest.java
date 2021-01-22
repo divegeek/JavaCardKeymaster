@@ -2241,10 +2241,13 @@ public class KMFunctionalTest {
     byte[] plainData= "Hello World 123!".getBytes();
     short ret = begin(KMType.ENCRYPT, KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length), KMKeyParameters.instance(inParams), (short)0);
     short opHandle = KMArray.cast(ret).get((short) 2);
-    opHandle = KMInteger.cast(opHandle).getShort();
-    abort(KMInteger.uint_16(opHandle));
+    byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+    KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
+    opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+    abort(opHandle);
     short dataPtr = KMByteBlob.instance(plainData, (short) 0, (short) plainData.length);
-    ret = update(KMInteger.uint_16(opHandle), dataPtr, (short) 0, (short) 0, (short) 0);
+    opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+    ret = update(opHandle, dataPtr, (short) 0, (short) 0, (short) 0);
     Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE,ret);
     cleanUp();
   }
@@ -2513,7 +2516,8 @@ public class KMFunctionalTest {
       boolean aesGcmFlag) {
     short beginResp = begin(keyPurpose, keyBlob, inParams, hwToken);
     short opHandle = KMArray.cast(beginResp).get((short) 2);
-    opHandle = KMInteger.cast(opHandle).getShort();
+    byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+    KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
     short dataPtr = KMByteBlob.instance(data, (short) 0, (short) data.length);
     short ret = KMType.INVALID_VALUE;
     byte[] outputData = new byte[128];
@@ -2537,7 +2541,8 @@ public class KMFunctionalTest {
         KMArray.cast(inParams).add((short)0, associatedData);
         inParams = KMKeyParameters.instance(inParams);
       }
-      ret = update(KMInteger.uint_16(opHandle), dataPtr, inParams, (short) 0, (short) 0);
+      opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+      ret = update(opHandle, dataPtr, inParams, (short) 0, (short) 0);
       dataPtr = KMArray.cast(ret).get((short) 3);
       if (KMByteBlob.cast(dataPtr).length() > 0) {
         Util.arrayCopyNonAtomic(
@@ -2553,10 +2558,11 @@ public class KMFunctionalTest {
       }
     }
 
+    opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
     if (keyPurpose == KMType.VERIFY) {
-      ret = finish(KMInteger.uint_16(opHandle), dataPtr, signature, (short) 0, (short) 0, (short) 0);
+      ret = finish(opHandle, dataPtr, signature, (short) 0, (short) 0, (short) 0);
     } else {
-      ret = finish(KMInteger.uint_16(opHandle), dataPtr, null, (short) 0, (short) 0, (short) 0);
+      ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0);
     }
     if(len >0){
       dataPtr = KMArray.cast(ret).get((short)2);

@@ -472,6 +472,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
+  private void generateUniqueOperationHandle(byte[] buf, short offset, short len) {
+    do {
+      seProvider.newRandomNumber(buf, offset, len);
+    } while (null != repository.findOperation(buf, offset, len));
+  }
+
   private boolean isProvisioningComplete() {
     if((0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_KEY))
          && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_CHAIN))
@@ -486,7 +492,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void freeOperations() {
     if (data[OP_HANDLE] != KMType.INVALID_VALUE) {
-      KMOperationState op = repository.findOperation(KMInteger.cast(data[OP_HANDLE]).getShort());
+      KMOperationState op = repository.findOperation(data[OP_HANDLE]);
       if (op != null) {
         repository.releaseOperation(op);
       }
@@ -1557,8 +1563,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.reclaimMemory(bufferLength);
 
     data[OP_HANDLE] = KMArray.cast(tmpVariables[2]).get((short) 0);
-    tmpVariables[1] = KMInteger.cast(data[OP_HANDLE]).getShort();
-    KMOperationState op = repository.findOperation(tmpVariables[1]);
+    KMOperationState op = repository.findOperation(data[OP_HANDLE]);
     if (op == null) {
       KMException.throwIt(KMError.INVALID_OPERATION_HANDLE);
     }
@@ -1592,8 +1597,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[HW_TOKEN] = KMArray.cast(tmpVariables[2]).get((short) 4);
     data[VERIFICATION_TOKEN] = KMArray.cast(tmpVariables[2]).get((short) 5);
     // Check Operation Handle
-    tmpVariables[1] = KMInteger.cast(data[OP_HANDLE]).getShort();
-    KMOperationState op = repository.findOperation(tmpVariables[1]);
+    KMOperationState op = repository.findOperation(data[OP_HANDLE]);
     if (op == null) {
       KMException.throwIt(KMError.INVALID_OPERATION_HANDLE);
     }
@@ -2064,8 +2068,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // Check Operation Handle and get op state
     // Check Operation Handle
-    tmpVariables[1] = KMInteger.cast(data[OP_HANDLE]).getShort();
-    KMOperationState op = repository.findOperation(tmpVariables[1]);
+    KMOperationState op = repository.findOperation(data[OP_HANDLE]);
     if (op == null) KMException.throwIt(KMError.INVALID_OPERATION_HANDLE);
     // authorize the update operation
     authorizeUpdateFinishOperation(op, scratchPad);
@@ -2203,7 +2206,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] = KMArray.cast(args).get((short) 0);
     tmpVariables[0] = KMEnum.cast(tmpVariables[0]).getVal();
     data[HW_TOKEN] = KMArray.cast(args).get((short) 3);
-    KMOperationState op = repository.reserveOperation();
+    /*Generate a random number for operation handle */
+    short buf = KMByteBlob.instance(KMRepository.OPERATION_HANDLE_SIZE);
+    generateUniqueOperationHandle(
+            KMByteBlob.cast(buf).getBuffer(),
+            KMByteBlob.cast(buf).getStartOff(),
+            KMByteBlob.cast(buf).length());
+    /* opHandle is a KMInteger and is encoded as KMInteger when it is returned back. */
+    short opHandle = KMInteger.instance(
+            KMByteBlob.cast(buf).getBuffer(),
+            KMByteBlob.cast(buf).getStartOff(),
+            KMByteBlob.cast(buf).length());
+    KMOperationState op = repository.reserveOperation(opHandle);
     if (op == null)
       KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
     data[OP_HANDLE] = op.getHandle();
