@@ -49,7 +49,7 @@ enum class Instruction {
     INS_PROVISION_CERT_CHAIN_CMD = INS_BEGIN_KM_CMD+2,
     INS_PROVISION_CERT_PARAMS_CMD = INS_BEGIN_KM_CMD+3,
     INS_PROVISION_ATTEST_IDS_CMD = INS_BEGIN_KM_CMD+4,
-    INS_PROVISION_SHARED_SECRET_CMD = INS_BEGIN_KM_CMD+5,
+    INS_PROVISION_PRESHARED_SECRET_CMD = INS_BEGIN_KM_CMD+5,
     INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD+6,
     INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD+7,
     INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD+8,
@@ -61,7 +61,7 @@ enum ProvisionStatus {
     PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x02,
     PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04,
     PROVISION_STATUS_ATTEST_IDS = 0x08,
-    PROVISION_STATUS_SHARED_SECRET = 0x10,
+    PROVISION_STATUS_PRESHARED_SECRET = 0x10,
     PROVISION_STATUS_BOOT_PARAM = 0x20,
     PROVISION_STATUS_PROVISIONING_LOCKED = 0x40,
 };
@@ -123,28 +123,6 @@ static inline void getDerSubjectName(X509* x509, std::vector<uint8_t>& subject) 
         return;
     }
     subject.insert(subject.begin(), subjectDer, subjectDer+len);
-}
-
-static inline void getAuthorityKeyIdentifier(X509* x509, std::vector<uint8_t>& authKeyId) {
-    long xlen;
-    int tag, xclass;
-
-    int loc = X509_get_ext_by_NID(x509, NID_authority_key_identifier, -1);
-    X509_EXTENSION *ext = X509_get_ext(x509, loc);
-    if(ext == NULL) {
-        LOG(ERROR) << " Failed to read authority key identifier.";
-        return;
-    }
-
-    ASN1_OCTET_STRING *asn1AuthKeyId = X509_EXTENSION_get_data(ext);
-    const uint8_t *strAuthKeyId = ASN1_STRING_get0_data(asn1AuthKeyId);
-    int strAuthKeyIdLen = ASN1_STRING_length(asn1AuthKeyId);
-    int ret = ASN1_get_object(&strAuthKeyId, &xlen, &tag, &xclass, strAuthKeyIdLen);
-    if (ret == 0x80 || strAuthKeyId == NULL) {
-        LOG(ERROR) << "Failed to get the auth key identifier from ASN1 sequence.";
-        return;
-    }
-    authKeyId.insert(authKeyId.begin(), strAuthKeyId, strAuthKeyId + xlen);
 }
 
 static inline void getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate) {
@@ -334,7 +312,6 @@ static ErrorCode provisionAttestationCertificateParams(std::unique_ptr<se_transp
     std::vector<uint8_t> response;
     X509 *x509 = NULL;
     std::vector<uint8_t> subject;
-    std::vector<uint8_t> authorityKeyIdentifier;
     std::vector<uint8_t> notAfter;
 
     /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
@@ -345,8 +322,6 @@ static ErrorCode provisionAttestationCertificateParams(std::unique_ptr<se_transp
 
     /* Get subject in DER */
     getDerSubjectName(x509, subject);
-    /* Get AuthorityKeyIdentifier */
-    getAuthorityKeyIdentifier(x509, authorityKeyIdentifier);
     /* Get Expirty Time */
     getNotAfter(x509, notAfter);
     /*Free X509 */
@@ -355,7 +330,6 @@ static ErrorCode provisionAttestationCertificateParams(std::unique_ptr<se_transp
     array = cppbor::Array();
     array.add(subject);
     array.add(notAfter);
-    array.add(authorityKeyIdentifier);
     std::vector<uint8_t> cborData = array.encode();
 
     if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
@@ -406,7 +380,7 @@ static ErrorCode provisionAttestationIDs(std::unique_ptr<se_transport::Transport
 static ErrorCode provisionSharedSecret(std::unique_ptr<se_transport::TransportFactory>& transport) {
     ErrorCode errorCode = ErrorCode::OK;
     cppbor::Array array;
-    Instruction ins = Instruction::INS_PROVISION_SHARED_SECRET_CMD;
+    Instruction ins = Instruction::INS_PROVISION_PRESHARED_SECRET_CMD;
     std::vector<uint8_t> response;
     std::vector<uint8_t> masterKey(kFakeKeyAgreementKey, kFakeKeyAgreementKey +
             sizeof(kFakeKeyAgreementKey)/sizeof(kFakeKeyAgreementKey[0]));
@@ -480,13 +454,13 @@ static ErrorCode setBootParameters(std::unique_ptr<se_transport::TransportFactor
 }
 
 static bool isSEProvisioned(uint64_t status) {
-    bool ret = true;
-
-    if(status != (ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY | ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN |
-                ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS | ProvisionStatus::PROVISION_STATUS_ATTEST_IDS |
-                ProvisionStatus::PROVISION_STATUS_SHARED_SECRET | ProvisionStatus::PROVISION_STATUS_BOOT_PARAM
-                |ProvisionStatus::PROVISION_STATUS_PROVISIONING_LOCKED)) {
-        ret = false;
+    bool ret = false;
+    if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) &&
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN)) &&
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) &&
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) &&
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM))) {
+        ret = true;
     }
     return ret;
 }

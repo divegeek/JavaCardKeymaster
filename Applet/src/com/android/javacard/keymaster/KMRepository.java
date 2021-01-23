@@ -29,12 +29,17 @@ import javacard.framework.Util;
  */
 public class KMRepository implements KMUpgradable {
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 33;
+  public static final short DATA_INDEX_SIZE = 24;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_MEM_SIZE = 2048;
   public static final short HEAP_SIZE = 10000;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
+  public static final short OPERATION_HANDLE_SIZE = 8; /* 8 bytes */
+  private static final short OPERATION_HANDLE_STATUS_OFFSET = 0;
+  private static final short OPERATION_HANDLE_STATUS_SIZE = 1;
+  private static final short OPERATION_HANDLE_OFFSET = 1;
+  private static final short OPERATION_HANDLE_ENTRY_SIZE = OPERATION_HANDLE_SIZE + OPERATION_HANDLE_STATUS_SIZE;
 
   // Data table offsets
   public static final byte MASTER_KEY = 8;
@@ -50,26 +55,17 @@ public class KMRepository implements KMUpgradable {
   public static final byte ATT_ID_MANUFACTURER = 6;
   public static final byte ATT_ID_MODEL = 7;
   public static final byte ATT_EC_KEY = 12;
-  public static final byte CERT_AUTH_KEY_ID = 13;
-  public static final byte CERT_ISSUER = 14;
-  public static final byte CERT_EXPIRY_TIME = 15;
-  public static final byte BOOT_OS_VERSION = 16;
-  public static final byte BOOT_OS_PATCH = 17;
-  public static final byte VENDOR_PATCH_LEVEL = 18;
-  public static final byte BOOT_PATCH_LEVEL = 19;
-  public static final byte BOOT_VERIFIED_BOOT_KEY = 20;
-  public static final byte BOOT_VERIFIED_BOOT_HASH = 21;
-  public static final byte BOOT_VERIFIED_BOOT_STATE = 22;
-  public static final byte BOOT_DEVICE_LOCKED_STATUS = 23;
-  public static final byte BOOT_DEVICE_LOCKED_TIME = 24;
-  public static final byte AUTH_TAG_1 = 25;
-  public static final byte AUTH_TAG_2 = 26;
-  public static final byte AUTH_TAG_3 = 27;
-  public static final byte AUTH_TAG_4 = 28;
-  public static final byte AUTH_TAG_5 = 29;
-  public static final byte AUTH_TAG_6 = 30;
-  public static final byte AUTH_TAG_7 = 31;
-  public static final byte AUTH_TAG_8 = 32;
+  public static final byte CERT_ISSUER = 13;
+  public static final byte CERT_EXPIRY_TIME = 14;
+  public static final byte BOOT_OS_VERSION = 15;
+  public static final byte BOOT_OS_PATCH = 16;
+  public static final byte VENDOR_PATCH_LEVEL = 17;
+  public static final byte BOOT_PATCH_LEVEL = 18;
+  public static final byte BOOT_VERIFIED_BOOT_KEY = 19;
+  public static final byte BOOT_VERIFIED_BOOT_HASH = 20;
+  public static final byte BOOT_VERIFIED_BOOT_STATE = 21;
+  public static final byte BOOT_DEVICE_LOCKED_STATUS = 22;
+  public static final byte BOOT_DEVICE_LOCKED_TIME = 23;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -83,16 +79,12 @@ public class KMRepository implements KMUpgradable {
   public static final short DEVICE_LOCK_TS_SIZE = 8;
   public static final short DEVICE_LOCK_FLAG_SIZE = 1;
   public static final short BOOT_STATE_SIZE = 1;
-  public static final short MAX_BLOB_STORAGE = 8;
-  public static final short AUTH_TAG_LENGTH = 12;
-  public static final short AUTH_TAG_ENTRY_SIZE = 15;
   public static final short MAX_OPS = 4;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
 
   // Class Attributes
   private Object[] operationStateTable;
-  private static short opIdCounter;
   private byte[] heap;
   private short heapIndex;
   private byte[] dataTable;
@@ -113,9 +105,11 @@ public class KMRepository implements KMUpgradable {
     reclaimIndex = HEAP_SIZE;
     operationStateTable = new Object[MAX_OPS];
     // create and initialize operation state table.
+    //First byte in the operation handle buffer denotes whether the operation is
+    //reserved or unreserved.
     byte index = 0;
     while(index < MAX_OPS){
-      operationStateTable[index] = new Object[]{new byte[2],
+      operationStateTable[index] = new Object[]{new byte[OPERATION_HANDLE_ENTRY_SIZE],
         new Object[] {new byte[KMOperationState.MAX_DATA],
         new Object[KMOperationState.MAX_REFS]}};
       index++;
@@ -123,24 +117,51 @@ public class KMRepository implements KMUpgradable {
     repository = this;
   }
 
-  public KMOperationState findOperation(short opHandle) {
+  public void getOperationHandle(short oprHandle, byte[] buf, short off, short len) {
+    if (KMInteger.cast(oprHandle).length() != OPERATION_HANDLE_SIZE) {
+      KMException.throwIt(KMError.INVALID_OPERATION_HANDLE);
+    }
+    KMInteger.cast(oprHandle).getValue(buf, off, len);
+  }
+
+  public KMOperationState findOperation(byte[] buf, short off, short len) {
     short index = 0;
     byte[] opId;
-    while(index < MAX_OPS){
-      opId = ((byte[])((Object[])operationStateTable[index])[0]);
-      if(Util.getShort(opId,(short)0) == opHandle)return KMOperationState.read((Object[])((Object[])operationStateTable[index])[1]);
+    while (index < MAX_OPS) {
+      opId = ((byte[]) ((Object[]) operationStateTable[index])[0]);
+      if (0 == Util.arrayCompare(buf, off, opId, OPERATION_HANDLE_OFFSET, len)) {
+        return KMOperationState
+                .read(opId, OPERATION_HANDLE_OFFSET, (Object[]) ((Object[]) operationStateTable[index])[1]);
+      }
       index++;
     }
+
     return null;
   }
 
-  public KMOperationState reserveOperation(){
+  /* operationHandle is a KMInteger */
+  public KMOperationState findOperation(short operationHandle) {
+    short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
+    getOperationHandle(
+            operationHandle,
+            KMByteBlob.cast(buf).getBuffer(),
+            KMByteBlob.cast(buf).getStartOff(),
+            KMByteBlob.cast(buf).length());
+    return findOperation(
+            KMByteBlob.cast(buf).getBuffer(),
+            KMByteBlob.cast(buf).getStartOff(),
+            KMByteBlob.cast(buf).length());
+  }
+
+  /* opHandle is a KMInteger */
+  public KMOperationState reserveOperation(short opHandle){
     short index = 0;
     byte[] opId;
     while(index < MAX_OPS){
       opId = (byte[])((Object[])operationStateTable[index])[0];
-      if(Util.getShort(opId,(short)0) == 0){
-        return KMOperationState.instance(/*Util.getShort(opId,(short)0)*/getOpId(),(Object[])((Object[])operationStateTable[index])[1]);
+      /* Check for unreserved operation state */
+      if (opId[OPERATION_HANDLE_STATUS_OFFSET] == 0) {
+        return KMOperationState.instance(opHandle, (Object[])((Object[])operationStateTable[index])[1]);
       }
       index++;
     }
@@ -148,37 +169,54 @@ public class KMRepository implements KMUpgradable {
   }
 
   //TODO refactor following method
-  public void persistOperation(byte[] data, short opHandle, KMOperation op, KMOperation hmacSigner) {
+  public void persistOperation(byte[] data, short opHandle, KMOperation op) {
   	short index = 0;
     byte[] opId;
+    short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
+    getOperationHandle(
+            opHandle,
+            KMByteBlob.cast(buf).getBuffer(),
+            KMByteBlob.cast(buf).getStartOff(),
+            KMByteBlob.cast(buf).length());
     //Update an existing operation state.
-    while(index < MAX_OPS){
-    	opId = (byte[])((Object[])operationStateTable[index])[0];
-    	if(Util.getShort(opId,(short)0) == opHandle){
-    		Object[] slot = (Object[])((Object[])operationStateTable[index])[1];
-      	JCSystem.beginTransaction();
-        Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length);
+    while (index < MAX_OPS) {
+      opId = (byte[]) ((Object[]) operationStateTable[index])[0];
+      if ((1 == opId[OPERATION_HANDLE_STATUS_OFFSET])
+              && (0 == Util.arrayCompare(
+                      opId,
+                      OPERATION_HANDLE_OFFSET,
+                      KMByteBlob.cast(buf).getBuffer(),
+                      KMByteBlob.cast(buf).getStartOff(),
+                      KMByteBlob.cast(buf).length()))) {
+        Object[] slot = (Object[]) ((Object[]) operationStateTable[index])[1];
+        JCSystem.beginTransaction();
+        Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0,
+                (short) ((byte[]) slot[0]).length);
         Object[] ops = ((Object[]) slot[1]);
         ops[0] = op;
-        ops[1] = hmacSigner;
         JCSystem.commitTransaction();
         return;
-    	}
-    	index++;
+      }
+      index++;
     }
 
     index = 0;
     //Persist a new operation.
   	while(index < MAX_OPS){
       opId = (byte[])((Object[])operationStateTable[index])[0];
-      if(Util.getShort(opId,(short)0) == 0){
-      	Util.setShort(opId, (short)0, opHandle);
+      if(0 == opId[OPERATION_HANDLE_STATUS_OFFSET]){
       	Object[] slot = (Object[])((Object[])operationStateTable[index])[1];
       	JCSystem.beginTransaction();
+        opId[OPERATION_HANDLE_STATUS_OFFSET] = 1;/*reserved */
+        Util.arrayCopy(
+            KMByteBlob.cast(buf).getBuffer(),
+            KMByteBlob.cast(buf).getStartOff(),
+            opId,
+            OPERATION_HANDLE_OFFSET,
+            OPERATION_HANDLE_SIZE);
         Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length);
         Object[] ops = ((Object[]) slot[1]);
         ops[0] = op;
-        ops[1] = hmacSigner;
         JCSystem.commitTransaction();
       	break;
       }
@@ -186,28 +224,24 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-  private short getOpId() {
-    byte index = 0;
-    opIdCounter++;
-    while (index < MAX_OPS) {
-      if (Util.getShort((byte[]) ((Object[]) operationStateTable[index])[0], (short) 0)
-          == opIdCounter) {
-        opIdCounter++;
-        index = 0;
-        continue;
-      }
-      index++;
-    }
-    return opIdCounter;
-  }
-
-  public void releaseOperation(KMOperationState op){
+  public void releaseOperation(KMOperationState op) {
     short index = 0;
     byte[] var;
-    while(index < MAX_OPS){
-      var = ((byte[])((Object[])operationStateTable[index])[0]);
-      if(Util.getShort(var,(short)0) == op.handle()){
-        Util.arrayFillNonAtomic(var,(short)0,(short)var.length,(byte)0);
+    short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
+    getOperationHandle(
+            op.getHandle(),
+            KMByteBlob.cast(buf).getBuffer(),
+            KMByteBlob.cast(buf).getStartOff(),
+            KMByteBlob.cast(buf).length());
+    while (index < MAX_OPS) {
+      var = ((byte[]) ((Object[]) operationStateTable[index])[0]);
+      if ((var[OPERATION_HANDLE_STATUS_OFFSET] == 1) &&
+              (0 == Util.arrayCompare(var,
+                      OPERATION_HANDLE_OFFSET,
+                      KMByteBlob.cast(buf).getBuffer(),
+                      KMByteBlob.cast(buf).getStartOff(),
+                      KMByteBlob.cast(buf).length()))) {
+        Util.arrayFillNonAtomic(var, (short) 0, (short) var.length, (byte) 0);
         op.release();
         break;
       }
@@ -224,7 +258,6 @@ public class KMRepository implements KMUpgradable {
     if(len != SHARED_SECRET_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     writeDataEntry(SHARED_KEY,key,start,len);
   }
-
 
   public void initComputedHmac(byte[] key, short start, short len) {
     if(len != COMPUTED_HMAC_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
@@ -401,120 +434,6 @@ public class KMRepository implements KMUpgradable {
     return readData(COMPUTED_HMAC_KEY);
   }
 
-  private byte readAuthTagState(byte[] buf, short offset) {
-    return buf[offset];
-  }
-
-  private void writeAuthTagState(byte[] buf, short offset, byte state) {
-    buf[offset] = state;
-  }
-
-  public void persistAuthTag(short authTag) {
-    if (KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH)
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    short authTagEntry = alloc(AUTH_TAG_ENTRY_SIZE);
-    short offset = alloc(AUTH_TAG_ENTRY_SIZE);
-    writeAuthTagState(
-        KMByteBlob.cast(authTagEntry).getBuffer(),
-        KMByteBlob.cast(authTagEntry).getStartOff(),
-        (byte) 1);
-    Util.arrayCopyNonAtomic(
-        KMByteBlob.cast(authTag).getBuffer(),
-        KMByteBlob.cast(authTag).getStartOff(),
-        getHeap(), authTagEntry, AUTH_TAG_LENGTH);
-    Util.setShort(getHeap(), (short) (authTagEntry + AUTH_TAG_LENGTH +1),
-        (short) 0);
-    short index = 0;
-    while (index < MAX_BLOB_STORAGE) {
-      if (dataLength((short) (index + AUTH_TAG_1)) != 0) {
-        readDataEntry((short) (index + AUTH_TAG_1), getHeap(), offset);
-        if (0 == readAuthTagState(getHeap(), offset)) {
-          writeDataEntry((short) (index + AUTH_TAG_1),
-              KMByteBlob.cast(authTagEntry).getBuffer(),
-              KMByteBlob.cast(authTagEntry).getStartOff(),
-              AUTH_TAG_ENTRY_SIZE);
-          break;
-        }
-      } else {
-        writeDataEntry((short) (index + AUTH_TAG_1),
-            KMByteBlob.cast(authTagEntry).getBuffer(),
-            KMByteBlob.cast(authTagEntry).getStartOff(),
-            AUTH_TAG_ENTRY_SIZE);
-        break;
-      }
-      index++;
-    }
-  }
-
-  public boolean validateAuthTag(short authTag) {
-    short tag = findTag(authTag);
-    return tag !=KMType.INVALID_VALUE;
-  }
-
-  public void removeAuthTag(short authTag) {
-    short tag = findTag(authTag);
-    if(tag ==KMType.INVALID_VALUE) KMException.throwIt(KMError.UNKNOWN_ERROR);
-    clearDataEntry(tag);
-  }
-
-  public void removeAllAuthTags() {
-    short index = 0;
-    while (index < MAX_BLOB_STORAGE) {
-      clearDataEntry((short)(index+AUTH_TAG_1));
-      index++;
-    }
-  }
-
-  private short findTag(short authTag) {
-    if(KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH)KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    short index = 0;
-    short found;
-    short offset = alloc(AUTH_TAG_ENTRY_SIZE);
-    while (index < MAX_BLOB_STORAGE) {
-      if (dataLength((short)(index+AUTH_TAG_1)) != 0) {
-        readDataEntry((short)(index+AUTH_TAG_1),
-            getHeap(), offset);
-        found =
-          Util.arrayCompare(
-            getHeap(),
-            (short)(offset+1),
-            KMByteBlob.cast(authTag).getBuffer(),
-            KMByteBlob.cast(authTag).getStartOff(),
-            AUTH_TAG_LENGTH);
-        if(found == 0)return (short)(index+AUTH_TAG_1);
-      }
-      index++;
-    }
-    return KMType.INVALID_VALUE;
-  }
-
-  public short getRateLimitedKeyCount(short authTag) {
-    short tag = findTag(authTag);
-    short blob;
-    if (tag != KMType.INVALID_VALUE) {
-      blob = readData(tag);
-      return Util.getShort(KMByteBlob.cast(blob).getBuffer(),
-        (short)(KMByteBlob.cast(blob).getStartOff()+AUTH_TAG_LENGTH+1));
-    }
-    return KMType.INVALID_VALUE;
-  }
-
-  public void setRateLimitedKeyCount(short authTag, short val) {
-    short tag = findTag(authTag);
-    if (tag != KMType.INVALID_VALUE) {
-      short dataPtr = readData(tag);
-      Util.setShort(
-          KMByteBlob.cast(dataPtr).getBuffer(),
-          (short)(KMByteBlob.cast(dataPtr).getStartOff()+AUTH_TAG_LENGTH+1),
-          val);
-      writeDataEntry(tag,
-          KMByteBlob.cast(dataPtr).getBuffer(),
-          KMByteBlob.cast(dataPtr).getStartOff(),
-          KMByteBlob.cast(dataPtr).length());
-    }
-  }
-
-
   public void persistAttestationKey(short secret) {
     writeDataEntry(ATT_EC_KEY,
       KMByteBlob.cast(secret).getBuffer(),
@@ -569,13 +488,6 @@ public class KMRepository implements KMUpgradable {
     writeDataEntry(CERT_EXPIRY_TIME, buf,start,len);
   }
 
-  public short getAuthKeyId() {
-    return readData(CERT_AUTH_KEY_ID);
-  }
-
-  public void setAuthKeyId(byte[] buf, short start, short len) {
-    writeDataEntry(CERT_AUTH_KEY_ID,buf,start,len);
-  }
   private static final byte[] zero = {0,0,0,0,0,0,0,0};
 
   public short getOsVersion(){
@@ -711,16 +623,6 @@ public class KMRepository implements KMUpgradable {
     short start = alloc(BOOT_STATE_SIZE);
     (getHeap())[start] = state;
     writeDataEntry(BOOT_VERIFIED_BOOT_STATE,getHeap(),start,BOOT_STATE_SIZE);
-  }
-
-  public short getKeyBlobCount(){
-    byte index = 0;
-    byte count = 0;
-    while(index < MAX_BLOB_STORAGE){
-      if(dataLength((short)(index+AUTH_TAG_1)) != 0) count++;
-      index++;
-    }
-    return count;
   }
 
   @Override

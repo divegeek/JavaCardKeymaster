@@ -121,6 +121,12 @@ public class KMCipherImpl extends KMCipher{
           //padding byte always should be <= block size
           if((short)paddingByte > blkSize ||
             (short)paddingByte <= 0) KMException.throwIt(KMError.INVALID_ARGUMENT);
+
+          for(short j = 1; j <= paddingByte; ++j) {
+            if (scratchPad[i+len -j] != paddingByte) {
+              KMException.throwIt(KMError.INVALID_ARGUMENT);
+            }
+          }
           len = (short)(len - (short)paddingByte);// remove the padding bytes
         }
       }
