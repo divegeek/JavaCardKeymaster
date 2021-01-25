@@ -197,7 +197,8 @@ ErrorCode Provision::initProvision() {
 	if(pTransportFactory == nullptr) {
 		pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
 					android::base::GetBoolProperty("ro.kernel.qemu", false)));
-		pTransportFactory->openConnection();
+		if(!pTransportFactory->openConnection())
+            return ErrorCode::UNKNOWN_ERROR;
 	}
 	return ErrorCode::OK;
 }
@@ -398,6 +399,14 @@ ErrorCode Provision::lockProvision() {
         return errorCode;
     }
     return errorCode;
+}
+
+ErrorCode Provision::uninit() {
+	if(pTransportFactory != nullptr) {
+        if(!pTransportFactory->closeConnection())
+            return ErrorCode::UNKNOWN_ERROR;
+    }
+    return ErrorCode::OK;
 }
 // Provision End
 
