@@ -58,6 +58,7 @@ public:
 	ErrorCode provisionBootParameters(BootParams& bootParams );
     ErrorCode lockProvision();
     ErrorCode getProvisionStatus(uint64_t&);
+    ErrorCode uninit();
 
 private:
     std::unique_ptr<se_transport::TransportFactory> pTransportFactory;
