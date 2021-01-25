@@ -36,6 +36,6 @@ cc_binary {
         "libjc_transport",
         "libcrypto",
         "libjsoncpp",
-        "libjc_common",
+        "libjc_provision",
     ],
 }
