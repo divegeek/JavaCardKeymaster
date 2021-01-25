@@ -25,10 +25,43 @@ namespace keymaster {
 namespace V4_1 {
 namespace javacard {
 
-/**
- * Provisions the SE.
- */
-ErrorCode provision(std::unique_ptr<se_transport::TransportFactory>& transport);
+typedef struct BootParams_ {
+	uint32_t osVersion;
+	uint32_t osPatchLevel;
+	uint32_t vendorPatchLevel;
+	uint32_t bootPatchLevel;
+	std::vector<uint8_t> verifiedBootKey;
+	std::vector<uint8_t> verifiedBootKeyHash;
+	uint32_t verifiedBootState;
+	uint32_t deviceLocked;
+} BootParams;
+
+typedef struct AttestIDParams_ {
+	std::string brand;
+	std::string device;
+	std::string product;
+	std::string serial;
+	std::string imei;
+	std::string meid;
+	std::string manufacturer;
+	std::string model;
+} AttestIDParams;
+
+class Provision {
+public:
+	ErrorCode initProvision();
+	ErrorCode provisionAttestationKey(std::vector<uint8_t>& batchKey);
+	ErrorCode provisionAtestationCertificateChain(std::vector<std::vector<uint8_t>>& CertChain);
+	ErrorCode provisionAttestationCertificateParams(std::vector<uint8_t>& batchCertificate);
+	ErrorCode provisionAttestationID(AttestIDParams& attestParams);
+	ErrorCode provisionPreSharedSecret(std::vector<uint8_t>& preSharedSecret);
+	ErrorCode provisionBootParameters(BootParams& bootParams );
+    ErrorCode lockProvision();
+    ErrorCode getProvisionStatus(uint64_t&);
+
+private:
+    std::unique_ptr<se_transport::TransportFactory> pTransportFactory;
+};
 
 }  // namespace javacard
 }  // namespace V4_1

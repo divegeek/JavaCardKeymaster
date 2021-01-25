@@ -32,7 +32,6 @@
 #include <JavacardKeymaster4Device.h>
 #include <JavacardSoftKeymasterContext.h>
 #include <CommonUtils.h>
-#include <Provision.h>
 #include <android-base/logging.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -91,7 +90,19 @@ enum class Instruction {
     INS_ABORT_OPERATION_CMD = INS_END_KM_PROVISION_CMD+19,
     INS_DEVICE_LOCKED_CMD = INS_END_KM_PROVISION_CMD+20,
     INS_EARLY_BOOT_ENDED_CMD = INS_END_KM_PROVISION_CMD+21,
-    INS_GET_CERT_CHAIN_CMD = INS_END_KM_PROVISION_CMD+22
+    INS_GET_CERT_CHAIN_CMD = INS_END_KM_PROVISION_CMD+22,
+    INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD+8,
+};
+
+enum ProvisionStatus {
+    NOT_PROVISIONED = 0x00,
+    PROVISION_STATUS_ATTESTATION_KEY = 0x01,
+    PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x02,
+    PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04,
+    PROVISION_STATUS_ATTEST_IDS = 0x08,
+    PROVISION_STATUS_PRESHARED_SECRET = 0x10,
+    PROVISION_STATUS_BOOT_PARAM = 0x20,
+    PROVISION_STATUS_PROVISIONING_LOCKED = 0x40,
 };
 
 //Extended error codes
@@ -368,15 +379,57 @@ uint16_t getStatus(std::vector<uint8_t>& inputData) {
     return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
 }
 
+static bool isSEProvisioned() {
+    ErrorCode errorCode = ErrorCode::OK;
+    Instruction ins = Instruction::INS_GET_PROVISION_STATUS_CMD;
+    std::vector<uint8_t> cborData;
+    std::vector<uint8_t> response;
+    std::unique_ptr<Item> item;
+    CborConverter cborConverter;
+    std::vector<uint8_t> apdu;
+    bool ret = false;
+
+    errorCode = constructApduMessage(ins, cborData, apdu);
+    if(errorCode != ErrorCode::OK) return ret;
+
+    if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
+        LOG(ERROR) << " Failed to send GET_PROVISION_STATUS_CMD ";
+        return ret;
+    }
+
+    if((response.size() <= 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
+        return ret;
+    }
+    //Check if SE is provisioned.
+    std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
+            true);
+    if(item != NULL) {
+        uint64_t status;
+
+        if(!cborConverter.getUint64(item, 1, status)) {
+            LOG(ERROR) << "Failed to parse the status from cbor data";
+            return ret;
+        }
+
+        if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) &&
+                (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN)) &&
+                (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) &&
+                (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) &&
+                (0 != (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM))) {
+            ret = true;
+        }
+    }
+    return ret;
+}
+
+
 ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response, bool
         extendedOutput=false) {
     ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> apdu;
 
-    // TODO In real scenario the provision happens in the factory. In that case this
-    // below code is not required. This is just used for simulation.
-    if (ErrorCode::OK != (ret = provision(getTransportFactoryInstance()))) {
-        LOG(ERROR) << "Failed to provision the device";
+    if (!isSEProvisioned()) {
+        LOG(ERROR) << "Javacard applet is not provisioned.";
         return ret;
     }
     ret = constructApduMessage(ins, inData, apdu, extendedOutput);
