@@ -49,11 +49,12 @@ public interface KMSEProvider extends KMUpgradable {
       short[] lengths);
 
   /**
-   * Verify that the imported key is valid.
+   * Verify that the imported key is valid. If the algorithm and/or keysize are not supported then it
+   * should throw a CryptoException.
    *
    * @param alg will be KMType.AES, KMType.DES or KMType.HMAC.
    * @param keysize will be 128 or 256 for AES or DES. It can be 64 to 512 (multiple of 8) for HMAC.
-   * @param buf is the buffer in which key has to be returned
+   * @param buf is the buffer that contains the symmetric key.
    * @param startOff is the start offset.
    * @param length of the data in the buf. This should match the keysize (in bytes).
    * @return true if the symmetric key is supported and valid.
@@ -63,14 +64,15 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * Validate that the imported asymmetric key pair is valid. For RSA the public key exponent must
    * always be 0x010001. The key size of RSA key pair must be 2048 bits and key size of EC key pair
-   * must be for p256 curve.
+   * must be for p256 curve. If the algorithms are not supported then it should throw a
+   * CryptoException.
    *
    * @param alg will be KMType.RSA or KMType.EC.
-   * @param privKeyBuf is the buffer to return the private key exponent in case of RSA or private
+   * @param privKeyBuf is the buffer that contains the private key exponent in case of RSA or private
    *     key in case of EC.
    * @param privKeyStart is the start offset.
    * @param privKeyLength is the length of this private key buffer.
-   * @param pubModBuf is the buffer to return the modulus in case of RSA or public key in case of
+   * @param pubModBuf is the buffer that contains the modulus in case of RSA or public key in case of
    *     EC.
    * @param pubModStart is the start of offset.
    * @param pubModLength is the length of this public key buffer.
@@ -88,14 +90,14 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that generates random number of desired length.
    *
-   * @param num is the buffer in which random number is returned to applet.
+   * @param num is the buffer in which random number is returned to the applet.
    * @param offset is start of the buffer.
    * @param length indicates the size of buffer and desired length of random number in bytes.
    */
   void newRandomNumber(byte[] num, short offset, short length);
 
   /**
-   * This is a oneshot operation that adds the entropy to the entroy pool. This operation
+   * This is a oneshot operation that adds the entropy to the entropy pool. This operation
    * corresponds to addRndEntropy command. This method may ignore the added entropy value if the SE
    * provider does not support it.
    *
@@ -108,14 +110,16 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that generates and returns back a true random number.
    *
-   * @param num is the buffer in which entropy value is given.
+   * @param num is the buffer in which entropy value is returned.
    * @param offset is start of the buffer.
    * @param length length of the buffer.
    */
   void getTrueRandomNumber(byte[] num, short offset, short length);
 
   /**
-   * This is a oneshot operation that performs encryption operation using AES GCM algorithm.
+   * This is a oneshot operation that performs encryption operation using AES GCM algorithm. It throws
+   * CryptoException if algorithm is not supported or if tag length is not equal to 16 or
+   * nonce length is not equal to 12.
    *
    * @param aesKey is the buffer that contains 128 bit or 256 bit aes key used to encrypt.
    * @param aesKeyStart is the start in aes key buffer.
@@ -156,7 +160,8 @@ public interface KMSEProvider extends KMUpgradable {
       short authTagLen);
 
   /**
-   * This is a oneshot operation that performs decryption operation using AES GCM algorithm.
+   * This is a oneshot operation that performs decryption operation using AES GCM algorithm. It throws
+   * CryptoException if algorithm is not supported.
    *
    * @param aesKey is the buffer that contains 128 bit or 256 bit aes key used to encrypt.
    * @param aesKeyStart is the start in aes key buffer.
@@ -164,7 +169,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @param encData is the buffer of the input encrypted data.
    * @param encDataStart is the start of the encrypted data buffer.
    * @param encDataLen is the length of the data buffer.
-   * @param data is the buffer that contains output data to encrypt.
+   * @param data is the buffer that contains output decrypted data.
    * @param dataStart is the start of the data buffer.
    * @param nonce is the buffer of nonce.
    * @param nonceStart is the start of the nonce buffer.
@@ -196,30 +201,7 @@ public interface KMSEProvider extends KMUpgradable {
       short authTagStart,
       short authTagLen);
 
-  /**
-   * This is a oneshot operation that performs signing using AES CCM algorithm.
-   *
-   * @param data is the input data buffer.
-   * @param dataStart is the start of the buffer.
-   * @param dataLen is the length of the input data
-   * @param aesKey is the aesKey buffer either 128 bit or 256 bit aes key.
-   * @param aesKeyStart is the start of the aes key.
-   * @param aesKeyLen is the length of the aes key buffer in bytes.
-   * @param signature is the output signature buffer.
-   * @param signatureStart is the start of the signature buffer.
-   * @return length of the signature buffer.
-   */
-  short aesCCMSign(
-      byte[] data,
-      short dataStart,
-      short dataLen,
-      byte[] aesKey,
-      short aesKeyStart,
-      short aesKeyLen,
-      byte[] signature,
-      short signatureStart);
-
-  /**
+   /**
    * This is a oneshot operation that performs key derivation function using cmac kdf (CKDF) as
    * defined in android keymaster hal definition.
    *
@@ -299,7 +281,8 @@ public interface KMSEProvider extends KMUpgradable {
 
   /**
    * This is a oneshot operation that decrypts the data using RSA algorithm with oaep256 padding.
-   * The public exponent is always 0x010001.
+   * The public exponent is always 0x010001. It throws CryptoException if OAEP encoding validation
+   * fails.
    *
    * @param privExp is the private exponent (2048 bit) buffer.
    * @param privExpStart is the start of the private exponent buffer.
@@ -309,8 +292,8 @@ public interface KMSEProvider extends KMUpgradable {
    * @param modLength is the length of the modulus buffer in bytes.
    * @param inputDataBuf is the buffer of the input data.
    * @param inputDataStart is the start of the input data buffer.
-   * @param inputDataLength is the length of the inpur data buffer in bytes.
-   * @param outputDataBuf is the buffer of the decrypted data buffer.
+   * @param inputDataLength is the length of the input data buffer in bytes.
+   * @param outputDataBuf is the output buffer that contains the decrypted data.
    * @param outputDataStart is the start of the output data buffer.
    * @return length of the decrypted data.
    */
@@ -336,11 +319,11 @@ public interface KMSEProvider extends KMUpgradable {
    * @param inputDataBuf is the buffer of the input data.
    * @param inputDataStart is the start of the input data buffer.
    * @param inputDataLength is the length of the inpur data buffer in bytes.
-   * @param outputDataBuf is the buffer of the decrypted data buffer.
+   * @param outputDataBuf is the output buffer that contains the signature.
    * @param outputDataStart is the start of the output data buffer.
    * @return length of the decrypted data.
    */
-  public short ecSign256(
+  short ecSign256(
           byte[] secret,
           short secretStart,
           short secretLength,
@@ -354,7 +337,7 @@ public interface KMSEProvider extends KMUpgradable {
    * This creates a persistent operation for signing, verify, encryption and decryption using HMAC,
    * AES and DES algorithms when keymaster hal's beginOperation function is executed. The
    * KMOperation instance can be reclaimed by the seProvider when KMOperation is finished or
-   * aborted.
+   * aborted. It throws CryptoException if algorithm is not supported.
    *
    * @param purpose is KMType.ENCRYPT or KMType.DECRYPT for AES and DES algorithm. It will be
    *     KMType.SIGN and KMType.VERIFY for HMAC algorithm
@@ -391,7 +374,8 @@ public interface KMSEProvider extends KMUpgradable {
    * This creates a persistent operation for signing, verify, encryption and decryption using RSA
    * and EC algorithms when keymaster hal's beginOperation function is executed. For RSA the public
    * exponent is always 0x0100101. For EC the curve is always p256. The KMOperation instance can be
-   * reclaimed by the seProvider when KMOperation is finished or aborted.
+   * reclaimed by the seProvider when KMOperation is finished or aborted. It throws CryptoException 
+   * if algorithm is not supported.
    *
    * @param purpose is KMType.ENCRYPT or KMType.DECRYPT for RSA. It will be * KMType.SIGN and
    *     KMType.VERIFY for RSA and EC algorithms.
@@ -439,7 +423,12 @@ public interface KMSEProvider extends KMUpgradable {
    * @param len is the length of the buffer.
    * @param totalLen is the total length of cert chain.
    */
-  public void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen);
+  void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen);
+
+  /**
+   * This operation clears the certificate chain from persistent memory.
+   */
+  void clearCertificateChain();
 
   /**
    * The operation reads the certificate chain from persistent memory.

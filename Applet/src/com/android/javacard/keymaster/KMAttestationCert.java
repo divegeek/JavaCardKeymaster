@@ -33,14 +33,6 @@ public interface KMAttestationCert {
   KMAttestationCert verifiedBootState(byte val);
 
   /**
-   * Set authentication key Id from CA Certificate set during provisioning.
-   *
-   * @param obj This is a KMByteBlob containing authentication Key Id.
-   * @return instance of KMAttestationCert
-   */
-  KMAttestationCert authKey(short obj);
-
-  /**
    * Set uniqueId received from CA certificate during provisioning.
    *
    * @param scratchpad Buffer to store intermediate results.
