@@ -519,7 +519,7 @@ int main(int argc, char* argv[])
         usage();
     }
     /* Initialize provision */
-    mProvision.initProvision();
+    mProvision.init();
 
     /* getopt_long stores the option index here. */
     while ((c = getopt_long(argc, argv, ":slha:k:c:p:i:r:b:", longOpts, NULL)) != -1) {
@@ -582,5 +582,7 @@ int main(int argc, char* argv[])
     if(optind < argc) {
         usage();
     }
+    /*Uninitalize */
+    mProvision.uninit();
     return 0;
 }

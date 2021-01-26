@@ -191,9 +191,7 @@ extendedOutput) {
     return ret;
 }
 
-// Class Provision Start
-
-ErrorCode Provision::initProvision() {
+ErrorCode Provision::init() {
 	if(pTransportFactory == nullptr) {
 		pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
 					android::base::GetBoolProperty("ro.kernel.qemu", false)));

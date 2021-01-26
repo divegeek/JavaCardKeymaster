@@ -49,15 +49,45 @@ typedef struct AttestIDParams_ {
 
 class Provision {
 public:
-	ErrorCode initProvision();
+    /**
+     * Initalizes the transport layer.
+     */
+	ErrorCode init();
+    /**
+     * Provision the Attestation key.
+     */
 	ErrorCode provisionAttestationKey(std::vector<uint8_t>& batchKey);
+    /**
+     * Provision the Attestation certificate chain.
+     */
 	ErrorCode provisionAtestationCertificateChain(std::vector<std::vector<uint8_t>>& CertChain);
+    /**
+     * Provision the Attestation certificate paramters.
+     */
 	ErrorCode provisionAttestationCertificateParams(std::vector<uint8_t>& batchCertificate);
+    /**
+     * Provision the Attestation ID.
+     */
 	ErrorCode provisionAttestationID(AttestIDParams& attestParams);
+    /**
+     * Provision the pre-shared secret.
+     */
 	ErrorCode provisionPreSharedSecret(std::vector<uint8_t>& preSharedSecret);
+    /**
+     * Provision the boot parameters.
+     */
 	ErrorCode provisionBootParameters(BootParams& bootParams );
+    /**
+     * Locks the provision. After this no more provision commanands are allowed.
+     */
     ErrorCode lockProvision();
+    /**
+     * Get the provision status.
+     */
     ErrorCode getProvisionStatus(uint64_t&);
+    /**
+     * Uninitialize the transport layer.
+     */
     ErrorCode uninit();
 
 private:
