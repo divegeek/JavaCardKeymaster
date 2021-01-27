@@ -25,8 +25,6 @@ cc_binary {
         "4.1/JavacardKeymaster4Device.cpp",
         "4.1/JavacardSoftKeymasterContext.cpp",
         "4.1/JavacardOperationContext.cpp",
-        "4.1/CommonUtils.cpp",
-        "4.1/CborConverter.cpp",
     ],
     local_include_dirs: [
         "include",
@@ -46,6 +44,7 @@ cc_binary {
         "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
         "libjc_transport",
+        "libjc_common",
         "libcrypto",
     ],
     product_variables: {
@@ -111,12 +110,11 @@ cc_library {
 }
 
 cc_library {
-    name: "libjc_provision",
+    name: "libjc_common",
     vendor_available: true,
     srcs: [
         "4.1/CommonUtils.cpp",
         "4.1/CborConverter.cpp",
-        "4.1/Provision.cpp",
     ],
     local_include_dirs: [
         "include",
@@ -138,7 +136,6 @@ cc_library {
         "libcppbor",
         "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
-        "libjc_transport",
 	    "libcrypto",
     ],
 }
