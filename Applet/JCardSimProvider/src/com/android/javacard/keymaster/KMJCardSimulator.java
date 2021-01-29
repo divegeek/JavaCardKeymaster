@@ -71,7 +71,7 @@ public class KMJCardSimulator implements KMSEProvider {
   public static final short MAX_RND_NUM_SIZE = 64;
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  private static final short CERT_CHAIN_MAX_SIZE = 2050;//First 2 bytes for length.
+  private static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
 
 
   public static boolean jcardSim = false;
@@ -1246,7 +1246,7 @@ public class KMJCardSimulator implements KMSEProvider {
     // Next single byte holds the array header.
     // Next 3 bytes holds the Byte array header with the cert1 length.
     // Next 3 bytes holds the Byte array header with the cert2 length.
-    if (totalLen > CERT_CHAIN_MAX_SIZE) {
+    if (totalLen > (short) (CERT_CHAIN_MAX_SIZE - 2)) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     short persistedLen = Util.getShort(certificateChain, (short) 0);
