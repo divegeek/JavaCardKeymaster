@@ -22,6 +22,8 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
+import javacard.security.AESKey;
+import javacard.security.KeyBuilder;
 
 /**
  * KMRepository class manages persistent and volatile memory usage by the applet. Note the repository
@@ -29,7 +31,7 @@ import javacard.framework.Util;
  */
 public class KMRepository implements KMUpgradable {
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 24;
+  public static final short DATA_INDEX_SIZE = 23;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_MEM_SIZE = 2048;
   public static final short HEAP_SIZE = 10000;
@@ -42,10 +44,9 @@ public class KMRepository implements KMUpgradable {
   private static final short OPERATION_HANDLE_ENTRY_SIZE = OPERATION_HANDLE_SIZE + OPERATION_HANDLE_STATUS_SIZE;
 
   // Data table offsets
-  public static final byte MASTER_KEY = 8;
-  public static final byte SHARED_KEY = 9;
-  public static final byte COMPUTED_HMAC_KEY = 10;
-  public static final byte HMAC_NONCE = 11;
+  public static final byte SHARED_KEY = 8;
+  public static final byte COMPUTED_HMAC_KEY = 9;
+  public static final byte HMAC_NONCE = 10;
   public static final byte ATT_ID_BRAND = 0;
   public static final byte ATT_ID_DEVICE = 1;
   public static final byte ATT_ID_PRODUCT = 2;
@@ -54,18 +55,18 @@ public class KMRepository implements KMUpgradable {
   public static final byte ATT_ID_MEID = 5;
   public static final byte ATT_ID_MANUFACTURER = 6;
   public static final byte ATT_ID_MODEL = 7;
-  public static final byte ATT_EC_KEY = 12;
-  public static final byte CERT_ISSUER = 13;
-  public static final byte CERT_EXPIRY_TIME = 14;
-  public static final byte BOOT_OS_VERSION = 15;
-  public static final byte BOOT_OS_PATCH = 16;
-  public static final byte VENDOR_PATCH_LEVEL = 17;
-  public static final byte BOOT_PATCH_LEVEL = 18;
-  public static final byte BOOT_VERIFIED_BOOT_KEY = 19;
-  public static final byte BOOT_VERIFIED_BOOT_HASH = 20;
-  public static final byte BOOT_VERIFIED_BOOT_STATE = 21;
-  public static final byte BOOT_DEVICE_LOCKED_STATUS = 22;
-  public static final byte BOOT_DEVICE_LOCKED_TIME = 23;
+  public static final byte ATT_EC_KEY = 11;
+  public static final byte CERT_ISSUER = 12;
+  public static final byte CERT_EXPIRY_TIME = 13;
+  public static final byte BOOT_OS_VERSION = 14;
+  public static final byte BOOT_OS_PATCH = 15;
+  public static final byte VENDOR_PATCH_LEVEL = 16;
+  public static final byte BOOT_PATCH_LEVEL = 17;
+  public static final byte BOOT_VERIFIED_BOOT_KEY = 18;
+  public static final byte BOOT_VERIFIED_BOOT_HASH = 19;
+  public static final byte BOOT_VERIFIED_BOOT_STATE = 20;
+  public static final byte BOOT_DEVICE_LOCKED_STATUS = 21;
+  public static final byte BOOT_DEVICE_LOCKED_TIME = 22;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -90,6 +91,7 @@ public class KMRepository implements KMUpgradable {
   private byte[] dataTable;
   private short dataIndex;
   private short reclaimIndex;
+  private AESKey masterKey;
 
   // Singleton instance
   private static KMRepository repository;
@@ -249,9 +251,19 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-  public void initMasterKey(byte[] key, short start, short len) {
-    if(len != MASTER_KEY_SIZE) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    writeDataEntry(MASTER_KEY,key, start, len);
+  /**
+   * Masterkey is stored as a Javacard Key object instead of byte array.
+   * When master key is stored as a Key object, the Javacard OS internally
+   * provides appropriate security measures for the key to protect the key.
+   * The master key is maintained by Repository class so the Key object is
+   * created in this class itself rather than creating it in the SEProvider.
+   */
+  public void initMasterKey(byte[] buf, short off, short len) {
+    if (len != MASTER_KEY_SIZE)
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    masterKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
+            (short) (MASTER_KEY_SIZE * 8), false);
+    masterKey.setKey(buf, off);
   }
 
   public void initHmacSharedSecretKey(byte[] key, short start, short len) {
@@ -296,8 +308,10 @@ public class KMRepository implements KMUpgradable {
     // If write through caching is implemented then this method will restore the data into cache
   }
 
-  public short getMasterKeySecret() {
-    return readData(MASTER_KEY);
+  public void getMasterKeySecret(byte[] buffer, short offset, short length) {
+    if (length != MASTER_KEY_SIZE)
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    masterKey.getKey(buffer, offset);
   }
 
   // This function uses memory from the back of the heap(transient memory). Call
@@ -629,12 +643,14 @@ public class KMRepository implements KMUpgradable {
   public void onSave(Element ele) {
     ele.write(dataIndex);
     ele.write(dataTable);
+    ele.write(masterKey);
   }
 
   @Override
   public void onRestore(Element ele) {
     dataIndex = ele.readShort();
     dataTable = (byte[]) ele.readObject();
+    masterKey = (AESKey) ele.readObject();
   }
 
   @Override
@@ -646,6 +662,6 @@ public class KMRepository implements KMUpgradable {
   @Override
   public short getBackupObjectCount() {
     // dataTable
-    return (short) 1;
+    return (short) 2;
   }
 }
