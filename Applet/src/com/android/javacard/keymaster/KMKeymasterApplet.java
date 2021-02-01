@@ -1530,11 +1530,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
 
     //master key.
-    tmpVariables[2] = KMByteBlob.instance(KMRepository.MASTER_KEY_SIZE);
-    repository.getMasterKeySecret(
-            KMByteBlob.cast(tmpVariables[2]).getBuffer(),
-            KMByteBlob.cast(tmpVariables[2]).getStartOff(),
-            KMByteBlob.cast(tmpVariables[2]).length());
+    tmpVariables[2] = repository.getMasterKeySecret();
     cert.makeUniqueId(
             scratchPad,
             (short) 0,
@@ -3907,11 +3903,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //    Input data - Encrypted output (Generated in step 2).
     // 4. HMAC Sign generates an output of 32 bytes length.
     //    Consume only first 16 bytes as derived key.
-    tmpVariables[4] = KMByteBlob.instance(KMRepository.MASTER_KEY_SIZE);
-    repository.getMasterKeySecret(
-            KMByteBlob.cast(tmpVariables[4]).getBuffer(),
-            KMByteBlob.cast(tmpVariables[4]).getStartOff(),
-            KMByteBlob.cast(tmpVariables[4]).length());
+    tmpVariables[4] = repository.getMasterKeySecret();
     tmpVariables[5] = repository.alloc(AES_GCM_AUTH_TAG_LENGTH);
     tmpVariables[3] =
             seProvider.aesGCMEncrypt(
