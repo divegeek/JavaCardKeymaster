@@ -162,7 +162,7 @@ public class KMInteger extends KMType {
     KMInteger.cast(num1).getValue(repository.getHeap(),(short)(num1Buf+(short)(8-len)),len);
     len = KMInteger.cast(num2).length();
     KMInteger.cast(num2).getValue(repository.getHeap(),(short)(num2Buf+(short)(8-len)),len);
-    return Util.arrayCompare(
+    return KMUtils.unsignedByteArrayCompare(
       repository.getHeap(), num1Buf,
       repository.getHeap(), num2Buf,
       (short)8);
