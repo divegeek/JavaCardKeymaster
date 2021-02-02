@@ -2,7 +2,7 @@
 This directory contains provisioning tool which helps in provisioning 
 the secure element by using the APIs exposed by Provision library.
 This tool takes the input parameters from json file. A sample
-json file is located in this directory with name sample_json.txt for
+json file is located in this directory with name [sample_json.txt](https://github.com/BKSSMVenkateswarlu/JavaCardKeymaster/blob/master/provisioning_tool/sample_json.txt) for
 your reference.
 
 #### Build
