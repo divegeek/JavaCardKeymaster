@@ -6,4 +6,6 @@ json file is located in this directory with name sample_json.txt for
 your reference.
 
 #### Build
-This tool has dependency on [libjc_common](https://github.com/BKSSMVenkateswarlu/JavaCardKeymaster/blob/master/HAL/keymaster/Android.bp)
+This tool can be built along with aosp build. It has dependency on 
+[libjc_common](https://github.com/BKSSMVenkateswarlu/JavaCardKeymaster/blob/master/HAL/keymaster/Android.bp) and
+libjc_provision.
