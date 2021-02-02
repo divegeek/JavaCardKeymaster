@@ -14,23 +14,36 @@ public class KMUtils {
           0, 0, 0, 0, 0x05, 0x26, 0x5C, 0x00 }; // 86400000 msec
   public static final byte[] oneMonthMsec = {
           0, 0, 0, 0, (byte) 0x9C,(byte) 0xBE, (byte) 0xBD, 0x50}; // 2629746000 msec
-  public static final byte[] oneYearMsec = {
-          0, 0, 0, 0x07, 0x58, (byte) 0xF0, (byte) 0xDF, (byte) 0xC0 }; // 31556952000 msec
-  // Leap year + 3 yrs
+  public static final byte[] leapYearMsec =  {
+          0, 0, 0, 0x07, (byte) 0x5C, (byte) 0xD7, (byte) 0x88, 0x00}; //31622400000;
+  public static final byte[] yearMsec = {
+          0, 0, 0, 0x07, 0x57, (byte) 0xB1, 0x2C, 0x00}; //31536000000
+  //Leap year(366) + 3 * 365
   public static final byte[] fourYrsMsec = {
-          0, 0, 0, 0x1D, 0x63, (byte) 0xC3, 0x7F, 0x00 }; // 126227808000 msec
+          0, 0, 0, 0x1D, 0x63, (byte) 0xEB, 0x0C, 0x00};//126230400000
   public static final byte[] firstJan2020 = {
-    0, 0, 0x01, 0x6F, 0x5E, 0x66, (byte)0xE8, 0x00 }; // 1577836800000 msec
+          0, 0, 0x01, 0x6F, 0x5E, 0x66, (byte)0xE8, 0x00 }; // 1577836800000 msec
   public static final byte[] firstJan2051 = {
           0, 0, 0x02, 0x53, 0x26, (byte) 0x0E, (byte) 0x1C, 0x00 }; // 2556144000000
                                                                     // msec
+  public static final byte[] febMonthLeapMSec = {
+          0, 0, 0, 0, (byte) 0x95, 0x58, 0x6C, 0x00  }; //2505600000
+  public static final byte[] febMonthMsec = {
+          0, 0, 0, 0, (byte) 0x90, 0x32, 0x10, 0x00 }; //2419200000
+  public static final byte[] ThirtyOneDaysMonthMsec = {
+          0, 0, 0, 0, (byte) 0x9F, (byte) 0xA5, 0x24, 0x00 };//2678400000
+  public static final byte[] ThirtDaysMonthMsec = {
+          0, 0, 0, 0, (byte) 0x9A, 0x7E, (byte) 0xC8, 0x00 };//2592000000
+  public static final short year2051 = 2051;
+  public static final short year2020 = 2020;
 
   // --------------------------------------
   public static short convertToDate(short time, byte[] scratchPad,
           boolean utcFlag) {
+
     short yrsCount = 0;
     short monthCount = 1;
-    short dayCount = 0;
+    short dayCount = 1;
     short hhCount = 0;
     short mmCount = 0;
     short ssCount = 0;
@@ -42,17 +55,17 @@ public class KMUtils {
             (short) (8 - KMInteger.cast(time).length()), KMInteger.cast(time)
                     .length());
     // If the time is less then 1 Jan 2020 then it is an error
-    if (Util.arrayCompare(scratchPad, (short) 0, firstJan2020, (short) 0,
+    if (unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2020, (short) 0,
             (short) 8) < 0) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     if (utcFlag
-            && Util.arrayCompare(scratchPad, (short) 0, firstJan2051,
+            && unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2051,
                     (short) 0, (short) 8) >= 0) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
 
-    if (Util.arrayCompare(scratchPad, (short) 0, firstJan2051, (short) 0,
+    if (unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2051, (short) 0,
             (short) 8) < 0) {
       Util.arrayCopyNonAtomic(firstJan2020, (short) 0, scratchPad, (short) 8,
               (short) 8);
@@ -68,7 +81,7 @@ public class KMUtils {
               (short) 8);
     }
     // divide the given time with four yrs msec count
-    if (Util.arrayCompare(scratchPad, (short) 0, fourYrsMsec, (short) 0,
+    if (unsignedByteArrayCompare(scratchPad, (short) 0, fourYrsMsec, (short) 0,
             (short) 8) >= 0) {
       Util.arrayCopyNonAtomic(fourYrsMsec, (short) 0, scratchPad, (short) 8,
               (short) 8);
@@ -81,44 +94,97 @@ public class KMUtils {
       Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
               (short) 8);
     }
-    // divide the given time with one yr msec count
-    if (Util.arrayCompare(scratchPad, (short) 0, oneYearMsec, (short) 0,
-            (short) 8) >= 0) {
-      Util.arrayCopyNonAtomic(oneYearMsec, (short) 0, scratchPad, (short) 8,
-              (short) 8);
-      yrsCount += divide(scratchPad, (short) 0, (short) 8, (short) 16);
-      Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
-              (short) 8);
+
+    //Get the leap year index starting from the (base Year + yrsCount) Year.
+    short leapYrIdx = getLeapYrIndex(from2020, yrsCount);
+
+    // if leap year index is 0, then the number of days for the 1st year will be 366 days.
+    // if leap year index is not 0, then the number of days for the 1st year will be 365 days.
+    if (((leapYrIdx == 0) &&
+         (unsignedByteArrayCompare(scratchPad, (short) 0, leapYearMsec, (short) 0,(short) 8) >= 0)) || 
+         ((leapYrIdx != 0) &&
+         (unsignedByteArrayCompare(scratchPad, (short) 0, yearMsec, (short) 0,(short) 8) >= 0))) {
+      for (short i = 0; i < 4; i++) {
+        yrsCount++;
+        if (i == leapYrIdx) {
+          Util.arrayCopyNonAtomic(leapYearMsec, (short) 0, scratchPad,
+                  (short) 8, (short) 8);
+        } else {
+          Util.arrayCopyNonAtomic(yearMsec, (short) 0, scratchPad, (short) 8,
+                  (short) 8);
+        }
+        subtract(scratchPad, (short) 0, (short) 8, (short) 16);
+        Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
+                (short) 8);
+        if (((short) (i + 1) == leapYrIdx)) {
+          if (unsignedByteArrayCompare(scratchPad, (short) 0, leapYearMsec,
+                  (short) 0, (short) 8) < 0) {
+            break;
+          }
+        } else {
+          if (unsignedByteArrayCompare(scratchPad, (short) 0, yearMsec,
+                  (short) 0, (short) 8) < 0) {
+            break;
+          }
+        }
+      }
     }
+
     // total yrs from 1970
     if (from2020)
-      yrsCount = (short) (2020 + yrsCount);
+      yrsCount = (short) (year2020 + yrsCount);
     else
-      yrsCount = (short) (2051 + yrsCount);
+      yrsCount = (short) (year2051 + yrsCount);
 
     // divide the given time with one month msec count
-    if (Util.arrayCompare(scratchPad, (short) 0, oneMonthMsec, (short) 0,
+    if (unsignedByteArrayCompare(scratchPad, (short) 0, oneMonthMsec, (short) 0,
             (short) 8) >= 0) {
-      Util.arrayCopyNonAtomic(oneMonthMsec, (short) 0, scratchPad, (short) 8,
-              (short) 8);
-      monthCount = divide(scratchPad, (short) 0, (short) 8, (short) 16);
-      monthCount++;
-      Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
-              (short) 8);
+      for (short i = 0; i < 12; i++) {
+        if (i == 1) {
+          // Feb month
+          if (isLeapYear(yrsCount)) {
+            // Leap year 29 days
+            Util.arrayCopyNonAtomic(febMonthLeapMSec, (short) 0, scratchPad,
+                    (short) 8, (short) 8);
+          } else {
+            // 28 days
+            Util.arrayCopyNonAtomic(febMonthMsec, (short) 0, scratchPad,
+                    (short) 8, (short) 8);
+          }
+        } else if (((i <= 6) && ((i % 2 == 0))) || ((i > 6) && ((i % 2 == 1)))) {
+          Util.arrayCopyNonAtomic(ThirtyOneDaysMonthMsec, (short) 0,
+                  scratchPad, (short) 8, (short) 8);
+        } else {
+          // 30 Days
+          Util.arrayCopyNonAtomic(ThirtDaysMonthMsec, (short) 0, scratchPad,
+                  (short) 8, (short) 8);
+        }
+
+        if (unsignedByteArrayCompare(scratchPad, (short) 0, scratchPad, (short) 8,
+                (short) 8) >= 0) {
+          subtract(scratchPad, (short) 0, (short) 8, (short) 16);
+          Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
+                  (short) 8);
+        } else {
+          break;
+        }
+        monthCount++;
+      }
     }
 
     // divide the given time with one day msec count
-    if (Util.arrayCompare(scratchPad, (short) 0, oneDayMsec, (short) 0,
+    if (unsignedByteArrayCompare(scratchPad, (short) 0, oneDayMsec, (short) 0,
             (short) 8) >= 0) {
       Util.arrayCopyNonAtomic(oneDayMsec, (short) 0, scratchPad, (short) 8,
               (short) 8);
       dayCount = divide(scratchPad, (short) 0, (short) 8, (short) 16);
+      dayCount++;
       Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
               (short) 8);
     }
 
     // divide the given time with one hour msec count
-    if (Util.arrayCompare(scratchPad, (short) 0, oneHourMsec, (short) 0,
+    if (unsignedByteArrayCompare(scratchPad, (short) 0, oneHourMsec, (short) 0,
             (short) 8) >= 0) {
       Util.arrayCopyNonAtomic(oneHourMsec, (short) 0, scratchPad, (short) 8,
               (short) 8);
@@ -128,7 +194,7 @@ public class KMUtils {
     }
 
     // divide the given time with one minute msec count
-    if (Util.arrayCompare(scratchPad, (short) 0, oneMinMsec, (short) 0,
+    if (unsignedByteArrayCompare(scratchPad, (short) 0, oneMinMsec, (short) 0,
             (short) 8) >= 0) {
       Util.arrayCopyNonAtomic(oneMinMsec, (short) 0, scratchPad, (short) 8,
               (short) 8);
@@ -138,7 +204,7 @@ public class KMUtils {
     }
 
     // divide the given time with one second msec count
-    if (Util.arrayCompare(scratchPad, (short) 0, oneSecMsec, (short) 0,
+    if (unsignedByteArrayCompare(scratchPad, (short) 0, oneSecMsec, (short) 0,
             (short) 8) >= 0) {
       Util.arrayCopyNonAtomic(oneSecMsec, (short) 0, scratchPad, (short) 8,
               (short) 8);
@@ -161,6 +227,25 @@ public class KMUtils {
       return KMByteBlob.instance(scratchPad, (short) 2, (short) (len - 2)); // YY
     else
       return KMByteBlob.instance(scratchPad, (short) 0, len); // YYYY
+  }
+
+  public static byte unsignedByteArrayCompare(byte[] a1, short offset1, byte[] a2, short offset2, short length) {
+    byte count = (byte) 0;
+    short val1 = (short)0;
+    short val2 = (short)0;
+
+    for (; count < length; count++) {
+        val1 = (short) (a1[(short) (count + offset1)] & 0x00FF);
+        val2 = (short) (a2[(short) (count + offset2)] & 0x00FF);
+
+        if (val1 < val2) {
+            return -1;
+        }
+        if (val1 > val2) {
+            return 1;
+        }
+    }
+    return 0;
   }
 
   public static short numberToString(short number, byte[] scratchPad,
@@ -211,7 +296,7 @@ public class KMUtils {
   }
 
   public static byte compare(byte[] buf, short lhs, short rhs) {
-    return Util.arrayCompare(buf, lhs, buf, rhs, (short) 8);
+    return unsignedByteArrayCompare(buf, lhs, buf, rhs, (short) 8);
   }
 
   public static void shiftLeft(byte[] buf, short start) {
@@ -317,6 +402,27 @@ public class KMUtils {
     Util.arrayCopyNonAtomic(oneMonthMsec, (short) 0, scratchPad, (short) (offset + 8),
             (short) 8);
     return divide(scratchPad, (short) 0, (short) 8, (short) 16);
+  }
+
+  public static boolean isLeapYear(short year) {
+    if ((short)(year%4) == (short) 0) {
+      if (((short)(year % 100) == (short) 0) &&
+              ((short) (year % 400)) != (short) 0) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  public static short getLeapYrIndex(boolean from2020, short yrsCount) {
+    short newBaseYr = (short) (from2020 ? (year2020 + yrsCount) : (year2051 + yrsCount));
+    for(short i = 0; i < 4; i++) {
+      if(isLeapYear((short)(newBaseYr + i))) {
+        return i;
+      }
+    }
+    return -1;
   }
 
 }
