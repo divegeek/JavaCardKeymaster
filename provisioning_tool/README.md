@@ -11,6 +11,7 @@ This tool can be built along with aosp build. It has dependency on
 libjc_provision.
 
 #### Usage
+<pre>
 Usage: provision_tool *options*\
 Valid options are:\
 -h, --help                        show the help message and exit.\
@@ -23,3 +24,4 @@ Valid options are:\
 -b, --set_boot_params jsonFile    Provision boot parameters.\
 -s, --provision_stautus           Prints the current provision status.\
 -l, --lock_provision              Locks the provision commands.
+</pre>
