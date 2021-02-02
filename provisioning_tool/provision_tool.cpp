@@ -177,6 +177,7 @@ bool getBootParameterBlobValue(Json::Value& bootParamsObj, const char* key, std:
 bool setBootParameters(const char* filename) {
     Json::Value bootParamsObj;
     bool ret = false;
+    ErrorCode err = ErrorCode::OK;
     keymaster::V4_1::javacard::BootParams bootParams;
 
     if(!parseJsonFile(filename))
@@ -219,10 +220,12 @@ bool setBootParameters(const char* filename) {
         }
 
     } else {
+        printf("\n Fail: Improper value found for set_boot_params key inside the json file\n");
         return ret;
     }
 
-    if (ErrorCode::OK != mProvision.provisionBootParameters(bootParams)) {
+    if (ErrorCode::OK != (err = mProvision.provisionBootParameters(bootParams))) {
+        printf("\n set boot parameters failed with err:%d \n", (int32_t)err);
         return ret;
     }
 
@@ -233,6 +236,7 @@ bool setBootParameters(const char* filename) {
 bool provisionAttestationIds(const char *filename) {
     Json::Value attestIds;
     bool ret = false;
+    ErrorCode err = ErrorCode::OK;
     keymaster::V4_1::javacard::AttestIDParams params;
 
     if(!parseJsonFile(filename))
@@ -248,6 +252,7 @@ bool provisionAttestationIds(const char *filename) {
                 continue;
             }
             if (!value.isString()) {
+                printf("\n Fail: Value for each attest ids key should be a string in the json file \n");
                 return ret;
             }
 
@@ -273,10 +278,12 @@ bool provisionAttestationIds(const char *filename) {
             }
         }
 
-        if (ErrorCode::OK != mProvision.provisionAttestationID(params)) {
+        if (ErrorCode::OK != (err = mProvision.provisionAttestationID(params))) {
+            printf("\n Provision attestationID parameters failed with err:%d \n", (int32_t)err);
             return ret;
         }
     } else {
+        printf("\n Fail: Improper value found for attest_ids key inside the json file \n");
         return ret;
     }
     printf("\n provisioned attestation ids successfully \n");
@@ -330,6 +337,7 @@ bool getProvisionStatus() {
 bool provisionSharedSecret(const char* filename) {
     Json::Value sharedSecret;
     bool ret = false;
+    ErrorCode err = ErrorCode::OK;
 
     if(!parseJsonFile(filename))
         return ret;
@@ -338,14 +346,17 @@ bool provisionSharedSecret(const char* filename) {
     if (!sharedSecret.isNull()) {
 
         if (!sharedSecret.isString()) {
+            printf("\n Fail: Value for shared secret key should be string inside the json file\n");
             return ret;
         }
         std::string secret = hex2str(sharedSecret.asString());
         std::vector<uint8_t> data(secret.begin(), secret.end());
-        if(ErrorCode::OK != mProvision.provisionPreSharedSecret(data)) {
+        if(ErrorCode::OK != (err = mProvision.provisionPreSharedSecret(data))) {
+            printf("\n Provision pre-shared secret failed with err:%d \n", (int32_t)err);
             return ret;
         }
     } else {
+        printf("\n Fail: Improper value for shared_secret key inside the json file\n");
         return ret;
     }
     printf("\n Provisioned shared secret successfully \n");
@@ -355,6 +366,7 @@ bool provisionSharedSecret(const char* filename) {
 static bool provisionAttestationKey(const char* filename) {
     Json::Value keyFile;
     bool ret = false;
+    ErrorCode err = ErrorCode::OK;
 
     if(!parseJsonFile(filename))
         return ret;
@@ -368,10 +380,12 @@ static bool provisionAttestationKey(const char* filename) {
             printf("\n Failed to read the Root ec key\n");
             return ret;
         }
-        if(ErrorCode::OK != mProvision.provisionAttestationKey(data)) {
+        if(ErrorCode::OK != (err = mProvision.provisionAttestationKey(data))) {
+            printf("\n Provision attestation key failed with error: %d\n", (int32_t)err);
             return ret;
         }
     } else {
+        printf("\n Improper value for attest_key in json file \n");
         return ret;
     }
     printf("\n Provisioned attestation key successfully\n");
@@ -381,6 +395,7 @@ static bool provisionAttestationKey(const char* filename) {
 bool provisionAttestationCertificateChain(const char* filename) {
     Json::Value certChainFile;
     bool ret = false;
+    ErrorCode err = ErrorCode::OK;
 
     if(!parseJsonFile(filename))
         return ret;
@@ -400,16 +415,20 @@ bool provisionAttestationCertificateChain(const char* filename) {
                     }
                     certData.push_back(std::move(tmp));
                 } else {
+                    printf("\n Fail: Only proper certificate paths as a string is allowed inside the json file. \n");
                     return ret;
                 }
             }
         } else {
+            printf("\n Fail: cert chain value should be an array inside the json file. \n");
             return ret;
         }
-        if (ErrorCode::OK != mProvision.provisionAtestationCertificateChain(certData)) {
+        if (ErrorCode::OK != (err = mProvision.provisionAtestationCertificateChain(certData))) {
+            printf("\n Provision certificate chain failed with error: %d\n", (int32_t)err);
             return ret;
         }
     } else {
+        printf("\n Fail: Improper value found for attest_cert_chain key inside json file \n");
         return ret;
     }
     printf("\n Provisioned attestation certificate chain successfully\n");
@@ -419,6 +438,7 @@ bool provisionAttestationCertificateChain(const char* filename) {
 bool provisionAttestationCertificateParams(const char* filename) {
     Json::Value certChainFile;
     bool ret = false;
+    ErrorCode err = ErrorCode::OK;
 
     if(!parseJsonFile(filename))
         return ret;
@@ -436,13 +456,16 @@ bool provisionAttestationCertificateParams(const char* filename) {
                 printf("\n Failed to read the Root certificate\n");
                 return ret;
             }
-            if (ErrorCode::OK != mProvision.provisionAttestationCertificateParams(tmp)) {
+            if (ErrorCode::OK != (err = mProvision.provisionAttestationCertificateParams(tmp))) {
+                printf("\n Provision certificate params failed with error: %d\n", (int32_t)err);
                 return ret;
             }
         } else {
+            printf("\n Fail: cert chain value should be an array inside the json file. \n");
             return ret;
         }
     } else {
+        printf("\n Fail: Improper value found for attest_cert_chain key inside json file \n");
         return ret;
     }
     printf("\n Provisioned attestation certificate parameters successfully\n");
@@ -452,27 +475,21 @@ bool provisionAttestationCertificateParams(const char* filename) {
 bool provision(const char* filename) {
 
     if(!provisionAttestationKey(filename)) {
-        printf("\n Failed to provision attestation Key\n");
         return false;
     }
     if(!provisionAttestationCertificateChain(filename)) {
-        printf("\n Failed to provision certificate chain\n");
         return false;
     }
     if(!provisionAttestationCertificateParams(filename)) {
-        printf("\n Failed to provision certificate paramters\n");
         return false;
     }
     if(!provisionSharedSecret(filename)) {
-        printf("\n Failed to provision shared secret\n");
         return false;
     }
     if(!provisionAttestationIds(filename)) {
-        printf("\n Failed to provision attestation ids\n");
         return false;
     }
     if(!setBootParameters(filename)) {
-        printf("\n Failed to set boot parameters\n");
         return false;
     }
     return true;
@@ -526,7 +543,8 @@ int main(int argc, char* argv[])
         switch(c) {
             case 'a':
                 //all
-                provision(optarg);
+                if(!provision(optarg))
+                    printf("\n Failed to provision the device \n");
                 break;
             case 'k':
                 //attest key
