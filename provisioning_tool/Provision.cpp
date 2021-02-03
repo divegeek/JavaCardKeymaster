@@ -28,10 +28,8 @@
 #include <Transport.h>
 #include <CommonUtils.h>
 #include <Provision.h>
+ #include <android-base/properties.h>
 
-#define ROOT_EC_KEY   "/data/data/ec_key.der"
-#define INTERMEDIATE_EC_CERT "/data/data/ec_cert.der"
-#define ROOT_EC_CERT  "/data/data/ec_root_cert.der"
 #define INS_BEGIN_KM_CMD 0x00
 #define APDU_CLS 0x80
 #define APDU_P1  0x40
@@ -42,7 +40,6 @@ namespace keymaster {
 namespace V4_1 {
 namespace javacard {
 
-constexpr uint8_t kFakeKeyAgreementKey[32] = {};
 enum class Instruction {
     // Provisioning commands
     INS_PROVISION_ATTESTATION_KEY_CMD = INS_BEGIN_KM_CMD+1,
@@ -67,32 +64,15 @@ enum ProvisionStatus {
 };
 
 // Static function declarations.
-static bool readDataFromFile(const char *filename, std::vector<uint8_t>& data);
 static ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut, bool
 extendedOutput=false);
 static ErrorCode sendProvisionData(std::unique_ptr<se_transport::TransportFactory>& transport, Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response, bool
 extendedOutput = false);
-static ErrorCode provisionAttestationKey(std::unique_ptr<se_transport::TransportFactory>& transport);
-static ErrorCode provisionAttestationCertificateChain(std::unique_ptr<se_transport::TransportFactory>& transport);
-static ErrorCode provisionAttestationCertificateParams(std::unique_ptr<se_transport::TransportFactory>& transport);
-static ErrorCode provisionAttestationIDs(std::unique_ptr<se_transport::TransportFactory>& transport);
-static ErrorCode provisionSharedSecret(std::unique_ptr<se_transport::TransportFactory>& transport);
-static ErrorCode getProvisionStatus(std::unique_ptr<se_transport::TransportFactory>& transport, std::vector<uint8_t>&
-response);
-static ErrorCode lockProvision(std::unique_ptr<se_transport::TransportFactory>& transport);
-static ErrorCode setBootParameters(std::unique_ptr<se_transport::TransportFactory>& transport);
 static uint16_t getStatus(std::vector<uint8_t>& inputData);
-static bool isSEProvisioned(uint64_t status);
 
-static inline X509* parseDerCertificate(const char* filename) {
+static inline X509* parseDerCertificate(std::vector<uint8_t>& certData) {
     X509 *x509 = NULL;
-    std::vector<uint8_t> certData;
 
-    /* Read the Root certificate */
-    if(!readDataFromFile(filename, certData)) {
-        LOG(ERROR) << " Failed to read the Root certificate";
-        return NULL;
-    }
     /* Create BIO instance from certificate data */
     BIO *bio = BIO_new_mem_buf(certData.data(), certData.size());
     if(bio == NULL) {
@@ -143,30 +123,6 @@ static inline void getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate) {
 static uint16_t getStatus(std::vector<uint8_t>& inputData) {
     //Last two bytes are the status SW0SW1
     return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
-}
-
-static bool readDataFromFile(const char *filename, std::vector<uint8_t>& data) {
-    FILE *fp;
-    bool ret = true;
-    fp = fopen(filename, "rb");
-    if(fp == NULL) {
-        LOG(ERROR) << "Failed to open file: " << filename;
-        return false;
-    }
-    fseek(fp, 0L, SEEK_END);
-    long int filesize = ftell(fp);
-    rewind(fp);
-    std::unique_ptr<uint8_t[]> buf(new uint8_t[filesize]);
-    if( 0 == fread(buf.get(), filesize, 1, fp)) {
-        LOG(ERROR) << "No Content in the file: " << filename;
-        ret = false;
-    }
-    if(true == ret) {
-        //data.insert(data.begin(), buf.get(), buf.get() + filesize);
-        data.insert(data.end(), buf.get(), buf.get() + filesize);
-    }
-    fclose(fp);
-    return ret;
 }
 
 static ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut, bool
@@ -235,77 +191,72 @@ extendedOutput) {
     return ret;
 }
 
-static ErrorCode provisionAttestationKey(std::unique_ptr<se_transport::TransportFactory>& transport) {
+ErrorCode Provision::init() {
+	if(pTransportFactory == nullptr) {
+		pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
+					android::base::GetBoolProperty("ro.kernel.qemu", false)));
+		if(!pTransportFactory->openConnection())
+            return ErrorCode::UNKNOWN_ERROR;
+	}
+	return ErrorCode::OK;
+}
+
+ErrorCode Provision::provisionAttestationKey(std::vector<uint8_t>& batchKey) {
     ErrorCode errorCode = ErrorCode::OK;
+    std::vector<uint8_t> privKey;
+    std::vector<uint8_t> pubKey;
+    EcCurve curve;
     CborConverter cborConverter;
     cppbor::Array array;
     cppbor::Array subArray;
-    std::vector<uint8_t> data;
-    std::vector<uint8_t> privKey;
-    std::vector<uint8_t> pubKey;
-    Instruction ins = Instruction::INS_PROVISION_ATTESTATION_KEY_CMD;
-    EcCurve curve;
     std::vector<uint8_t> response;
+    Instruction ins = Instruction::INS_PROVISION_ATTESTATION_KEY_CMD;
 
     AuthorizationSet authSetKeyParams(AuthorizationSetBuilder()
             .Authorization(TAG_ALGORITHM, KM_ALGORITHM_EC)
             .Authorization(TAG_DIGEST, KM_DIGEST_SHA_2_256)
             .Authorization(TAG_EC_CURVE, KM_EC_CURVE_P_256)
             .Authorization(TAG_PURPOSE, static_cast<keymaster_purpose_t>(0x7F))); /* The value 0x7F is not present in types.hal */
-    // Read the ECKey from the file.         
     hidl_vec<KeyParameter> keyParams = kmParamSet2Hidl(authSetKeyParams);
-
-    if(!readDataFromFile(ROOT_EC_KEY, data)) {
-        LOG(ERROR) << " Failed to read the Root rsa key";
-        return ErrorCode::UNKNOWN_ERROR;
-    }
-    if(ErrorCode::OK != (errorCode = ecRawKeyFromPKCS8(data, privKey, pubKey, curve))) {
+    if(ErrorCode::OK != (errorCode = ecRawKeyFromPKCS8(batchKey, privKey, pubKey, curve))) {
         return errorCode;
     }
     subArray.add(privKey);
     subArray.add(pubKey);
     std::vector<uint8_t> encodedArray = subArray.encode();
     cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
-
     //Encode data.
     cborConverter.addKeyparameters(array, keyParams);
     array.add(static_cast<uint32_t>(KeyFormat::RAW));
     array.add(bstr);
 
     std::vector<uint8_t> cborData = array.encode();
-
-    if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
         return errorCode;
     }
     return errorCode;
 }
 
-static ErrorCode provisionAttestationCertificateChain(std::unique_ptr<se_transport::TransportFactory>& transport) {
+ErrorCode Provision::provisionAtestationCertificateChain(std::vector<std::vector<uint8_t>>& certChain) {
     ErrorCode errorCode = ErrorCode::OK;
     cppbor::Array array;
     Instruction ins = Instruction::INS_PROVISION_CERT_CHAIN_CMD;
     std::vector<uint8_t> response;
 
     std::vector<uint8_t> certData;
-    /* Read the Root certificate */
-    if(!readDataFromFile(INTERMEDIATE_EC_CERT, certData)) {
-        LOG(ERROR) << " Failed to read the Root certificate";
-        return (ErrorCode::UNKNOWN_ERROR);
+    for (auto data : certChain) {
+        certData.insert(certData.end(), data.begin(), data.end());
     }
-    if(!readDataFromFile(ROOT_EC_CERT, certData)) {
-        LOG(ERROR) << " Failed to read the Root certificate";
-        return (ErrorCode::UNKNOWN_ERROR);
-    }
-    cppbor::Bstr certChain(certData.begin(), certData.end());
-    std::vector<uint8_t> cborData = certChain.encode();
+    cppbor::Bstr bstrCertChain(certData.begin(), certData.end());
+    std::vector<uint8_t> cborData = bstrCertChain.encode();
 
-    if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
         return errorCode;
     }
     return errorCode;
 }
 
-static ErrorCode provisionAttestationCertificateParams(std::unique_ptr<se_transport::TransportFactory>& transport) {
+ErrorCode Provision::provisionAttestationCertificateParams(std::vector<uint8_t>& batchCertificate) {
     ErrorCode errorCode = ErrorCode::OK;
     cppbor::Array array;
     Instruction ins = Instruction::INS_PROVISION_CERT_PARAMS_CMD;
@@ -316,7 +267,7 @@ static ErrorCode provisionAttestationCertificateParams(std::unique_ptr<se_transp
 
     /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
     /* Get X509 certificate instance for the root certificate.*/
-    if(NULL == (x509 = parseDerCertificate(INTERMEDIATE_EC_CERT))) {
+    if(NULL == (x509 = parseDerCertificate(batchCertificate))) {
         return errorCode;
     }
 
@@ -332,200 +283,130 @@ static ErrorCode provisionAttestationCertificateParams(std::unique_ptr<se_transp
     array.add(notAfter);
     std::vector<uint8_t> cborData = array.encode();
 
-    if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
         return errorCode;
     }
     return errorCode;
 }
 
-
-static ErrorCode provisionAttestationIDs(std::unique_ptr<se_transport::TransportFactory>& transport) {
+ErrorCode Provision::provisionAttestationID(AttestIDParams& attestParams) {
     ErrorCode errorCode = ErrorCode::OK;
     CborConverter cborConverter;
     cppbor::Array array;
     Instruction ins = Instruction::INS_PROVISION_ATTEST_IDS_CMD;
     std::vector<uint8_t> response;
 
-    std::string brand("Google");
-    std::string device("Pixel 3A");
-    std::string product("Pixel");
-    std::string serial("UGYJFDjFeRuBEH");
-    std::string imei("987080543071019");
-    std::string meid("27863510227963");
-    std::string manufacturer("Foxconn");
-    std::string model("HD1121");
-
     AuthorizationSet authSetAttestParams(AuthorizationSetBuilder()
-            .Authorization(TAG_ATTESTATION_ID_BRAND, brand.data(), brand.size())
-            .Authorization(TAG_ATTESTATION_ID_DEVICE, device.data(), device.size())
-            .Authorization(TAG_ATTESTATION_ID_PRODUCT, product.data(), product.size())
-            .Authorization(TAG_ATTESTATION_ID_SERIAL, serial.data(), serial.size())
-            .Authorization(TAG_ATTESTATION_ID_IMEI, imei.data(), imei.size())
-            .Authorization(TAG_ATTESTATION_ID_MEID, meid.data(), meid.size())
-            .Authorization(TAG_ATTESTATION_ID_MANUFACTURER, manufacturer.data(), manufacturer.size())
-            .Authorization(TAG_ATTESTATION_ID_MODEL, model.data(), model.size()));
+            .Authorization(TAG_ATTESTATION_ID_BRAND, attestParams.brand.data(), attestParams.brand.size())
+            .Authorization(TAG_ATTESTATION_ID_DEVICE, attestParams.device.data(), attestParams.device.size())
+            .Authorization(TAG_ATTESTATION_ID_PRODUCT, attestParams.product.data(), attestParams.product.size())
+            .Authorization(TAG_ATTESTATION_ID_SERIAL, attestParams.serial.data(), attestParams.serial.size())
+            .Authorization(TAG_ATTESTATION_ID_IMEI, attestParams.imei.data(), attestParams.imei.size())
+            .Authorization(TAG_ATTESTATION_ID_MEID, attestParams.meid.data(), attestParams.meid.size())
+            .Authorization(TAG_ATTESTATION_ID_MANUFACTURER, attestParams.manufacturer.data(), attestParams.manufacturer.size())
+            .Authorization(TAG_ATTESTATION_ID_MODEL, attestParams.model.data(), attestParams.model.size()));
 
-    hidl_vec<KeyParameter> attestParams = kmParamSet2Hidl(authSetAttestParams);
+    hidl_vec<KeyParameter> attestKeyParams = kmParamSet2Hidl(authSetAttestParams);
 
     array = cppbor::Array();
-    cborConverter.addKeyparameters(array, attestParams);
+    cborConverter.addKeyparameters(array, attestKeyParams);
     std::vector<uint8_t> cborData = array.encode();
 
-    if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
         return errorCode;
     }
     return errorCode;
 }
 
-static ErrorCode provisionSharedSecret(std::unique_ptr<se_transport::TransportFactory>& transport) {
+ErrorCode Provision::provisionPreSharedSecret(std::vector<uint8_t>& preSharedSecret) {
     ErrorCode errorCode = ErrorCode::OK;
     cppbor::Array array;
     Instruction ins = Instruction::INS_PROVISION_PRESHARED_SECRET_CMD;
     std::vector<uint8_t> response;
-    std::vector<uint8_t> masterKey(kFakeKeyAgreementKey, kFakeKeyAgreementKey +
-            sizeof(kFakeKeyAgreementKey)/sizeof(kFakeKeyAgreementKey[0]));
 
     array = cppbor::Array();
-    array.add(masterKey);
+    array.add(preSharedSecret);
     std::vector<uint8_t> cborData = array.encode();
 
-    if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
         return errorCode;
     }
     return errorCode;
 }
 
-static ErrorCode getProvisionStatus(std::unique_ptr<se_transport::TransportFactory>& transport, std::vector<uint8_t>&
-response) {
+ErrorCode Provision::provisionBootParameters(BootParams& bootParams) {
+    ErrorCode errorCode = ErrorCode::OK;
+    cppbor::Array array;
+    std::vector<uint8_t> apdu;
+    std::vector<uint8_t> response;
+    Instruction ins = Instruction::INS_SET_BOOT_PARAMS_CMD;
+
+    array.add(GetOsVersion()).
+        add(GetOsPatchlevel()).
+        add(bootParams.vendorPatchLevel).
+        add(bootParams.bootPatchLevel).
+        /* Verified Boot Key */
+        add(bootParams.verifiedBootKey).
+        /* Verified Boot Hash */
+        add(bootParams.verifiedBootKeyHash).
+        /* boot state */
+        add(bootParams.verifiedBootState).
+        /* device locked */
+        add(bootParams.deviceLocked);
+
+    std::vector<uint8_t> cborData = array.encode();
+
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
+        return errorCode;
+    }
+    return errorCode;
+}
+
+ErrorCode Provision::getProvisionStatus(uint64_t& status) {
     ErrorCode errorCode = ErrorCode::OK;
     Instruction ins = Instruction::INS_GET_PROVISION_STATUS_CMD;
     std::vector<uint8_t> cborData;
+    std::vector<uint8_t> response;
+    std::unique_ptr<Item> item;
+    CborConverter cborConverter;
 
-    if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
+        LOG(ERROR) << "Failed to get provision status err: " << static_cast<int32_t>(errorCode);
         return errorCode;
     }
-    return errorCode;
+    //Check if SE is provisioned.
+    std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
+            true);
+    if(item != NULL) {
 
+        if(!cborConverter.getUint64(item, 1, status)) {
+            LOG(ERROR) << "Failed to parse the status from cbor data";
+            return ErrorCode::UNKNOWN_ERROR;
+        }
+    }
+    return errorCode;
 }
 
-static ErrorCode lockProvision(std::unique_ptr<se_transport::TransportFactory>& transport) {
+ErrorCode Provision::lockProvision() {
     ErrorCode errorCode = ErrorCode::OK;
     Instruction ins = Instruction::INS_LOCK_PROVISIONING_CMD;
     std::vector<uint8_t> cborData;
     std::vector<uint8_t> response;
 
-    if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
         return errorCode;
     }
     return errorCode;
 }
 
-static ErrorCode setBootParameters(std::unique_ptr<se_transport::TransportFactory>& transport) {
-    ErrorCode errorCode = ErrorCode::OK;
-    std::vector<uint8_t> verifiedBootKey(32, 0);
-    std::vector<uint8_t> verifiedBootKeyHash(32, 0);
-    uint32_t vendorPatchLevel = 0;
-    uint32_t bootPatchLevel = 0;
-    cppbor::Array array;
-    std::vector<uint8_t> apdu;
-    std::vector<uint8_t> response;
-    Instruction ins = Instruction::INS_SET_BOOT_PARAMS_CMD;
-    keymaster_verified_boot_t kmVerifiedBoot = KM_VERIFIED_BOOT_UNVERIFIED;
-
-    array.add(GetOsVersion()).
-        add(GetOsPatchlevel()).
-        add(vendorPatchLevel).
-        add(bootPatchLevel).
-        /* Verified Boot Key */
-        add(verifiedBootKey).
-        /* Verified Boot Hash */
-        add(verifiedBootKeyHash).
-        /* boot state */
-        add(static_cast<uint32_t>(kmVerifiedBoot)).
-        /* device locked */
-        add(0);
-
-    std::vector<uint8_t> cborData = array.encode();
-
-    if(ErrorCode::OK != (errorCode = sendProvisionData(transport, ins, cborData, response))) {
-        return errorCode;
-    }
-    return errorCode;
-}
-
-static bool isSEProvisioned(uint64_t status) {
-    bool ret = false;
-    if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM))) {
-        ret = true;
-    }
-    return ret;
-}
-
-ErrorCode provision(std::unique_ptr<se_transport::TransportFactory>& transport) {
-    std::vector<uint8_t> response;
-    std::unique_ptr<Item> item;
-    CborConverter cborConverter;
-    ErrorCode errorCode = ErrorCode::OK;
-
-    //Get Provision status.
-    if(ErrorCode::OK != (errorCode = getProvisionStatus(transport, response))) {
-        return errorCode;
-    }
-
-    //Check if SE is provisioned.
-    std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
-            true);
-    if(item != NULL) {
-        uint64_t status;
-
-        if(!cborConverter.getUint64(item, 1, status))
+ErrorCode Provision::uninit() {
+	if(pTransportFactory != nullptr) {
+        if(!pTransportFactory->closeConnection())
             return ErrorCode::UNKNOWN_ERROR;
-
-        if(isSEProvisioned(status)) {
-            return ErrorCode::OK; //SE is Provisioned.
-        }
-
-    } else {
-        return ErrorCode::UNKNOWN_ERROR;
     }
-
-    //SE not provisioned so Provision the SE.
-
-    //Provision Attestation Key.
-    if(ErrorCode::OK != (errorCode = provisionAttestationKey(transport))) {
-        return errorCode;
-    }
-    //Provision Attestation certificate chain.
-    if(ErrorCode::OK != (errorCode = provisionAttestationCertificateChain(transport))) {
-        return errorCode;
-    }
-    //Provision certificate parameters.
-    if(ErrorCode::OK != (errorCode = provisionAttestationCertificateParams(transport))) {
-        return errorCode;
-    }
-    //Provision Attestation IDs.
-    if(ErrorCode::OK != (errorCode = provisionAttestationIDs(transport))) {
-        return errorCode;
-    }
-    //Provision Shared secret.
-    if(ErrorCode::OK != (errorCode = provisionSharedSecret(transport))) {
-        return errorCode;
-    }
-    //Set Boot parameters.
-    if(ErrorCode::OK != (errorCode = setBootParameters(transport))) {
-        return errorCode;
-    }
-    //Lock the provisioning.
-    if(ErrorCode::OK != (errorCode = lockProvision(transport))) {
-        return errorCode;
-    }
-    //return OK
-    return errorCode;
+    return ErrorCode::OK;
 }
+// Provision End
 
 }  // namespace javacard
 }  // namespace V4_1
