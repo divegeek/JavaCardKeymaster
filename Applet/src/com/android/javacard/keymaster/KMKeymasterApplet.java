@@ -3315,7 +3315,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 0);
     // Check if EarlyBootEnded tag is present.
     tmpVariables[0] =
-        KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ENDED, data[KEY_PARAMETERS]);
+        KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, data[KEY_PARAMETERS]);
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.EARLY_BOOT_ENDED);
     }
@@ -3611,7 +3611,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
       tmpVariables[1] = repository.getOsVersion();
       tmpVariables[1] =
-          Util.arrayCompare(
+          KMUtils.unsignedByteArrayCompare(
               KMInteger.cast(tmpVariables[1]).getBuffer(),
               KMInteger.cast(tmpVariables[1]).getStartOff(),
               scratchPad,
@@ -3644,7 +3644,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
       tmpVariables[1] = repository.getOsPatch();
       tmpVariables[1] =
-          Util.arrayCompare(
+          KMUtils.unsignedByteArrayCompare(
               KMInteger.cast(tmpVariables[1]).getBuffer(),
               KMInteger.cast(tmpVariables[1]).getStartOff(),
               scratchPad,
