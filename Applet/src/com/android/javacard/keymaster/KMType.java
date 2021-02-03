@@ -231,7 +231,7 @@ public abstract class KMType {
   // Reset Since Id Rotation
   public static final short RESET_SINCE_ID_ROTATION = (short) 0x03EC;
   //Early boot ended.
-  public static final short EARLY_BOOT_ENDED = (short) 0x0131;
+  public static final short EARLY_BOOT_ONLY = (short) 0x0131;
   //Device unique attestation.
   public static final short DEVICE_UNIQUE_ATTESTATION = (short) 0x02D0;
 
