@@ -37,6 +37,13 @@ import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
 import javacardx.crypto.Cipher;
 
+import com.android.javacard.keymaster.KMAESKey;
+import com.android.javacard.keymaster.KMAttestationKey;
+import com.android.javacard.keymaster.KMECPrivateKey;
+import com.android.javacard.keymaster.KMHmacKey;
+import com.android.javacard.keymaster.KMMasterKey;
+import com.android.javacard.keymaster.KMPreSharedKey;
+
 public class KMAndroidSEProvider implements KMSEProvider {
   // static final variables
   // --------------------------------------------------------------
@@ -158,6 +165,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private RandomData rng;
   //For storing root certificate and intermediate certificates.
   private byte[] certificateChain;
+  private KMAESKey masterKey;
+  private KMECPrivateKey attestationKey;
+  private KMHmacKey preSharedKey;
 
   private static KMAndroidSEProvider androidSEProvider = null;
 
@@ -177,7 +187,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     hmacKey = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) 512,
         false);
     rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
-    initECKey();
+    ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+    initECKey(ecKeyPair);
 
     // Re-usable cipher and signature instances
     cipherPool = new Object[(short) (CIPHER_ALGS.length * 4)];
@@ -210,8 +221,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     Util.arrayFillNonAtomic(tmpArray, (short) 0, (short) 256, (byte) 0);
   }
 
-  private void initECKey() {
-    ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+  private void initECKey(KeyPair ecKeyPair) {
     ECPrivateKey privKey = (ECPrivateKey) ecKeyPair.getPrivate();
     ECPublicKey pubkey = (ECPublicKey) ecKeyPair.getPublic();
     pubkey.setFieldFP(secp256r1_P, (short) 0, (short) secp256r1_P.length);
@@ -600,13 +610,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
     rng.setSeed(num, offset, length);
   }
 
-  @Override
-  public short aesGCMEncrypt(byte[] aesKey, short aesKeyStart, short aesKeyLen,
-      byte[] secret, short secretStart, short secretLen, byte[] encSecret,
-      short encSecretStart, byte[] nonce, short nonceStart, short nonceLen,
-      byte[] authData, short authDataStart, short authDataLen, byte[] authTag,
-      short authTagStart, short authTagLen) {
-
+  public short aesGCMEncrypt(AESKey key,
+          byte[] secret, short secretStart, short secretLen, byte[] encSecret,
+          short encSecretStart, byte[] nonce, short nonceStart, short nonceLen,
+          byte[] authData, short authDataStart, short authDataLen, byte[] authTag,
+          short authTagStart, short authTagLen) {
     if (authTagLen != AES_GCM_TAG_LENGTH) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
@@ -617,13 +625,38 @@ public class KMAndroidSEProvider implements KMSEProvider {
       aesGcmCipher = (AEADCipher) Cipher.getInstance(AEADCipher.ALG_AES_GCM,
           false);
     }
-    AESKey key = createAESKey(aesKey, aesKeyStart, aesKeyLen);
     aesGcmCipher.init(key, Cipher.MODE_ENCRYPT, nonce, nonceStart, nonceLen);
     aesGcmCipher.updateAAD(authData, authDataStart, authDataLen);
     short ciphLen = aesGcmCipher.doFinal(secret, secretStart, secretLen,
         encSecret, encSecretStart);
     aesGcmCipher.retrieveTag(authTag, authTagStart, authTagLen);
     return ciphLen;
+  }
+
+  @Override
+  public short aesGCMEncrypt(byte[] aesKey, short aesKeyStart, short aesKeyLen,
+      byte[] secret, short secretStart, short secretLen, byte[] encSecret,
+      short encSecretStart, byte[] nonce, short nonceStart, short nonceLen,
+      byte[] authData, short authDataStart, short authDataLen, byte[] authTag,
+      short authTagStart, short authTagLen) {
+
+    AESKey key = createAESKey(aesKey, aesKeyStart, aesKeyLen);
+    return aesGCMEncrypt(
+            key,
+            secret,
+            secretStart,
+            secretLen,
+            encSecret,
+            encSecretStart,
+            nonce,
+            nonceStart,
+            nonceLen,
+            authData,
+            authDataStart,
+            authDataLen,
+            authTag,
+            authTagStart,
+            authTagLen);
   }
 
   @Override
@@ -648,8 +681,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return verification;
   }
 
-  public HMACKey cmacKdf(byte[] keyMaterial, short keyMaterialStart,
-      short keyMaterialLen, byte[] label, short labelStart, short labelLen,
+  public HMACKey cmacKdf(KMPreSharedKey preSharedKey, byte[] label, short labelStart, short labelLen,
       byte[] context, short contextStart, short contextLength) {
     try {
       // This is hardcoded to requirement - 32 byte output with two concatenated
@@ -667,10 +699,18 @@ public class KMAndroidSEProvider implements KMSEProvider {
       // [i] counter - 32 bits
       short iBufLen = 4;
       short keyOutLen = n * 16;
+      //Convert Hmackey to AES Key as the algorithm is ALG_AES_CMAC_128.
+      KMHmacKey hmacKey = ((KMHmacKey) preSharedKey);
+      hmacKey.getKey(tmpArray, (short) 0);
+      aesKeys[KEYSIZE_256_OFFSET].setKey(tmpArray, (short) 0);
+      //Initialize the key derivation function.
+      kdf.init(aesKeys[KEYSIZE_256_OFFSET], Signature.MODE_SIGN);
+      //Clear the tmpArray buffer.
+      Util.arrayFillNonAtomic(tmpArray, (short) 0, (short) 256, (byte) 0);
+
       Util.arrayFillNonAtomic(tmpArray, (short) 0, iBufLen, (byte) 0);
       Util.arrayFillNonAtomic(tmpArray, (short) iBufLen, keyOutLen, (byte) 0);
-      aesKeys[KEYSIZE_256_OFFSET].setKey(keyMaterial, (short) keyMaterialStart);
-      kdf.init(aesKeys[KEYSIZE_256_OFFSET], Signature.MODE_SIGN);
+
       byte i = 1;
       short pos = 0;
       while (i <= n) {
@@ -733,17 +773,15 @@ public class KMAndroidSEProvider implements KMSEProvider {
         outputDataBuf, (short) outputDataStart);
   }
 
-  public short ecSign256(byte[] secret, short secretStart, short secretLength,
+  public short ecSign256(KMAttestationKey attestationKey,
           byte[] inputDataBuf, short inputDataStart, short inputDataLength,
           byte[] outputDataBuf, short outputDataStart) {
     Signature.OneShot signer = null;
     try {
-      ECPrivateKey key = (ECPrivateKey) ecKeyPair.getPrivate();
-      key.setS(secret, secretStart, secretLength);
 
       signer = Signature.OneShot.open(MessageDigest.ALG_SHA_256,
           Signature.SIG_CIPHER_ECDSA, Cipher.PAD_NULL);
-      signer.init(key, Signature.MODE_SIGN);
+      signer.init(((KMECPrivateKey)attestationKey).getPrivateKey(), Signature.MODE_SIGN);
       return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
           outputDataBuf, outputDataStart);
     } finally {
@@ -975,7 +1013,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short modOff, short modLength) {
     try {
       byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0, (byte)digest);
-      // TODO Java Card does not support MGF1-SHA1 and digest as SHA256.
+      // Java Card does not support MGF1-SHA1 and digest as SHA256.
       // Both digest should be SHA256 as per Java Card, but as per Keymaster
       // MGF should use SHA1 and message digest should be SHA256.
       if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
@@ -1116,12 +1154,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public short cmacKdf(byte[] keyMaterial, short keyMaterialStart,
-      short keyMaterialLen, byte[] label, short labelStart, short labelLen,
-      byte[] context, short contextStart, short contextLength, byte[] keyBuf,
-      short keyStart) {
-    HMACKey key = cmacKdf(keyMaterial, keyMaterialStart, keyMaterialLen, label,
-        labelStart, labelLen, context, contextStart, contextLength);
+  public short cmacKdf(KMPreSharedKey pSharedKey, byte[] label,
+          short labelStart, short labelLen, byte[] context, short contextStart,
+          short contextLength, byte[] keyBuf, short keyStart) {
+    HMACKey key = cmacKdf(pSharedKey, label, labelStart, labelLen, context,
+            contextStart, contextLength);
     return key.getKey(keyBuf, keyStart);
   }
 
@@ -1187,25 +1224,113 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public void onSave(Element element) {
     element.write(certificateChain);
+    KMAESKey.onSave(element, masterKey);
+    KMECPrivateKey.onSave(element, attestationKey);
+    KMHmacKey.onSave(element, preSharedKey);
   }
 
   @Override
   public void onRestore(Element element) {
     certificateChain = (byte[]) element.readObject();
+    masterKey = KMAESKey.onRestore(element);
+    attestationKey = KMECPrivateKey.onRestore(element);
+    preSharedKey = KMHmacKey.onRestore(element);
   }
 
   @Override
   public short getBackupPrimitiveByteCount() {
-    return (short) 0;
+    short count =
+            (short) (KMAESKey.getBackupPrimitiveByteCount() +
+            KMECPrivateKey.getBackupPrimitiveByteCount() +
+            KMHmacKey.getBackupPrimitiveByteCount());
+    return count;
   }
 
   @Override
   public short getBackupObjectCount() {
-    return (short) 1;
+    short count =
+            (short) (1 /*Certificate chain */ +
+            KMAESKey.getBackupObjectCount() +
+            KMECPrivateKey.getBackupObjectCount() +
+            KMHmacKey.getBackupObjectCount());
+    return count;
   }
 
   @Override
   public  boolean isUpgrading() {
     return UpgradeManager.isUpgrading();
+  }
+
+  @Override
+  public KMMasterKey createMasterKey(short keySizeBits) {
+    try {
+      if (masterKey == null) {
+        AESKey key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
+                keySizeBits, false);
+        masterKey = new KMAESKey(key);
+        short keyLen = (short) (keySizeBits / 8);
+        getTrueRandomNumber(tmpArray, (short) 0, keyLen);
+        masterKey.setKey(tmpArray, (short) 0);
+      }
+      return (KMMasterKey) masterKey;
+    } finally {
+      clean();
+    }
+  }
+
+  @Override
+  public KMAttestationKey createAttestationKey(byte[] keyData, short offset,
+          short length) {
+    if (attestationKey == null) {
+      // Strongbox supports only P-256 curve for EC key.
+      KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+      initECKey(ecKeyPair);
+      attestationKey = new KMECPrivateKey(ecKeyPair);
+    }
+    attestationKey.setS(keyData, offset, length);
+    return (KMAttestationKey) attestationKey;
+  }
+
+  @Override
+  public KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length) {
+    short lengthInBits = (short)(length * 8);
+    if ((lengthInBits % 8 != 0) || !(lengthInBits >= 64 && lengthInBits <= 512)) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if (preSharedKey == null) {
+      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, lengthInBits,
+              false);
+      preSharedKey = new KMHmacKey(key);
+    }
+    preSharedKey.setKey(keyData, offset, length);
+    return (KMPreSharedKey) preSharedKey;
+  }
+
+  @Override
+  public KMMasterKey getMasterKey() {
+    return (KMMasterKey) masterKey;
+  }
+
+  @Override
+  public KMAttestationKey getAttestationKey() {
+    return (KMAttestationKey) attestationKey;
+  }
+
+  @Override
+  public KMPreSharedKey getPresharedKey() {
+    return (KMPreSharedKey) preSharedKey;
+  }
+
+  @Override
+  public short aesGCMEncrypt(KMMasterKey key, byte[] secret, short secretStart,
+          short secretLen, byte[] encSecret, short encSecretStart,
+          byte[] nonce, short nonceStart, short nonceLen, byte[] authData,
+          short authDataStart, short authDataLen, byte[] authTag,
+          short authTagStart, short authTagLen) {
+
+    return aesGCMEncrypt(((KMAESKey) key).getKey(), secret, secretStart,
+            secretLen, encSecret, encSecretStart, nonce, nonceStart, nonceLen,
+            authData, authDataStart, authDataLen, authTag, authTagStart,
+            authTagLen);
   }
 }

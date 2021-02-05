@@ -80,13 +80,11 @@ public class KMRsaOAEPEncoding extends Cipher {
 
   @Override
   public byte getCipherAlgorithm() {
-    // TODO
     return 0;
   }
 
   @Override
   public byte getPaddingAlgorithm() {
-    // TODO
     return 0;
   }
 
