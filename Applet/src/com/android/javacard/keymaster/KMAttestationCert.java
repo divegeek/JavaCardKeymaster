@@ -44,15 +44,13 @@ public interface KMAttestationCert {
    * @param attestAppIdOff Start offset of the attestAppId buffer.
    * @param attestAppIdLen Length of the attestAppId buffer.
    * @param resetSinceIdRotation This holds the information of RESET_SINCE_ID_ROTATION.
-   * @param key This buffer contains the master secret.
-   * @param keyOff Start offset of the master key.
-   * @param keyLen Length of the master key.
+   * @param instance of the master key.
    * @return instance of KMAttestationCert.
    */
   KMAttestationCert makeUniqueId(byte[] scratchpad, short scratchPadOff, byte[] creationTime,
           short creationTimeOff, short creationTimeLen, byte[] attestAppId,
           short attestAppIdOff, short attestAppIdLen, byte resetSinceIdRotation,
-          byte[] key, short keyOff, short keyLen);
+          KMMasterKey masterKey);
 
   /**
    * Set start time received from creation/activation time tag. Used for certificate's valid period.
@@ -129,14 +127,6 @@ public interface KMAttestationCert {
    * @return instance of KMAttestationCert
    */
   KMAttestationCert buffer(byte[] buf, short bufStart, short maxLen);
-
-  /**
-   * Set signing key to be used to sign the cert.
-   *
-   * @param privateKey This is ECPrivateKey with curve P-256.
-   * @return instance of KMAttestationCert
-   */
-  KMAttestationCert signingKey(short privateKey);
 
   /**
    * Get the start of the certificate

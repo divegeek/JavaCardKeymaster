@@ -190,8 +190,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         JCSystem.makeTransientShortArray((short) TMP_VARIABLE_ARRAY_SIZE, JCSystem.CLEAR_ON_RESET);
     if(!isUpgrading) {
       keymasterState = KMKeymasterApplet.INIT_STATE;
-      seProvider.getTrueRandomNumber(buf, (short) 0, KMRepository.MASTER_KEY_SIZE);
-      repository.initMasterKey(buf, (short)0, KMRepository.MASTER_KEY_SIZE);
+      seProvider.createMasterKey((short) (KMRepository.MASTER_KEY_SIZE * 8));
     }
     KMType.initialize();
     encoder = new KMEncoder();
@@ -752,7 +751,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     importECKeys(scratchPad);
 
     // persist key
-    repository.persistAttestationKey(data[SECRET]);
+    seProvider.createAttestationKey(
+            KMByteBlob.cast(data[SECRET]).getBuffer(),
+            KMByteBlob.cast(data[SECRET]).getStartOff(),
+            KMByteBlob.cast(data[SECRET]).length());
   }
 
   private void processProvisionAttestIdsCmd(APDU apdu) {
@@ -795,7 +797,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     // Persist shared Hmac.
-    repository.initHmacSharedSecretKey(
+    seProvider.createPresharedKey(
         KMByteBlob.cast(tmpVariables[0]).getBuffer(),
         KMByteBlob.cast(tmpVariables[0]).getStartOff(),
         KMByteBlob.cast(tmpVariables[0]).length());
@@ -1033,12 +1035,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
 
     // generate the key and store it in scratch pad - 32 bytes
-    tmpVariables[8] = repository.getSharedKey();
     tmpVariables[6] =
         seProvider.cmacKdf(
-            KMByteBlob.cast(tmpVariables[8]).getBuffer(),
-            KMByteBlob.cast(tmpVariables[8]).getStartOff(),
-            KMByteBlob.cast(tmpVariables[8]).length(),
+            seProvider.getPresharedKey(),
             ckdfLable,
             (short) 0,
             (short) ckdfLable.length,
@@ -1397,7 +1396,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // validity period
     // active time or creation time - byte blob
-    // TODO current assumption is that if active and creation time are missing from characteristics
+    // current assumption is that if active and creation time are missing from characteristics
     // then
     //  then it is an error.
     tmpVariables[1] =
@@ -1425,7 +1424,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     cert.deviceLocked(repository.getDeviceLock());
     cert.issuer(repository.getIssuer());
     cert.publicKey(data[PUB_KEY]);
-    cert.signingKey(repository.getAttKey());
     cert.verifiedBootHash(repository.getVerifiedBootHash());
 
     cert.verifiedBootKey(repository.getVerifiedBootKey());
@@ -1529,8 +1527,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       resetAfterRotation = 0x01;
     }
 
-    //master key.
-    tmpVariables[2] = repository.getMasterKeySecret();
     cert.makeUniqueId(
             scratchPad,
             (short) 0,
@@ -1540,9 +1536,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMByteBlob.cast(tmpVariables[1]).getBuffer(),
             KMByteBlob.cast(tmpVariables[1]).getStartOff(),
             KMByteBlob.cast(tmpVariables[1]).length(), resetAfterRotation,
-            KMByteBlob.cast(tmpVariables[2]).getBuffer(),
-            KMByteBlob.cast(tmpVariables[2]).getStartOff(),
-            KMByteBlob.cast(tmpVariables[2]).length());
+            seProvider.getMasterKey());
   }
 
   private void processDestroyAttIdsCmd(APDU apdu) {
@@ -3893,7 +3887,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // 1. AesGCM Encryption, with below input parameters.
     //    authData - HIDDEN_PARAMTERS
     //    Key - Master Key
-    //    InputData - AUTH_DATA
+    //    InputData - KeyCharacteristics
     //    IV - NONCE
     // 2. After encryption it generates two outputs
     //    a. Encrypted output
@@ -3903,13 +3897,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //    Input data - Encrypted output (Generated in step 2).
     // 4. HMAC Sign generates an output of 32 bytes length.
     //    Consume only first 16 bytes as derived key.
-    tmpVariables[4] = repository.getMasterKeySecret();
     tmpVariables[5] = repository.alloc(AES_GCM_AUTH_TAG_LENGTH);
     tmpVariables[3] =
             seProvider.aesGCMEncrypt(
-                KMByteBlob.cast(tmpVariables[4]).getBuffer(),
-                KMByteBlob.cast(tmpVariables[4]).getStartOff(),
-                KMByteBlob.cast(tmpVariables[4]).length(),
+                seProvider.getMasterKey(),
                 repository.getHeap(),
                 data[AUTH_DATA],
                 data[AUTH_DATA_LENGTH],
