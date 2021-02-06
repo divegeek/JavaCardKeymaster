@@ -540,6 +540,17 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
+  public short hmacSignkdf(KMMasterKey masterkey, byte[] data, short dataStart,
+          short dataLength, byte[] signature, short signatureStart) {
+    KMAESKey aesKey = (KMAESKey) masterkey;
+    short keyLen = (short) (aesKey.getKeySizeBits() / 8);
+    byte[] keyData = new byte[keyLen];
+    aesKey.getKey(keyData, (short) 0);
+    return hmacSign(keyData, (short) 0, keyLen, data, dataStart, dataLength,
+            signature, signatureStart);
+  }
+
+  @Override
   public short hmacSign(byte[] keyBuf, short keyStart, short keyLength, byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
     HMACKey key = createHMACKey(keyBuf,keyStart,keyLength);
     return hmacSign(key,data,dataStart,dataLength,mac,macStart);
@@ -1359,36 +1370,5 @@ public class KMJCardSimulator implements KMSEProvider {
   @Override
   public KMPreSharedKey getPresharedKey() {
     return (KMPreSharedKey) preSharedKey;
-  }
-
-  @Override
-  public short aesGCMEncrypt(KMMasterKey masterKey, byte[] secret, short secretStart,
-          short secretLen, byte[] encSecret, short encSecretStart, byte[] nonce,
-          short nonceStart, short nonceLen, byte[] authData,
-          short authDataStart, short authDataLen, byte[] authTag,
-          short authTagStart, short authTagLen) {
-    KMAESKey aesKey = (KMAESKey) masterKey;
-    short keyLen = aesKey.getKeySizeBits();
-    keyLen = (short) (keyLen / 8);
-    byte[] keyBuf = new byte[keyLen];
-    aesKey.getKey(keyBuf, (short)0);
-    return aesGCMEncrypt(
-            keyBuf,
-            (short) 0,
-            keyLen,
-            secret,
-            secretStart,
-            secretLen,
-            encSecret,
-            encSecretStart,
-            nonce,
-            nonceStart,
-            nonceLen,
-            authData,
-            authDataStart,
-            authDataLen,
-            authTag,
-            authTagStart,
-            authTagLen);
   }
 }

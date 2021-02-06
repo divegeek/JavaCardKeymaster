@@ -752,6 +752,21 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
+  public short hmacSign(KMMasterKey masterkey, byte[] data, short dataStart,
+          short dataLength, byte[] signature, short signatureStart) {
+    try {
+      AESKey aesKey = ((KMAESKey) masterkey).getKey();
+      aesKey.getKey(tmpArray, (short) 0);
+      HMACKey key = createHMACKey(tmpArray, (short) 0,
+              (short) (aesKey.getSize() / 8));
+      return hmacSign(key, data, dataStart, dataLength, signature,
+              signatureStart);
+    } finally {
+      clean();
+    }
+  }
+
+  @Override
   public boolean hmacVerify(byte[] keyBuf, short keyStart, short keyLength,
       byte[] data, short dataStart, short dataLength, byte[] mac,
       short macStart, short macLength) {
@@ -1319,18 +1334,5 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public KMPreSharedKey getPresharedKey() {
     return (KMPreSharedKey) preSharedKey;
-  }
-
-  @Override
-  public short aesGCMEncrypt(KMMasterKey key, byte[] secret, short secretStart,
-          short secretLen, byte[] encSecret, short encSecretStart,
-          byte[] nonce, short nonceStart, short nonceLen, byte[] authData,
-          short authDataStart, short authDataLen, byte[] authTag,
-          short authTagStart, short authTagLen) {
-
-    return aesGCMEncrypt(((KMAESKey) key).getKey(), secret, secretStart,
-            secretLen, encSecret, encSecretStart, nonce, nonceStart, nonceLen,
-            authData, authDataStart, authDataLen, authTag, authTagStart,
-            authTagLen);
   }
 }

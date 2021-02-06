@@ -160,46 +160,6 @@ public interface KMSEProvider extends KMUpgradable {
       short authTagLen);
 
   /**
-   * This function is used to derive a partial secret, which is used to encrypt the keyBlobs.
-   * This is a oneshot operation that performs encryption operation using AES GCM algorithm. It throws
-   * CryptoException if algorithm is not supported or if tag length is not equal to 16 or
-   * nonce length is not equal to 12.
-   *
-   * @param aesKey instance of KMMasterKey.
-   * @param data is the buffer that contains data to encrypt.
-   * @param dataStart is the start of the data buffer.
-   * @param dataLen is the length of the data buffer.
-   * @param encData is the buffer of the output encrypted data.
-   * @param encDataStart is the start of the encrypted data buffer.
-   * @param nonce is the buffer of nonce.
-   * @param nonceStart is the start of the nonce buffer.
-   * @param nonceLen is the length of the nonce buffer.
-   * @param authData is the authentication data buffer.
-   * @param authDataStart is the start of the authentication buffer.
-   * @param authDataLen is the length of the authentication buffer.
-   * @param authTag is the buffer to output authentication tag.
-   * @param authTagStart is the start of the buffer.
-   * @param authTagLen is the length of the buffer.
-   * @return length of the encrypted data.
-   */
-  short aesGCMEncrypt(
-          KMMasterKey aesKey,
-          byte[] data,
-          short dataStart,
-          short dataLen,
-          byte[] encData,
-          short encDataStart,
-          byte[] nonce,
-          short nonceStart,
-          short nonceLen,
-          byte[] authData,
-          short authDataStart,
-          short authDataLen,
-          byte[] authTag,
-          short authTagStart,
-          short authTagLen);
-
-  /**
    * This is a oneshot operation that performs decryption operation using AES GCM algorithm. It throws
    * CryptoException if algorithm is not supported.
    *
@@ -289,6 +249,26 @@ public interface KMSEProvider extends KMUpgradable {
       short dataLength,
       byte[] signature,
       short signatureStart);
+
+  /**
+   * This is a oneshot operation that signs the data using hmac algorithm.
+   * This is used to derive the key, which is used to encrypt the keyblob.
+   *
+   * @param instance of masterkey.
+   * @param data is the buffer containing data to be signed.
+   * @param dataStart is the start of the data.
+   * @param dataLength is the length of the data.
+   * @param signature is the output signature buffer
+   * @param signatureStart is the start of the signature
+   * @return length of the signature buffer in bytes.
+   */
+  short hmacSignkdf(
+          KMMasterKey masterkey,
+          byte[] data,
+          short dataStart,
+          short dataLength,
+          byte[] signature,
+          short signatureStart);
 
   /**
    * This is a oneshot operation that verifies the signature using hmac algorithm.
