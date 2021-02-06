@@ -17,11 +17,9 @@ package com.android.javacard.keymaster;
 
 /**
  * KMAttestationKey is a marker interface and the SE Provider has to implement 
- * this interface. KMAttestationKey is stored as a Javacard KeyPair object instead 
- * of byte array. When the attestation key is stored as a KeyPair object, 
- * the Javacard OS internally provides appropriate security measures 
- * to protect the key. The attestation key is maintained by the 
- * SEProvider.
+ * this interface. Internally attestation key is stored as a Javacard EC
+ * key pair object, which will provide additional security. 
+ * The attestation key is maintained by the SEProvider.
  */
 public interface KMAttestationKey {
 
