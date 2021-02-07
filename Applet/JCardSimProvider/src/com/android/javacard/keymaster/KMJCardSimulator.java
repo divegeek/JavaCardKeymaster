@@ -515,7 +515,7 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public short cmacKdf(KMPreSharedKey pSharedKey, byte[] label,
+  public short cmacKDF(KMPreSharedKey pSharedKey, byte[] label,
                        short labelStart, short labelLen, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
     KMHmacKey key = (KMHmacKey) pSharedKey;
     short keyMaterialLen = key.getKeySizeBits();
@@ -540,7 +540,7 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public short hmacSignkdf(KMMasterKey masterkey, byte[] data, short dataStart,
+  public short hmacKDF(KMMasterKey masterkey, byte[] data, short dataStart,
           short dataLength, byte[] signature, short signatureStart) {
     KMAESKey aesKey = (KMAESKey) masterkey;
     short keyLen = (short) (aesKey.getKeySizeBits() / 8);

@@ -15,8 +15,6 @@
  */
 package com.android.javacard.keymaster;
 
-import org.globalplatform.upgrade.Element;
-
 import javacard.security.AESKey;
 
 public class KMAESKey implements KMMasterKey {
@@ -36,23 +34,5 @@ public class KMAESKey implements KMMasterKey {
   
   public short getKeySizeBits() {
     return aesKey.getSize();
-  }
-
-  public static void onSave(Element element, KMAESKey kmKey) {
-    element.write(kmKey.aesKey);
-  }
-
-  public static KMAESKey onRestore(Element element) {
-    AESKey aesKey = (AESKey) element.readObject();
-    KMAESKey kmKey = new KMAESKey(aesKey);
-    return kmKey;
-  }
-
-  public static short getBackupPrimitiveByteCount() {
-    return (short) 0;
-  }
-
-  public static short getBackupObjectCount() {
-    return (short) 1;
   }
 }
