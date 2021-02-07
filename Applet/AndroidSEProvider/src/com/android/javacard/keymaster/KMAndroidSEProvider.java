@@ -752,7 +752,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public short hmacSign(KMMasterKey masterkey, byte[] data, short dataStart,
+  public short hmacKDF(KMMasterKey masterkey, byte[] data, short dataStart,
           short dataLength, byte[] signature, short signatureStart) {
     try {
       AESKey aesKey = ((KMAESKey) masterkey).getKey();
@@ -1169,7 +1169,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public short cmacKdf(KMPreSharedKey pSharedKey, byte[] label,
+  public short cmacKDF(KMPreSharedKey pSharedKey, byte[] label,
           short labelStart, short labelLen, byte[] context, short contextStart,
           short contextLength, byte[] keyBuf, short keyStart) {
     HMACKey key = cmacKdf(pSharedKey, label, labelStart, labelLen, context,

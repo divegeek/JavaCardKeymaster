@@ -1032,7 +1032,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // generate the key and store it in scratch pad - 32 bytes
     tmpVariables[6] =
-        seProvider.cmacKdf(
+        seProvider.cmacKDF(
             seProvider.getPresharedKey(),
             ckdfLable,
             (short) 0,
@@ -3800,7 +3800,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // 2. HMAC Sign generates an output of 32 bytes length.
     //    Consume only first 16 bytes as derived key.
     // Hmac sign.
-    tmpVariables[3] = seProvider.hmacSignkdf(
+    tmpVariables[3] = seProvider.hmacKDF(
             seProvider.getMasterKey(),
             repository.getHeap(),
             tmpVariables[1],
