@@ -15,8 +15,12 @@
  */
 package com.android.javacard.keymaster;
 
-public class KMInstance {
-  public byte reserved;
-  public Object object;
-  public byte instanceCount;
+/**
+ * KMAttestationKey is a marker interface and the SE Provider has to implement 
+ * this interface. Internally attestation key is stored as a Javacard EC
+ * key pair object, which will provide additional security. 
+ * The attestation key is maintained by the SEProvider.
+ */
+public interface KMAttestationKey {
+
 }

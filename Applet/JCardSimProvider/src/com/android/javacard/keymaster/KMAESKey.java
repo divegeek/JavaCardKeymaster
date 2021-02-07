@@ -15,8 +15,24 @@
  */
 package com.android.javacard.keymaster;
 
-public class KMInstance {
-  public byte reserved;
-  public Object object;
-  public byte instanceCount;
+import javacard.security.AESKey;
+
+public class KMAESKey implements KMMasterKey {
+  private AESKey aesKey;
+
+  public KMAESKey(AESKey key) {
+    aesKey = key;
+  }
+
+  public void setKey(byte[] keyData, short kOff) {
+    aesKey.setKey(keyData, kOff);
+  }
+
+  public byte getKey(byte[] keyData, short kOff) {
+    return aesKey.getKey(keyData, kOff);
+  }
+  
+  public short getKeySizeBits() {
+    return aesKey.getSize();
+  }
 }

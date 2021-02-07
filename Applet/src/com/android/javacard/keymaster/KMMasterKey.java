@@ -15,8 +15,12 @@
  */
 package com.android.javacard.keymaster;
 
-public class KMInstance {
-  public byte reserved;
-  public Object object;
-  public byte instanceCount;
+/**
+ * KMMasterKey is a marker interface and the SE Provider has to implement 
+ * this interface. Internally Masterkey is stored as a Javacard AES key object,
+ * which will provide additional security. The master key is maintained by the 
+ * SEProvider.
+ */
+public interface KMMasterKey {
+
 }
