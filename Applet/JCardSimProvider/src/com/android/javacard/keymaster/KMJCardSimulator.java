@@ -84,6 +84,9 @@ public class KMJCardSimulator implements KMSEProvider {
   private static byte[] entropyPool;
   private static byte[] rndNum;
   private byte[] certificateChain;
+  private KMAESKey masterKey;
+  private KMECPrivateKey attestationKey;
+  private KMHmacKey preSharedKey;
 
   private static KMJCardSimulator jCardSimulator = null;
 
@@ -320,6 +323,7 @@ public class KMJCardSimulator implements KMSEProvider {
     key.getKey(keyMaterial,(short)0);
 
      */
+
     //print("KeyMaterial Enc", keyMaterial);
     //print("Authdata Enc", authData, authDataStart, authDataLen);
     java.security.Key aesKey = new SecretKeySpec(keyBuf,keyStart,keyLen, "AES");
@@ -511,10 +515,16 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public short cmacKdf(byte[] keyMaterial, short keyMaterialStart, short keyMaterialLen, byte[] label,
+  public short cmacKDF(KMPreSharedKey pSharedKey, byte[] label,
                        short labelStart, short labelLen, byte[] context, short contextStart, short contextLength, byte[] keyBuf, short keyStart) {
-    HMACKey key = cmacKdf(keyMaterial,keyMaterialStart, keyMaterialLen, label, labelStart, labelLen,context,contextStart,contextLength);
-    return key.getKey(keyBuf,keyStart);
+    KMHmacKey key = (KMHmacKey) pSharedKey;
+    short keyMaterialLen = key.getKeySizeBits();
+    keyMaterialLen = (short) (keyMaterialLen / 8);
+    short keyMaterialStart = 0;
+    byte[] keyMaterial = new byte[keyMaterialLen];
+    key.getKey(keyMaterial, keyMaterialStart);
+    HMACKey hmacKey = cmacKdf(keyMaterial,keyMaterialStart, keyMaterialLen, label, labelStart, labelLen,context,contextStart,contextLength);
+    return hmacKey.getKey(keyBuf,keyStart);
   }
 
    
@@ -527,6 +537,17 @@ public class KMJCardSimulator implements KMSEProvider {
                           byte[] mac, short macStart, short macLength) {
     hmacSignature.init(key, Signature.MODE_VERIFY);
     return hmacSignature.verify(data, dataStart, dataLength, mac, macStart, macLength);
+  }
+
+  @Override
+  public short hmacKDF(KMMasterKey masterkey, byte[] data, short dataStart,
+          short dataLength, byte[] signature, short signatureStart) {
+    KMAESKey aesKey = (KMAESKey) masterkey;
+    short keyLen = (short) (aesKey.getKeySizeBits() / 8);
+    byte[] keyData = new byte[keyLen];
+    aesKey.getKey(keyData, (short) 0);
+    return hmacSign(keyData, (short) 0, keyLen, data, dataStart, dataLength,
+            signature, signatureStart);
   }
 
   @Override
@@ -1213,13 +1234,11 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public short ecSign256(byte[] secret, short secretStart, short secretLength,
+  public short ecSign256(KMAttestationKey attestationKey,
       byte[] inputDataBuf, short inputDataStart, short inputDataLength,
       byte[] outputDataBuf, short outputDataStart) {
 
-    ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(
-        KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
-    key.setS(secret, secretStart, secretLength);
+    ECPrivateKey key = ((KMECPrivateKey)attestationKey).getPrivateKey();
 
     Signature signer = Signature
         .getInstance(Signature.ALG_ECDSA_SHA_256, false);
@@ -1272,36 +1291,84 @@ public class KMJCardSimulator implements KMSEProvider {
 
   @Override
   public void clearDeviceBooted(boolean resetBootFlag) {
-    // To be filled
   }
 
   @Override
   public void onSave(Element ele) {
-    // TODO Auto-generated method stub
-
   }
 
   @Override
   public void onRestore(Element ele) {
-    // TODO Auto-generated method stub
-
   }
 
   @Override
   public short getBackupPrimitiveByteCount() {
-    // TODO Auto-generated method stub
     return 0;
   }
 
   @Override
   public short getBackupObjectCount() {
-    // TODO Auto-generated method stub
     return 0;
   }
 
   @Override
   public boolean isUpgrading() {
-    // TODO Auto-generated method stub
     return false;
+  }
+
+  @Override
+  public KMMasterKey createMasterKey(short keySizeBits) {
+    if (masterKey == null) {
+      AESKey key = (AESKey) KeyBuilder.buildKey(
+              KeyBuilder.TYPE_AES, keySizeBits, false);
+      masterKey = new KMAESKey(key);
+      short keyLen = (short) (keySizeBits / 8);
+      byte[] keyData  = new byte[keyLen];
+      getTrueRandomNumber(keyData, (short) 0, keyLen);
+      masterKey.setKey(keyData, (short) 0);
+    }
+    return (KMMasterKey) masterKey;
+  }
+
+  @Override
+  public KMAttestationKey createAttestationKey(byte[] keyData, short offset,
+          short length) {
+    if (attestationKey == null) {
+      // Strongbox supports only P-256 curve for EC key.
+      KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+      attestationKey = new KMECPrivateKey(ecKeyPair);
+    }
+    attestationKey.setS(keyData, offset, length);
+    return (KMAttestationKey) attestationKey;
+  }
+
+  @Override
+  public KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length) {
+    short lengthInBits = (short)(length * 8);
+    if ((lengthInBits % 8 != 0) || !(lengthInBits >= 64 && lengthInBits <= 512)) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if (preSharedKey == null) {
+      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, lengthInBits,
+              false);
+      preSharedKey = new KMHmacKey(key);
+    }
+    preSharedKey.setKey(keyData, offset, length);
+    return (KMPreSharedKey) preSharedKey;
+  }
+
+  @Override
+  public KMMasterKey getMasterKey() {
+    return (KMMasterKey) masterKey;
+  }
+
+  @Override
+  public KMAttestationKey getAttestationKey() {
+    return (KMAttestationKey) attestationKey;
+  }
+
+  @Override
+  public KMPreSharedKey getPresharedKey() {
+    return (KMPreSharedKey) preSharedKey;
   }
 }
