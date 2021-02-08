@@ -1672,6 +1672,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
         if (op.getPadding() == KMType.PADDING_NONE && len != 256)
           KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+        System.out.println("Heap Index:"+repository.alloc((short)0));
         len =
             op.getOperation()
                 .finish(

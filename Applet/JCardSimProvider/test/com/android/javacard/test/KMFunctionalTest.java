@@ -41,15 +41,26 @@ import com.android.javacard.keymaster.KMKeymasterApplet;
 import com.android.javacard.keymaster.KMRepository;
 import com.android.javacard.keymaster.KMType;
 import com.android.javacard.keymaster.KMVerificationToken;
+//import com.licel.jcardsim.bouncycastle.crypto.Digest;
 import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
+
 import javacard.framework.AID;
 import javacard.framework.Util;
+import javacard.security.KeyBuilder;
+import javacard.security.KeyPair;
+import javacard.security.RSAPrivateKey;
+import javacard.security.RSAPublicKey;
+import javacard.security.Signature;
+import javacardx.crypto.Cipher;
 
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Arrays;
+import java.util.Random;
 
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -2027,6 +2038,159 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
+  public byte[] EncryptMessage(byte[] input, short params, byte[] keyBlob) {
+    short ret = begin(KMType.ENCRYPT,
+            KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
+            KMKeyParameters.instance(params), (short) 0);
+    // Get the operation handle.
+    short opHandle = KMArray.cast(ret).get((short) 2);
+    byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+    KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0,
+            (short) opHandleBuf.length);
+    opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+
+    ret = finish(opHandle,
+            KMByteBlob.instance(input, (short) 0, (short) input.length), null,
+            (short) 0, (short) 0, (short) 0, KMError.OK);
+    short dataPtr = KMArray.cast(ret).get((short) 2);
+    byte[] output = new byte[KMByteBlob.cast(dataPtr).length()];
+    if (KMByteBlob.cast(dataPtr).length() > 0) {
+      Util.arrayCopyNonAtomic(KMByteBlob.cast(dataPtr).getBuffer(), KMByteBlob
+              .cast(dataPtr).getStartOff(), output, (short) 0,
+              KMByteBlob.cast(dataPtr).length());
+    }
+    return output;
+  }
+
+  public byte[] DecryptMessage(byte[] input, short params, byte[] keyBlob) {
+    short ret = begin(KMType.DECRYPT,
+            KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
+            KMKeyParameters.instance(params), (short) 0);
+    // Get the operation handle.
+    short opHandle = KMArray.cast(ret).get((short) 2);
+    byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+    KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0,
+            (short) opHandleBuf.length);
+    opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+
+    ret = finish(opHandle,
+            KMByteBlob.instance(input, (short) 0, (short) input.length), null,
+            (short) 0, (short) 0, (short) 0, KMError.OK);
+    short dataPtr = KMArray.cast(ret).get((short) 2);
+    byte[] output = new byte[KMByteBlob.cast(dataPtr).length()];
+    if (KMByteBlob.cast(dataPtr).length() > 0) {
+      Util.arrayCopyNonAtomic(KMByteBlob.cast(dataPtr).getBuffer(), KMByteBlob
+              .cast(dataPtr).getStartOff(), output, (short) 0,
+              KMByteBlob.cast(dataPtr).length());
+    }
+    return output;
+  }
+
+  public short generateRandom(short upperBound) {
+    Random rand = new Random();
+    short int_random = (short) rand.nextInt(upperBound);
+    return int_random;
+  }
+
+  @Test
+  public void JCardTestRsaPkcs1() {
+    //Testing with Only Javacard APIs
+    byte[] message = {
+            0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64,
+            0x21 };
+    for (int i = 0; i < 500; i++) {
+      byte[] out = new byte[256];
+      byte[] dplain = new byte[256];
+      KeyPair rsaKey = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
+      rsaKey.genKeyPair();
+      Cipher rsaCipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
+      RSAPublicKey key = (RSAPublicKey) rsaKey.getPublic();
+      rsaCipher.init(key, Cipher.MODE_ENCRYPT);
+
+      short outlen = rsaCipher.doFinal(message, (short) 0,
+              (short) message.length, out, (short) 0);
+      Assert.assertEquals(outlen, 256);
+
+      RSAPrivateKey privKey = (RSAPrivateKey) rsaKey.getPrivate();
+      rsaCipher.init(privKey, Cipher.MODE_DECRYPT);
+      short d_outlen = rsaCipher.doFinal(out, (short) 0, outlen, dplain,
+              (short) 0);
+      Assert.assertEquals(d_outlen, message.length);
+      byte[] plain = new byte[d_outlen];
+      Util.arrayCopyNonAtomic(dplain, (short) 0, plain, (short) 0, d_outlen);
+
+      Assert.assertTrue(Arrays.equals(message, plain));
+    }
+  }
+
+  @Test
+  public void testVtsRsaPkcs1Success() {
+    init();
+    byte[] message = {
+            0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64,
+            0x21 }; // "Hello World!";
+    for (int i = 0; i < 250; i++) {
+      short key = generateRsaKey(null, null);
+      short rsaKeyPtr = KMArray.cast(key).get((short) 1);
+      byte[] keyBlob = new byte[KMByteBlob.cast(rsaKeyPtr).length()];
+      Util.arrayCopyNonAtomic(KMByteBlob.cast(rsaKeyPtr).getBuffer(),
+              KMByteBlob.cast(rsaKeyPtr).getStartOff(), keyBlob, (short) 0,
+              (short) keyBlob.length);
+      short pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
+              KMType.RSA_PKCS1_1_5_ENCRYPT);
+
+      byte[] cipherText1 = EncryptMessage(message, pkcs1Params, keyBlob);
+      Assert.assertEquals((2048 / 8), cipherText1.length);
+
+      pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
+              KMType.RSA_PKCS1_1_5_ENCRYPT);
+      byte[] cipherText2 = EncryptMessage(message, pkcs1Params, keyBlob);
+      Assert.assertEquals((2048 / 8), cipherText2.length);
+      System.out.println("stage-2");
+      // PKCS1 v1.5 randomizes padding so every result should be different.
+      Assert.assertFalse(Arrays.equals(cipherText1, cipherText2));
+
+      print(cipherText1, (short) 0, (short) cipherText1.length);
+      pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
+              KMType.RSA_PKCS1_1_5_ENCRYPT);
+      byte[] plainText = DecryptMessage(cipherText1, pkcs1Params, keyBlob);
+      Assert.assertTrue(Arrays.equals(message, plainText));
+
+      // Decrypting corrupted ciphertext should fail.
+      short offset_to_corrupt = generateRandom((short) cipherText1.length);
+
+      byte corrupt_byte;
+      do {
+        corrupt_byte = (byte) generateRandom((short) 256);
+      } while (corrupt_byte == cipherText1[offset_to_corrupt]);
+      cipherText1[offset_to_corrupt] = corrupt_byte;
+
+      pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
+              KMType.RSA_PKCS1_1_5_ENCRYPT);
+      // Do Begin operation.
+      short ret = begin(KMType.DECRYPT,
+              KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
+              KMKeyParameters.instance(pkcs1Params), (short) 0);
+      System.out.println("stage-4");
+
+      // Get the operation handle.
+      short opHandle = KMArray.cast(ret).get((short) 2);
+      byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+      KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0,
+              (short) opHandleBuf.length);
+      opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+      System.out.println("stage-5");
+      short dataPtr = KMByteBlob.instance(cipherText1, (short) 0,
+              (short) cipherText1.length);
+      // Finish should return UNKNOWN_ERROR.
+      ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0,
+              KMError.UNKNOWN_ERROR);
+      System.out.println("stage-6");
+      System.out.println("Count of i:" + i);
+    }
+    cleanUp();
+  }
+
   @Test
   public void testSignVerifyWithHmacSHA256WithUpdate(){
     init();
@@ -2560,9 +2724,9 @@ public class KMFunctionalTest {
 
     opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
     if (keyPurpose == KMType.VERIFY) {
-      ret = finish(opHandle, dataPtr, signature, (short) 0, (short) 0, (short) 0);
+      ret = finish(opHandle, dataPtr, signature, (short) 0, (short) 0, (short) 0, KMError.OK);
     } else {
-      ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0);
+      ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0, KMError.OK);
     }
     if(len >0){
       dataPtr = KMArray.cast(ret).get((short)2);
@@ -2610,7 +2774,34 @@ public class KMFunctionalTest {
     }
   }
 
-  public short finish(short operationHandle, short data, byte[] signature, short inParams, short hwToken, short verToken) {
+  public short translateExtendedErrorCodes(short err) {
+    switch (err) {
+      case KMError.SW_CONDITIONS_NOT_SATISFIED:
+      case KMError.UNSUPPORTED_CLA:
+      case KMError.INVALID_P1P2:
+      case KMError.INVALID_DATA:
+      case KMError.CRYPTO_ILLEGAL_USE:
+      case KMError.CRYPTO_ILLEGAL_VALUE:
+      case KMError.CRYPTO_INVALID_INIT:
+      case KMError.CRYPTO_UNINITIALIZED_KEY:
+      case KMError.GENERIC_UNKNOWN_ERROR:
+        err = KMError.UNKNOWN_ERROR;
+        break;
+      case KMError.CRYPTO_NO_SUCH_ALGORITHM:
+        err = KMError.UNSUPPORTED_ALGORITHM;
+        break;
+      case KMError.UNSUPPORTED_INSTRUCTION:
+      case KMError.CMD_NOT_ALLOWED:
+      case KMError.SW_WRONG_LENGTH:
+        err = KMError.UNIMPLEMENTED;
+        break;
+      default:
+        break;
+    }
+    return err;
+  }
+
+  public short finish(short operationHandle, short data, byte[] signature, short inParams, short hwToken, short verToken, short expectedErr) {
     if(hwToken == 0) {
       hwToken = KMHardwareAuthToken.instance();
     }
@@ -2637,16 +2828,27 @@ public class KMFunctionalTest {
     CommandAPDU apdu = encodeApdu((byte)INS_FINISH_OPERATION_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    short ret = KMArray.instance((short) 3);
-    short outParams = KMKeyParameters.exp();
-    KMArray.cast(ret).add((short)0, KMInteger.exp());
-    KMArray.cast(ret).add((short)1, outParams);
-    KMArray.cast(ret).add((short)2, KMByteBlob.exp());
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
+    short ret;
+    short error;
+    if (expectedErr == KMError.OK) {
+      ret = KMArray.instance((short) 3);
+      short outParams = KMKeyParameters.exp();
+      KMArray.cast(ret).add((short)0, KMInteger.exp());
+      KMArray.cast(ret).add((short)1, outParams);
+      KMArray.cast(ret).add((short)2, KMByteBlob.exp());
+    } else {
+      ret = KMInteger.exp();
+    }
     ret = decoder.decode(ret, respBuf, (short) 0, len);
-    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
-    Assert.assertEquals(error, KMError.OK);
+    if (expectedErr == KMError.OK) {
+      error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
+    } else {
+      error = KMInteger.cast(ret).getShort();
+      error = translateExtendedErrorCodes(error);
+    }
+    Assert.assertEquals(error, expectedErr);
     return ret;
   }
   public short update(short operationHandle, short data, short inParams, short hwToken, short verToken) {
