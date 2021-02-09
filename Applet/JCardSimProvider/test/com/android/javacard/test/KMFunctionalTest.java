@@ -2093,6 +2093,50 @@ public class KMFunctionalTest {
   }
 
   @Test
+  public void testDesEcbPkcs7PaddingCorrupted() {
+    init();
+    short desKey = generateAesDesKey(KMType.DES, (short) 168, null, null, false);
+    short desKeyPtr = KMArray.cast(desKey).get((short) 1);
+    byte[] keyBlob = new byte[KMByteBlob.cast(desKeyPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(desKeyPtr).getBuffer(), KMByteBlob
+            .cast(desKeyPtr).getStartOff(), keyBlob, (short) 0,
+            (short) keyBlob.length);
+
+    byte[] message = {
+      0x61 };
+    short desPkcs7Params = getAesDesParams(KMType.DES, KMType.ECB,
+            KMType.PKCS7, null);
+    byte[] cipherText1 = EncryptMessage(message, desPkcs7Params, keyBlob);
+    Assert.assertEquals(8, cipherText1.length);
+    Assert.assertFalse(Arrays.equals(message, cipherText1));
+
+    // Corrupt the cipher text.
+    ++cipherText1[(cipherText1.length / 2)];
+
+    // Decrypt operation
+    // Begin
+    desPkcs7Params = getAesDesParams(KMType.DES, KMType.ECB, KMType.PKCS7, null);
+
+    short ret = begin(KMType.DECRYPT,
+            KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
+            KMKeyParameters.instance(desPkcs7Params), (short) 0);
+    // Get the operation handle.
+    short opHandle = KMArray.cast(ret).get((short) 2);
+    byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+    KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0,
+            (short) opHandleBuf.length);
+    opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+
+    // Finish
+    short dataPtr = KMByteBlob.instance(cipherText1, (short) 0,
+            (short) cipherText1.length);
+    opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+    ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0,
+            KMError.INVALID_ARGUMENT);
+    cleanUp();
+  }
+
+  @Test
   public void testVtsRsaPkcs1Success() {
     init();
     byte[] message = {
