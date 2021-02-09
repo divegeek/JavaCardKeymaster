@@ -15,8 +15,24 @@
  */
 package com.android.javacard.keymaster;
 
-public class KMInstance {
-  public byte reserved;
-  public Object object;
-  public byte instanceCount;
+import javacard.security.ECPrivateKey;
+import javacard.security.KeyPair;
+
+public class KMECPrivateKey implements KMAttestationKey {
+
+  private KeyPair ecKeyPair;
+
+  public KMECPrivateKey(KeyPair ecPair) {
+    ecKeyPair = ecPair;
+  }
+
+  public void setS(byte[] buffer, short offset, short length) {
+    ECPrivateKey ecPriv = (ECPrivateKey) ecKeyPair.getPrivate();
+    ecPriv.setS(buffer, offset, length);
+  }
+  
+  public ECPrivateKey getPrivateKey() {
+    return (ECPrivateKey) ecKeyPair.getPrivate();
+  }
+
 }

@@ -1,3 +1,18 @@
+/*
+ * Copyright(C) 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" (short)0IS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.android.javacard.keymaster;
 
 import org.globalplatform.upgrade.Element;
@@ -205,9 +220,7 @@ public interface KMSEProvider extends KMUpgradable {
    * This is a oneshot operation that performs key derivation function using cmac kdf (CKDF) as
    * defined in android keymaster hal definition.
    *
-   * @param aesKey is the key to use for ckdf.
-   * @param aesKeyStart is the start of the aes key buffer.
-   * @param aesKeyLen is the length of the aes key buffer.
+   * @param instance of pre-shared key.
    * @param label is the label to be used for ckdf.
    * @param labelStart is the start of label.
    * @param labelLen is the length of the label.
@@ -218,10 +231,8 @@ public interface KMSEProvider extends KMUpgradable {
    * @param keyStart is the start of the output buffer.
    * @return length of the derived key buffer in bytes.
    */
-  short cmacKdf(
-      byte[] aesKey,
-      short aesKeyStart,
-      short aesKeyLen,
+  short cmacKDF(
+      KMPreSharedKey hmacKey,
       byte[] label,
       short labelStart,
       short labelLen,
@@ -253,6 +264,26 @@ public interface KMSEProvider extends KMUpgradable {
       short dataLength,
       byte[] signature,
       short signatureStart);
+
+  /**
+   * This is a oneshot operation that signs the data using hmac algorithm.
+   * This is used to derive the key, which is used to encrypt the keyblob.
+   *
+   * @param instance of masterkey.
+   * @param data is the buffer containing data to be signed.
+   * @param dataStart is the start of the data.
+   * @param dataLength is the length of the data.
+   * @param signature is the output signature buffer
+   * @param signatureStart is the start of the signature
+   * @return length of the signature buffer in bytes.
+   */
+  short hmacKDF(
+          KMMasterKey masterkey,
+          byte[] data,
+          short dataStart,
+          short dataLength,
+          byte[] signature,
+          short signatureStart);
 
   /**
    * This is a oneshot operation that verifies the signature using hmac algorithm.
@@ -313,9 +344,7 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that signs the data using EC private key.
    *
-   * @param secret is the private key of P-256 curve.
-   * @param secretStart is the start of the private key buffer.
-   * @param secretLength is the length of the private buffer in bytes.
+   * @param instance of KMAttestationKey.
    * @param inputDataBuf is the buffer of the input data.
    * @param inputDataStart is the start of the input data buffer.
    * @param inputDataLength is the length of the inpur data buffer in bytes.
@@ -324,9 +353,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @return length of the decrypted data.
    */
   short ecSign256(
-          byte[] secret,
-          short secretStart,
-          short secretLength,
+          KMAttestationKey ecPrivKey,
           byte[] inputDataBuf,
           short inputDataStart,
           short inputDataLength,
@@ -472,4 +499,62 @@ public interface KMSEProvider extends KMUpgradable {
    * @return true if upgrading, otherwise false.
    */
   boolean isUpgrading();
+
+  /**
+   * This function generates an AES Key of keySizeBits, which is used as
+   * an master key. This generated key is maintained by the SEProvider.
+   * This function should be called only once at the time of installation.
+   *
+   * @param keySizeBits key size in bits.
+   * @return An instance of KMMasterKey.
+   */
+  KMMasterKey createMasterKey(short keySizeBits);
+
+  /**
+   * This function creates an ECKey and initializes the ECPrivateKey with
+   * the provided input key data. The initialized Key is maintained by the
+   * SEProvider. This function should be called only while provisioning the
+   * attestation key.
+   *
+   * @param keyData buffer containing the ec private key.
+   * @param offset start of the buffer.
+   * @param length length of the buffer.
+   * @return An instance of KMAttestationKey.
+   */
+  KMAttestationKey createAttestationKey(byte[] keyData, short offset, short length);
+
+  /**
+   * This function creates an HMACKey and initializes the key with the
+   * provided input key data. This created key is maintained by the
+   * SEProvider. This function should be called only while provisioing the
+   * pre-shared secret.
+   *
+   * @param keyData buffer containing the key data.
+   * @param offset start of the buffer.
+   * @param length length of the buffer.
+   * @return An instance of KMPreSharedKey.
+   */
+  KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length);
+
+  /**
+   * Returns the master key.
+   *
+   * @return Instance of the KMMasterKey
+   */
+  KMMasterKey getMasterKey();
+
+  /**
+   * Returns the attestation key.
+   *
+   * @return Instance of the  KMAttestationKey.
+   */
+  KMAttestationKey getAttestationKey();
+
+  /**
+   * Returns the preshared key.
+   *
+   * @return Instance of the KMPreSharedKey.
+   */
+  KMPreSharedKey getPresharedKey();
+
 }

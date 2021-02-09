@@ -1,3 +1,18 @@
+/*
+ * Copyright(C) 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" (short)0IS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.android.javacard.keymaster;
 
 import javacard.framework.JCSystem;
@@ -106,7 +121,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   }
 
   private static void init() {
-    //    if (repo == null) repo = KMRepository.instance();
     stack = null;
     stackPtr = 0;
     certStart = 0;
@@ -262,7 +276,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     pushBytes(X509Subject, (short) 0, (short) X509Subject.length);
     pushValidity();
     // issuer - der encoded
-    //    pushBytes(repo.getCertDataBuffer(), repo.getIssuer(), repo.getIssuerLen());
     pushBytes(
         KMByteBlob.cast(issuer).getBuffer(),
         KMByteBlob.cast(issuer).getStartOff(),
@@ -283,23 +296,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   private static void pushExtensions() {
     short last = stackPtr;
-    //    byte keyusage = 0;
-    //    byte unusedBits = 8;
-    /*
-    if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.SIGN, hwParams)) {
-      keyusage = (byte) (keyusage | keyUsageSign);
-      unusedBits = 7;
-    }
-    if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.WRAP_KEY, hwParams)) {
-      keyusage = (byte) (keyusage | keyUsageKeyEncipher);
-      unusedBits = 5;
-    }
-    if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.DECRYPT, hwParams)) {
-      keyusage = (byte) (keyusage | keyUsageDataEncipher);
-      unusedBits = 4;
-    }
-
-     */
     if (keyUsage != 0) pushKeyUsage(keyUsage, unusedBits);
     pushKeyDescription();
     pushSequenceHeader((short) (last - stackPtr));
@@ -544,7 +540,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static void pushRoT() {
     short last = stackPtr;
     // verified boot hash
-    // pushOctetString(repo.verifiedBootHash, (short) 0, (short) repo.verifiedBootHash.length);
     pushOctetString(
         KMByteBlob.cast(verifiedHash).getBuffer(),
         KMByteBlob.cast(verifiedHash).getStartOff(),
@@ -775,12 +770,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   }
 
   @Override
-  public KMAttestationCert signingKey(short privKey) {
-    signPriv = privKey;
-    return this;
-  }
-
-  @Override
   public short getCertStart() {
     return certStart;
   }
@@ -808,11 +797,10 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     tbsLength = (short) (tbsLength - tbsOffset);
     pushSequenceHeader((short) (last - stackPtr));
     certStart = stackPtr;
-    short sigLen = KMJCardSimulator.getInstance()
+    KMJCardSimulator provider = KMJCardSimulator.getInstance();
+    short sigLen = provider
         .ecSign256(
-                KMByteBlob.cast(signPriv).getBuffer(),
-                KMByteBlob.cast(signPriv).getStartOff(),
-                KMByteBlob.cast(signPriv).length(),
+                provider.getAttestationKey(),
                 stack,
                 tbsOffset,
                 tbsLength,
@@ -833,7 +821,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   public KMAttestationCert makeUniqueId(byte[] scratchPad, short scratchPadOff,
           byte[] creationTime, short timeOffset, short creationTimeLen,
           byte[] attestAppId, short appIdOff, short attestAppIdLen,
-          byte resetSinceIdRotation, byte[] key, short keyOff, short keyLen) {
+          byte resetSinceIdRotation, KMMasterKey masterKey) {
     // Concatenate T||C||R
     // temporal count T
     short temp = KMUtils.countTemporalCount(creationTime, timeOffset,
@@ -851,8 +839,17 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     scratchPad[scratchPadOff] = resetSinceIdRotation;
     scratchPadOff++;
 
+    //Get the key data from the master key
+    KMAESKey aesKey = (KMAESKey) masterKey;
+    short mKeyData =  KMByteBlob.instance((short) (aesKey.getKeySizeBits() / 8));
+    aesKey.getKey(
+            KMByteBlob.cast(mKeyData).getBuffer(), /* Key */
+            KMByteBlob.cast(mKeyData).getStartOff()); /* Key start*/
     timeOffset = KMByteBlob.instance((short) 32);
-    appIdOff = KMJCardSimulator.getInstance().hmacSign(key, keyOff, keyLen,
+    appIdOff = KMJCardSimulator.getInstance().hmacSign(
+            KMByteBlob.cast(mKeyData).getBuffer(), /* Key */
+            KMByteBlob.cast(mKeyData).getStartOff(), /* Key start*/
+            KMByteBlob.cast(mKeyData).length(), /* Key length*/
             scratchPad, /* data */
             temp, /* data start */
             scratchPadOff, /* data length */

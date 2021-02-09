@@ -363,15 +363,4 @@ public class KMEncoder {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
-  /*
-  private static void print(byte[] buf, short start, short length){
-    StringBuilder sb = new StringBuilder();
-    for(int i = start; i < (start+length); i++){
-      sb.append(String.format("%02X", buf[i])) ;
-      //if((i-start)%16 == 0 && (i-start) != 0) sb.append(String.format("\n"));
-    }
-    System.out.println(sb.toString());
-  }
-
-   */
 }

@@ -38,7 +38,7 @@
 #include <openssl/bio.h>
 #include <openssl/asn1.h>
 
-#define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v0.1"
+#define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v1.0"
 #define JAVACARD_KEYMASTER_AUTHOR    "Android Open Source Project"
 
 #define APDU_CLS 0x80

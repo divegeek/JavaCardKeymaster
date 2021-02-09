@@ -15,8 +15,24 @@
  */
 package com.android.javacard.keymaster;
 
-public class KMInstance {
-  public byte reserved;
-  public Object object;
-  public byte instanceCount;
+import javacard.security.HMACKey;
+
+public class KMHmacKey implements KMPreSharedKey {
+  private HMACKey hmacKey;
+
+  public KMHmacKey(HMACKey key) {
+    hmacKey = key;
+  }
+
+  public void setKey(byte[] keyData, short kOff, short length) {
+    hmacKey.setKey(keyData, kOff, length);
+  }
+
+  public byte getKey(byte[] keyData, short kOff) {
+    return hmacKey.getKey(keyData, kOff);
+  }
+
+  public short getKeySizeBits() {
+    return hmacKey.getSize();
+  }
 }
