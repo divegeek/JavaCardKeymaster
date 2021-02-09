@@ -1,0 +1,245 @@
+// converted by version 1.3
+// on Wed Feb 14 10:43:54 CET 2018
+
+.package org/globalplatform/upgrade {
+	.aid 0xA0:0x0:0x0:0x1:0x51:0x7;
+	.version 1.1;
+
+	.imports {
+		0xA0:0x0:0x0:0x0:0x62:0x0:0x1 1.0;		//java/lang
+	}
+
+	.constantPool {
+		// 0
+		staticMethodRef 0.0.0()V;		// java/lang/Object.<init>()V
+	}
+
+	.interface public abstract Element 0 {
+
+		.fields {
+			public static final byte TYPE_SIMPLE = 1;		// B
+			public static final byte TYPE_MAPPED = 2;		// B
+			public static final short SIZE_BOOLEAN = 1;		// S
+			public static final short SIZE_BYTE = 1;		// S
+			public static final short SIZE_SHORT = 2;		// S
+		}
+
+		.method public abstract write(Z)Lorg/globalplatform/upgrade/Element; 0 {
+		}
+
+		.method public abstract write(B)Lorg/globalplatform/upgrade/Element; 1 {
+		}
+
+		.method public abstract write(S)Lorg/globalplatform/upgrade/Element; 2 {
+		}
+
+		.method public abstract write(Ljava/lang/Object;)Lorg/globalplatform/upgrade/Element; 3 {
+			.descriptor	Ljava/lang/Object;	0.0;
+
+		}
+
+		.method public abstract canWriteBoolean()S 4 {
+		}
+
+		.method public abstract canWriteByte()S 5 {
+		}
+
+		.method public abstract canWriteShort()S 6 {
+		}
+
+		.method public abstract canWriteObject()S 7 {
+		}
+
+		.method public abstract initRead()V 8 {
+		}
+
+		.method public abstract readBoolean()Z 9 {
+		}
+
+		.method public abstract readByte()B 10 {
+		}
+
+		.method public abstract readShort()S 11 {
+		}
+
+		.method public abstract readObject()Ljava/lang/Object; 12 {
+			.descriptor	Ljava/lang/Object;	0.0;
+
+		}
+
+		.method public abstract canReadBoolean()S 13 {
+		}
+
+		.method public abstract canReadByte()S 14 {
+		}
+
+		.method public abstract canReadShort()S 15 {
+		}
+
+		.method public abstract canReadObject()S 16 {
+		}
+
+	}
+
+	.interface public abstract MappedElement 1 {
+
+		.superInterfaces {
+			Element;
+		}
+
+		.method public abstract write(Z)Lorg/globalplatform/upgrade/Element; 0 {
+		}
+
+		.method public abstract write(B)Lorg/globalplatform/upgrade/Element; 1 {
+		}
+
+		.method public abstract write(S)Lorg/globalplatform/upgrade/Element; 2 {
+		}
+
+		.method public abstract write(Ljava/lang/Object;)Lorg/globalplatform/upgrade/Element; 3 {
+			.descriptor	Ljava/lang/Object;	0.0;
+
+		}
+
+		.method public abstract canWriteBoolean()S 4 {
+		}
+
+		.method public abstract canWriteByte()S 5 {
+		}
+
+		.method public abstract canWriteShort()S 6 {
+		}
+
+		.method public abstract canWriteObject()S 7 {
+		}
+
+		.method public abstract initRead()V 8 {
+		}
+
+		.method public abstract readBoolean()Z 9 {
+		}
+
+		.method public abstract readByte()B 10 {
+		}
+
+		.method public abstract readShort()S 11 {
+		}
+
+		.method public abstract readObject()Ljava/lang/Object; 12 {
+			.descriptor	Ljava/lang/Object;	0.0;
+
+		}
+
+		.method public abstract canReadBoolean()S 13 {
+		}
+
+		.method public abstract canReadByte()S 14 {
+		}
+
+		.method public abstract canReadShort()S 15 {
+		}
+
+		.method public abstract canReadObject()S 16 {
+		}
+
+		.method public abstract getMappedObject()Ljava/lang/Object; 17 {
+			.descriptor	Ljava/lang/Object;	0.0;
+
+		}
+
+		.method public abstract setMappedObject(Ljava/lang/Object;)Lorg/globalplatform/upgrade/Element; 18 {
+			.descriptor	Ljava/lang/Object;	0.0;
+
+		}
+
+	}
+
+	.interface public abstract OnUpgradeListener 2 {
+
+		.method public abstract onSave()Lorg/globalplatform/upgrade/Element; 0 {
+		}
+
+		.method public abstract onCleanup()V 1 {
+		}
+
+		.method public abstract onRestore(Lorg/globalplatform/upgrade/Element;)V 2 {
+		}
+
+		.method public abstract onConsolidate()V 3 {
+		}
+
+	}
+
+	.class public final UpgradeManager 3 extends 0.0 {		// extends java/lang/Object
+
+		.publicMethodTable 1 {
+			equals(Ljava/lang/Object;)Z;
+		}
+
+		.packageMethodTable 0 {
+		}
+
+		.method private <init>()V {
+			.stack 1;
+			.locals 0;
+
+				L0:	aload_0;
+					invokespecial 0;		// java/lang/Object.<init>()V
+					return;
+		}
+
+		.method public static isUpgrading()Z 0 {
+			.stack 1;
+			.locals 0;
+
+				L0:	sconst_0;
+					sreturn;
+		}
+
+		.method public static getPreviousPackageVersion()S 1 {
+			.stack 1;
+			.locals 0;
+
+				L0:	sconst_0;
+					sreturn;
+		}
+
+		.method public static checkPreviousPackageAID([BSB)Z 2 {
+			.stack 1;
+			.locals 0;
+
+				L0:	sconst_0;
+					sreturn;
+		}
+
+		.method public static createElement(BSS)Lorg/globalplatform/upgrade/Element; 3 {
+			.stack 1;
+			.locals 0;
+
+				L0:	aconst_null;
+					areturn;
+		}
+
+		.method public static matchMappedElement(Ljava/lang/Object;)Lorg/globalplatform/upgrade/MappedElement; 4 {
+			.stack 1;
+			.locals 0;
+
+			.descriptor	Ljava/lang/Object;	0.0;
+
+				L0:	aconst_null;
+					areturn;
+		}
+
+		.method public static nonNullReference()Ljava/lang/Object; 5 {
+			.stack 1;
+			.locals 0;
+
+			.descriptor	Ljava/lang/Object;	0.0;
+
+				L0:	aconst_null;
+					areturn;
+		}
+
+	}
+
+}

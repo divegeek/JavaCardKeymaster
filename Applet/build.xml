@@ -1,188 +1,26 @@
-<project name="JavaCardKeymaster" basedir=".">
-
-  <!-- Properties - other properties are included from build_common.xml -->
-  <property environment="env"/>
-  <property name="jdk.home" value="${env.JAVA_HOME}"/>
-  <property name="src.dir" value="Applet/src"/>
-  <property name="src.oracle.dir" value="Applet/OracleSimProvider"/>
-  <property name="src.jcard.dir" value="Applet/JCardSimProvider"/>
-  <property name="test.dir" value="Applet/test"/>
-  <property name="unit-test.test.build.dir" value="build/unittest/test"/>
-  <property name="unit-test.src.build.dir" value="build/unittest/src"/>
-  <property name="jc.home" value="${env.JC_HOME_SIMULATOR}"/>
-  <property name="jc.home.tools" value="${env.JC_HOME_TOOLS}"/>
-  <property name="redirect.output" value="default.output"/>
-  <property name="build.sysclasspath" value="ignore"/>
-  <property name="env.JC_TARGET_PLATFORM" value="3.1.0"/>
-
-  <taskdef resource="net/sf/antcontrib/antcontrib.properties">
-    <classpath>
-      <pathelement location="${jc.home}/lib/ant-contrib-1.0b3.jar"/>
-    </classpath>
-  </taskdef>
-
-  <!-- Unit Testing uses jcardsim with javacard classic 3.0.5 apis -->
-  <path id="unit-test.classpath">
-    <pathelement location="build/unittest/src"/>
-    <pathelement location="lib/junit-4.13.jar"/>
-    <pathelement location="lib/hamcrest-core-1.3.jar"/>
-    <pathelement location="lib/jcardsim-3.0.5-SNAPSHOT.jar"/>
-  </path>
-
-  <path id="jc_jars"
-    description="Sets the classpath to Java Card API">
-    <pathelement path="${jc.home}/lib/api_classic.jar"/>
-    <pathelement path="${jc.home}/lib/api_classic_annotations.jar"/>
-  </path>
-
-  <path id="jc_tools_jars"
-    description="Sets the classpath to Java Card API and tools">
-    <pathelement path="${jc.home}/lib/api_classic.jar"/>
-    <pathelement path="${jc.home}/lib/tools_simulator.jar"/>
-    <pathelement path="${jc.home.tools}/lib/tools.jar"/>
-    <pathelement path="${jc.home}/lib/api_classic_annotations.jar"/>
-  </path>
-
-  <!-- Definitions for tasks for javacard tools -->
-  <taskdef name="convert"
-    classname="com.sun.javacard.ant.tasks.ConverterTask"
-    classpath="${jc.home.tools}/lib/jctasks_tools.jar"/>
-  <taskdef name="verifycap"
-    classname="com.sun.javacard.ant.tasks.VerifyCapTask"
-    classpath="${jc.home.tools}/lib/jctasks_tools.jar"/>
-  <taskdef name="scriptgen"
-    classname="com.sun.javacard.ant.tasks.ScriptgenTask"
-    classpath="${jc.home}/lib/jctasks_simulator.jar"/>
+<project name="JavaCardKeymaster" default ="default" >
 
   <!-- Targets -->
+  <target name = "applet.init" description ="Initialize applet build environment">
+	  <property name="applet.home.dir" value="${basedir}"/>
+	  <property name="applet.build.dir" value="${basedir}/build"/>
+	  <property name="applet.common.src" value="${basedir}/src" />
+	  <property name="JCardSim.dir" value="${basedir}/JCardSimProvider"/>
+	  <property name="AndroidSE.dir" value="${basedir}/AndroidSEProvider"/>
+	  <mkdir dir="${basedir}/build"/>
+  </target>
+
   <target name="cleanall">
-    <delete dir="./build"/>
+    <delete dir="${basedir}/build"/>
   </target>
 
-  <target name="init">
-    <mkdir dir="./build/classes"/>
-  </target>
-<!--
-  <target name="compile_applet" depends="init">
-    <pathconvert property="boot_classpath" refid="jc_jars"/>
-    <javac srcdir="${src.dir}"
-      destdir="./build/classes"
-      source="7"
-      target="7"
-      debug="yes"
-      includeantruntime="no"
-      bootclasspath="${boot_classpath}">
-    </javac>
-  </target>
-  -->
-  <target name="compile_applet" depends="init">
-    <pathconvert property="boot_classpath" refid="jc_jars"/>
-    <javac
-      destdir="./build/classes"
-      source="7"
-      target="7"
-      debug="yes"
-      includeantruntime="no"
-      bootclasspath="${boot_classpath}">
-      <src path="${src.dir}"/>
-      <src path="${src.oracle.dir}"/>
-    </javac>
-  </target>
+<target name="JCardSim" depends = "applet.init">
+    <ant antfile="${JCardSim.dir}/build.xml" target="default"/>
+</target>
 
-  <target name="convert_applet" depends="compile_applet">
-    <convert dir="./build/classes" Configfile="JavaCardKeymaster.opt">
-      <classpath refid="jc_tools_jars"/>
-    </convert>
-    <copy todir="./build" flatten="true">
-      <fileset dir="./build/classes">
-        <include name="**/*.cap"/>
-        <include name="**/*.jca"/>
-        <include name="**/*.exp"/>
-      </fileset>
-      <regexpmapper from="(.*)\.(.*)"
-        to="JavaCardKeymaster.\2"
-        casesensitive="yes"/>
-    </copy>
-  </target>
+<target name="AndroidSE" depends = "applet.init">
+    <ant antfile="${AndroidSE.dir}/build.xml" target="default"/>
+</target>
 
-  <target name="verify_applet" depends="convert_applet">
-    <verifycap capfile="./build/JavaCardKeymaster.cap" outfile="./build/digest.txt">
-      <exportfiles dir="${jc.home.tools}/api_export_files_${env.JC_TARGET_PLATFORM}"
-        includes="**/*.exp"/>
-      <classpath refid="jc_tools_jars"/>
-    </verifycap>
-  </target>
-
-  <target name="generate_script" depends="verify_applet">
-    <scriptgen capfile="./build/JavaCardKeymaster.cap"
-      outfile="./build/scr.txt"
-      hashfile="./build/digest.txt">
-      <classpath refid="jc_tools_jars"/>
-    </scriptgen>
-
-    <concat destfile="./build/JavaCardKeymaster.scr">
-      <filelist dir="." files="powerup.scr"/>
-      <filelist dir="./build" files="scr.txt"/>
-      <filelist dir="." files="JavaCardKeymaster.scr"/>
-      <filelist dir="." files="powerdown.scr"/>
-    </concat>
-    <delete>
-      <fileset dir="./build" includes="*.cap, *.jca, *.exp, *.txt"/>
-    </delete>
-  </target>
-
-  <target name="run" depends="generate_script">
-    <java classname="com.sun.javacard.apdutool.Main" output="${redirect.output}" failonerror="true">
-      <arg value="-nobanner"/>
-      <arg value="-noatr"/>
-      <arg value="build/JavaCardKeymaster.scr"/>
-      <classpath refid="jc_tools_jars"/>
-    </java>
-  </target>
-
-  <!-- Unit Testing related targets -->
-  <target name="unit-test.clean">
-    <delete dir="${unit-test.test.build.dir}"/>
-    <delete dir="${unit-test.src.build.dir}"/>
-  </target>
-
-  <!--
-  <target name="unit-test.src-compile">
-    <mkdir dir="${unit-test.src.build.dir}"/>
-    <javac srcdir="${src.dir}" destdir="${unit-test.src.build.dir}" includeantruntime="false">
-      <classpath refid="unit-test.classpath"/>
-    </javac>
-  </target>
--->
-  <target name="unit-test.src-compile">
-    <mkdir dir="${unit-test.src.build.dir}"/>
-    <javac destdir="${unit-test.src.build.dir}" includeantruntime="false">
-      <src path="${src.dir}"/>
-      <src path="${src.jcard.dir}"/>
-      <classpath refid="unit-test.classpath"/>
-    </javac>
-  </target>
-  <target name="unit-test.test-compile" depends="unit-test.src-compile">
-    <mkdir dir="${unit-test.test.build.dir}"/>
-    <javac srcdir="${test.dir}" destdir="${unit-test.test.build.dir}" includeantruntime="false">
-      <classpath refid="unit-test.classpath"/>
-    </javac>
-  </target>
-
-  <target name="unit-test" depends="unit-test.test-compile">
-    <junit printsummary="on" haltonfailure="yes" fork="true">
-      <classpath>
-        <path refid="unit-test.classpath"/>
-        <pathelement location="${unit-test.test.build.dir}"/>
-      </classpath>
-      <formatter type="brief" usefile="false"/>
-      <batchtest>
-        <fileset dir="${test.dir}" includes="**/*Test.java"/>
-      </batchtest>
-    </junit>
-  </target>
-
-  <target name="all" depends="run" />
-  <target name="all-with-unittests" depends="cleanall, init, unit-test, run" />
-
+<target name="default" depends="cleanall, AndroidSE, JCardSim" />
 </project>
