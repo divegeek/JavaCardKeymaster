@@ -347,29 +347,6 @@ public class KMUtils {
     }
   }
 
-  
-  // num1 must be greater then or equal to num2 and both must be positive
-  /*private short subtractIntegers(short num1, short num2) {
-    short buf =
-    repository.alloc((short)24); byte[] scratchPad = repository.getHeap();
-    Util.arrayFillNonAtomic(scratchPad, buf, (short) 24, (byte) 0);
-    Util.arrayCopyNonAtomic(KMInteger.cast(num1).getBuffer(),
-            KMInteger.cast(num1).getStartOff(), scratchPad,
-            (short) (buf + 8 - KMInteger.cast(num1).length()),
-            KMInteger.cast(num1).length());
-    Util.arrayCopyNonAtomic(KMInteger.cast(num2).getBuffer(),
-            KMInteger.cast(num2).getStartOff(), scratchPad,
-            (short) (buf + 16 - KMInteger.cast(num2).length()),
-            KMInteger.cast(num2).length());
-    if (scratchPad[buf] < 0 || scratchPad[(short) (buf + 8)] < 0)
-      return KMType.INVALID_VALUE;
-    if (Util.arrayCompare(scratchPad, buf, scratchPad, (short) (buf + 8),
-            (short) 8) < 1)
-      return KMType.INVALID_VALUE;
-    subtract(scratchPad, buf, (short) (buf + 8), (short) (buf + 16));
-    return KMInteger.uint_64(scratchPad, (short) (buf + 16));
-  }*/
-
   public static void add(byte[] buf, short op1, short op2, short result) {
     byte index = 7;
     byte carry = 0;

@@ -520,7 +520,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[VERIFICATION_TOKEN] = KMArray.cast(tmpVariables[0]).get((short) 1);
     validateVerificationToken(data[VERIFICATION_TOKEN], scratchPad);
     short verTime = KMVerificationToken.cast(data[VERIFICATION_TOKEN]).getTimestamp();
-    // short lastDeviceLockedTime = KMInteger.uint_64(repository.deviceLockedTimestamp, (short)0);
     short lastDeviceLockedTime = repository.getDeviceTimeStamp();
     if (KMInteger.compare(verTime, lastDeviceLockedTime) > 0) {
       Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 8, (byte) 0);
@@ -536,6 +535,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short index = 0;
     while (index < data.length) {
       data[index] = KMType.INVALID_VALUE;
+      index++;
+    }
+    index = 0;
+    while (index < tmpVariables.length) {
+      tmpVariables[index] = KMType.INVALID_VALUE;
       index++;
     }
   }
@@ -3001,7 +3005,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.IMPORT_PARAMETER_MISMATCH);
       }
     } else {
-      // add the key size to scratch pad
       // add the key size to scratchPad
       tmpVariables[5] = KMInteger.uint_16(KMByteBlob.cast(data[SECRET]).length());
       tmpVariables[6] = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, tmpVariables[5]);
@@ -3130,26 +3133,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     receiveIncoming(apdu);
     byte[] scratchPad = apdu.getBuffer();
     // Argument 1 OS Version
-    // short osVersionExp = KMIntegerTag.exp(KMType.UINT_TAG);
     tmpVariables[0] = KMInteger.exp();
     // Argument 2 OS Patch level
-    // short osPatchExp = KMIntegerTag.exp(KMType.UINT_TAG);
     tmpVariables[1] = KMInteger.exp();
     // Argument 3 Vendor Patch level
     tmpVariables[2] = KMInteger.exp();
     // Argument 4 Boot Patch level
     tmpVariables[3] = KMInteger.exp();
     // Argument 5 Verified Boot Key
-    // short bootKeyExp = KMByteBlob.exp();
     tmpVariables[4] = KMByteBlob.exp();
     // Argument 6 Verified Boot Hash
-    // short bootHashExp = KMByteBlob.exp();
     tmpVariables[5] = KMByteBlob.exp();
     // Argument 7 Verified Boot State
-    // short bootStateExp = KMEnum.instance(KMType.VERIFIED_BOOT_STATE);
     tmpVariables[6] = KMEnum.instance(KMType.VERIFIED_BOOT_STATE);
     // Argument 8 Device Locked
-    // short deviceLockedExp = KMEnum.instance(KMType.DEVICE_LOCKED);
     tmpVariables[7] = KMEnum.instance(KMType.DEVICE_LOCKED);
     // Array of expected arguments
     short argsProto = KMArray.instance((short) 8);
@@ -3166,21 +3163,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //reclaim memory
     repository.reclaimMemory(bufferLength);
 
-    // short osVersionTagPtr = KMArray.cast(args).get((short) 0);
     tmpVariables[0] = KMArray.cast(args).get((short) 0);
-    // short osPatchTagPtr = KMArray.cast(args).get((short) 1);
     tmpVariables[1] = KMArray.cast(args).get((short) 1);
-    // short vendorPatchTagPtr = KMArray.cast(args).get((short) 2);
     tmpVariables[2] = KMArray.cast(args).get((short) 2);
-    // short BootPatchTagPtr = KMArray.cast(args).get((short) 3);
     tmpVariables[3] = KMArray.cast(args).get((short) 3);
-    // short verifiedBootKeyPtr = KMArray.cast(args).get((short) 4);
     tmpVariables[4] = KMArray.cast(args).get((short) 4);
-    // short verifiedBootHashPtr = KMArray.cast(args).get((short) 5);
     tmpVariables[5] = KMArray.cast(args).get((short) 5);
-    // short verifiedBootStatePtr = KMArray.cast(args).get((short) 6);
     tmpVariables[6] = KMArray.cast(args).get((short) 6);
-    // short deviceLockedPtr = KMArray.cast(args).get((short) 7);
     tmpVariables[7] = KMArray.cast(args).get((short) 7);
     if (KMByteBlob.cast(tmpVariables[4]).length() > KMRepository.BOOT_KEY_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);

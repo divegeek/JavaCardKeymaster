@@ -30,7 +30,6 @@ public class KMCipherImpl extends KMCipher{
   private short cipherAlg;
   private short padding;
   private short mode;
-  private boolean verificationFlag;
   private short blockMode;
   KMCipherImpl(Cipher c){
     cipher = c;
@@ -59,7 +58,6 @@ public class KMCipherImpl extends KMCipher{
         return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
       } catch (AEADBadTagException e) {
         e.printStackTrace();
-        verificationFlag = false;
         KMException.throwIt(KMError.VERIFICATION_FAILED);
       } catch (ShortBufferException e) {
         e.printStackTrace();
