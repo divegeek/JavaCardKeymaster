@@ -72,6 +72,7 @@ public class KMJCardSimulator implements KMSEProvider {
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   private static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
+  private static final short RSA_KEY_SIZE = 256;
 
 
   public static boolean jcardSim = false;
@@ -166,9 +167,6 @@ public class KMJCardSimulator implements KMSEProvider {
       key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
       key.setKey(buf, (short) startOff);
     }
- //   byte[] buffer = new byte[length];
- //   Util.arrayCopyNonAtomic(buf, startOff, buffer, (short)0,length);
- //   print("AES Key", buffer);
     return key;
   }
 
@@ -221,13 +219,27 @@ public class KMJCardSimulator implements KMSEProvider {
                            byte[] pubModBuf, short pubModStart, short pubModLength, short[] lengths){
     switch (alg){
       case KMType.RSA:
-        KeyPair rsaKey = createRsaKeyPair();
-        RSAPrivateKey privKey = (RSAPrivateKey) rsaKey.getPrivate();
-        lengths[0] = privKey.getExponent(privKeyBuf,privKeyStart);
-        lengths[1] = privKey.getModulus(pubModBuf,pubModStart);
-        if(lengths[0] > privKeyLength || lengths[1] > pubModLength){
+        if (RSA_KEY_SIZE != privKeyLength || RSA_KEY_SIZE != pubModLength) {
           CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
         }
+        KeyPair rsaKey = createRsaKeyPair();
+        RSAPrivateKey privKey = (RSAPrivateKey) rsaKey.getPrivate();
+        //Copy exponent.
+        byte[] exp = new byte[RSA_KEY_SIZE];
+        lengths[0] = privKey.getExponent(exp, (short)0);
+        if (lengths[0] > privKeyLength)
+          CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+        Util.arrayFillNonAtomic(privKeyBuf, privKeyStart, privKeyLength, (byte)0);
+        Util.arrayCopyNonAtomic(exp, (short)0,
+                privKeyBuf, (short)(privKeyStart + privKeyLength - lengths[0]), lengths[0]);
+        //Copy modulus
+        byte[] mod = new byte[RSA_KEY_SIZE];
+        lengths[1] = privKey.getModulus(mod, (short)0);
+        if (lengths[1] > pubModLength)
+          CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+        Util.arrayFillNonAtomic(pubModBuf, pubModStart, pubModLength, (byte)0);
+        Util.arrayCopyNonAtomic(mod, (short)0,
+                pubModBuf, (short)(pubModStart + pubModLength - lengths[1]), lengths[1]);
         break;
       case KMType.EC:
         KeyPair ecKey = createECKeyPair();
@@ -312,20 +324,6 @@ public class KMJCardSimulator implements KMSEProvider {
     if(keyLen != 32 && keyLen != 16){
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
-    /*byte[] keyMaterial = new byte[key];
-    short keySize = 16;
-    if(key.getSize() == 128){
-      keyMaterial = new byte[16];
-    }else if(key.getSize() == 256){
-      keyMaterial = new byte[32];
-      keySize = 32;
-    }
-    key.getKey(keyMaterial,(short)0);
-
-     */
-
-    //print("KeyMaterial Enc", keyMaterial);
-    //print("Authdata Enc", authData, authDataStart, authDataLen);
     java.security.Key aesKey = new SecretKeySpec(keyBuf,keyStart,keyLen, "AES");
     // Create the cipher
     javax.crypto.Cipher cipher = null;
@@ -402,73 +400,67 @@ public class KMJCardSimulator implements KMSEProvider {
       short authDataLen,
       byte[] authTag,
       short authTagStart,
-      short authTagLen) {
-  //Create the sun jce compliant aes key
-    if(keyLen != 32 && keyLen != 16){
+          short authTagLen) {
+    // Create the sun jce compliant aes key
+    if (keyLen != 32 && keyLen != 16) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
-    /*byte[] keyMaterial = new byte[16];
-    short keySize = 16;
-    if(key.getSize() == 128){
-      keyMaterial = new byte[16];
-    }else if(key.getSize() == 256){
-      keyMaterial = new byte[32];
-      keySize = 32;
-    }
-    key.getKey(keyMaterial,(short)0);
-
-     */
-    //print("KeyMaterial Dec", keyMaterial);
-    //print("Authdata Dec", authData, authDataStart, authDataLen);
-    java.security.Key aesKey = new SecretKeySpec(keyBuf,keyStart,keyLen, "AES");
+    java.security.Key aesKey = new SecretKeySpec(keyBuf, keyStart, keyLen,
+            "AES");
     // Create the cipher
-  javax.crypto.Cipher cipher = null;
-  try {
-  cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding", "SunJCE");
-  } catch (NoSuchAlgorithmException e) {
-  e.printStackTrace();
-  CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-  } catch (NoSuchProviderException e) {
-  e.printStackTrace();
-  CryptoException.throwIt(CryptoException.INVALID_INIT);
-  } catch (NoSuchPaddingException e) {
-  e.printStackTrace();
-  CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-  }
-  // Copy nonce
-  if(nonceLen != AES_GCM_NONCE_LENGTH){
-  CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-  }
-  byte[] iv = new byte[AES_GCM_NONCE_LENGTH];
-  Util.arrayCopyNonAtomic(nonce,nonceStart,iv,(short)0,AES_GCM_NONCE_LENGTH);
-  // Init Cipher
-  GCMParameterSpec spec = new GCMParameterSpec(authTagLen * 8, nonce,nonceStart,AES_GCM_NONCE_LENGTH);
-  try {
-  cipher.init(javax.crypto.Cipher.DECRYPT_MODE, aesKey, spec);
-  } catch (InvalidKeyException e) {
-  e.printStackTrace();
-  CryptoException.throwIt(CryptoException.INVALID_INIT);
-  } catch (InvalidAlgorithmParameterException e) {
-  e.printStackTrace();
-  CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-  }
-  // Create auth data
-  byte[] aad = new byte[authDataLen];
-  Util.arrayCopyNonAtomic(authData,authDataStart,aad,(short)0,authDataLen);
-  cipher.updateAAD(aad);
-  // Append the auth tag at the end of data
-    byte[] inputBuf = new byte[(short)(encSecretLen + authTagLen)];
-    Util.arrayCopyNonAtomic(encSecret,encSecretStart,inputBuf,(short)0,encSecretLen);
-    Util.arrayCopyNonAtomic(authTag,authTagStart,inputBuf,encSecretLen,authTagLen);
-  // Decrypt
-    short len = 0;
-    byte[] outputBuf = new byte[cipher.getOutputSize((short)inputBuf.length)];
+    javax.crypto.Cipher cipher = null;
     try {
-      len =  (short)(cipher.doFinal(inputBuf,(short)0,(short)inputBuf.length,outputBuf,(short)0));
-    }catch(AEADBadTagException e){
+      cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding", "SunJCE");
+    } catch (NoSuchAlgorithmException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    } catch (NoSuchProviderException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (NoSuchPaddingException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    // Copy nonce
+    if (nonceLen != AES_GCM_NONCE_LENGTH) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    byte[] iv = new byte[AES_GCM_NONCE_LENGTH];
+    Util.arrayCopyNonAtomic(nonce, nonceStart, iv, (short) 0,
+            AES_GCM_NONCE_LENGTH);
+    // Init Cipher
+    GCMParameterSpec spec = new GCMParameterSpec(authTagLen * 8, nonce,
+            nonceStart, AES_GCM_NONCE_LENGTH);
+    try {
+      cipher.init(javax.crypto.Cipher.DECRYPT_MODE, aesKey, spec);
+    } catch (InvalidKeyException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (InvalidAlgorithmParameterException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    }
+    // Create auth data
+    byte[] aad = new byte[authDataLen];
+    Util.arrayCopyNonAtomic(authData, authDataStart, aad, (short) 0,
+            authDataLen);
+    cipher.updateAAD(aad);
+    // Append the auth tag at the end of data
+    byte[] inputBuf = new byte[(short) (encSecretLen + authTagLen)];
+    Util.arrayCopyNonAtomic(encSecret, encSecretStart, inputBuf, (short) 0,
+            encSecretLen);
+    Util.arrayCopyNonAtomic(authTag, authTagStart, inputBuf, encSecretLen,
+            authTagLen);
+    // Decrypt
+    short len = 0;
+    byte[] outputBuf = new byte[cipher.getOutputSize((short) inputBuf.length)];
+    try {
+      len = (short) (cipher.doFinal(inputBuf, (short) 0,
+              (short) inputBuf.length, outputBuf, (short) 0));
+    } catch (AEADBadTagException e) {
       e.printStackTrace();
       return false;
-    }catch (ShortBufferException e) {
+    } catch (ShortBufferException e) {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     } catch (IllegalBlockSizeException e) {
@@ -478,8 +470,8 @@ public class KMJCardSimulator implements KMSEProvider {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
-    //Copy the decrypted data
-    Util.arrayCopyNonAtomic(outputBuf, (short)0,secret,secretStart,len);
+    // Copy the decrypted data
+    Util.arrayCopyNonAtomic(outputBuf, (short) 0, secret, secretStart, len);
     return true;
   }
 
@@ -641,50 +633,7 @@ public class KMJCardSimulator implements KMSEProvider {
     CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
     return null;
   }
-/*
-  @Override
-  public short updateOperation(short opHandle, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
-    Object op = findOperation(opHandle);
-    if(op instanceof Signature ){
-      ((Signature)op).update(inputDataBuf,inputDataStart,inputDataLength);
-      return 0;
-    }else{
-      return ((KMCipher)op).update(inputDataBuf,inputDataStart,inputDataLength,outputDataBuf,outputDataStart);
-    }
-  }
 
-  @Override
-  public short finishOperation(short opHandle, byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
-    Object op = findOperation(opHandle);
-    short ret = 0;
-    if(op instanceof Signature ){
-      ret = ((Signature)op).sign(inputDataBuf,inputDataStart,inputDataLength,outputDataBuf,outputDataStart);
-    }else{
-      ret = ((KMCipher)op).doFinal(inputDataBuf,inputDataStart,inputDataLength,outputDataBuf,outputDataStart);
-    }
-    removeOperation(opHandle);
-    return ret;
-  }
-
-  @Override
-  public void abortOperation(short opHandle) {
-    removeOperation(opHandle);
-  }
-
-  @Override
-  public void updateAAD(short opHandle, byte[] dataBuf, short dataStart, short dataLength) {
-    KMCipher aesGcm = (KMCipher) findOperation(opHandle);
-    aesGcm.updateAAD(dataBuf, dataStart, dataLength);
-  }
-
-  @Override
-  public void getAESGCMOutputSize(short opHandle, short dataSize, short macLength) {
-    KMCipher aesGcm = (KMCipher) findOperation(opHandle);
-    aesGcm.getAesGcmOutputSize(dataSize, macLength);
-  }
-  */
-
-   
   public KMCipher createRsaDecipher(short padding, short digest, byte[] secret, short secretStart,
                                     short secretLength, byte[] modBuffer, short modOff, short modLength) {
     byte cipherAlg = mapCipherAlg(KMType.RSA, (byte)padding, (byte)0);
@@ -783,12 +732,7 @@ public class KMJCardSimulator implements KMSEProvider {
       (padding == KMType.RSA_PKCS1_1_5_SIGN && digest == KMType.DIGEST_NONE)) {
       return createNoDigestSigner(padding,secret, secretStart, secretLength,
         modBuffer, modOff, modLength);
-    }/*
-    else if (padding == KMCipher.PAD_PKCS1_PSS) alg = Signature.ALG_RSA_SHA_256_PKCS1_PSS;
-    else if (padding == KMCipher.PAD_PKCS1) {
-      alg = Signature.ALG_RSA_SHA_256_PKCS1;
-    }else CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    */
+    }
     Signature rsaSigner = Signature.getInstance((byte)alg, false);
     RSAPrivateKey key = (RSAPrivateKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.LENGTH_RSA_2048, false);
     key.setExponent(secret,secretStart,secretLength);
