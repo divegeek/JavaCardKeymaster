@@ -1,3 +1,18 @@
+/*
+ * Copyright(C) 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.android.javacard.keymaster;
 
 /**
@@ -44,15 +59,13 @@ public interface KMAttestationCert {
    * @param attestAppIdOff Start offset of the attestAppId buffer.
    * @param attestAppIdLen Length of the attestAppId buffer.
    * @param resetSinceIdRotation This holds the information of RESET_SINCE_ID_ROTATION.
-   * @param key This buffer contains the master secret.
-   * @param keyOff Start offset of the master key.
-   * @param keyLen Length of the master key.
+   * @param instance of the master key.
    * @return instance of KMAttestationCert.
    */
   KMAttestationCert makeUniqueId(byte[] scratchpad, short scratchPadOff, byte[] creationTime,
           short creationTimeOff, short creationTimeLen, byte[] attestAppId,
           short attestAppIdOff, short attestAppIdLen, byte resetSinceIdRotation,
-          byte[] key, short keyOff, short keyLen);
+          KMMasterKey masterKey);
 
   /**
    * Set start time received from creation/activation time tag. Used for certificate's valid period.
@@ -129,14 +142,6 @@ public interface KMAttestationCert {
    * @return instance of KMAttestationCert
    */
   KMAttestationCert buffer(byte[] buf, short bufStart, short maxLen);
-
-  /**
-   * Set signing key to be used to sign the cert.
-   *
-   * @param privateKey This is ECPrivateKey with curve P-256.
-   * @return instance of KMAttestationCert
-   */
-  KMAttestationCert signingKey(short privateKey);
 
   /**
    * Get the start of the certificate

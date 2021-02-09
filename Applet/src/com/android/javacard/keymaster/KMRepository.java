@@ -29,7 +29,7 @@ import javacard.framework.Util;
  */
 public class KMRepository implements KMUpgradable {
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 24;
+  public static final short DATA_INDEX_SIZE = 22;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_MEM_SIZE = 2048;
   public static final short HEAP_SIZE = 10000;
@@ -42,10 +42,8 @@ public class KMRepository implements KMUpgradable {
   private static final short OPERATION_HANDLE_ENTRY_SIZE = OPERATION_HANDLE_SIZE + OPERATION_HANDLE_STATUS_SIZE;
 
   // Data table offsets
-  public static final byte MASTER_KEY = 8;
-  public static final byte SHARED_KEY = 9;
-  public static final byte COMPUTED_HMAC_KEY = 10;
-  public static final byte HMAC_NONCE = 11;
+  public static final byte COMPUTED_HMAC_KEY = 8;
+  public static final byte HMAC_NONCE = 9;
   public static final byte ATT_ID_BRAND = 0;
   public static final byte ATT_ID_DEVICE = 1;
   public static final byte ATT_ID_PRODUCT = 2;
@@ -54,18 +52,18 @@ public class KMRepository implements KMUpgradable {
   public static final byte ATT_ID_MEID = 5;
   public static final byte ATT_ID_MANUFACTURER = 6;
   public static final byte ATT_ID_MODEL = 7;
-  public static final byte ATT_EC_KEY = 12;
-  public static final byte CERT_ISSUER = 13;
-  public static final byte CERT_EXPIRY_TIME = 14;
-  public static final byte BOOT_OS_VERSION = 15;
-  public static final byte BOOT_OS_PATCH = 16;
-  public static final byte VENDOR_PATCH_LEVEL = 17;
-  public static final byte BOOT_PATCH_LEVEL = 18;
-  public static final byte BOOT_VERIFIED_BOOT_KEY = 19;
-  public static final byte BOOT_VERIFIED_BOOT_HASH = 20;
-  public static final byte BOOT_VERIFIED_BOOT_STATE = 21;
-  public static final byte BOOT_DEVICE_LOCKED_STATUS = 22;
-  public static final byte BOOT_DEVICE_LOCKED_TIME = 23;
+  public static final byte CERT_ISSUER = 10;
+  public static final byte CERT_EXPIRY_TIME = 11;
+  public static final byte BOOT_OS_VERSION = 12;
+  public static final byte BOOT_OS_PATCH = 13;
+  public static final byte VENDOR_PATCH_LEVEL = 14;
+  public static final byte BOOT_PATCH_LEVEL = 15;
+  public static final byte BOOT_VERIFIED_BOOT_KEY = 16;
+  public static final byte BOOT_VERIFIED_BOOT_HASH = 17;
+  public static final byte BOOT_VERIFIED_BOOT_STATE = 18;
+  public static final byte BOOT_DEVICE_LOCKED_STATUS = 19;
+  public static final byte DEVICE_LOCKED_TIME = 20;
+  public static final byte DEVICE_LOCKED = 21;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -113,6 +111,11 @@ public class KMRepository implements KMUpgradable {
         new Object[] {new byte[KMOperationState.MAX_DATA],
         new Object[KMOperationState.MAX_REFS]}};
       index++;
+    }
+    //Initialize the device locked status
+    if (!isUpgrading) {
+      setDeviceLock(false);
+      setDeviceLockPasswordOnly(false);
     }
     repository = this;
   }
@@ -168,7 +171,6 @@ public class KMRepository implements KMUpgradable {
     return null;
   }
 
-  //TODO refactor following method
   public void persistOperation(byte[] data, short opHandle, KMOperation op) {
   	short index = 0;
     byte[] opId;
@@ -249,16 +251,6 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-  public void initMasterKey(byte[] key, short start, short len) {
-    if(len != MASTER_KEY_SIZE) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    writeDataEntry(MASTER_KEY,key, start, len);
-  }
-
-  public void initHmacSharedSecretKey(byte[] key, short start, short len) {
-    if(len != SHARED_SECRET_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    writeDataEntry(SHARED_KEY,key,start,len);
-  }
-
   public void initComputedHmac(byte[] key, short start, short len) {
     if(len != COMPUTED_HMAC_KEY_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     writeDataEntry(COMPUTED_HMAC_KEY,key,start,len);
@@ -296,14 +288,9 @@ public class KMRepository implements KMUpgradable {
     // If write through caching is implemented then this method will restore the data into cache
   }
 
-  public short getMasterKeySecret() {
-    return readData(MASTER_KEY);
-  }
-
   // This function uses memory from the back of the heap(transient memory). Call
   // reclaimMemory function immediately after the use.
   public short allocReclaimableMemory(short length) {
-    // TODO Verify the below condition (HEAP_SIZE/2)
     if ((((short) (reclaimIndex - length)) <= heapIndex)
             || (length >= HEAP_SIZE / 2)) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
@@ -376,7 +363,6 @@ public class KMRepository implements KMUpgradable {
     if (dataLen != 0) {
       short dataPtr = Util.getShort(dataTable,(short)(id+DATA_INDEX_ENTRY_OFFSET));
       Util.arrayFillNonAtomic(dataTable, dataPtr,dataLen,(byte)0);
-      //Util.arrayFillNonAtomic(dataTable, id,DATA_INDEX_ENTRY_SIZE,(byte)0);
     }
     JCSystem.commitTransaction();
   }
@@ -422,27 +408,12 @@ public class KMRepository implements KMUpgradable {
     return heap;
   }
 
-  public short getSharedKey() {
-    return readData(SHARED_KEY);
-  }
-
   public short getHmacNonce() {
     return readData(HMAC_NONCE);
   }
 
   public short getComputedHmacKey() {
     return readData(COMPUTED_HMAC_KEY);
-  }
-
-  public void persistAttestationKey(short secret) {
-    writeDataEntry(ATT_EC_KEY,
-      KMByteBlob.cast(secret).getBuffer(),
-      KMByteBlob.cast(secret).getStartOff(),
-      KMByteBlob.cast(secret).length());
-  }
-
-  public short getAttKey() {
-    return readData(ATT_EC_KEY);
   }
 
   public void persistAttId(byte id, byte[] buf, short start, short len){
@@ -530,6 +501,39 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
+  public short readROT() {
+    short length = dataLength(BOOT_VERIFIED_BOOT_KEY);
+    length += dataLength(BOOT_VERIFIED_BOOT_HASH);
+    length += dataLength(BOOT_VERIFIED_BOOT_STATE);
+    length += dataLength(BOOT_DEVICE_LOCKED_STATUS);
+    short blob = KMByteBlob.instance(length);
+    if((length = readDataEntry(
+            BOOT_VERIFIED_BOOT_KEY,
+            KMByteBlob.cast(blob).getBuffer(),
+            KMByteBlob.cast(blob).getStartOff())) == 0){
+      return 0;
+    }
+    if((length += readDataEntry(
+            BOOT_VERIFIED_BOOT_HASH,
+            KMByteBlob.cast(blob).getBuffer(),
+            (short) (KMByteBlob.cast(blob).getStartOff() + length))) == 0){
+      return 0;
+    }
+    if((length += readDataEntry(
+            BOOT_VERIFIED_BOOT_STATE,
+            KMByteBlob.cast(blob).getBuffer(),
+            (short) (KMByteBlob.cast(blob).getStartOff() + length))) == 0){
+      return 0;
+    }
+    if((length += readDataEntry(
+            BOOT_DEVICE_LOCKED_STATUS,
+            KMByteBlob.cast(blob).getBuffer(),
+            (short) (KMByteBlob.cast(blob).getStartOff() + length))) == 0){
+      return 0;
+    }
+    return blob;
+  }
+
   public short getVerifiedBootKey(){
     return readData(BOOT_VERIFIED_BOOT_KEY);
   }
@@ -538,7 +542,7 @@ public class KMRepository implements KMUpgradable {
     return readData(BOOT_VERIFIED_BOOT_HASH);
   }
 
-  public boolean getDeviceLock(){
+  public boolean getBootLoaderLock() {
     short blob = readData(BOOT_DEVICE_LOCKED_STATUS);
     return (byte)((getHeap())[KMByteBlob.cast(blob).getStartOff()] & 0xFE) != 0;
   }
@@ -548,13 +552,18 @@ public class KMRepository implements KMUpgradable {
     return (getHeap())[KMByteBlob.cast(blob).getStartOff()];
   }
 
+  public boolean getDeviceLock(){
+    short blob = readData(DEVICE_LOCKED);
+    return (byte)((getHeap())[KMByteBlob.cast(blob).getStartOff()] & 0xFE) != 0;
+  }
+
   public boolean getDeviceLockPasswordOnly(){
-    short blob = readData(BOOT_DEVICE_LOCKED_STATUS);
+    short blob = readData(DEVICE_LOCKED);
     return (byte)((getHeap())[KMByteBlob.cast(blob).getStartOff()] & 0xFD) != 0;
   }
 
   public short getDeviceTimeStamp(){
-    short blob = readData(BOOT_DEVICE_LOCKED_TIME);
+    short blob = readData(DEVICE_LOCKED_TIME);
     if(blob != 0){
     return KMInteger.uint_64(KMByteBlob.cast(blob).getBuffer(),
       KMByteBlob.cast(blob).getStartOff());
@@ -580,27 +589,34 @@ public class KMRepository implements KMUpgradable {
     writeDataEntry(BOOT_PATCH_LEVEL, buf, start, len);
   }
 
-  public void setDeviceLock(boolean flag){
+  public void setBootloaderLocked(boolean flag) {
     short start = alloc(DEVICE_LOCK_FLAG_SIZE);
     if(flag) (getHeap())[start] = (byte)((getHeap())[start] | 0x01);
     else (getHeap())[start] = (byte)((getHeap())[start] & 0xFE);
     writeDataEntry(BOOT_DEVICE_LOCKED_STATUS,getHeap(),start,DEVICE_LOCK_FLAG_SIZE);
   }
 
+  public void setDeviceLock(boolean flag){
+    short start = alloc(DEVICE_LOCK_FLAG_SIZE);
+    if(flag) (getHeap())[start] = (byte)((getHeap())[start] | 0x01);
+    else (getHeap())[start] = (byte)((getHeap())[start] & 0xFE);
+    writeDataEntry(DEVICE_LOCKED,getHeap(),start,DEVICE_LOCK_FLAG_SIZE);
+  }
+
   public void setDeviceLockPasswordOnly(boolean flag){
     short start = alloc(DEVICE_LOCK_FLAG_SIZE);
     if(flag) (getHeap())[start] = (byte)((getHeap())[start] | 0x02);
     else (getHeap())[start] = (byte)((getHeap())[start] & 0xFD);
-    writeDataEntry(BOOT_DEVICE_LOCKED_STATUS,getHeap(),start,DEVICE_LOCK_FLAG_SIZE);
+    writeDataEntry(DEVICE_LOCKED,getHeap(),start,DEVICE_LOCK_FLAG_SIZE);
   }
 
   public void setDeviceLockTimestamp(byte[] buf, short start, short len){
     if(len != DEVICE_LOCK_TS_SIZE) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    writeDataEntry(BOOT_DEVICE_LOCKED_TIME, buf, start,len);
+    writeDataEntry(DEVICE_LOCKED_TIME, buf, start,len);
   }
 
   public void clearDeviceLockTimeStamp(){
-    clearDataEntry(BOOT_DEVICE_LOCKED_TIME);
+    clearDataEntry(DEVICE_LOCKED_TIME);
   }
 
   public void setOsPatch(byte[] buf, short start, short len){
