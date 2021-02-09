@@ -156,7 +156,6 @@ public class KMJCardSimulator implements KMSEProvider {
     return createAESKey(rndNum, (short)0, (short)rndNum.length);
   }
 
- // @Override
   public AESKey createAESKey(byte[] buf, short startOff, short length) {
     AESKey key = null;
     short keysize = (short)(length * 8);
@@ -359,7 +358,6 @@ public class KMJCardSimulator implements KMSEProvider {
     // Create auth data
     byte[] aad = new byte[authDataLen];
     Util.arrayCopyNonAtomic(authData,authDataStart,aad,(short)0,authDataLen);
-   // print("AAD", aad);
     cipher.updateAAD(aad);
     // Encrypt secret
     short len = 0;
@@ -982,8 +980,6 @@ public class KMJCardSimulator implements KMSEProvider {
     //Create the sun jce compliant aes key
     byte[] keyMaterial = new byte[secretLength];
     Util.arrayCopyNonAtomic(secret,secretStart,keyMaterial,(short)0,secretLength);
-    //print("KeyMaterial Enc", keyMaterial);
-    //print("Authdata Enc", authData, authDataStart, authDataLen);
     java.security.Key aesKey = new SecretKeySpec(keyMaterial,(short)0,keyMaterial.length, "AES");
     // Create the cipher
     javax.crypto.Cipher cipher = null;
@@ -1162,7 +1158,6 @@ public class KMJCardSimulator implements KMSEProvider {
 
   @Override
   public KMAttestationCert getAttestationCert(boolean rsaCert) {
-    //certBuilder.reset();
     return KMAttestationCertImpl.instance(rsaCert);
   }
 
