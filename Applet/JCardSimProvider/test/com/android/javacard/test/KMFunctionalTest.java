@@ -17,8 +17,6 @@
 package com.android.javacard.test;
 
 import com.android.javacard.keymaster.KMArray;
-import com.android.javacard.keymaster.KMAttestationCert;
-import com.android.javacard.keymaster.KMAttestationCertImpl;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
@@ -41,20 +39,11 @@ import com.android.javacard.keymaster.KMKeymasterApplet;
 import com.android.javacard.keymaster.KMRepository;
 import com.android.javacard.keymaster.KMType;
 import com.android.javacard.keymaster.KMVerificationToken;
-//import com.licel.jcardsim.bouncycastle.crypto.Digest;
 import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 
 import javacard.framework.AID;
 import javacard.framework.Util;
-import javacard.security.KeyBuilder;
-import javacard.security.KeyPair;
-import javacard.security.RSAPrivateKey;
-import javacard.security.RSAPublicKey;
-import javacard.security.Signature;
-import javacardx.crypto.Cipher;
-
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Random;
 
