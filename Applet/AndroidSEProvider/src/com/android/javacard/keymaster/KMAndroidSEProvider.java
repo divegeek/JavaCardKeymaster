@@ -112,6 +112,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final byte KEYSIZE_128_OFFSET = 0x00;
   public static final byte KEYSIZE_256_OFFSET = 0x01;
   public static final short TMP_ARRAY_SIZE = 256;
+  private static final short RSA_KEY_SIZE = 256;
   public static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
 
   final byte[] CIPHER_ALGS = {
@@ -532,13 +533,27 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short pubModStart, short pubModLength, short[] lengths) {
     switch (alg) {
     case KMType.RSA:
-      KeyPair rsaKey = createRsaKeyPair();
-      RSAPrivateKey privKey = (RSAPrivateKey) rsaKey.getPrivate();
-      lengths[0] = privKey.getExponent(privKeyBuf, privKeyStart);
-      lengths[1] = privKey.getModulus(pubModBuf, pubModStart);
-      if (lengths[0] > privKeyLength || lengths[1] > pubModLength) {
+      if (RSA_KEY_SIZE != privKeyLength || RSA_KEY_SIZE != pubModLength) {
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
+      KeyPair rsaKey = createRsaKeyPair();
+      RSAPrivateKey privKey = (RSAPrivateKey) rsaKey.getPrivate();
+      //Copy exponent.
+      Util.arrayFillNonAtomic(tmpArray, (short) 0, RSA_KEY_SIZE, (byte) 0);
+      lengths[0] = privKey.getExponent(tmpArray, (short)0);
+      if (lengths[0] > privKeyLength)
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      Util.arrayFillNonAtomic(privKeyBuf, privKeyStart, privKeyLength, (byte)0);
+      Util.arrayCopyNonAtomic(tmpArray, (short)0,
+              privKeyBuf, (short)(privKeyStart + privKeyLength - lengths[0]), lengths[0]);
+      //Copy modulus
+      Util.arrayFillNonAtomic(tmpArray, (short) 0, RSA_KEY_SIZE, (byte) 0);
+      lengths[1] = privKey.getModulus(tmpArray, (short)0);
+      if (lengths[1] > pubModLength)
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      Util.arrayFillNonAtomic(pubModBuf, pubModStart, pubModLength, (byte)0);
+      Util.arrayCopyNonAtomic(tmpArray, (short)0,
+              pubModBuf, (short)(pubModStart + pubModLength - lengths[1]), lengths[1]);
       break;
     case KMType.EC:
       KeyPair ecKey = createECKeyPair();

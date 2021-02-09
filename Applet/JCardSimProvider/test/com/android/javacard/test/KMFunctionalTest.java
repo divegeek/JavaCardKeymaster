@@ -2093,37 +2093,6 @@ public class KMFunctionalTest {
   }
 
   @Test
-  public void JCardTestRsaPkcs1() {
-    //Testing with Only Javacard APIs
-    byte[] message = {
-            0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64,
-            0x21 };
-    for (int i = 0; i < 500; i++) {
-      byte[] out = new byte[256];
-      byte[] dplain = new byte[256];
-      KeyPair rsaKey = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
-      rsaKey.genKeyPair();
-      Cipher rsaCipher = Cipher.getInstance(Cipher.ALG_RSA_PKCS1, false);
-      RSAPublicKey key = (RSAPublicKey) rsaKey.getPublic();
-      rsaCipher.init(key, Cipher.MODE_ENCRYPT);
-
-      short outlen = rsaCipher.doFinal(message, (short) 0,
-              (short) message.length, out, (short) 0);
-      Assert.assertEquals(outlen, 256);
-
-      RSAPrivateKey privKey = (RSAPrivateKey) rsaKey.getPrivate();
-      rsaCipher.init(privKey, Cipher.MODE_DECRYPT);
-      short d_outlen = rsaCipher.doFinal(out, (short) 0, outlen, dplain,
-              (short) 0);
-      Assert.assertEquals(d_outlen, message.length);
-      byte[] plain = new byte[d_outlen];
-      Util.arrayCopyNonAtomic(dplain, (short) 0, plain, (short) 0, d_outlen);
-
-      Assert.assertTrue(Arrays.equals(message, plain));
-    }
-  }
-
-  @Test
   public void testVtsRsaPkcs1Success() {
     init();
     byte[] message = {
@@ -2146,11 +2115,10 @@ public class KMFunctionalTest {
               KMType.RSA_PKCS1_1_5_ENCRYPT);
       byte[] cipherText2 = EncryptMessage(message, pkcs1Params, keyBlob);
       Assert.assertEquals((2048 / 8), cipherText2.length);
-      System.out.println("stage-2");
+
       // PKCS1 v1.5 randomizes padding so every result should be different.
       Assert.assertFalse(Arrays.equals(cipherText1, cipherText2));
 
-      print(cipherText1, (short) 0, (short) cipherText1.length);
       pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
               KMType.RSA_PKCS1_1_5_ENCRYPT);
       byte[] plainText = DecryptMessage(cipherText1, pkcs1Params, keyBlob);
@@ -2171,7 +2139,6 @@ public class KMFunctionalTest {
       short ret = begin(KMType.DECRYPT,
               KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
               KMKeyParameters.instance(pkcs1Params), (short) 0);
-      System.out.println("stage-4");
 
       // Get the operation handle.
       short opHandle = KMArray.cast(ret).get((short) 2);
@@ -2179,14 +2146,12 @@ public class KMFunctionalTest {
       KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0,
               (short) opHandleBuf.length);
       opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
-      System.out.println("stage-5");
+
       short dataPtr = KMByteBlob.instance(cipherText1, (short) 0,
               (short) cipherText1.length);
       // Finish should return UNKNOWN_ERROR.
       ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0,
               KMError.UNKNOWN_ERROR);
-      System.out.println("stage-6");
-      System.out.println("Count of i:" + i);
     }
     cleanUp();
   }

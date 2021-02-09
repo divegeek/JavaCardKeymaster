@@ -538,6 +538,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       data[index] = KMType.INVALID_VALUE;
       index++;
     }
+    index = 0;
+    while (index < tmpVariables.length) {
+      tmpVariables[index] = KMType.INVALID_VALUE;
+      index++;
+    }
   }
   /** Sends a response, may be extended response, as requested by the command. */
   public static void sendOutgoing(APDU apdu) {
@@ -1672,7 +1677,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
         if (op.getPadding() == KMType.PADDING_NONE && len != 256)
           KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-        System.out.println("Heap Index:"+repository.alloc((short)0));
         len =
             op.getOperation()
                 .finish(

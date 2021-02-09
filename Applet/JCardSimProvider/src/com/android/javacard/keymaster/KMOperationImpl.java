@@ -41,21 +41,9 @@ public class KMOperationImpl implements KMOperation {
       signature.update(inputDataBuf,inputDataStart,inputDataLength);
       return 0;
   }
-  
-  
-  private static void print(byte[] buf, short start, short length){
-    StringBuilder sb = new StringBuilder();
-    for(int i = start; i < (start+length); i++){
-      sb.append(String.format("%02X", buf[i])) ;
-      //if((i-start)%16 == 0 && (i-start) != 0) sb.append(String.format("\n"));
-    }
-    System.out.println(sb.toString());
-  }
-   
 
   @Override
   public short finish(byte[] inputDataBuf, short inputDataStart, short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
-    print(inputDataBuf, inputDataStart, inputDataLength);
       return cipher.doFinal(inputDataBuf,inputDataStart,inputDataLength,outputDataBuf,outputDataStart);
   }
 
