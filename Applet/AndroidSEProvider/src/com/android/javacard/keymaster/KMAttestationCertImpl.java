@@ -127,7 +127,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   }
 
   private static void init() {
-    //    if (repo == null) repo = KMRepository.instance();
     stack = null;
     stackPtr = 0;
     certStart = 0;
@@ -283,7 +282,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     pushBytes(X509Subject, (short) 0, (short) X509Subject.length);
     pushValidity();
     // issuer - der encoded
-    //    pushBytes(repo.getCertDataBuffer(), repo.getIssuer(), repo.getIssuerLen());
     pushBytes(
         KMByteBlob.cast(issuer).getBuffer(),
         KMByteBlob.cast(issuer).getStartOff(),
@@ -304,23 +302,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   private static void pushExtensions() {
     short last = stackPtr;
-    //    byte keyusage = 0;
-    //    byte unusedBits = 8;
-    /*
-    if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.SIGN, hwParams)) {
-      keyusage = (byte) (keyusage | keyUsageSign);
-      unusedBits = 7;
-    }
-    if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.WRAP_KEY, hwParams)) {
-      keyusage = (byte) (keyusage | keyUsageKeyEncipher);
-      unusedBits = 5;
-    }
-    if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.DECRYPT, hwParams)) {
-      keyusage = (byte) (keyusage | keyUsageDataEncipher);
-      unusedBits = 4;
-    }
-
-     */
     if (keyUsage != 0) pushKeyUsage(keyUsage, unusedBits);
     pushKeyDescription();
     pushSequenceHeader((short) (last - stackPtr));
@@ -565,7 +546,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static void pushRoT() {
     short last = stackPtr;
     // verified boot hash
-    // pushOctetString(repo.verifiedBootHash, (short) 0, (short) repo.verifiedBootHash.length);
     pushOctetString(
         KMByteBlob.cast(verifiedHash).getBuffer(),
         KMByteBlob.cast(verifiedHash).getStartOff(),
@@ -670,7 +650,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static void pushIntegerTag(short tagId, byte[] buf, short start, short len) {
     short last = stackPtr;
     pushInteger(buf, start, len);
-    //    pushIntegerHeader((short) (last - stackPtr));
     pushTagIdHeader(tagId, (short) (last - stackPtr));
   }
   // Ignore leading zeros. Only Unsigned Integers are required hence if MSB is set then add 0x00
