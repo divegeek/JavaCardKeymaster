@@ -3521,6 +3521,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     makeKeyCharacteristics(scratchPad);
     // make root of trust blob
     data[ROT] = repository.readROT();
+    if (data[ROT] == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
 
     // make hidden key params list
     data[HIDDEN_PARAMETERS] =
@@ -3580,6 +3583,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[SW_PARAMETERS] =
         KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getSoftwareEnforced();
     data[ROT] = repository.readROT();
+    if (data[ROT] == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
 
     data[HIDDEN_PARAMETERS] =
         KMKeyParameters.makeHidden(data[APP_ID], data[APP_DATA], data[ROT], scratchPad);
