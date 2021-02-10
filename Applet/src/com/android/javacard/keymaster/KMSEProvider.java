@@ -220,7 +220,7 @@ public interface KMSEProvider extends KMUpgradable {
    * This is a oneshot operation that performs key derivation function using cmac kdf (CKDF) as
    * defined in android keymaster hal definition.
    *
-   * @param instance of pre-shared key.
+   * @param hmacKey instance of pre-shared key.
    * @param label is the label to be used for ckdf.
    * @param labelStart is the start of label.
    * @param labelLen is the length of the label.
@@ -269,7 +269,7 @@ public interface KMSEProvider extends KMUpgradable {
    * This is a oneshot operation that signs the data using hmac algorithm.
    * This is used to derive the key, which is used to encrypt the keyblob.
    *
-   * @param instance of masterkey.
+   * @param masterkey instance of masterkey.
    * @param data is the buffer containing data to be signed.
    * @param dataStart is the start of the data.
    * @param dataLength is the length of the data.
@@ -344,7 +344,7 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that signs the data using EC private key.
    *
-   * @param instance of KMAttestationKey.
+   * @param ecPrivKey instance of KMAttestationKey.
    * @param inputDataBuf is the buffer of the input data.
    * @param inputDataStart is the start of the input data buffer.
    * @param inputDataLength is the length of the inpur data buffer in bytes.

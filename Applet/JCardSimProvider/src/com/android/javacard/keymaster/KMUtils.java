@@ -52,7 +52,6 @@ public class KMUtils {
   public static final short year2051 = 2051;
   public static final short year2020 = 2020;
 
-  // --------------------------------------
   public static short convertToDate(short time, byte[] scratchPad,
           boolean utcFlag) {
 

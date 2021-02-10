@@ -41,7 +41,7 @@ public class KMOperationState {
   // short type
   private static final byte KEY_SIZE = 6;
   private static final byte MAC_LENGTH = 8;
-  // Handle - currently this is short
+
   private static final byte OP_HANDLE = 10;
   // Auth time 64 bits
   private static final byte AUTH_TIME = 12;

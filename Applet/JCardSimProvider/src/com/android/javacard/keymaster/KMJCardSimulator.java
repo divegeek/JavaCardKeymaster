@@ -73,9 +73,6 @@ public class KMJCardSimulator implements KMSEProvider {
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   private static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
   private static final short RSA_KEY_SIZE = 256;
-
-
-  public static boolean jcardSim = false;
   private static Signature kdf;
   private static Signature hmacSignature;
 
@@ -117,13 +114,11 @@ public class KMJCardSimulator implements KMSEProvider {
     jCardSimulator = this;
   }
 
-   
   public KeyPair createRsaKeyPair() {
     KeyPair rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
     rsaKeyPair.genKeyPair();
     return rsaKeyPair;
   }
-
    
   public RSAPrivateKey createRsaKey(byte[] modBuffer, short modOff, short modLength,
                                     byte[] privBuffer, short privOff, short privLength) {
@@ -132,16 +127,13 @@ public class KMJCardSimulator implements KMSEProvider {
     privKey.setExponent(privBuffer, privOff, privLength);
     privKey.setModulus(modBuffer, modOff, modLength);
     return privKey;
-
   }
-
    
   public KeyPair createECKeyPair() {
     KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
     ecKeyPair.genKeyPair();
     return ecKeyPair;
   }
-
    
   public ECPrivateKey createEcKey(byte[] privBuffer, short privOff, short privLength) {
     KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
@@ -149,7 +141,6 @@ public class KMJCardSimulator implements KMSEProvider {
     privKey.setS(privBuffer,privOff, privLength);
     return privKey;
   }
-
    
   public AESKey createAESKey(short keysize) {
     byte[] rndNum = new byte[(short) (keysize/8)];
@@ -169,13 +160,11 @@ public class KMJCardSimulator implements KMSEProvider {
     return key;
   }
 
-   
   public DESKey createTDESKey() {
     byte[] rndNum = new byte[24];
     newRandomNumber(rndNum, (short) 0, (short)rndNum.length);
     return createTDESKey(rndNum, (short)0, (short)rndNum.length);
   }
-
    
   public DESKey createTDESKey(byte[] secretBuffer, short secretOff, short secretLength) {
     DESKey triDesKey =
@@ -183,7 +172,6 @@ public class KMJCardSimulator implements KMSEProvider {
     triDesKey.setKey(secretBuffer, secretOff);
     return triDesKey;
   }
-
    
   public HMACKey createHMACKey(short keysize) {
     if((keysize % 8 != 0) || !(keysize >= 64 && keysize <= 512)){
@@ -260,13 +248,13 @@ public class KMJCardSimulator implements KMSEProvider {
   public boolean importSymmetricKey(byte alg, short keysize, byte[] buf, short startOff, short length) {
     switch(alg){
       case KMType.AES:
-        AESKey aesKey = createAESKey(buf,startOff,length);
+        createAESKey(buf,startOff,length);
         break;
       case KMType.DES:
-        DESKey desKey = createTDESKey(buf,startOff,length);
+        createTDESKey(buf,startOff,length);
         break;
       case KMType.HMAC:
-        HMACKey hmacKey = createHMACKey(buf,startOff,length);
+        createHMACKey(buf,startOff,length);
         break;
       default:
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
@@ -279,10 +267,10 @@ public class KMJCardSimulator implements KMSEProvider {
   public boolean importAsymmetricKey(byte alg, byte[] privKeyBuf, short privKeyStart, short privKeyLength, byte[] pubModBuf, short pubModStart, short pubModLength) {
     switch (alg){
       case KMType.RSA:
-        RSAPrivateKey rsaKey = createRsaKey(pubModBuf,pubModStart,pubModLength,privKeyBuf,privKeyStart,privKeyLength);
+        createRsaKey(pubModBuf,pubModStart,pubModLength,privKeyBuf,privKeyStart,privKeyLength);
         break;
       case KMType.EC:
-        ECPrivateKey ecPrivKey = createEcKey(privKeyBuf,privKeyStart,privKeyLength);
+        createEcKey(privKeyBuf,privKeyStart,privKeyLength);
         break;
       default:
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
@@ -364,13 +352,7 @@ public class KMJCardSimulator implements KMSEProvider {
     byte[] outputBuf = new byte[cipher.getOutputSize(secretLen)];
     try {
       len =  (short)(cipher.doFinal(secret,secretStart,secretLen,outputBuf,(short)0));
-    } catch (ShortBufferException e) {
-      e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    } catch (IllegalBlockSizeException e) {
-      e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    } catch (BadPaddingException e) {
+    } catch (ShortBufferException | IllegalBlockSizeException | BadPaddingException e) {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
@@ -458,13 +440,7 @@ public class KMJCardSimulator implements KMSEProvider {
     } catch (AEADBadTagException e) {
       e.printStackTrace();
       return false;
-    } catch (ShortBufferException e) {
-      e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    } catch (IllegalBlockSizeException e) {
-      e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    } catch (BadPaddingException e) {
+    } catch (ShortBufferException | IllegalBlockSizeException | BadPaddingException e) {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
@@ -692,19 +668,10 @@ public class KMJCardSimulator implements KMSEProvider {
     } catch (NoSuchAlgorithmException e) {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    } catch (InvalidKeySpecException e) {
+    } catch (InvalidKeySpecException | InvalidAlgorithmParameterException | NoSuchPaddingException e) {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    } catch (InvalidKeyException e) {
-      e.printStackTrace();
-      CryptoException.throwIt(CryptoException.INVALID_INIT);
-    } catch (InvalidAlgorithmParameterException e) {
-      e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    } catch (NoSuchPaddingException e) {
-      e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    } catch (NoSuchProviderException e) {
+    } catch (InvalidKeyException | NoSuchProviderException e) {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.INVALID_INIT);
     }
@@ -768,13 +735,7 @@ public class KMJCardSimulator implements KMSEProvider {
     return ecSigner;
   }
 
-   
-  public KMCipher createSymmetricCipher(
-    short cipherAlg, short mode, short blockMode, short padding, byte[] secret, short secretStart, short secretLength) {
-    return createSymmetricCipher(cipherAlg, mode, blockMode, padding, secret,secretStart,secretLength,null,(short)0,(short)0);
-  }
 
-   
   public KMCipher createSymmetricCipher(short alg, short purpose, short blockMode, short padding, byte[] secret,
                                         short secretStart, short secretLength,
                                         byte[] ivBuffer, short ivStart, short ivLength) {
@@ -954,7 +915,6 @@ public class KMJCardSimulator implements KMSEProvider {
     return ret;
   }
 
-   
   public Signature createHmacSignerVerifier(short purpose, short digest, byte[] secret, short secretStart, short secretLength) {
     short alg = Signature.ALG_HMAC_SHA_256;
     if(digest != KMType.SHA2_256) CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -964,7 +924,6 @@ public class KMJCardSimulator implements KMSEProvider {
     hmacSignerVerifier.init(key,(byte)purpose);
     return hmacSignerVerifier;
   }
-
    
   public KMCipher createAesGcmCipher(short mode, short tagLen, byte[] secret, short secretStart, short secretLength,
                                      byte[] ivBuffer, short ivStart, short ivLength) {
@@ -1144,7 +1103,6 @@ public class KMJCardSimulator implements KMSEProvider {
   public Signature createEcVerifier(short digest, byte[] pubKey, short pubKeyStart, short pubKeyLength) {
     short alg = mapSignature256Alg(KMType.EC, (byte)0);
     Signature ecVerifier;
-    //if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
     if(digest == KMType.DIGEST_NONE) {
     	ecVerifier = new KMEcdsa256NoDigestSignature(Signature.MODE_VERIFY, pubKey, pubKeyStart, pubKeyLength);
     } else {
@@ -1266,7 +1224,7 @@ public class KMJCardSimulator implements KMSEProvider {
       getTrueRandomNumber(keyData, (short) 0, keyLen);
       masterKey.setKey(keyData, (short) 0);
     }
-    return (KMMasterKey) masterKey;
+    return masterKey;
   }
 
   @Override
@@ -1278,7 +1236,7 @@ public class KMJCardSimulator implements KMSEProvider {
       attestationKey = new KMECPrivateKey(ecKeyPair);
     }
     attestationKey.setS(keyData, offset, length);
-    return (KMAttestationKey) attestationKey;
+    return attestationKey;
   }
 
   @Override
@@ -1293,7 +1251,7 @@ public class KMJCardSimulator implements KMSEProvider {
       preSharedKey = new KMHmacKey(key);
     }
     preSharedKey.setKey(keyData, offset, length);
-    return (KMPreSharedKey) preSharedKey;
+    return preSharedKey;
   }
 
   @Override
