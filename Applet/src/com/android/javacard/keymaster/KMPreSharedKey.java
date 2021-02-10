@@ -16,10 +16,9 @@
 package com.android.javacard.keymaster;
 
 /**
- * KMPreSharedKey is a marker interface and the SE Provider has to implement 
- * this interface. Internally Preshared key is stored as a Javacard HMac key object,
- * which will provide additional security. The pre-shared key is maintained by the 
- * SEProvider.
+ * KMPreSharedKey is a marker interface and the SE Provider has to implement this interface.
+ * Internally Preshared key is stored as a Javacard HMac key object, which will provide additional
+ * security. The pre-shared key is maintained by the SEProvider.
  */
 public interface KMPreSharedKey {
 

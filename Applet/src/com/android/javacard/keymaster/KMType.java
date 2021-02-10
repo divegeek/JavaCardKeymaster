@@ -27,7 +27,8 @@ import javacard.framework.Util;
  * prototype objects which just cast the structure over contiguous memory buffer.
  */
 public abstract class KMType {
-  public static final short INVALID_VALUE = (short)0x8000;
+
+  public static final short INVALID_VALUE = (short) 0x8000;
   protected static final byte TLV_HEADER_SIZE = 3;
 
   // Types
@@ -283,12 +284,22 @@ public abstract class KMType {
     KMType.heap = repository.getHeap();
   }
 
-  public static byte getType(short ptr){return heap[ptr];}
-  public static short length(short ptr){return Util.getShort(heap, (short)(ptr+1));}
-  public static short getValue(short ptr){return Util.getShort(heap, (short)(ptr+TLV_HEADER_SIZE));}
+  public static byte getType(short ptr) {
+    return heap[ptr];
+  }
 
-  protected static short instance(byte type, short length){
-    if (length < 0) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+  public static short length(short ptr) {
+    return Util.getShort(heap, (short) (ptr + 1));
+  }
+
+  public static short getValue(short ptr) {
+    return Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
+  }
+
+  protected static short instance(byte type, short length) {
+    if (length < 0) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
     short ptr = repository.alloc((short) (length + TLV_HEADER_SIZE));
     heap[ptr] = type;
     Util.setShort(heap, (short) (ptr + 1), length);

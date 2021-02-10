@@ -16,11 +16,14 @@
 package com.android.javacard.keymaster;
 
 public abstract class KMCipher {
+
   public static final short SUN_JCE = 0xE9;
 
-  public abstract short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i);
+  public abstract short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad,
+      short i);
 
-  public abstract short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i);
+  public abstract short update(byte[] buffer, short startOff, short length, byte[] scratchPad,
+      short i);
 
   public abstract void updateAAD(byte[] buffer, short startOff, short length);
 

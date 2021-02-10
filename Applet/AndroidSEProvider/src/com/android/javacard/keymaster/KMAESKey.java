@@ -22,6 +22,7 @@ import com.android.javacard.keymaster.KMMasterKey;
 import javacard.security.AESKey;
 
 public class KMAESKey implements KMMasterKey {
+
   private AESKey aesKey;
 
   public KMAESKey(AESKey key) {
@@ -35,7 +36,7 @@ public class KMAESKey implements KMMasterKey {
   public AESKey getKey() {
     return aesKey;
   }
-  
+
   public short getKeySizeBits() {
     return aesKey.getSize();
   }

@@ -42,7 +42,7 @@ public class KMECPrivateKey implements KMAttestationKey {
     ECPrivateKey ecPriv = (ECPrivateKey) ecKeyPair.getPrivate();
     return ecPriv.getS(buffer, offset);
   }
-  
+
   public ECPrivateKey getPrivateKey() {
     return (ECPrivateKey) ecKeyPair.getPrivate();
   }
