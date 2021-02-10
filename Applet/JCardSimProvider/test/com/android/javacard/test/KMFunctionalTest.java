@@ -20,6 +20,8 @@ import com.android.javacard.keymaster.KMArray;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
+import com.android.javacard.keymaster.KMEcdsa256NoDigestSignature;
+import com.android.javacard.keymaster.KMException;
 import com.android.javacard.keymaster.KMJCardSimApplet;
 import com.android.javacard.keymaster.KMJCardSimulator;
 import com.android.javacard.keymaster.KMSEProvider;
@@ -43,10 +45,44 @@ import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 
 import javacard.framework.AID;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
+import javacard.security.CryptoException;
+import javacard.security.ECPrivateKey;
+import javacard.security.ECPublicKey;
+import javacard.security.KeyBuilder;
+import javacard.security.KeyPair;
+import javacard.security.RSAPrivateKey;
+import javacard.security.RSAPublicKey;
+import javacard.security.Signature;
+import javacardx.crypto.Cipher;
+
+import java.math.BigInteger;
+import java.security.AlgorithmParameters;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.SignatureException;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECParameterSpec;
+import java.security.spec.ECPoint;
+import java.security.spec.ECPrivateKeySpec;
+import java.security.spec.ECPublicKeySpec;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.InvalidParameterSpecException;
+import java.security.spec.MGF1ParameterSpec;
+import java.security.spec.RSAPrivateKeySpec;
+import java.security.spec.RSAPublicKeySpec;
 import java.util.Arrays;
 import java.util.Random;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.OAEPParameterSpec;
+import javax.crypto.spec.PSource;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 
@@ -776,16 +812,6 @@ public class KMFunctionalTest {
   @Test
   public void testRsaImportKeySuccess() {
     init();
-    /*
-    KeyPair rsaKeyPair = cryptoProvider.createRsaKeyPair();
-    byte[] pub = new byte[4];
-    short len = ((RSAPublicKey)rsaKeyPair.getPublic()).getExponent(pub,(short)1);
-    byte[] priv = new byte[256];
-    byte[] mod = new byte[256];
-    len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getModulus(mod,(short)0);
-    len = ((RSAPrivateKey)rsaKeyPair.getPrivate()).getExponent(priv,(short)0);
-     */
-
     byte[] pub = new byte[]{0x00,0x01,0x00,0x01};
     byte[] mod = new byte[256];
     byte[] priv = new byte[256];
@@ -1035,13 +1061,6 @@ public class KMFunctionalTest {
   @Test
   public void testEcImportKeySuccess() {
     init();
-    /*
-    KeyPair ecKeyPair = cryptoProvider.createECKeyPair();
-    byte[] pub = new byte[128];
-    short len = ((ECPublicKey)ecKeyPair.getPublic()).getW(pub,(short)0);
-    byte[] priv = new byte[128];
-    len = ((ECPrivateKey)ecKeyPair.getPrivate()).getS(priv,(short)0);
-    */
     byte[] pub = new byte[128];
     byte[] priv = new byte[128];
     short[] lengths = new short[2];
@@ -1107,7 +1126,7 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
-  private short extractKeyBlobArray(short keyBlob) {
+  private short extractKeyBlobArray(byte[] buf, short off, short buflen) {
     short ret = KMArray.instance((short) 5);
     KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_SECRET, KMByteBlob.exp());
     KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, KMByteBlob.exp());
@@ -1118,13 +1137,16 @@ public class KMFunctionalTest {
     ret =
       decoder.decodeArray(
         ret,
-        KMByteBlob.cast(keyBlob).getBuffer(),
-        KMByteBlob.cast(keyBlob).getStartOff(),
-        KMByteBlob.cast(keyBlob).length());
+        buf, off, buflen);
     short len = KMArray.cast(ret).length();
     ptr = KMArray.cast(ret).get((short)4);
 //    print(KMByteBlob.cast(ptr).getBuffer(),KMByteBlob.cast(ptr).getStartOff(),KMByteBlob.cast(ptr).length());
     return ret;
+  }
+
+  private short extractKeyBlobArray(short keyBlob) {
+    return extractKeyBlobArray(KMByteBlob.cast(keyBlob).getBuffer(), KMByteBlob
+            .cast(keyBlob).getStartOff(), KMByteBlob.cast(keyBlob).length());
   }
 
   @Test
@@ -1532,10 +1554,7 @@ public class KMFunctionalTest {
       KMByteBlob.cast(num).getBuffer(),
       KMByteBlob.cast(num).getStartOff(),
       KMByteBlob.cast(num).length());
-    //    cryptoProvider.newRandomNumber(
-//      KMByteBlob.cast(num).getBuffer(),
-//      KMByteBlob.cast(num).getStartOff(),
-//      KMByteBlob.cast(num).length());
+
     KMHmacSharingParameters.cast(params1).setNonce(num);
     short params2 = KMHmacSharingParameters.instance();
     KMHmacSharingParameters.cast(params2).setSeed(KMByteBlob.instance((short)0));
@@ -1612,10 +1631,8 @@ public class KMFunctionalTest {
     byte[] wrappedKey = new byte[16];
     cryptoProvider.newRandomNumber(wrappedKey,(short)0,(short)16);
     byte[] encWrappedKey = new byte[16];
-    //AESKey transportKey = cryptoProvider.createAESKey((short)256);
     byte[] transportKeyMaterial = new byte[32];
     cryptoProvider.newRandomNumber(transportKeyMaterial,(short)0,(short)32);
-    //transportKey.setKey(transportKeyMaterial,(short)0);
     byte[] nonce = new byte[12];
     cryptoProvider.newRandomNumber(nonce,(short)0,(short)12);
     byte[] authData = "Auth Data".getBytes();
@@ -1635,17 +1652,16 @@ public class KMFunctionalTest {
     Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
       KMByteBlob.cast(keyBlobPtr).getStartOff(),
       wrappingKeyBlob,(short)0, (short)wrappingKeyBlob.length);
-    short inParams = getRsaParams(KMType.SHA2_256, KMType.RSA_OAEP);
-    short ret = processMessage(maskedTransportKey,
-      KMByteBlob.instance(wrappingKeyBlob,(short)0, (short)wrappingKeyBlob.length),
-      KMType.ENCRYPT,
-      KMKeyParameters.instance(inParams),
-      (short)0,null,false,false
-    );
-    keyBlobPtr = KMArray.cast(ret).get((short)2);
-    byte[] encTransportKey = new byte[KMByteBlob.cast(keyBlobPtr).length()];
-    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
-      encTransportKey,(short)0, (short)encTransportKey.length);
+
+    byte[] output = new byte[256];
+    short outlen = rsaOaepEncryptMessage(wrappingKeyBlob, KMType.SHA2_256,
+            maskedTransportKey, (short)0, (short)maskedTransportKey.length,
+            output, (short)0);
+    byte[] encTransportKey = new byte[outlen];
+    Util.arrayCopyNonAtomic(output, (short)0, encTransportKey, (short)0,
+            outlen);
+    //Clean the heap.
+    KMRepository.instance().clean();
     short tagCount = 7;
     short arrPtr = KMArray.instance(tagCount);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
@@ -1689,7 +1705,7 @@ public class KMFunctionalTest {
     CommandAPDU apdu = encodeApdu((byte)INS_IMPORT_WRAPPED_KEY_CMD, arr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    ret = KMArray.instance((short) 3);
+    short ret = KMArray.instance((short) 3);
     KMArray.cast(ret).add((short) 0, KMInteger.exp());
     KMArray.cast(ret).add((short)1, KMByteBlob.exp());
     short inst = KMKeyCharacteristics.exp();
@@ -1787,11 +1803,6 @@ public class KMFunctionalTest {
     Assert.assertEquals(error, KMError.OK);
     ret = deleteKey(KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
     Assert.assertEquals(ret, KMError.OK);
-/*    ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob,(short)0,(short)keyBlob.length));
-    short err = KMByteBlob.cast(ret).get((short)1);
-    Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
-
- */
     cleanUp();
   }
 
@@ -1811,14 +1822,6 @@ public class KMFunctionalTest {
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
     Assert.assertEquals(respBuf[0], KMError.OK);
-/*    short ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob1,(short)0,(short)keyBlob1.length));
-    short err = KMByteBlob.cast(ret).get((short)1);
-    Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
-    ret = getKeyCharacteristics(KMByteBlob.instance(keyBlob2,(short)0,(short)keyBlob2.length));
-    err = KMByteBlob.cast(ret).get((short)1);
-    Assert.assertEquals(KMError.INVALID_KEY_BLOB,err);
-
- */
     cleanUp();
   }
 
@@ -2027,6 +2030,218 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
+  public short getPublicKey(byte[] keyBlob, short off, short len,
+          byte[] pubKey, short pubKeyOff) {
+    short keyBlobPtr = extractKeyBlobArray(keyBlob, off, len);
+    short arrayLen = KMArray.cast(keyBlobPtr).length();
+    if (arrayLen < 5) {
+      KMException.throwIt(KMError.INVALID_KEY_BLOB);
+    }
+    short pubKeyPtr = KMArray.cast(keyBlobPtr).get(
+            KMKeymasterApplet.KEY_BLOB_PUB_KEY);
+    Util.arrayCopy(KMByteBlob.cast(pubKeyPtr).getBuffer(),
+            KMByteBlob.cast(pubKeyPtr).getStartOff(), pubKey, pubKeyOff,
+            KMByteBlob.cast(pubKeyPtr).length());
+    return KMByteBlob.cast(pubKeyPtr).length();
+  }
+
+  private String toHexString(byte[] num){
+    StringBuilder sb = new StringBuilder();
+    for(int i = 0; i < num.length; i++){
+      sb.append(String.format("%02X", num[i])) ;
+      }
+    return sb.toString();
+  }
+
+  public short rsaEncryptMessage(byte[] keyBlob, short padding, short digest, byte[] input, short inputOff, short inputlen,
+          byte[] output, short outputOff) {
+    byte alg = Cipher.ALG_RSA_PKCS1;
+    byte[] tmp = null;
+    short inLen = inputlen;
+    if (padding == KMType.PADDING_NONE) {
+      alg = Cipher.ALG_RSA_NOPAD;
+      // Length cannot be greater then key size according to JcardSim
+      if(inLen >= 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+      // make input equal to 255 bytes
+      tmp = new byte[255];
+      Util.arrayFillNonAtomic(tmp,(short)0,(short)255, (byte)0);
+      Util.arrayCopyNonAtomic(
+        input,
+        inputOff,
+        tmp, (short)(255 - inLen),inLen);
+      inLen = 255;
+      inputOff = 0;
+    } else if(padding == KMType.RSA_PKCS1_1_5_ENCRYPT) {
+      tmp = input;
+    } else {
+      /*Fail */
+      Assert.assertTrue(false);
+    }
+    byte[] pubKey = new byte[256];
+    KeyPair rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
+    RSAPublicKey rsaPubKey = (RSAPublicKey) rsaKeyPair.getPublic();
+    getPublicKey(keyBlob, (short)0, (short)keyBlob.length, pubKey, (short)0);
+    byte[] exponent = new byte[]{0x01,0x00,0x01};
+    rsaPubKey.setModulus(pubKey, (short) 0, (short) pubKey.length);
+    rsaPubKey.setExponent(exponent, (short) 0, (short) exponent.length);
+
+    Cipher rsaCipher = Cipher.getInstance(alg, false);
+    rsaCipher.init(rsaPubKey, Cipher.MODE_ENCRYPT);
+    return rsaCipher.doFinal(tmp, inputOff, inLen, output, outputOff);
+  }
+
+  public short rsaOaepEncryptMessage(byte[] keyBlob, short digest, byte[] input, short inputOff, short inputlen,
+          byte[] output, short outputOff) {
+    byte[] mod = new byte[256];
+    getPublicKey(keyBlob, (short)0, (short)keyBlob.length, mod, (short)0);
+    byte[] exponent = new byte[]{0x01,0x00,0x01};
+
+    // Convert byte arrays into keys
+    String modString = toHexString(mod);
+    String expString = toHexString(exponent);
+    BigInteger modInt = new BigInteger(modString,16);
+    BigInteger expInt = new BigInteger(expString,16);
+    javax.crypto.Cipher rsaCipher = null;
+    try{
+      KeyFactory kf = KeyFactory.getInstance("RSA");
+      // Create cipher with oaep padding
+      OAEPParameterSpec oaepSpec = null;
+      if(digest == KMType.SHA2_256){
+        oaepSpec= new OAEPParameterSpec("SHA-256", "MGF1",
+          MGF1ParameterSpec.SHA1, PSource.PSpecified.DEFAULT);
+      }else{
+        oaepSpec= new OAEPParameterSpec("SHA1", "MGF1",
+          MGF1ParameterSpec.SHA1, PSource.PSpecified.DEFAULT);
+      }
+      rsaCipher = javax.crypto.Cipher.getInstance("RSA/ECB/OAEPPadding", "SunJCE");
+
+      RSAPublicKeySpec pubSpec = new RSAPublicKeySpec(modInt, expInt);
+      java.security.interfaces.RSAPublicKey pubKey = (java.security.interfaces.RSAPublicKey) kf.generatePublic(pubSpec);
+      rsaCipher.init(javax.crypto.Cipher.ENCRYPT_MODE, pubKey, oaepSpec);
+      byte[] cipherOut = rsaCipher.doFinal(input, inputOff, inputlen);
+
+      if(cipherOut != null) {
+        Util.arrayCopyNonAtomic(cipherOut, (short) 0, output, outputOff, (short) cipherOut.length);
+      }
+      return (short) cipherOut.length;
+    } catch (NoSuchAlgorithmException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    } catch (InvalidKeySpecException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    } catch (InvalidKeyException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (InvalidAlgorithmParameterException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    } catch (NoSuchPaddingException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    } catch (NoSuchProviderException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.INVALID_INIT);
+    } catch (IllegalBlockSizeException e) {
+      e.printStackTrace();
+    } catch (BadPaddingException e) {
+      e.printStackTrace();
+    }
+    return 0;
+  }
+
+  public boolean ecNoDigestVerifyMessage(byte[] input, short inputOff,
+          short inputlen, byte[] sign, short signOff, short signLen,
+          byte[] keyBlob) {
+    KeyFactory kf;
+    byte[] pubKey = new byte[128];
+    short keyStart = 0;
+    short keyLength = getPublicKey(keyBlob, (short) 0, (short) keyBlob.length,
+            pubKey, (short) 0);
+    try {
+      java.security.Signature sunSigner = java.security.Signature.getInstance(
+              "NONEwithECDSA", "SunEC");
+      kf = KeyFactory.getInstance("EC");
+      AlgorithmParameters parameters = AlgorithmParameters.getInstance("EC",
+              "SunEC");
+      // Supported curve secp256r1
+      parameters.init(new ECGenParameterSpec("secp256r1"));
+      ECParameterSpec ecParameters = parameters
+              .getParameterSpec(ECParameterSpec.class);
+
+      // Check if the first byte is 04 and remove it.
+      if (pubKey[keyStart] == 0x04) {
+        // uncompressed format.
+        keyStart++;
+        keyLength--;
+      }
+      short i = 0;
+      byte[] pubx = new byte[keyLength / 2];
+      for (; i < keyLength / 2; i++) {
+        pubx[i] = pubKey[keyStart + i];
+      }
+      byte[] puby = new byte[keyLength / 2];
+      for (i = 0; i < keyLength / 2; i++) {
+        puby[i] = pubKey[keyStart + keyLength / 2 + i];
+      }
+      BigInteger bIX = new BigInteger(pubx);
+      BigInteger bIY = new BigInteger(puby);
+      ECPoint point = new ECPoint(bIX, bIY);
+      ECPublicKeySpec pubkeyspec = new ECPublicKeySpec(point, ecParameters);
+      java.security.interfaces.ECPublicKey ecPubkey = (java.security.interfaces.ECPublicKey) kf
+              .generatePublic(pubkeyspec);
+      sunSigner.initVerify(ecPubkey);
+      sunSigner.update(input, inputOff, inputlen);
+      return sunSigner.verify(sign, signOff, signLen);
+    } catch (NoSuchAlgorithmException e) {
+      e.printStackTrace();
+    } catch (NoSuchProviderException e) {
+      e.printStackTrace();
+    } catch (InvalidParameterSpecException e) {
+      e.printStackTrace();
+    } catch (InvalidKeySpecException e) {
+      e.printStackTrace();
+    } catch (InvalidKeyException e) {
+      e.printStackTrace();
+    } catch (SignatureException e) {
+      e.printStackTrace();
+    }
+    return false;
+  }
+
+  public boolean ecVerifyMessage(byte[] input, short inputOff, short inputlen,
+          byte[] sign, short signOff, short signLen, byte[] keyBlob) {
+    Signature ecVerifier;
+    byte[] pubKey = new byte[128];
+    short len = getPublicKey(keyBlob, (short) 0, (short) keyBlob.length,
+            pubKey, (short) 0);
+    ECPublicKey key = (ECPublicKey) KeyBuilder.buildKey(
+            KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);
+    key.setW(pubKey, (short) 0, len);
+    ecVerifier = Signature.getInstance(Signature.ALG_ECDSA_SHA_256, false);
+    ecVerifier.init(key, Signature.MODE_VERIFY);
+    return ecVerifier.verify(input, inputOff, inputlen, sign, signOff, signLen);
+  }
+
+  public boolean rsaVerifyMessage(byte[] input, short inputOff, short inputlen, byte[] sign, short signOff, short signLen,
+          short digest,short padding,  byte[] keyBlob) {
+    if(digest == KMType.DIGEST_NONE || padding == KMType.PADDING_NONE) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    byte[] pubKey = new byte[256];
+    getPublicKey(keyBlob, (short)0, (short)keyBlob.length, pubKey, (short)0);
+    short alg = Signature.ALG_RSA_SHA_256_PKCS1_PSS;
+
+    if (padding == KMType.RSA_PKCS1_1_5_SIGN)
+      alg = Signature.ALG_RSA_SHA_256_PKCS1;
+
+    Signature rsaVerifier = Signature.getInstance((byte)alg, false);
+    RSAPublicKey key = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
+    byte[] exponent = new byte[]{0x01,0x00,0x01};
+    key.setExponent(exponent,(short)0,(short)exponent.length);
+    key.setModulus(pubKey, (short)0, (short)pubKey.length);
+    rsaVerifier.init(key,Signature.MODE_VERIFY);
+    return rsaVerifier.verify(input, inputOff, inputlen, sign, signOff, signLen);
+  }
+
   public byte[] EncryptMessage(byte[] input, short params, byte[] keyBlob) {
     short ret = begin(KMType.ENCRYPT,
             KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
@@ -2141,13 +2356,19 @@ public class KMFunctionalTest {
       short pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
               KMType.RSA_PKCS1_1_5_ENCRYPT);
 
-      byte[] cipherText1 = EncryptMessage(message, pkcs1Params, keyBlob);
-      Assert.assertEquals((2048 / 8), cipherText1.length);
+      byte[] cipherText1 = new byte[256];
+      short cipherText1Len = rsaEncryptMessage(keyBlob, KMType.RSA_PKCS1_1_5_ENCRYPT, KMType.DIGEST_NONE,
+              message, (short)0, (short)message.length,
+              cipherText1, (short)0);
+      Assert.assertEquals((2048 / 8), cipherText1Len);
 
       pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
               KMType.RSA_PKCS1_1_5_ENCRYPT);
-      byte[] cipherText2 = EncryptMessage(message, pkcs1Params, keyBlob);
-      Assert.assertEquals((2048 / 8), cipherText2.length);
+      byte[] cipherText2 = new byte[256];
+      short cipherText2Len = rsaEncryptMessage(keyBlob, KMType.RSA_PKCS1_1_5_ENCRYPT, KMType.DIGEST_NONE,
+              message, (short)0, (short)message.length,
+              cipherText2, (short)0);
+      Assert.assertEquals((2048 / 8), cipherText2Len);
 
       // PKCS1 v1.5 randomizes padding so every result should be different.
       Assert.assertFalse(Arrays.equals(cipherText1, cipherText2));
@@ -2275,15 +2496,6 @@ public class KMFunctionalTest {
   }
 
   public void testAttestKey(byte[] keyBlob){
-    /*
-    short key = generateRsaKey(null,null);
-    short keyBlobPtr = KMArray.cast(key).get((short)1);
-    byte[] keyBlob= new byte[KMByteBlob.cast(keyBlobPtr).length()];
-    Util.arrayCopyNonAtomic(
-      KMByteBlob.cast(keyBlobPtr).getBuffer(),
-      KMByteBlob.cast(keyBlobPtr).getStartOff(),
-      keyBlob,(short)0, (short)keyBlob.length);
-     */
     short arrPtr = KMArray.instance((short)2);
     KMArray.cast(arrPtr).add((short)0, KMByteTag.instance(KMType.ATTESTATION_APPLICATION_ID,
       KMByteBlob.instance(attAppId,(short)0,(short)attAppId.length)));
@@ -2471,19 +2683,19 @@ public class KMFunctionalTest {
       keyBlob,(short)0, (short)keyBlob.length);
     short inParams = getRsaParams(digest, padding);
     byte[] plainData = "Hello World 123!".getBytes();
+    byte[] cipherData = new byte[256];
+    short cipherDataLen = 0;
     //Encrypt
-    short ret = processMessage(plainData,
-      KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
-      KMType.ENCRYPT,
-      KMKeyParameters.instance(inParams),
-      (short)0,null,false, false
-    );
+    if (padding == KMType.RSA_OAEP) {
+      cipherDataLen = rsaOaepEncryptMessage(keyBlob, digest, plainData,
+              (short) 0, (short) plainData.length, cipherData, (short) 0);
+    } else {
+      cipherDataLen = rsaEncryptMessage(keyBlob, padding, digest, plainData,
+              (short) 0, (short) plainData.length, cipherData, (short) 0);
+    }
+    Assert.assertTrue((cipherDataLen == 256));
     inParams = getRsaParams(digest, padding);
-    keyBlobPtr = KMArray.cast(ret).get((short)2);
-    byte[] cipherData = new byte[KMByteBlob.cast(keyBlobPtr).length()];
-    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
-      cipherData,(short)0, (short)cipherData.length);
-    ret = processMessage(cipherData,
+    short ret = processMessage(cipherData,
       KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
       KMType.DECRYPT,
       KMKeyParameters.instance(inParams),
@@ -2522,14 +2734,10 @@ public class KMFunctionalTest {
       Assert.assertEquals(signatureData.length,256);
       return;
     }
-    ret = processMessage(plainData,
-      KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
-      KMType.VERIFY,
-      KMKeyParameters.instance(inParams),
-      (short)0,signatureData,update,false
-    );
-    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
-    Assert.assertEquals(error, KMError.OK);
+    boolean verify = rsaVerifyMessage(plainData, (short)0, (short)plainData.length,
+            signatureData, (short)0, (short)signatureData.length,
+            digest, padding, keyBlob);
+    Assert.assertTrue(verify);
   }
 
   public void testSignVerifyWithEcdsa(byte digest, boolean update){
@@ -2553,14 +2761,17 @@ public class KMFunctionalTest {
     byte[] signatureData = new byte[KMByteBlob.cast(keyBlobPtr).length()];
     Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(), KMByteBlob.cast(keyBlobPtr).getStartOff(),
       signatureData,(short)0, (short)signatureData.length);
-    ret = processMessage(plainData,
-      KMByteBlob.instance(keyBlob,(short)0, (short)keyBlob.length),
-      KMType.VERIFY,
-      KMKeyParameters.instance(inParams),
-      (short)0,signatureData,update,false
-    );
-    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
-    Assert.assertEquals(error, KMError.OK);
+    boolean verify = false;
+    if (digest == KMType.DIGEST_NONE) {
+      verify = ecNoDigestVerifyMessage(plainData, (short)0, (short)plainData.length,
+              signatureData, (short)0, (short)signatureData.length,
+              keyBlob);
+    } else {
+    verify = ecVerifyMessage(plainData, (short)0, (short)plainData.length,
+            signatureData, (short)0, (short)signatureData.length,
+            keyBlob);
+    }
+    Assert.assertTrue(verify);
   }
   public void testSignVerifyWithHmac(byte digest, boolean update){
     short hmacKeyArr = generateHmacKey(null, null);

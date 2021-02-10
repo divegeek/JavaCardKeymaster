@@ -125,19 +125,6 @@ public class KMOperationImpl implements KMOperation {
         if (mode == KMType.DECRYPT) {
           inputDataLen = (short) (inputDataLen - macLength);
         }
-      } else if (cipherAlg == KMType.RSA && padding == KMType.PADDING_NONE &&
-          mode == KMType.ENCRYPT) {
-        // Length cannot be greater then key size according to Java Card
-        if (inputDataLen > 256)
-          KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-        // make input equal to 255 bytes
-        Util.arrayFillNonAtomic(tmpArray, (short) 0, (short) 256, (byte) 0);
-        Util.arrayCopyNonAtomic(inputDataBuf, inputDataStart, tmpArray,
-            (short) (256 - inputDataLen), inputDataLen);
-        inputDataStart = 0;
-        inputDataLen = 256;
-        inputDataBuf = tmpArray;
-
       } else if ((cipherAlg == KMType.DES || cipherAlg == KMType.AES) &&
           padding == KMType.PKCS7 && mode == KMType.ENCRYPT) {
         byte blkSize = 16;
