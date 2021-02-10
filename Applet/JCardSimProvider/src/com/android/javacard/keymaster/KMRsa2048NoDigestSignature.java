@@ -89,8 +89,7 @@ public class KMRsa2048NoDigestSignature extends Signature {
 
   @Override
   public boolean verify(byte[] bytes, short i, short i1, byte[] bytes1, short i2, short i3) throws CryptoException {
-    // Cannot support this method as javacard cipher api does not allow 256 byte for public key
-    // encryption without padding. It only allows 255 bytes data.
+    // Public key operations not handled here.
     return false;
   }
 

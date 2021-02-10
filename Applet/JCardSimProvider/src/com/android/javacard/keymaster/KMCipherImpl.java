@@ -81,21 +81,7 @@ public class KMCipherImpl extends KMCipher{
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
     } else{
-      if(cipherAlg == KMType.RSA && padding == KMType.PADDING_NONE && mode == KMType.ENCRYPT ){
-        // Length cannot be greater then key size according to JcardSim
-        if(length >= 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-        // make input equal to 255 bytes
-        byte[] tmp = new byte[255];
-        Util.arrayFillNonAtomic(tmp,(short)0,(short)255, (byte)0);
-        Util.arrayCopyNonAtomic(
-          buffer,
-          startOff,
-          tmp, (short)(255 - length),length);
-        startOff = 0;
-        length = 255;
-        buffer = tmp;
-
-      }else if((cipherAlg == KMType.DES || cipherAlg == KMType.AES) && padding ==KMType.PKCS7 && mode == KMType.ENCRYPT){
+      if((cipherAlg == KMType.DES || cipherAlg == KMType.AES) && padding ==KMType.PKCS7 && mode == KMType.ENCRYPT){
           byte blkSize = 16;
           byte paddingBytes;
           short len = length;
