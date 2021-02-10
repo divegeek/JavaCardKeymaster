@@ -20,8 +20,6 @@ import com.android.javacard.keymaster.KMArray;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
-import com.android.javacard.keymaster.KMEcdsa256NoDigestSignature;
-import com.android.javacard.keymaster.KMException;
 import com.android.javacard.keymaster.KMJCardSimApplet;
 import com.android.javacard.keymaster.KMJCardSimulator;
 import com.android.javacard.keymaster.KMSEProvider;
@@ -45,14 +43,10 @@ import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 
 import javacard.framework.AID;
-import javacard.framework.ISOException;
 import javacard.framework.Util;
-import javacard.security.CryptoException;
-import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
-import javacard.security.RSAPrivateKey;
 import javacard.security.RSAPublicKey;
 import javacard.security.Signature;
 import javacardx.crypto.Cipher;
@@ -68,12 +62,10 @@ import java.security.SignatureException;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPoint;
-import java.security.spec.ECPrivateKeySpec;
 import java.security.spec.ECPublicKeySpec;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.InvalidParameterSpecException;
 import java.security.spec.MGF1ParameterSpec;
-import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
 import java.util.Arrays;
 import java.util.Random;
@@ -1657,6 +1649,7 @@ public class KMFunctionalTest {
     short outlen = rsaOaepEncryptMessage(wrappingKeyBlob, KMType.SHA2_256,
             maskedTransportKey, (short)0, (short)maskedTransportKey.length,
             output, (short)0);
+    Assert.assertTrue((outlen == 256));
     byte[] encTransportKey = new byte[outlen];
     Util.arrayCopyNonAtomic(output, (short)0, encTransportKey, (short)0,
             outlen);
@@ -2035,7 +2028,7 @@ public class KMFunctionalTest {
     short keyBlobPtr = extractKeyBlobArray(keyBlob, off, len);
     short arrayLen = KMArray.cast(keyBlobPtr).length();
     if (arrayLen < 5) {
-      KMException.throwIt(KMError.INVALID_KEY_BLOB);
+      return 0;
     }
     short pubKeyPtr = KMArray.cast(keyBlobPtr).get(
             KMKeymasterApplet.KEY_BLOB_PUB_KEY);
@@ -2061,7 +2054,8 @@ public class KMFunctionalTest {
     if (padding == KMType.PADDING_NONE) {
       alg = Cipher.ALG_RSA_NOPAD;
       // Length cannot be greater then key size according to JcardSim
-      if(inLen >= 256) KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+      if(inLen >= 256) 
+        return 0;
       // make input equal to 255 bytes
       tmp = new byte[255];
       Util.arrayFillNonAtomic(tmp,(short)0,(short)255, (byte)0);
@@ -2080,7 +2074,9 @@ public class KMFunctionalTest {
     byte[] pubKey = new byte[256];
     KeyPair rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
     RSAPublicKey rsaPubKey = (RSAPublicKey) rsaKeyPair.getPublic();
-    getPublicKey(keyBlob, (short)0, (short)keyBlob.length, pubKey, (short)0);
+    if (0 == getPublicKey(keyBlob, (short)0, (short)keyBlob.length, pubKey, (short)0))
+      return 0;
+
     byte[] exponent = new byte[]{0x01,0x00,0x01};
     rsaPubKey.setModulus(pubKey, (short) 0, (short) pubKey.length);
     rsaPubKey.setExponent(exponent, (short) 0, (short) exponent.length);
@@ -2093,7 +2089,8 @@ public class KMFunctionalTest {
   public short rsaOaepEncryptMessage(byte[] keyBlob, short digest, byte[] input, short inputOff, short inputlen,
           byte[] output, short outputOff) {
     byte[] mod = new byte[256];
-    getPublicKey(keyBlob, (short)0, (short)keyBlob.length, mod, (short)0);
+    if (0 == getPublicKey(keyBlob, (short)0, (short)keyBlob.length, mod, (short)0))
+      return 0;
     byte[] exponent = new byte[]{0x01,0x00,0x01};
 
     // Convert byte arrays into keys
@@ -2126,22 +2123,16 @@ public class KMFunctionalTest {
       return (short) cipherOut.length;
     } catch (NoSuchAlgorithmException e) {
       e.printStackTrace();
-      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
     } catch (InvalidKeySpecException e) {
       e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     } catch (InvalidKeyException e) {
       e.printStackTrace();
-      CryptoException.throwIt(CryptoException.INVALID_INIT);
     } catch (InvalidAlgorithmParameterException e) {
       e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     } catch (NoSuchPaddingException e) {
       e.printStackTrace();
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     } catch (NoSuchProviderException e) {
       e.printStackTrace();
-      CryptoException.throwIt(CryptoException.INVALID_INIT);
     } catch (IllegalBlockSizeException e) {
       e.printStackTrace();
     } catch (BadPaddingException e) {
@@ -2158,6 +2149,8 @@ public class KMFunctionalTest {
     short keyStart = 0;
     short keyLength = getPublicKey(keyBlob, (short) 0, (short) keyBlob.length,
             pubKey, (short) 0);
+    if (keyLength == 0)
+      return false;
     try {
       java.security.Signature sunSigner = java.security.Signature.getInstance(
               "NONEwithECDSA", "SunEC");
@@ -2215,6 +2208,9 @@ public class KMFunctionalTest {
     byte[] pubKey = new byte[128];
     short len = getPublicKey(keyBlob, (short) 0, (short) keyBlob.length,
             pubKey, (short) 0);
+    if (len == 0) {
+      return false;
+    }
     ECPublicKey key = (ECPublicKey) KeyBuilder.buildKey(
             KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);
     key.setW(pubKey, (short) 0, len);
@@ -2225,9 +2221,11 @@ public class KMFunctionalTest {
 
   public boolean rsaVerifyMessage(byte[] input, short inputOff, short inputlen, byte[] sign, short signOff, short signLen,
           short digest,short padding,  byte[] keyBlob) {
-    if(digest == KMType.DIGEST_NONE || padding == KMType.PADDING_NONE) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+    if(digest == KMType.DIGEST_NONE || padding == KMType.PADDING_NONE)
+      return false;
     byte[] pubKey = new byte[256];
-    getPublicKey(keyBlob, (short)0, (short)keyBlob.length, pubKey, (short)0);
+    if (0 == getPublicKey(keyBlob, (short)0, (short)keyBlob.length, pubKey, (short)0))
+      return false;
     short alg = Signature.ALG_RSA_SHA_256_PKCS1_PSS;
 
     if (padding == KMType.RSA_PKCS1_1_5_SIGN)
