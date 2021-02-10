@@ -41,6 +41,7 @@ public abstract class KMType {
   public static final byte HW_AUTH_TOKEN_TYPE = 0x08;
   public static final byte VERIFICATION_TOKEN_TYPE = 0x09;
   public static final byte HMAC_SHARING_PARAM_TYPE = 0x0A;
+  public static final byte X509_CERT = 0x0B;
   // Tag Types
   public static final short INVALID_TAG = 0x0000;
   public static final short ENUM_TAG = 0x1000;
@@ -50,6 +51,7 @@ public abstract class KMType {
   public static final short ULONG_TAG = 0x5000;
   public static final short DATE_TAG = 0x6000;
   public static final short BOOL_TAG = 0x7000;
+  public static final short BIGNUM_TAG = (short) 0x8000;
   public static final short BYTES_TAG = (short) 0x9000;
   public static final short ULONG_ARRAY_TAG = (short) 0xA000;
   public static final short TAG_TYPE_MASK = (short) 0xF000;
@@ -269,6 +271,7 @@ public abstract class KMType {
   // Confirmation Token
   public static final short CONFIRMATION_TOKEN = (short) 0x03ED;
 
+  public static final short LENGTH_FROM_PDU = (short) 0xFFFF;
 
   public static final byte NO_VALUE = (byte) 0xff;
 

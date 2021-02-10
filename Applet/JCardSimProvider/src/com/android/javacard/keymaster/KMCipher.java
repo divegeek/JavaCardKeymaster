@@ -24,11 +24,19 @@ public abstract class KMCipher {
 
   public abstract void updateAAD(byte[] buffer, short startOff, short length);
 
+  public abstract short getBlockMode();
+
   public abstract void setBlockMode(short mode);
+
+  public abstract short getPaddingAlgorithm();
+
+  public abstract short getCipherAlgorithm();
 
   public abstract void setPaddingAlgorithm(short alg);
 
   public abstract void setCipherAlgorithm(short alg);
+
+  public abstract short getCipherProvider();
 
   public abstract short getAesGcmOutputSize(short len, short macLength);
 }
