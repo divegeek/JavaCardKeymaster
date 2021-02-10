@@ -279,4 +279,12 @@ public class KMEnumArrayTag extends KMTag {
     }
     return true;
   }
+
+  public boolean isValidBlockMode(byte alg) {
+    if (alg == KMType.AES || alg == KMType.DES) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 }

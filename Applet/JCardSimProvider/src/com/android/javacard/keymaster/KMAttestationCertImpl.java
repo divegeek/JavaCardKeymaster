@@ -90,6 +90,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static byte[] stack;
   private static short start;
   private static short length;
+  //  private static KMRepository repo;
   private static short uniqueId;
   private static short attChallenge;
   private static short notBefore;
