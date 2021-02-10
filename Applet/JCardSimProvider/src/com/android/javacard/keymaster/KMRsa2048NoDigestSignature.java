@@ -121,7 +121,7 @@ public class KMRsa2048NoDigestSignature extends Signature {
     if (padding == KMType.PADDING_NONE) {
       if (len > 256) return false;
       else if (len == 256) {
-        short v = KMInteger.unsignedByteArrayCompare(buf, start, rsaModulus, (short) 0, len);
+        short v = KMUtils.unsignedByteArrayCompare(buf, start, rsaModulus, (short) 0, len);
         if (v > 0) return false;
       }
     } else {//pkcs1 no digest
