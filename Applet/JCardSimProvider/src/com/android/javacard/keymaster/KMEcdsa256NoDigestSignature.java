@@ -173,14 +173,7 @@ public class KMEcdsa256NoDigestSignature extends Signature {
 
   @Override
   public boolean verify(byte[] bytes, short i, short i1, byte[] bytes1, short i2, short i3) throws CryptoException {
-    // Cannot support this method as javacard cipher api does not allow 256 byte for public key
-    // encryption without padding. It only allows 255 bytes data.
-    try {
-    	update(bytes, i , i1);
-	    return sunSigner.verify(bytes1, i2, i3);
-		} catch (SignatureException e) {
-			CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-		}
+    // Public key operations not handled here.
     return false;
   }
 

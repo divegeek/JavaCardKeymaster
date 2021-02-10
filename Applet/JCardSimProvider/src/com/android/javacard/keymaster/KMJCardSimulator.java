@@ -605,17 +605,13 @@ public class KMJCardSimulator implements KMSEProvider {
                   pubModStart,
                   pubModLength);
           return new KMOperationImpl(signer);
-        case KMType.VERIFY:
-          Signature verifier = createRsaVerifier(digest, padding, pubModBuf, pubModStart, pubModLength);
-          return new KMOperationImpl(verifier);
-        case KMType.ENCRYPT:
-          KMCipher cipher = createRsaCipher(padding, digest, pubModBuf, pubModStart, pubModLength);
-          return new KMOperationImpl(cipher);
         case KMType.DECRYPT:
           KMCipher decipher =
               createRsaDecipher(
                   padding, digest, privKeyBuf, privKeyStart, privKeyLength, pubModBuf, pubModStart, pubModLength);
           return new KMOperationImpl(decipher);
+        default:
+          KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
       }
     }else if(alg == KMType.EC){
       switch(purpose){
@@ -623,9 +619,8 @@ public class KMJCardSimulator implements KMSEProvider {
           Signature signer =
             createEcSigner(digest,privKeyBuf,privKeyStart,privKeyLength);
           return new KMOperationImpl(signer);
-        case KMType.VERIFY:
-          Signature verifier = createEcVerifier(digest,pubModBuf,pubModStart,pubModLength);
-          return new KMOperationImpl(verifier);
+        default:
+          KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
       }
     }
     CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
@@ -1108,52 +1103,6 @@ public class KMJCardSimulator implements KMSEProvider {
         randIndex = 0;
       }
     }
-  }
-
-   
-  public KMCipher createRsaCipher(short padding, short digest, byte[] modBuffer, short modOff, short modLength) {
-    byte cipherAlg = mapCipherAlg(KMType.RSA, (byte)padding, (byte)0);
-    if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
-      return createRsaOAEP256Cipher(KMType.ENCRYPT, (byte)digest, null,(short)0,(short)0,modBuffer,modOff,modLength);
-    }
-    Cipher rsaCipher = Cipher.getInstance(cipherAlg,false);
-    RSAPublicKey key = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
-    byte[] exponent = new byte[]{0x01,0x00,0x01};
-    key.setExponent(exponent,(short)0,(short)3);
-    key.setModulus(modBuffer, modOff, modLength);
-    rsaCipher.init(key,Cipher.MODE_ENCRYPT);
-    KMCipherImpl inst = new KMCipherImpl(rsaCipher);
-    inst.setCipherAlgorithm(KMType.RSA);
-    inst.setMode(KMType.ENCRYPT);
-    inst.setPaddingAlgorithm(padding);
-    return inst;
-  }
-
-  public Signature createRsaVerifier(short digest, short padding, byte[] modBuffer, short modOff, short modLength) {
-    short alg = mapSignature256Alg(KMType.RSA,(byte)padding);
-    if(digest == KMType.DIGEST_NONE || padding == KMType.PADDING_NONE) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    Signature rsaVerifier = Signature.getInstance((byte)alg, false);
-    RSAPublicKey key = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_2048, false);
-    byte[] exponent = new byte[]{0x01,0x00,0x01};
-    key.setExponent(exponent,(short)0,(short)3);
-    key.setModulus(modBuffer, modOff, modLength);
-    rsaVerifier.init(key,Signature.MODE_VERIFY);
-    return rsaVerifier;
-  }
-
-  public Signature createEcVerifier(short digest, byte[] pubKey, short pubKeyStart, short pubKeyLength) {
-    short alg = mapSignature256Alg(KMType.EC, (byte)0);
-    Signature ecVerifier;
-    //if(msgDigestAlg == MessageDigest.ALG_NULL) CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-    if(digest == KMType.DIGEST_NONE) {
-    	ecVerifier = new KMEcdsa256NoDigestSignature(Signature.MODE_VERIFY, pubKey, pubKeyStart, pubKeyLength);
-    } else {
-    	ECPublicKey key = (ECPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, KeyBuilder.LENGTH_EC_FP_256, false);
-    	key.setW(pubKey,pubKeyStart,pubKeyLength);
-    	ecVerifier = Signature.getInstance((byte)alg,false);
-    	ecVerifier.init(key,Signature.MODE_VERIFY);
-    }
-    return ecVerifier;
   }
 
   @Override
