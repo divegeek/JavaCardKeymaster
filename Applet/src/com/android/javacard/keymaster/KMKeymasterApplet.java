@@ -3481,7 +3481,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
       tmpVariables[1] = repository.getOsVersion();
       tmpVariables[1] =
-          KMUtils.unsignedByteArrayCompare(
+          KMInteger.unsignedByteArrayCompare(
               KMInteger.cast(tmpVariables[1]).getBuffer(),
               KMInteger.cast(tmpVariables[1]).getStartOff(),
               scratchPad,
@@ -3500,7 +3500,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
       tmpVariables[1] = repository.getOsPatch();
       tmpVariables[1] =
-          KMUtils.unsignedByteArrayCompare(
+          KMInteger.unsignedByteArrayCompare(
               KMInteger.cast(tmpVariables[1]).getBuffer(),
               KMInteger.cast(tmpVariables[1]).getStartOff(),
               scratchPad,
