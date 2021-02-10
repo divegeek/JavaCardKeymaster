@@ -22,6 +22,7 @@ import com.android.javacard.keymaster.KMPreSharedKey;
 import javacard.security.HMACKey;
 
 public class KMHmacKey implements KMPreSharedKey {
+
   private HMACKey hmacKey;
 
   public KMHmacKey(HMACKey key) {
@@ -39,6 +40,7 @@ public class KMHmacKey implements KMPreSharedKey {
   public short getKeySizeBits() {
     return hmacKey.getSize();
   }
+
   public static void onSave(Element element, KMHmacKey kmKey) {
     element.write(kmKey.hmacKey);
   }

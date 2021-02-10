@@ -21,20 +21,26 @@ package com.android.javacard.keymaster;
  * throw EMError errors.
  */
 public class KMException extends RuntimeException {
+
   public static short reason;
   public static KMException exception;
-  private KMException(){
+
+  private KMException() {
   }
-  public static void throwIt(short reason){
+
+  public static void throwIt(short reason) {
     KMException.reason = reason;
     throw instance();
   }
-  public static KMException instance(){
-    if(exception == null ) exception = new KMException();
+
+  public static KMException instance() {
+    if (exception == null) {
+      exception = new KMException();
+    }
     return exception;
   }
 
-  public void clear(){
+  public void clear() {
     reason = KMError.UNKNOWN_ERROR;
   }
 }

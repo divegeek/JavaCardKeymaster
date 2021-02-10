@@ -23,6 +23,7 @@ package com.android.javacard.keymaster;
  * instance of cert.
  */
 public interface KMAttestationCert {
+
   /**
    * Set verified boot hash.
    *
@@ -63,12 +64,13 @@ public interface KMAttestationCert {
    * @return instance of KMAttestationCert.
    */
   KMAttestationCert makeUniqueId(byte[] scratchpad, short scratchPadOff, byte[] creationTime,
-          short creationTimeOff, short creationTimeLen, byte[] attestAppId,
-          short attestAppIdOff, short attestAppIdLen, byte resetSinceIdRotation,
-          KMMasterKey masterKey);
+      short creationTimeOff, short creationTimeLen, byte[] attestAppId,
+      short attestAppIdOff, short attestAppIdLen, byte resetSinceIdRotation,
+      KMMasterKey masterKey);
 
   /**
-   * Set start time received from creation/activation time tag. Used for certificate's valid period.
+   * Set start time received from creation/activation time tag. Used for certificate's valid
+   * period.
    *
    * @param obj This is a KMByteBlob object containing start time.
    * @param scratchpad Buffer to store intermediate results.
@@ -78,17 +80,18 @@ public interface KMAttestationCert {
 
 
   /**
-   * Set expiry time received from expiry time tag or ca certificates expiry time.
-   * Used for certificate's valid period.
+   * Set expiry time received from expiry time tag or ca certificates expiry time. Used for
+   * certificate's valid period.
    *
    * @param usageExpiryTimeObj This is a KMByteBlob containing expiry time.
-   * @param certExpirtyTimeObj This is a KMByteblob containing expirty time extracted from certificate.
+   * @param certExpirtyTimeObj This is a KMByteblob containing expirty time extracted from
+   * certificate.
    * @param scratchpad Buffer to store intermediate results.
    * @param offset Variable used to store intermediate results.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert notAfter(short usageExpiryTimeObj,
-          short certExpirtyTimeObj, byte[] scratchPad, short offset);
+      short certExpirtyTimeObj, byte[] scratchPad, short offset);
 
   /**
    * Set device lock status received during booting time or due to device lock command.
@@ -115,12 +118,12 @@ public interface KMAttestationCert {
   KMAttestationCert attestationChallenge(short obj);
 
   /**
-   * Set extension tag received from key characteristics which needs to be added to android extension.
-   * This method will called once for each tag.
+   * Set extension tag received from key characteristics which needs to be added to android
+   * extension. This method will called once for each tag.
    *
    * @param tag is the KMByteBlob containing KMTag.
-   * @param hwEnforced is true if the tag has to be added to hw enforced list or
-   *                    else added to sw enforced list.
+   * @param hwEnforced is true if the tag has to be added to hw enforced list or else added to sw
+   * enforced list.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert extensionTag(short tag, boolean hwEnforced);
@@ -166,7 +169,6 @@ public interface KMAttestationCert {
 
   /**
    * Build the certificate. After this method the certificate is ready.
-   *
    */
   void build();
 }
