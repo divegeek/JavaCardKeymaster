@@ -40,6 +40,8 @@ import javacardx.crypto.Cipher;
 import com.android.javacard.keymaster.KMAESKey;
 import com.android.javacard.keymaster.KMAttestationKey;
 import com.android.javacard.keymaster.KMECPrivateKey;
+import com.android.javacard.keymaster.KMError;
+import com.android.javacard.keymaster.KMException;
 import com.android.javacard.keymaster.KMHmacKey;
 import com.android.javacard.keymaster.KMMasterKey;
 import com.android.javacard.keymaster.KMPreSharedKey;
@@ -1018,51 +1020,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return rsaSigner;
   }
 
-  public Signature createRsaVerifier(short digest, short padding,
-      byte[] modBuffer, short modOff, short modLength) {
-    try {
-      byte alg = mapSignature256Alg(KMType.RSA, (byte) padding, (byte) digest);
-      if (digest == KMType.DIGEST_NONE || padding == KMType.PADDING_NONE)
-        CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-
-      Signature rsaVerifier = getSignatureInstanceFromPool(alg);
-      RSAPublicKey key = (RSAPublicKey) rsaKeyPair.getPublic();
-      // setExponent
-      Util.setShort(tmpArray, (short) 0, (short) 0x0001);
-      Util.setShort(tmpArray, (short) 2, (short) 0x0001);
-      key.setExponent(tmpArray, (short) 0, (short) 4);
-      key.setModulus(modBuffer, modOff, modLength);
-      rsaVerifier.init(key, Signature.MODE_VERIFY);
-      return rsaVerifier;
-    } finally {
-      clean();
-    }
-  }
-
-  public Cipher createRsaCipher(short padding, short digest, byte[] modBuffer,
-      short modOff, short modLength) {
-    try {
-      byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0, (byte)digest);
-      // Java Card does not support MGF1-SHA1 and digest as SHA256.
-      // Both digest should be SHA256 as per Java Card, but as per Keymaster
-      // MGF should use SHA1 and message digest should be SHA256.
-      if (cipherAlg == Cipher.ALG_RSA_PKCS1_OAEP) {
-        KMException.throwIt(KMError.UNIMPLEMENTED);
-      }
-      Cipher rsaCipher = getCipherInstanceFromPool(cipherAlg);
-      RSAPublicKey key = (RSAPublicKey) rsaKeyPair.getPublic();
-      // setExponent
-      Util.setShort(tmpArray, (short) 0, (short) 0x0001);
-      Util.setShort(tmpArray, (short) 2, (short) 0x0001);
-      key.setExponent(tmpArray, (short) 0, (short) 4);
-      key.setModulus(modBuffer, modOff, modLength);
-      rsaCipher.init(key, Cipher.MODE_ENCRYPT);
-      return rsaCipher;
-    } finally {
-      clean();
-    }
-  }
-
   public Cipher createRsaDecipher(short padding, short digest, byte[] secret,
       short secretStart, short secretLength, byte[] modBuffer, short modOff,
       short modLength) {
@@ -1086,17 +1043,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return ecSigner;
   }
 
-  public Signature createEcVerifier(short digest, byte[] pubKey,
-      short pubKeyStart, short pubKeyLength) {
-    byte alg = mapSignature256Alg(KMType.EC, (byte) 0, (byte) digest);
-    Signature ecVerifier = null;
-    ECPublicKey key = (ECPublicKey) ecKeyPair.getPublic();
-    key.setW(pubKey, pubKeyStart, pubKeyLength);
-    ecVerifier = getSignatureInstanceFromPool(alg);
-    ecVerifier.init(key, Signature.MODE_VERIFY);
-    return ecVerifier;
-  }
-
   @Override
   public KMOperation initAsymmetricOperation(byte purpose, byte alg,
       byte padding, byte digest, byte[] privKeyBuf, short privKeyStart,
@@ -1116,28 +1062,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
         opr.setMode(purpose);
         JCSystem.commitTransaction();
         break;
-      case KMType.VERIFY:
-        Signature verifier = createRsaVerifier(digest, padding, pubModBuf,
-            pubModStart, pubModLength);
-        opr = getOperationInstanceFromPool();
-        JCSystem.beginTransaction();
-        opr.setSignature(verifier);
-        opr.setCipherAlgorithm(alg);
-        opr.setPaddingAlgorithm(padding);
-        opr.setMode(purpose);
-        JCSystem.commitTransaction();
-        break;
-      case KMType.ENCRYPT:
-        Cipher cipher = createRsaCipher(padding, digest, pubModBuf,
-            pubModStart, pubModLength);
-        opr = getOperationInstanceFromPool();
-        JCSystem.beginTransaction();
-        opr.setCipher(cipher);
-        opr.setCipherAlgorithm(alg);
-        opr.setPaddingAlgorithm(padding);
-        opr.setMode(purpose);
-        JCSystem.commitTransaction();
-        break;
       case KMType.DECRYPT:
         Cipher decipher = createRsaDecipher(padding, digest, privKeyBuf,
             privKeyStart, privKeyLength, pubModBuf, pubModStart, pubModLength);
@@ -1150,6 +1074,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         JCSystem.commitTransaction();
         break;
       default:
+        KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
         break;
       }
     } else if (alg == KMType.EC) {
@@ -1162,13 +1087,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
         opr.setSignature(signer);
         JCSystem.commitTransaction();
         break;
-      case KMType.VERIFY:
-        Signature verifier = createEcVerifier(digest, pubModBuf, pubModStart,
-            pubModLength);
-        opr = getOperationInstanceFromPool();
-        JCSystem.beginTransaction();
-        opr.setSignature(verifier);
-        JCSystem.commitTransaction();
+      default:
+        KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
         break;
       }
     } else {

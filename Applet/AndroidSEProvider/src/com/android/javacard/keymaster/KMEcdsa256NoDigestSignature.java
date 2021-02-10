@@ -112,28 +112,14 @@ public class KMEcdsa256NoDigestSignature extends Signature {
   @Override
   public boolean verify(byte[] bytes, short i, short i1, byte[] bytes1,
       short i2, short i3) throws CryptoException {
-    try {
-      if (i1 > MAX_NO_DIGEST_MSG_LEN)
-        CryptoException.throwIt(CryptoException.ILLEGAL_USE);
-      // add zeros to the left
-      if (i1 < MAX_NO_DIGEST_MSG_LEN) {
-        Util.arrayFillNonAtomic(KMAndroidSEProvider.getInstance().tmpArray,
-            (short) 0, (short) MAX_NO_DIGEST_MSG_LEN, (byte) 0);
-      }
-      Util.arrayCopyNonAtomic(bytes, i,
-          KMAndroidSEProvider.getInstance().tmpArray,
-          (short) (MAX_NO_DIGEST_MSG_LEN - i1), i1);
-      return inst.verifyPreComputedHash(
-          KMAndroidSEProvider.getInstance().tmpArray, (short) 0,
-          (short) MAX_NO_DIGEST_MSG_LEN, bytes1, i2, i3);
-    } finally {
-      KMAndroidSEProvider.getInstance().clean();
-    }
+    //Verification is handled inside HAL
+    return false;
   }
 
   @Override
   public boolean verifyPreComputedHash(byte[] bytes, short i, short i1,
           byte[] bytes1, short i2, short i3) throws CryptoException {
-    return inst.verify(bytes, i, i1, bytes1, i2, i3);
+    //Verification is handled inside HAL
+    return false;
   }
 }
