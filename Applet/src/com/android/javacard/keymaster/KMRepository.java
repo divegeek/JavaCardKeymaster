@@ -502,35 +502,40 @@ public class KMRepository implements KMUpgradable {
   }
 
   public short readROT() {
+    short totalLength = 0;
     short length = dataLength(BOOT_VERIFIED_BOOT_KEY);
-    length += dataLength(BOOT_VERIFIED_BOOT_HASH);
-    length += dataLength(BOOT_VERIFIED_BOOT_STATE);
-    length += dataLength(BOOT_DEVICE_LOCKED_STATUS);
-    short blob = KMByteBlob.instance(length);
-    if((length = readDataEntry(
-            BOOT_VERIFIED_BOOT_KEY,
-            KMByteBlob.cast(blob).getBuffer(),
-            KMByteBlob.cast(blob).getStartOff())) == 0){
-      return 0;
+    if (length == 0) {
+      return KMType.INVALID_VALUE;
     }
-    if((length += readDataEntry(
-            BOOT_VERIFIED_BOOT_HASH,
-            KMByteBlob.cast(blob).getBuffer(),
-            (short) (KMByteBlob.cast(blob).getStartOff() + length))) == 0){
-      return 0;
+    totalLength += length;
+    if ((length = dataLength(BOOT_VERIFIED_BOOT_HASH)) == 0) {
+      return KMType.INVALID_VALUE;
     }
-    if((length += readDataEntry(
-            BOOT_VERIFIED_BOOT_STATE,
-            KMByteBlob.cast(blob).getBuffer(),
-            (short) (KMByteBlob.cast(blob).getStartOff() + length))) == 0){
-      return 0;
+    totalLength += length;
+    if ((length = dataLength(BOOT_VERIFIED_BOOT_STATE)) == 0) {
+      return KMType.INVALID_VALUE;
     }
-    if((length += readDataEntry(
-            BOOT_DEVICE_LOCKED_STATUS,
-            KMByteBlob.cast(blob).getBuffer(),
-            (short) (KMByteBlob.cast(blob).getStartOff() + length))) == 0){
-      return 0;
+    totalLength += length;
+    if ((length = dataLength(BOOT_DEVICE_LOCKED_STATUS)) == 0) {
+      return KMType.INVALID_VALUE;
     }
+    totalLength += length;
+
+    short blob = KMByteBlob.instance(totalLength);
+    length = readDataEntry(BOOT_VERIFIED_BOOT_KEY, KMByteBlob.cast(blob)
+            .getBuffer(), KMByteBlob.cast(blob).getStartOff());
+
+    length += readDataEntry(BOOT_VERIFIED_BOOT_HASH, KMByteBlob.cast(blob)
+            .getBuffer(),
+            (short) (KMByteBlob.cast(blob).getStartOff() + length));
+
+    length += readDataEntry(BOOT_VERIFIED_BOOT_STATE, KMByteBlob.cast(blob)
+            .getBuffer(),
+            (short) (KMByteBlob.cast(blob).getStartOff() + length));
+
+    readDataEntry(BOOT_DEVICE_LOCKED_STATUS, KMByteBlob.cast(blob)
+            .getBuffer(),
+            (short) (KMByteBlob.cast(blob).getStartOff() + length));
     return blob;
   }
 
