@@ -2319,6 +2319,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MAC_LENGTH, data[KEY_PARAMETERS]);
     switch (op.getAlgorithm()) {
       case KMType.AES:
+        //Validate the block mode.
+        switch(param) {
+          case KMType.ECB:
+          case KMType.CBC:
+          case KMType.CTR:
+          case KMType.GCM:
+            break;
+          default:
+            KMException.throwIt(KMError.UNSUPPORTED_BLOCK_MODE);
+        }
         if (param == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
         if (param == KMType.GCM) {
           if (op.getPadding() != KMType.PADDING_NONE) {
@@ -2338,6 +2348,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
         break;
       case KMType.DES:
+        //Validate the block mode.
+        switch(param) {
+          case KMType.ECB:
+          case KMType.CBC:
+            break;
+          default:
+            KMException.throwIt(KMError.UNSUPPORTED_BLOCK_MODE);
+        }
         if (param == KMType.INVALID_VALUE) KMException.throwIt(KMError.INVALID_ARGUMENT);
         break;
       case KMType.HMAC:
