@@ -38,7 +38,6 @@ public class KMEncoder {
   private static final byte UINT64_LENGTH = (byte) 0x1B;
   private static final short TINY_PAYLOAD = 0x17;
   private static final short SHORT_PAYLOAD =  0x100;
-  //TODO make this static.
   private byte[] buffer;
   private short startOff;
   private short length;
@@ -73,7 +72,6 @@ public class KMEncoder {
     }else{
       this.length = (short)buffer.length;
     }
-    //this.length = (short)(startOff + length);
     push(object);
     encode();
     return (short)(this.startOff - startOff);

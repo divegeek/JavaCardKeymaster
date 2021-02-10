@@ -21,82 +21,61 @@ package com.android.javacard.keymaster;
  */
 public class KMError {
   public static final short OK = 0;
-  public static final short ROOT_OF_TRUST_ALREADY_SET = 1;
+
   public static final short UNSUPPORTED_PURPOSE = 2;
   public static final short INCOMPATIBLE_PURPOSE = 3;
   public static final short UNSUPPORTED_ALGORITHM = 4;
   public static final short INCOMPATIBLE_ALGORITHM = 5;
   public static final short UNSUPPORTED_KEY_SIZE = 6;
-  public static final short UNSUPPORTED_BLOCK_MODE = 7;
+
   public static final short INCOMPATIBLE_BLOCK_MODE = 8;
   public static final short UNSUPPORTED_MAC_LENGTH = 9;
   public static final short UNSUPPORTED_PADDING_MODE = 10;
   public static final short INCOMPATIBLE_PADDING_MODE = 11;
   public static final short UNSUPPORTED_DIGEST = 12;
   public static final short INCOMPATIBLE_DIGEST = 13;
-  public static final short INVALID_EXPIRATION_TIME = 14;
-  public static final short INVALID_USER_ID = 15;
-  public static final short INVALID_AUTHORIZATION_TIMEOUT = 16;
-  public static final short UNSUPPORTED_KEY_FORMAT = 17;
-  public static final short INCOMPATIBLE_KEY_FORMAT = 18;
+
   public static final short UNSUPPORTED_KEY_ENCRYPTION_ALGORITHM = 19;
-  /** For PKCS8 & PKCS12 */
-  public static final short UNSUPPORTED_KEY_VERIFICATION_ALGORITHM = 20;
-  /** For PKCS8 & PKCS12 */
+
+    /** For PKCS8 & PKCS12 */
   public static final short INVALID_INPUT_LENGTH = 21;
 
-  public static final short KEY_EXPORT_OPTIONS_INVALID = 22;
-  public static final short DELEGATION_NOT_ALLOWED = 23;
-  public static final short KEY_NOT_YET_VALID = 24;
-  public static final short KEY_EXPIRED = 25;
+
   public static final short KEY_USER_NOT_AUTHENTICATED = 26;
-  public static final short OUTPUT_PARAMETER_NULL = 27;
+
   public static final short INVALID_OPERATION_HANDLE = 28;
-  public static final short INSUFFICIENT_BUFFER_SPACE = 29;
+
   public static final short VERIFICATION_FAILED = 30;
   public static final short TOO_MANY_OPERATIONS = 31;
-  public static final short UNEXPECTED_NULL_POINTER = 32;
   public static final short INVALID_KEY_BLOB = 33;
-  public static final short IMPORTED_KEY_NOT_ENCRYPTED = 34;
-  public static final short IMPORTED_KEY_DECRYPTION_FAILED = 35;
-  public static final short IMPORTED_KEY_NOT_SIGNED = 36;
-  public static final short IMPORTED_KEY_VERIFICATION_FAILED = 37;
+
   public static final short INVALID_ARGUMENT = 38;
   public static final short UNSUPPORTED_TAG = 39;
   public static final short INVALID_TAG = 40;
-  public static final short MEMORY_ALLOCATION_FAILED = 41;
+
   public static final short IMPORT_PARAMETER_MISMATCH = 44;
-  public static final short SECURE_HW_ACCESS_DENIED = 45;
   public static final short OPERATION_CANCELLED = 46;
-  public static final short CONCURRENT_ACCESS_CONFLICT = 47;
-  public static final short SECURE_HW_BUSY = 48;
-  public static final short SECURE_HW_COMMUNICATION_FAILED = 49;
-  public static final short UNSUPPORTED_EC_FIELD = 50;
+
   public static final short MISSING_NONCE = 51;
   public static final short INVALID_NONCE = 52;
   public static final short MISSING_MAC_LENGTH = 53;
-  public static final short KEY_RATE_LIMIT_EXCEEDED = 54;
+
   public static final short CALLER_NONCE_PROHIBITED = 55;
-  public static final short KEY_MAX_OPS_EXCEEDED = 56;
+
   public static final short INVALID_MAC_LENGTH = 57;
   public static final short MISSING_MIN_MAC_LENGTH = 58;
   public static final short UNSUPPORTED_MIN_MAC_LENGTH = 59;
-  public static final short UNSUPPORTED_KDF = 60;
+
   public static final short UNSUPPORTED_EC_CURVE = 61;
   public static final short KEY_REQUIRES_UPGRADE = 62;
-  public static final short ATTESTATION_CHALLENGE_MISSING = 63;
-  public static final short KEYMASTER_NOT_CONFIGURED = 64;
+
   public static final short ATTESTATION_APPLICATION_ID_MISSING = 65;
-  public static final short CANNOT_ATTEST_IDS = 66;
   public static final short ROLLBACK_RESISTANCE_UNAVAILABLE = 67;
-  public static final short HARDWARE_TYPE_UNAVAILABLE = 68;
-  public static final short PROOF_OF_PRESENCE_REQUIRED = 69;
-  public static final short CONCURRENT_PROOF_OF_PRESENCE_REQUESTED = 70;
-  public static final short NO_USER_CONFIRMATION = 71;
+
   public static final short DEVICE_LOCKED = 72;
   public static final short EARLY_BOOT_ENDED = 73;
+
   public static final short UNIMPLEMENTED = 100;
-  public static final short VERSION_MISMATCH = 101;
   public static final short UNKNOWN_ERROR = 1000;
 
   //Extended errors

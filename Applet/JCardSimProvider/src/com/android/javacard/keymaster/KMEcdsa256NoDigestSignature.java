@@ -85,18 +85,12 @@ public class KMEcdsa256NoDigestSignature extends Signature {
   	    ECPublicKey pubkey = (ECPublicKey) kf.generatePublic(pubkeyspec);
   	    sunSigner.initVerify(pubkey);
   		}
-  	} catch (NoSuchAlgorithmException e) {
+  	} catch (NoSuchAlgorithmException | NoSuchProviderException e) {
   		CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-  	} catch (NoSuchProviderException e) {
-  		CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-  	} catch(InvalidParameterSpecException e) {
-  		CryptoException.throwIt(CryptoException.INVALID_INIT);
-  	} catch(InvalidKeySpecException e) {
-  		CryptoException.throwIt(CryptoException.INVALID_INIT);
-  	} catch(InvalidKeyException e) {
+  	} catch(InvalidParameterSpecException | InvalidKeySpecException | InvalidKeyException e) {
   		CryptoException.throwIt(CryptoException.INVALID_INIT);
   	}
-  }
+	}
 
   @Override
   public void init(Key key, byte b) throws CryptoException {
