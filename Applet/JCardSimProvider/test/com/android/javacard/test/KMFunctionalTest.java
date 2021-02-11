@@ -2307,9 +2307,8 @@ public class KMFunctionalTest {
             KMType.PKCS7, new byte[12]);
     short ret = begin(KMType.ENCRYPT,
             KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-            KMKeyParameters.instance(desPkcs7Params), (short) 0,
-            KMError.UNSUPPORTED_BLOCK_MODE);
-
+            KMKeyParameters.instance(desPkcs7Params), (short) 0);
+    Assert.assertTrue(ret == KMError.UNSUPPORTED_BLOCK_MODE);
     cleanUp();
   }
 
@@ -2971,7 +2970,7 @@ public class KMFunctionalTest {
   }
 
   public short begin(byte keyPurpose, short keyBlob, short keyParmas,
-          short hwToken, short expectedErr) {
+          short hwToken) {
     short arrPtr = KMArray.instance((short) 4);
     KMArray.cast(arrPtr).add((short) 0,
             KMEnum.instance(KMType.PURPOSE, keyPurpose));
@@ -2994,7 +2993,7 @@ public class KMFunctionalTest {
     if (len > 5) {
       ret = decoder.decode(ret, respBuf, (short) 0, len);
       short error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
-      Assert.assertEquals(error, expectedErr);
+      Assert.assertEquals(error, KMError.OK);
       return ret;
     } else {
       if (len == 3)
@@ -3003,11 +3002,6 @@ public class KMFunctionalTest {
         return respBuf[1];
       return Util.getShort(respBuf, (short) 0);
     }
-  }
-
-  public short begin(byte keyPurpose, short keyBlob, short keyParmas,
-          short hwToken) {
-    return begin(keyPurpose, keyBlob, keyParmas, hwToken, KMError.OK);
   }
 
   public short translateExtendedErrorCodes(short err) {
