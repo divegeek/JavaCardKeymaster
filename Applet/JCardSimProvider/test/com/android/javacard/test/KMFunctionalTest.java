@@ -2295,6 +2295,25 @@ public class KMFunctionalTest {
   }
 
   @Test
+  public void testUnsupportedBlockMode() {
+    init();
+    short desKey = generateAesDesKey(KMType.DES, (short) 168, null, null, false);
+    short desKeyPtr = KMArray.cast(desKey).get((short) 1);
+    byte[] keyBlob = new byte[KMByteBlob.cast(desKeyPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(desKeyPtr).getBuffer(), KMByteBlob
+            .cast(desKeyPtr).getStartOff(), keyBlob, (short) 0,
+            (short) keyBlob.length);
+    short desPkcs7Params = getAesDesParams(KMType.DES, (byte) KMType.CTR,
+            KMType.PKCS7, new byte[12]);
+    short ret = begin(KMType.ENCRYPT,
+            KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
+            KMKeyParameters.instance(desPkcs7Params), (short) 0,
+            KMError.UNSUPPORTED_BLOCK_MODE);
+
+    cleanUp();
+  }
+
+  @Test
   public void testDesEcbPkcs7PaddingCorrupted() {
     init();
     short desKey = generateAesDesKey(KMType.DES, (short) 168, null, null, false);
@@ -2951,34 +2970,44 @@ public class KMFunctionalTest {
     return ret;
   }
 
-  public short begin(byte keyPurpose, short keyBlob, short keyParmas, short hwToken) {
-    short arrPtr = KMArray.instance((short)4);
-    KMArray.cast(arrPtr).add((short)0, KMEnum.instance(KMType.PURPOSE, keyPurpose));
-    KMArray.cast(arrPtr).add((short)1, keyBlob);
-    KMArray.cast(arrPtr).add((short)2, keyParmas);
-    if(hwToken == 0) {
+  public short begin(byte keyPurpose, short keyBlob, short keyParmas,
+          short hwToken, short expectedErr) {
+    short arrPtr = KMArray.instance((short) 4);
+    KMArray.cast(arrPtr).add((short) 0,
+            KMEnum.instance(KMType.PURPOSE, keyPurpose));
+    KMArray.cast(arrPtr).add((short) 1, keyBlob);
+    KMArray.cast(arrPtr).add((short) 2, keyParmas);
+    if (hwToken == 0) {
       hwToken = KMHardwareAuthToken.instance();
     }
-    KMArray.cast(arrPtr).add((short)3, hwToken);
-    CommandAPDU apdu = encodeApdu((byte)INS_BEGIN_OPERATION_CMD, arrPtr);
-    //print(apdu.getBytes(),(short)0,(short)apdu.getBytes().length);
+    KMArray.cast(arrPtr).add((short) 3, hwToken);
+    CommandAPDU apdu = encodeApdu((byte) INS_BEGIN_OPERATION_CMD, arrPtr);
+    // print(apdu.getBytes(),(short)0,(short)apdu.getBytes().length);
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
     short outParams = KMKeyParameters.exp();
-    KMArray.cast(ret).add((short)0, KMInteger.exp());
-    KMArray.cast(ret).add((short)1, outParams);
-    KMArray.cast(ret).add((short)2, KMInteger.exp());
+    KMArray.cast(ret).add((short) 0, KMInteger.exp());
+    KMArray.cast(ret).add((short) 1, outParams);
+    KMArray.cast(ret).add((short) 2, KMInteger.exp());
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
-    if(len > 5){
-    ret = decoder.decode(ret, respBuf, (short) 0, len);
-    short error = KMInteger.cast(KMArray.cast(ret).get((short)0)).getShort();
-    Assert.assertEquals(error, KMError.OK);
-    return ret;}else{
-      if(len == 3) return respBuf[0];
-      if(len == 4) return respBuf[1];
-      return Util.getShort(respBuf,(short)0);
+    if (len > 5) {
+      ret = decoder.decode(ret, respBuf, (short) 0, len);
+      short error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
+      Assert.assertEquals(error, expectedErr);
+      return ret;
+    } else {
+      if (len == 3)
+        return respBuf[0];
+      if (len == 4)
+        return respBuf[1];
+      return Util.getShort(respBuf, (short) 0);
     }
+  }
+
+  public short begin(byte keyPurpose, short keyBlob, short keyParmas,
+          short hwToken) {
+    return begin(keyPurpose, keyBlob, keyParmas, hwToken, KMError.OK);
   }
 
   public short translateExtendedErrorCodes(short err) {
