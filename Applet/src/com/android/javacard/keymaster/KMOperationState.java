@@ -20,10 +20,10 @@ import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
- * KMOperationState is the container of an active operation started by beginOperation function.
- * This operation state is persisted by the applet in non volatile memory. However, this state is not
- * retained if applet is upgraded. There will be four operation state records maintained i.e. only four
- * active operations are supported at any given time.
+ * KMOperationState is the container of an active operation started by beginOperation function. This
+ * operation state is persisted by the applet in non volatile memory. However, this state is not
+ * retained if applet is upgraded. There will be four operation state records maintained i.e. only
+ * four active operations are supported at any given time.
  */
 public class KMOperationState {
 
@@ -64,7 +64,9 @@ public class KMOperationState {
   }
 
   private static KMOperationState proto() {
-    if (prototype == null) prototype = new KMOperationState();
+    if (prototype == null) {
+      prototype = new KMOperationState();
+    }
     return prototype;
   }
 
@@ -88,7 +90,9 @@ public class KMOperationState {
   }
 
   public void persist() {
-    if (!dFlag) return;
+    if (!dFlag) {
+      return;
+    }
     KMRepository.instance().persistOperation(data, Util.getShort(data, OP_HANDLE), op);
     dFlag = false;
   }
@@ -108,13 +112,14 @@ public class KMOperationState {
     Util.arrayFillNonAtomic(
         data, (short) 0, (short) data.length, (byte) 0);
   }
-  private void dataUpdated(){
+
+  private void dataUpdated() {
     dFlag = true;
   }
 
   public void release() {
     Object[] ops = ((Object[]) slot[REFS]);
-    ((KMOperation)ops[OPERATION]).abort();
+    ((KMOperation) ops[OPERATION]).abort();
     JCSystem.beginTransaction();
     Util.arrayFillNonAtomic(
         (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length, (byte) 0);
@@ -168,20 +173,29 @@ public class KMOperationState {
   }
 
   public void setOneTimeAuthReqd(boolean flag) {
-    if (flag) data[FLAGS] = (byte) (data[FLAGS] | SECURE_USER_ID_REQD);
-    else data[FLAGS] = (byte) (data[FLAGS] & (~SECURE_USER_ID_REQD));
+    if (flag) {
+      data[FLAGS] = (byte) (data[FLAGS] | SECURE_USER_ID_REQD);
+    } else {
+      data[FLAGS] = (byte) (data[FLAGS] & (~SECURE_USER_ID_REQD));
+    }
     dataUpdated();
   }
 
   public void setAuthTimeoutValidated(boolean flag) {
-    if (flag) data[FLAGS] = (byte) (data[FLAGS] | AUTH_TIMEOUT_VALIDATED);
-    else data[FLAGS] = (byte) (data[FLAGS] & (~AUTH_TIMEOUT_VALIDATED));
+    if (flag) {
+      data[FLAGS] = (byte) (data[FLAGS] | AUTH_TIMEOUT_VALIDATED);
+    } else {
+      data[FLAGS] = (byte) (data[FLAGS] & (~AUTH_TIMEOUT_VALIDATED));
+    }
     dataUpdated();
   }
 
   public void setAuthPerOperationReqd(boolean flag) {
-    if (flag) data[FLAGS] = (byte) (data[FLAGS] | AUTH_PER_OP_REQD);
-    else data[FLAGS] = (byte) (data[FLAGS] & (~AUTH_PER_OP_REQD));
+    if (flag) {
+      data[FLAGS] = (byte) (data[FLAGS] | AUTH_PER_OP_REQD);
+    } else {
+      data[FLAGS] = (byte) (data[FLAGS] & (~AUTH_PER_OP_REQD));
+    }
     dataUpdated();
   }
 

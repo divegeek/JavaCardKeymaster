@@ -1,26 +1,26 @@
-<project name="JavaCardKeymaster" default ="default" >
+<project name="JavaCardKeymaster" default="default">
 
   <!-- Targets -->
-  <target name = "applet.init" description ="Initialize applet build environment">
-	  <property name="applet.home.dir" value="${basedir}"/>
-	  <property name="applet.build.dir" value="${basedir}/build"/>
-	  <property name="applet.common.src" value="${basedir}/src" />
-	  <property name="JCardSim.dir" value="${basedir}/JCardSimProvider"/>
-	  <property name="AndroidSE.dir" value="${basedir}/AndroidSEProvider"/>
-	  <mkdir dir="${basedir}/build"/>
+  <target name="applet.init" description="Initialize applet build environment">
+    <property name="applet.home.dir" value="${basedir}"/>
+    <property name="applet.build.dir" value="${basedir}/build"/>
+    <property name="applet.common.src" value="${basedir}/src"/>
+    <property name="JCardSim.dir" value="${basedir}/JCardSimProvider"/>
+    <property name="AndroidSE.dir" value="${basedir}/AndroidSEProvider"/>
+    <mkdir dir="${basedir}/build"/>
   </target>
 
   <target name="cleanall">
     <delete dir="${basedir}/build"/>
   </target>
 
-<target name="JCardSim" depends = "applet.init">
+  <target name="JCardSim" depends="applet.init">
     <ant antfile="${JCardSim.dir}/build.xml" target="default"/>
-</target>
+  </target>
 
-<target name="AndroidSE" depends = "applet.init">
+  <target name="AndroidSE" depends="applet.init">
     <ant antfile="${AndroidSE.dir}/build.xml" target="default"/>
-</target>
+  </target>
 
-<target name="default" depends="cleanall, AndroidSE, JCardSim" />
+  <target name="default" depends="cleanall, AndroidSE, JCardSim"/>
 </project>

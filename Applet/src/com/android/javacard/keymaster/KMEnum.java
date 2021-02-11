@@ -26,27 +26,31 @@ import javacard.framework.Util;
  * struct{short enumType; byte val}}
  */
 public class KMEnum extends KMType {
+
   private static KMEnum prototype;
   private static short instPtr;
 
   // The allowed enum types.
   private static short[] types = {
-    HARDWARE_TYPE,
-    KEY_FORMAT,
-    KEY_DERIVATION_FUNCTION,
-    VERIFIED_BOOT_STATE,
-    DEVICE_LOCKED,
-    USER_AUTH_TYPE,
-    PURPOSE,
-    ECCURVE
+      HARDWARE_TYPE,
+      KEY_FORMAT,
+      KEY_DERIVATION_FUNCTION,
+      VERIFIED_BOOT_STATE,
+      DEVICE_LOCKED,
+      USER_AUTH_TYPE,
+      PURPOSE,
+      ECCURVE
   };
 
   private static Object[] enums = null;
 
-  private KMEnum() {}
+  private KMEnum() {
+  }
 
   private static KMEnum proto(short ptr) {
-    if (prototype == null) prototype = new KMEnum();
+    if (prototype == null) {
+      prototype = new KMEnum();
+    }
     instPtr = ptr;
     return prototype;
   }
@@ -61,7 +65,9 @@ public class KMEnum extends KMType {
   }
 
   public static KMEnum cast(short ptr) {
-    if (heap[ptr] != ENUM_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[ptr] != ENUM_TYPE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     if (Util.getShort(heap, (short) (ptr + 1)) == INVALID_VALUE) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
@@ -91,22 +97,22 @@ public class KMEnum extends KMType {
     // The allowed enum values to corresponding enum types in the types array.
     if (enums == null) {
       enums =
-          new Object[] {
-            new byte[] {SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX},
-            new byte[] {X509, PKCS8, RAW},
-            new byte[] {
-              DERIVATION_NONE,
-              RFC5869_SHA256,
-              ISO18033_2_KDF1_SHA1,
-              ISO18033_2_KDF1_SHA256,
-              ISO18033_2_KDF2_SHA1,
-              ISO18033_2_KDF2_SHA256
-            },
-            new byte[] {SELF_SIGNED_BOOT, VERIFIED_BOOT, UNVERIFIED_BOOT, FAILED_BOOT},
-            new byte[] {DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
-            new byte[] {USER_AUTH_NONE, PASSWORD, FINGERPRINT, BOTH},
-            new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
-            new byte[] {P_224, P_256, P_384, P_521}
+          new Object[]{
+              new byte[]{SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX},
+              new byte[]{X509, PKCS8, RAW},
+              new byte[]{
+                  DERIVATION_NONE,
+                  RFC5869_SHA256,
+                  ISO18033_2_KDF1_SHA1,
+                  ISO18033_2_KDF1_SHA256,
+                  ISO18033_2_KDF2_SHA1,
+                  ISO18033_2_KDF2_SHA256
+              },
+              new byte[]{SELF_SIGNED_BOOT, VERIFIED_BOOT, UNVERIFIED_BOOT, FAILED_BOOT},
+              new byte[]{DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
+              new byte[]{USER_AUTH_NONE, PASSWORD, FINGERPRINT, BOTH},
+              new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
+              new byte[]{P_224, P_256, P_384, P_521}
           };
     }
   }

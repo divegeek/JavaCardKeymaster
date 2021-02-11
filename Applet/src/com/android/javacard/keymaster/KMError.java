@@ -20,6 +20,7 @@ package com.android.javacard.keymaster;
  * positive unlike negative values in keymaster hal.
  */
 public class KMError {
+
   public static final short OK = 0;
   public static final short UNSUPPORTED_PURPOSE = 2;
   public static final short INCOMPATIBLE_PURPOSE = 3;
@@ -36,7 +37,9 @@ public class KMError {
 
   public static final short UNSUPPORTED_KEY_ENCRYPTION_ALGORITHM = 19;
 
-  /** For PKCS8 & PKCS12 */
+  /**
+   * For PKCS8 & PKCS12
+   */
   public static final short INVALID_INPUT_LENGTH = 21;
 
 
@@ -86,5 +89,5 @@ public class KMError {
   public static final short CRYPTO_UNINITIALIZED_KEY = 10012;
   //Generic Unknown error.
   public static final short GENERIC_UNKNOWN_ERROR = 10013;
-  
+
 }
