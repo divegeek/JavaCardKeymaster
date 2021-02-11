@@ -24,25 +24,28 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.ShortBufferException;
 
 
-public class KMCipherImpl extends KMCipher{
+public class KMCipherImpl extends KMCipher {
+
   private Cipher cipher;
   private javax.crypto.Cipher sunCipher;
   private short cipherAlg;
   private short padding;
   private short mode;
   private short blockMode;
-  KMCipherImpl(Cipher c){
+
+  KMCipherImpl(Cipher c) {
     cipher = c;
   }
-  KMCipherImpl(javax.crypto.Cipher c){
+
+  KMCipherImpl(javax.crypto.Cipher c) {
     sunCipher = c;
   }
 
   @Override
-  public short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i){
-    if(cipherAlg == KMType.RSA && padding == KMType.RSA_OAEP){
+  public short doFinal(byte[] buffer, short startOff, short length, byte[] scratchPad, short i) {
+    if (cipherAlg == KMType.RSA && padding == KMType.RSA_OAEP) {
       try {
-        return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
+        return (short) sunCipher.doFinal(buffer, startOff, length, scratchPad, i);
       } catch (ShortBufferException e) {
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -53,9 +56,9 @@ public class KMCipherImpl extends KMCipher{
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    }else if(cipherAlg == KMType.AES && blockMode == KMType.GCM){
+    } else if (cipherAlg == KMType.AES && blockMode == KMType.GCM) {
       try {
-        return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
+        return (short) sunCipher.doFinal(buffer, startOff, length, scratchPad, i);
       } catch (AEADBadTagException e) {
         e.printStackTrace();
         KMException.throwIt(KMError.VERIFICATION_FAILED);
@@ -67,9 +70,9 @@ public class KMCipherImpl extends KMCipher{
       } catch (BadPaddingException e) {
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    } else if(cipherAlg == KMType.AES && blockMode == KMType.CTR){
+    } else if (cipherAlg == KMType.AES && blockMode == KMType.CTR) {
       try {
-        return (short)sunCipher.doFinal(buffer,startOff,length,scratchPad,i);
+        return (short) sunCipher.doFinal(buffer, startOff, length, scratchPad, i);
       } catch (ShortBufferException e) {
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -80,53 +83,64 @@ public class KMCipherImpl extends KMCipher{
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    } else{
-      if((cipherAlg == KMType.DES || cipherAlg == KMType.AES) && padding ==KMType.PKCS7 && mode == KMType.ENCRYPT){
-          byte blkSize = 16;
-          byte paddingBytes;
-          short len = length;
-          if (cipherAlg == KMType.DES) blkSize = 8;
-          // padding bytes
-          if (len % blkSize == 0) paddingBytes = blkSize;
-          else paddingBytes = (byte) (blkSize - (len % blkSize));
-          // final len with padding
-          len = (short) (len + paddingBytes);
-          // intermediate buffer to copy input data+padding
-          byte[] tmp = new byte[len];
-          // fill in the padding
-          Util.arrayFillNonAtomic(tmp, (short) 0, len, paddingBytes);
-          // copy the input data
-          Util.arrayCopyNonAtomic(buffer,startOff,tmp,(short)0,length);
-          buffer = tmp;
-          length = len;
-          startOff = 0;
+    } else {
+      if ((cipherAlg == KMType.DES || cipherAlg == KMType.AES) && padding == KMType.PKCS7
+          && mode == KMType.ENCRYPT) {
+        byte blkSize = 16;
+        byte paddingBytes;
+        short len = length;
+        if (cipherAlg == KMType.DES) {
+          blkSize = 8;
+        }
+        // padding bytes
+        if (len % blkSize == 0) {
+          paddingBytes = blkSize;
+        } else {
+          paddingBytes = (byte) (blkSize - (len % blkSize));
+        }
+        // final len with padding
+        len = (short) (len + paddingBytes);
+        // intermediate buffer to copy input data+padding
+        byte[] tmp = new byte[len];
+        // fill in the padding
+        Util.arrayFillNonAtomic(tmp, (short) 0, len, paddingBytes);
+        // copy the input data
+        Util.arrayCopyNonAtomic(buffer, startOff, tmp, (short) 0, length);
+        buffer = tmp;
+        length = len;
+        startOff = 0;
       }
       short len = cipher.doFinal(buffer, startOff, length, scratchPad, i);
       // JCard Sim removes leading zeros during decryption in case of no padding - so add that back.
-      if (cipherAlg == KMType.RSA && padding == KMType.PADDING_NONE && mode == KMType.DECRYPT && len < 256) {
+      if (cipherAlg == KMType.RSA && padding == KMType.PADDING_NONE && mode == KMType.DECRYPT
+          && len < 256) {
         byte[] tempBuf = new byte[256];
         Util.arrayFillNonAtomic(tempBuf, (short) 0, (short) 256, (byte) 0);
         Util.arrayCopyNonAtomic(scratchPad, (short) 0, tempBuf, (short) (i + 256 - len), len);
         Util.arrayCopyNonAtomic(tempBuf, (short) 0, scratchPad, i, (short) 256);
         len = 256;
-      }else if((cipherAlg == KMType.AES || cipherAlg == KMType.DES) // PKCS7
-        && padding == KMType.PKCS7
-        && mode == KMType.DECRYPT){
+      } else if ((cipherAlg == KMType.AES || cipherAlg == KMType.DES) // PKCS7
+          && padding == KMType.PKCS7
+          && mode == KMType.DECRYPT) {
         byte blkSize = 16;
-        if (cipherAlg == KMType.DES) blkSize = 8;
-        if(len >0) {
+        if (cipherAlg == KMType.DES) {
+          blkSize = 8;
+        }
+        if (len > 0) {
           //verify if padding is corrupted.
-          byte paddingByte = scratchPad[i+len -1];
+          byte paddingByte = scratchPad[i + len - 1];
           //padding byte always should be <= block size
-          if((short)paddingByte > blkSize ||
-            (short)paddingByte <= 0) KMException.throwIt(KMError.INVALID_ARGUMENT);
+          if ((short) paddingByte > blkSize ||
+              (short) paddingByte <= 0) {
+            KMException.throwIt(KMError.INVALID_ARGUMENT);
+          }
 
-          for(short j = 1; j <= paddingByte; ++j) {
-            if (scratchPad[i+len -j] != paddingByte) {
+          for (short j = 1; j <= paddingByte; ++j) {
+            if (scratchPad[i + len - j] != paddingByte) {
               KMException.throwIt(KMError.INVALID_ARGUMENT);
             }
           }
-          len = (short)(len - (short)paddingByte);// remove the padding bytes
+          len = (short) (len - (short) paddingByte);// remove the padding bytes
         }
       }
       return len;
@@ -146,17 +160,17 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short update(byte[] buffer, short startOff, short length, byte[] scratchPad, short i) {
-    if(cipherAlg == KMType.AES && (blockMode == KMType.GCM || blockMode == KMType.CTR)){
+    if (cipherAlg == KMType.AES && (blockMode == KMType.GCM || blockMode == KMType.CTR)) {
       try {
-        return (short)sunCipher.update(buffer,startOff,length,scratchPad,i);
+        return (short) sunCipher.update(buffer, startOff, length, scratchPad, i);
       } catch (ShortBufferException e) {
         e.printStackTrace();
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       } catch (IllegalStateException e) {
-      	e.printStackTrace();
-      	CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+        e.printStackTrace();
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
-    } else{
+    } else {
       return cipher.update(buffer, startOff, length, scratchPad, i);
     }
     return KMType.INVALID_VALUE;
@@ -164,16 +178,16 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public void updateAAD(byte[] buffer, short startOff, short length) {
-	  try {
-    sunCipher.updateAAD(buffer,startOff,length);
-	  } catch (IllegalArgumentException e) {
-		  e.printStackTrace();
-		  CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-	  } catch (IllegalStateException e) {
-		  CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-	  } catch (UnsupportedOperationException e) {
-		  CryptoException.throwIt(CryptoException.ILLEGAL_USE);
-	  }
+    try {
+      sunCipher.updateAAD(buffer, startOff, length);
+    } catch (IllegalArgumentException e) {
+      e.printStackTrace();
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    } catch (IllegalStateException e) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    } catch (UnsupportedOperationException e) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+    }
   }
 
   @Override
@@ -187,12 +201,12 @@ public class KMCipherImpl extends KMCipher{
   }
 
   @Override
-  public void setBlockMode(short mode){
-    blockMode =  mode;
+  public void setBlockMode(short mode) {
+    blockMode = mode;
   }
 
   @Override
-  public short getBlockMode(){
+  public short getBlockMode() {
     return blockMode;
   }
 
@@ -206,7 +220,7 @@ public class KMCipherImpl extends KMCipher{
 
   @Override
   public short getCipherProvider() {
-	  return KMCipher.SUN_JCE;
+    return KMCipher.SUN_JCE;
   }
 
   @Override
