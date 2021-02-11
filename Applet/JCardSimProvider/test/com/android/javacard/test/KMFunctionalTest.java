@@ -2430,6 +2430,24 @@ public class KMFunctionalTest {
   }
 
   @Test
+  public void testUnsupportedBlockMode() {
+    init();
+    short desKey = generateAesDesKey(KMType.DES, (short) 168, null, null, false);
+    short desKeyPtr = KMArray.cast(desKey).get((short) 1);
+    byte[] keyBlob = new byte[KMByteBlob.cast(desKeyPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(desKeyPtr).getBuffer(), KMByteBlob
+            .cast(desKeyPtr).getStartOff(), keyBlob, (short) 0,
+            (short) keyBlob.length);
+    short desPkcs7Params = getAesDesParams(KMType.DES, (byte) KMType.CTR,
+            KMType.PKCS7, new byte[12]);
+    short ret = begin(KMType.ENCRYPT,
+            KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
+            KMKeyParameters.instance(desPkcs7Params), (short) 0);
+    Assert.assertTrue(ret == KMError.UNSUPPORTED_BLOCK_MODE);
+    cleanUp();
+  }
+
+  @Test
   public void testDesEcbPkcs7PaddingCorrupted() {
     init();
     short desKey = generateAesDesKey(KMType.DES, (short) 168, null, null, false);
