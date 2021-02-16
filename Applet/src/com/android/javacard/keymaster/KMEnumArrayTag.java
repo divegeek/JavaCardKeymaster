@@ -35,10 +35,13 @@ public class KMEnumArrayTag extends KMTag {
   // Tag Values.
   private static Object[] enums = null;
 
-  private KMEnumArrayTag() {}
+  private KMEnumArrayTag() {
+  }
 
   private static KMEnumArrayTag proto(short ptr) {
-    if (prototype == null) prototype = new KMEnumArrayTag();
+    if (prototype == null) {
+      prototype = new KMEnumArrayTag();
+    }
     instPtr = ptr;
     return prototype;
   }
@@ -94,7 +97,9 @@ public class KMEnumArrayTag extends KMTag {
   }
 
   public static KMEnumArrayTag cast(short ptr) {
-    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[ptr] != TAG_TYPE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     if (Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE)) != ENUM_ARRAY_TAG) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
@@ -122,13 +127,13 @@ public class KMEnumArrayTag extends KMTag {
     if (enums == null) {
       // allowed tag values.
       enums =
-          new Object[] {
-            new byte[] {ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
-            new byte[] {ECB, CBC, CTR, GCM},
-            new byte[] {DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
-            new byte[] {
-              PADDING_NONE, RSA_OAEP, RSA_PSS, RSA_PKCS1_1_5_ENCRYPT, RSA_PKCS1_1_5_SIGN, PKCS7
-            }
+          new Object[]{
+              new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
+              new byte[]{ECB, CBC, CTR, GCM},
+              new byte[]{DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
+              new byte[]{
+                  PADDING_NONE, RSA_OAEP, RSA_PSS, RSA_PKCS1_1_5_ENCRYPT, RSA_PKCS1_1_5_SIGN, PKCS7
+              }
           };
     }
   }
@@ -198,15 +203,20 @@ public class KMEnumArrayTag extends KMTag {
       switch (alg) {
         case KMType.EC:
         case KMType.RSA:
-          if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256 && digest != KMType.SHA1)
+          if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256 && digest != KMType.SHA1) {
             return false;
+          }
           break;
         case KMType.HMAC:
-          if (digest != KMType.SHA2_256) return false;
+          if (digest != KMType.SHA2_256) {
+            return false;
+          }
           break;
         case KMType.AES:
         case KMType.DES:
-          if (digest != KMType.DIGEST_NONE) return false;
+          if (digest != KMType.DIGEST_NONE) {
+            return false;
+          }
           break;
         default:
           return false;
@@ -270,7 +280,9 @@ public class KMEnumArrayTag extends KMTag {
           }
           break;
         case KMType.WRAP_KEY:
-          if (alg != KMType.RSA) return false;
+          if (alg != KMType.RSA) {
+            return false;
+          }
           break;
         default:
           return false;

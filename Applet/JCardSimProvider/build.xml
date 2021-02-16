@@ -1,21 +1,23 @@
-<project name="JCardSimProvider" default = "default">
-   <import file="../build.xml" as="common" />
+<project name="JCardSimProvider" default="default">
+  <import file="../build.xml" as="common"/>
   <!-- Properties - other properties are included from build_common.xml -->
-  <target name = "jcard.init" >
-	  <property name="common.src.dir" value="${applet.common.src}"/>
-	  <property name="jcard.src.dir" value="${JCardSim.dir}/src"/>
-	  <property name="jcard.test.dir" value="${JCardSim.dir}/test"/>
-	  <property name="jcard.test.build.dir" value="${applet.build.dir}/jcardsim/test"/>
-	  <property name="jcard.src.build.dir" value="${applet.build.dir}/jcardsim/src"/>  
-	  <!-- Unit Testing uses jcardsim with javacard classic 3.0.5 apis -->
-	  <path id="jcard.classpath">
-		<pathelement location="${jcard.src.build.dir}"/>
-		<pathelement location="${JCardSim.dir}/lib/gpapi-upgrade.jar"/>
-		<pathelement location="${JCardSim.dir}/lib/junit-4.13.jar"/>
-		<pathelement location="${JCardSim.dir}/lib/hamcrest-core-1.3.jar"/>
-		<pathelement location="${JCardSim.dir}/lib/jcardsim-3.0.5-SNAPSHOT.jar"/>
-	  </path>
-</target>
+  <target name="jcard.init">
+    <property name="common.src.dir" value="${applet.common.src}"/>
+    <property name="jcard.src.dir" value="${JCardSim.dir}/src"/>
+    <property name="jcard.test.dir" value="${JCardSim.dir}/test"/>
+    <property name="jcard.test.build.dir"
+        value="${applet.build.dir}/jcardsim/test"/>
+    <property name="jcard.src.build.dir"
+        value="${applet.build.dir}/jcardsim/src"/>
+    <!-- Unit Testing uses jcardsim with javacard classic 3.0.5 apis -->
+    <path id="jcard.classpath">
+      <pathelement location="${jcard.src.build.dir}"/>
+      <pathelement location="${JCardSim.dir}/lib/gpapi-upgrade.jar"/>
+      <pathelement location="${JCardSim.dir}/lib/junit-4.13.jar"/>
+      <pathelement location="${JCardSim.dir}/lib/hamcrest-core-1.3.jar"/>
+      <pathelement location="${JCardSim.dir}/lib/jcardsim-3.0.5-SNAPSHOT.jar"/>
+    </path>
+  </target>
 
   <!-- Unit Testing related targets -->
   <target name="jcard.clean">
@@ -23,9 +25,10 @@
     <delete dir="${jcard.src.build.dir}"/>
   </target>
 
-  <target name="jcard.src.compile" depends = "jcard.init">
+  <target name="jcard.src.compile" depends="jcard.init">
     <mkdir dir="${jcard.src.build.dir}"/>
-    <javac destdir="${jcard.src.build.dir}" includeantruntime="false" debug="true">
+    <javac destdir="${jcard.src.build.dir}" includeantruntime="false"
+        debug="true">
       <src path="${common.src.dir}"/>
       <src path="${jcard.src.dir}"/>
       <classpath refid="jcard.classpath"/>
@@ -34,7 +37,8 @@
 
   <target name="jcard.test.compile" depends="jcard.src.compile">
     <mkdir dir="${jcard.test.build.dir}"/>
-    <javac srcdir="${jcard.test.dir}" destdir="${jcard.test.build.dir}" includeantruntime="false">
+    <javac srcdir="${jcard.test.dir}" destdir="${jcard.test.build.dir}"
+        includeantruntime="false">
       <classpath refid="jcard.classpath"/>
     </javac>
   </target>
@@ -52,5 +56,5 @@
     </junit>
   </target>
 
-<target name="default" depends="jcard.test.run"/>
+  <target name="default" depends="jcard.test.run"/>
 </project>

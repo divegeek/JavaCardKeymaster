@@ -130,11 +130,13 @@ public class KMRsa2048NoDigestSignature extends Signature {
 
   private boolean isValidData(byte[] buf, short start, short len) {
     if (algorithm == ALG_RSA_SIGN_NOPAD) {
-      if (len > 256)
+      if (len > 256) {
         return false;
+      }
     } else { // ALG_RSA_PKCS1_NODIGEST
-      if (len > 245)
+      if (len > 245) {
         return false;
+      }
     }
     return true;
   }

@@ -21,23 +21,25 @@ package com.android.javacard.keymaster;
  * returned back to KMSEProvider for the reuse when the operation is finished.
  */
 public interface KMOperation {
+
   // Used for cipher operations
   short update(byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-                        byte[] outputDataBuf, short outputDataStart);
+      byte[] outputDataBuf, short outputDataStart);
+
   // Used for signature operations
   short update(byte[] inputDataBuf, short inputDataStart, short inputDataLength);
 
   // Used for finishing cipher operations.
   short finish(byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-                        byte[] outputDataBuf, short outputDataStart);
+      byte[] outputDataBuf, short outputDataStart);
 
   // Used for finishing signing operations.
   short sign(byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-             byte[] signBuf, short signStart);
+      byte[] signBuf, short signStart);
 
   // Used for finishing verifying operations.
   boolean verify(byte[] inputDataBuf, short inputDataStart, short inputDataLength,
-                 byte[] signBuf, short signStart, short signLength);
+      byte[] signBuf, short signStart, short signLength);
 
   // Used for aborting the ongoing operations.
   void abort();

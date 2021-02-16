@@ -19,40 +19,46 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
+
 /**
  * KMIntegerTag represents UINT, ULONG and DATE tags specified in keymaster hal specs. struct{byte
- * TAG_TYPE; short length; struct{short UINT_TAG/ULONG_TAG/DATE_TAG; short tagKey; 4 or 8 byte value}}
+ * TAG_TYPE; short length; struct{short UINT_TAG/ULONG_TAG/DATE_TAG; short tagKey; 4 or 8 byte
+ * value}}
  */
 public class KMIntegerTag extends KMTag {
+
   private static KMIntegerTag prototype;
   private static short instPtr;
   // Allowed tag keys.
   private static final short[] tags = {
-    // UINT
-    KEYSIZE,
-    MIN_MAC_LENGTH,
-    MIN_SEC_BETWEEN_OPS,
-    MAX_USES_PER_BOOT,
-    USERID,
-    AUTH_TIMEOUT,
-    OS_VERSION,
-    OS_PATCH_LEVEL,
-    VENDOR_PATCH_LEVEL,
-    BOOT_PATCH_LEVEL,
-    MAC_LENGTH,
-    // ULONG
-    RSA_PUBLIC_EXPONENT,
-    // DATE
-    ACTIVE_DATETIME,
-    ORIGINATION_EXPIRE_DATETIME,
-    USAGE_EXPIRE_DATETIME,
-    CREATION_DATETIME
+      // UINT
+      KEYSIZE,
+      MIN_MAC_LENGTH,
+      MIN_SEC_BETWEEN_OPS,
+      MAX_USES_PER_BOOT,
+      USERID,
+      AUTH_TIMEOUT,
+      OS_VERSION,
+      OS_PATCH_LEVEL,
+      VENDOR_PATCH_LEVEL,
+      BOOT_PATCH_LEVEL,
+      MAC_LENGTH,
+      // ULONG
+      RSA_PUBLIC_EXPONENT,
+      // DATE
+      ACTIVE_DATETIME,
+      ORIGINATION_EXPIRE_DATETIME,
+      USAGE_EXPIRE_DATETIME,
+      CREATION_DATETIME
   };
 
-  private KMIntegerTag() {}
+  private KMIntegerTag() {
+  }
 
   private static KMIntegerTag proto(short ptr) {
-    if (prototype == null) prototype = new KMIntegerTag();
+    if (prototype == null) {
+      prototype = new KMIntegerTag();
+    }
     instPtr = ptr;
     return prototype;
   }
@@ -98,7 +104,9 @@ public class KMIntegerTag extends KMTag {
   }
 
   public static KMIntegerTag cast(short ptr) {
-    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[ptr] != TAG_TYPE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     short tagType = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
     if (!validateTagType(tagType)) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
@@ -172,19 +180,29 @@ public class KMIntegerTag extends KMTag {
     val = KMInteger.cast(val).getShort();
     switch (alg) {
       case KMType.RSA:
-        if (val == 2048) return true;
+        if (val == 2048) {
+          return true;
+        }
         break;
       case KMType.AES:
-        if (val == 128 || val == 256) return true;
+        if (val == 128 || val == 256) {
+          return true;
+        }
         break;
       case KMType.DES:
-        if (val == 192 || val == 168) return true;
+        if (val == 192 || val == 168) {
+          return true;
+        }
         break;
       case KMType.EC:
-        if (val == 256) return true;
+        if (val == 256) {
+          return true;
+        }
         break;
       case KMType.HMAC:
-        if (val % 8 == 0 && val >= 64 && val <= 512) return true;
+        if (val % 8 == 0 && val >= 64 && val <= 512) {
+          return true;
+        }
         break;
       default:
         break;
