@@ -338,35 +338,28 @@ keyFormat, std::vector<uint8_t>& wrappedKeyDescription) {
     return ErrorCode::OK;
 }
 
-ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut, bool
-extendedOutput=false) {
+ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut) {
     apduOut.push_back(static_cast<uint8_t>(APDU_CLS)); //CLS
     apduOut.push_back(static_cast<uint8_t>(ins)); //INS
     apduOut.push_back(static_cast<uint8_t>(APDU_P1)); //P1
     apduOut.push_back(static_cast<uint8_t>(APDU_P2)); //P2
 
-    if(UCHAR_MAX < inputData.size() && USHRT_MAX >= inputData.size()) {
+    if(USHRT_MAX >= inputData.size()) {
+        // Send extended length APDU always as response size is not known to HAL.
+        // Case 1: Lc > 0  CLS | INS | P1 | P2 | 00 | 2 bytes of Lc | CommandData | 2 bytes of Le all set to 00.
+        // Case 2: Lc = 0  CLS | INS | P1 | P2 | 3 bytes of Le all set to 00.
         //Extended length 3 bytes, starts with 0x00
         apduOut.push_back(static_cast<uint8_t>(0x00));
-        apduOut.push_back(static_cast<uint8_t>(inputData.size() >> 8));
-        apduOut.push_back(static_cast<uint8_t>(inputData.size() & 0xFF));
-        //Data
-        apduOut.insert(apduOut.end(), inputData.begin(), inputData.end());
-        //Expected length of output
-        apduOut.push_back(static_cast<uint8_t>(0x00));
-        apduOut.push_back(static_cast<uint8_t>(0x00));
-        apduOut.push_back(static_cast<uint8_t>(0x00));//Accepting complete length of output at a time
-    } else if(0 <= inputData.size() && UCHAR_MAX >= inputData.size()) {
-        //Short length
-        apduOut.push_back(static_cast<uint8_t>(inputData.size()));
-        //Data
-        if(inputData.size() > 0)
+        if (inputData.size() > 0) {
+            apduOut.push_back(static_cast<uint8_t>(inputData.size() >> 8));
+            apduOut.push_back(static_cast<uint8_t>(inputData.size() & 0xFF));
+            //Data
             apduOut.insert(apduOut.end(), inputData.begin(), inputData.end());
-        //Expected length of output
-        apduOut.push_back(static_cast<uint8_t>(0x00));//Accepting complete length of output at a time
-        if(extendedOutput)
-            apduOut.push_back(static_cast<uint8_t>(0x00));
-
+        }
+        //Expected length of output.
+        //Accepting complete length of output every time.
+        apduOut.push_back(static_cast<uint8_t>(0x00));
+        apduOut.push_back(static_cast<uint8_t>(0x00));
     } else {
         return (ErrorCode::INSUFFICIENT_BUFFER_SPACE);
     }
@@ -423,8 +416,7 @@ static bool isSEProvisioned() {
 }
 
 
-ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response, bool
-        extendedOutput=false) {
+ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response) {
     ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> apdu;
 
@@ -432,7 +424,7 @@ ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<ui
         LOG(ERROR) << "Javacard applet is not provisioned.";
         return ret;
     }
-    ret = constructApduMessage(ins, inData, apdu, extendedOutput);
+    ret = constructApduMessage(ins, inData, apdu);
     if(ret != ErrorCode::OK) return ret;
 
     if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
@@ -849,7 +841,7 @@ Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToA
             } else {
                 cborData.clear();
                 cborOutData.clear();
-                errorCode = sendData(Instruction::INS_GET_CERT_CHAIN_CMD, cborData, cborOutData, true);
+                errorCode = sendData(Instruction::INS_GET_CERT_CHAIN_CMD, cborData, cborOutData);
                 if(errorCode == ErrorCode::OK) {
                     //Skip last 2 bytes in cborData, it contains status.
                     std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(),
