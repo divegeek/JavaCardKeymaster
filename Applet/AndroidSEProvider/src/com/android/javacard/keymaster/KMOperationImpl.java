@@ -125,26 +125,14 @@ public class KMOperationImpl implements KMOperation {
         if (mode == KMType.DECRYPT) {
           inputDataLen = (short) (inputDataLen - macLength);
         }
-      } else if (cipherAlg == KMType.RSA && padding == KMType.PADDING_NONE &&
-          mode == KMType.ENCRYPT) {
-        // Length cannot be greater then key size according to Java Card
-        if (inputDataLen > 256)
-          KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-        // make input equal to 255 bytes
-        Util.arrayFillNonAtomic(tmpArray, (short) 0, (short) 256, (byte) 0);
-        Util.arrayCopyNonAtomic(inputDataBuf, inputDataStart, tmpArray,
-            (short) (256 - inputDataLen), inputDataLen);
-        inputDataStart = 0;
-        inputDataLen = 256;
-        inputDataBuf = tmpArray;
-
       } else if ((cipherAlg == KMType.DES || cipherAlg == KMType.AES) &&
           padding == KMType.PKCS7 && mode == KMType.ENCRYPT) {
         byte blkSize = 16;
         byte paddingBytes;
         short inputlen = inputDataLen;
-        if (cipherAlg == KMType.DES)
+        if (cipherAlg == KMType.DES) {
           blkSize = 8;
+        }
         // padding bytes
         if (inputlen % blkSize == 0) {
           paddingBytes = blkSize;
@@ -168,20 +156,22 @@ public class KMOperationImpl implements KMOperation {
       if ((cipherAlg == KMType.AES || cipherAlg == KMType.DES) &&
           padding == KMType.PKCS7 && mode == KMType.DECRYPT) {
         byte blkSize = 16;
-        if (cipherAlg == KMType.DES)
+        if (cipherAlg == KMType.DES) {
           blkSize = 8;
+        }
         if (len > 0) {
           // verify if padding is corrupted.
           byte paddingByte = outputDataBuf[(short) (outputDataStart + len - 1)];
           // padding byte always should be <= block size
-          if ((short) paddingByte > blkSize || (short) paddingByte <= 0)
+          if ((short) paddingByte > blkSize || (short) paddingByte <= 0) {
             KMException.throwIt(KMError.INVALID_ARGUMENT);
+          }
 
-          for(short j = 1; j <= paddingByte; ++j) {
+          for (short j = 1; j <= paddingByte; ++j) {
             if (outputDataBuf[(short) (outputDataStart + len - j)] != paddingByte) {
               KMException.throwIt(KMError.INVALID_ARGUMENT);
             }
-          }          
+          }
           len = (short) (len - (short) paddingByte);// remove the padding bytes
         }
       } else if (cipherAlg == KMType.AES && blockMode == KMType.GCM) {
@@ -191,8 +181,9 @@ public class KMOperationImpl implements KMOperation {
         } else {
           boolean verified = ((AEADCipher) cipher).verifyTag(inputDataBuf,
               (short) (inputDataStart + inputDataLen), macLength, macLength);
-          if (!verified)
+          if (!verified) {
             KMException.throwIt(KMError.VERIFICATION_FAILED);
+          }
         }
       }
     } finally {

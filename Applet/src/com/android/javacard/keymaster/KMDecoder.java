@@ -21,21 +21,22 @@ import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 public class KMDecoder {
+
   // major types
   private static final short UINT_TYPE = 0x00;
   private static final short BYTES_TYPE = 0x40;
   private static final short ARRAY_TYPE = 0x80;
-  private static final short MAP_TYPE =  0xA0;
+  private static final short MAP_TYPE = 0xA0;
 
   // masks
   private static final short ADDITIONAL_MASK = 0x1F;
   private static final short MAJOR_TYPE_MASK = 0xE0;
 
   // value length
-  private static final short UINT8_LENGTH =  0x18;
-  private static final short UINT16_LENGTH =  0x19;
+  private static final short UINT8_LENGTH = 0x18;
+  private static final short UINT16_LENGTH = 0x19;
   private static final short UINT32_LENGTH = 0x1A;
-  private static final short UINT64_LENGTH =  0x1B;
+  private static final short UINT64_LENGTH = 0x1B;
 
   private byte[] buffer;
   private short startOff;
@@ -52,16 +53,17 @@ public class KMDecoder {
   public short decode(short expression, byte[] buffer, short startOff, short length) {
     this.buffer = buffer;
     this.startOff = startOff;
-    this.length = (short)(startOff+length);
+    this.length = (short) (startOff + length);
     return decode(expression);
   }
-  public short decodeArray(short exp, byte[] buffer, short startOff, short length){
+
+  public short decodeArray(short exp, byte[] buffer, short startOff, short length) {
     this.buffer = buffer;
     this.startOff = startOff;
-    this.length = (short)(startOff+length);
+    this.length = (short) (startOff + length);
     short payloadLength = readMajorTypeWithPayloadLength(ARRAY_TYPE);
     short expLength = KMArray.cast(exp).length();
-    if(payloadLength > expLength){
+    if (payloadLength > expLength) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     short index = 0;
@@ -76,9 +78,10 @@ public class KMDecoder {
     }
     return arrPtr;
   }
-  private short decode(short exp){
+
+  private short decode(short exp) {
     byte type = KMType.getType(exp);
-    switch(type){
+    switch (type) {
       case KMType.BYTE_BLOB_TYPE:
         return decodeByteBlob(exp);
       case KMType.INTEGER_TYPE:
@@ -105,8 +108,9 @@ public class KMDecoder {
         return 0;
     }
   }
-  private short decodeTag(short tagType, short exp){
-    switch(tagType){
+
+  private short decodeTag(short tagType, short exp) {
+    switch (tagType) {
       case KMType.BYTES_TAG:
         return decodeBytesTag(exp);
       case KMType.BOOL_TAG:
@@ -174,16 +178,15 @@ public class KMDecoder {
         if (tagType == allowedType) {
           // then decodeByteBlob and add that to the array.
           obj = decode(tagClass);
-          KMArray.cast(vals).add(index,obj);
+          KMArray.cast(vals).add(index, obj);
           tagFound = true;
           break;
         }
         tagInd++;
       }
-      if(!tagFound){
+      if (!tagFound) {
         ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-      }
-      else {
+      } else {
         index++;
       }
     }
@@ -199,14 +202,14 @@ public class KMDecoder {
     readTagKey(KMIntegerArrayTag.cast(exp).getTagType());
     // the values are array of integers.
     return KMIntegerArrayTag.instance(KMIntegerArrayTag.cast(exp).getTagType(),
-      this.tagKey, decode(KMIntegerArrayTag.cast(exp).getValues()));
+        this.tagKey, decode(KMIntegerArrayTag.cast(exp).getValues()));
   }
 
   private short decodeIntegerTag(short exp) {
     readTagKey(KMIntegerTag.cast(exp).getTagType());
     // the value is an integer
     return KMIntegerTag.instance(KMIntegerTag.cast(exp).getTagType(),
-      this.tagKey, decode(KMIntegerTag.cast(exp).getValue()));
+        this.tagKey, decode(KMIntegerTag.cast(exp).getValue()));
   }
 
   private short decodeBytesTag(short exp) {
@@ -222,7 +225,7 @@ public class KMDecoder {
     short type;
     short obj;
     // check whether array contains one type of objects or multiple types
-    if( KMArray.cast(exp).containedType() == 0){// multiple types specified by expression.
+    if (KMArray.cast(exp).containedType() == 0) {// multiple types specified by expression.
       if (KMArray.cast(exp).length() != KMArray.ANY_ARRAY_LENGTH) {
         if (KMArray.cast(exp).length() != payloadLength) {
           ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -234,9 +237,9 @@ public class KMDecoder {
         KMArray.cast(arrPtr).add(index, obj);
         index++;
       }
-    }else{ // Array is a Vector containing objects of one type
+    } else { // Array is a Vector containing objects of one type
       type = KMArray.cast(exp).containedType();
-      while(index < payloadLength){
+      while (index < payloadLength) {
         obj = decode(type);
         KMArray.cast(arrPtr).add(index, obj);
         index++;
@@ -257,7 +260,7 @@ public class KMDecoder {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (len < UINT8_LENGTH) {
-      enumVal = (byte)(len & ADDITIONAL_MASK);
+      enumVal = (byte) (len & ADDITIONAL_MASK);
       incrementStartOff((short) 1);
     } else if (len == UINT8_LENGTH) {
       incrementStartOff((short) 1);
@@ -291,7 +294,7 @@ public class KMDecoder {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (len < UINT8_LENGTH) {
-      enumVal = (byte)(len & ADDITIONAL_MASK);
+      enumVal = (byte) (len & ADDITIONAL_MASK);
       incrementStartOff((short) 1);
     } else {
       incrementStartOff((short) 1);
@@ -307,12 +310,12 @@ public class KMDecoder {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short len = (short) (buffer[startOff] & ADDITIONAL_MASK);
-    if(len > UINT64_LENGTH){
+    if (len > UINT64_LENGTH) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     incrementStartOff((short) 1);
     if (len < UINT8_LENGTH) {
-      inst = KMInteger.uint_8((byte)(len & ADDITIONAL_MASK));
+      inst = KMInteger.uint_8((byte) (len & ADDITIONAL_MASK));
     } else if (len == UINT8_LENGTH) {
       inst = KMInteger.instance(buffer, startOff, (short) 1);
       incrementStartOff((short) 1);
@@ -377,8 +380,8 @@ public class KMDecoder {
     }
     if (lenType < UINT8_LENGTH) {
       payloadLength = lenType;
-    }else if (lenType == UINT8_LENGTH) {
-      payloadLength = (short)(readByte() & 0xFF);
+    } else if (lenType == UINT8_LENGTH) {
+      payloadLength = (short) (readByte() & 0xFF);
     } else {
       payloadLength = readShort();
     }
@@ -405,12 +408,12 @@ public class KMDecoder {
   }
 
   public short readCertificateChainLengthAndHeaderLen(byte[] buf, short bufOffset,
-          short bufLen) {
+      short bufLen) {
     this.buffer = buf;
     this.startOff = bufOffset;
     this.length = (short) (bufOffset + bufLen);
     short totalLen = readMajorTypeWithPayloadLength(BYTES_TYPE);
-    totalLen +=  (short)( startOff - bufOffset);
+    totalLen += (short) (startOff - bufOffset);
     return totalLen;
   }
 }

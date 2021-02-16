@@ -21,19 +21,20 @@ import org.globalplatform.upgrade.UpgradeManager;
 
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
 
-    KMAndroidSEApplet(){
-      super(new KMAndroidSEProvider());
-    }
-    /**
-     * Installs this applet.
-     *
-     * @param bArray the array containing installation parameters
-     * @param bOffset the starting offset in bArray
-     * @param bLength the length in bytes of the parameter data in bArray
-     */
-    public static void install(byte[] bArray, short bOffset, byte bLength) {
-      new KMAndroidSEApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
-    }
+  KMAndroidSEApplet() {
+    super(new KMAndroidSEProvider());
+  }
+
+  /**
+   * Installs this applet.
+   *
+   * @param bArray the array containing installation parameters
+   * @param bOffset the starting offset in bArray
+   * @param bLength the length in bytes of the parameter data in bArray
+   */
+  public static void install(byte[] bArray, short bOffset, byte bLength) {
+    new KMAndroidSEApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
+  }
 
   @Override
   public void onCleanup() {
@@ -66,7 +67,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
     // Create element.
     Element element = UpgradeManager.createElement(Element.TYPE_SIMPLE,
-            primitiveCount, objectCount);
+        primitiveCount, objectCount);
     element.write(provisionStatus);
     element.write(keymasterState);
     repository.onSave(element);

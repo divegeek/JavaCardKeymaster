@@ -1,58 +1,60 @@
-<project name="AndroidSEProvider" default = "default">
-   <import file="../build.xml" as="common" />
+<project name="AndroidSEProvider" default="default">
+  <import file="../build.xml" as="common"/>
   <!-- Properties - other properties are included from build_common.xml -->
-  <target name = "androidse.init" >
-	  <property environment="env"/>
-	  <property name="common.src.dir" value="${applet.common.src}"/>
-	  <property name="androidse.src.dir" value="${AndroidSE.dir}/src"/>
-	  <property name="androidse.home" value="${env.JC_HOME_SIMULATOR}"/>
-      <property name="build.sysclasspath" value="ignore" />
-	  <!-- Taskdefs -->
-	  <taskdef resource="net/sf/antcontrib/antcontrib.properties">
-		<classpath> <pathelement location="${androidse.home}/lib/ant-contrib-1.0b3.jar"/> 
-		</classpath>
-	  </taskdef>
-      <taskdef name="convert"
-             classname="com.sun.javacard.ant.tasks.ConverterTask"
-             classpath="${androidse.home}/lib/jctasks.jar" />
-	  <taskdef name="verifycap"
-             classname="com.sun.javacard.ant.tasks.VerifyCapTask"
-             classpath="${androidse.home}/lib/jctasks.jar" />
-      <path id="androidse.jars"
+  <target name="androidse.init">
+    <property environment="env"/>
+    <property name="common.src.dir" value="${applet.common.src}"/>
+    <property name="androidse.src.dir" value="${AndroidSE.dir}/src"/>
+    <property name="androidse.home" value="${env.JC_HOME_SIMULATOR}"/>
+    <property name="build.sysclasspath" value="ignore"/>
+    <!-- Taskdefs -->
+    <taskdef resource="net/sf/antcontrib/antcontrib.properties">
+      <classpath>
+        <pathelement location="${androidse.home}/lib/ant-contrib-1.0b3.jar"/>
+      </classpath>
+    </taskdef>
+    <taskdef name="convert"
+        classname="com.sun.javacard.ant.tasks.ConverterTask"
+        classpath="${androidse.home}/lib/jctasks.jar"/>
+    <taskdef name="verifycap"
+        classname="com.sun.javacard.ant.tasks.VerifyCapTask"
+        classpath="${androidse.home}/lib/jctasks.jar"/>
+    <path id="androidse.jars"
         description="Sets the classpath to Java Card API">
-        <pathelement path="${AndroidSE.dir}/lib/gpapi-upgrade.jar"/>
-        <pathelement path="${androidse.home}/lib/api_classic.jar"/>
-        <pathelement path="${androidse.home}/lib/api_classic_annotations.jar"/>
-      </path> 
-      <path id="androidse.tools.jars"
-          description="Sets the classpath to Java Card API and tools">
-        <pathelement path="${AndroidSE.dir}/lib/gpapi-upgrade.jar"/>
-        <pathelement path="${androidse.home}/lib/api_classic.jar" />
-        <pathelement path="${androidse.home}/lib/tools.jar" />
-        <pathelement path="${androidse.home}/lib/api_classic_annotations.jar" />
-      </path>
-	 <mkdir dir="${applet.build.dir}/classes"/>	
-	</target>
-	
-    <target name="androidse.compile" depends="androidse.init">
+      <pathelement path="${AndroidSE.dir}/lib/gpapi-upgrade.jar"/>
+      <pathelement path="${androidse.home}/lib/api_classic.jar"/>
+      <pathelement path="${androidse.home}/lib/api_classic_annotations.jar"/>
+    </path>
+    <path id="androidse.tools.jars"
+        description="Sets the classpath to Java Card API and tools">
+      <pathelement path="${AndroidSE.dir}/lib/gpapi-upgrade.jar"/>
+      <pathelement path="${androidse.home}/lib/api_classic.jar"/>
+      <pathelement path="${androidse.home}/lib/tools.jar"/>
+      <pathelement path="${androidse.home}/lib/api_classic_annotations.jar"/>
+    </path>
+    <mkdir dir="${applet.build.dir}/classes"/>
+  </target>
+
+  <target name="androidse.compile" depends="androidse.init">
     <pathconvert property="classpath" refid="androidse.jars"/>
-    <javac 
-      destdir="${applet.build.dir}/classes"
-      source="7"
-      target="7"
-      debug="yes"
-      includeantruntime="no"
-      bootclasspath="${classpath}">
+    <javac
+        destdir="${applet.build.dir}/classes"
+        source="7"
+        target="7"
+        debug="yes"
+        includeantruntime="no"
+        bootclasspath="${classpath}">
       <src path="${common.src.dir}"/>
       <src path="${androidse.src.dir}"/>
     </javac>
   </target>
-  
+
   <target name="androidse.convert" depends="androidse.compile">
-    <convert dir="${applet.build.dir}/classes" Configfile="${AndroidSE.dir}/AndroidSE_3_0_5.opt">
+    <convert dir="${applet.build.dir}/classes"
+        Configfile="${AndroidSE.dir}/AndroidSE_3_0_5.opt">
       <classpath refid="androidse.tools.jars"/>
     </convert>
- 
+
     <copy todir="${applet.build.dir}" flatten="true">
       <fileset dir="${applet.build.dir}/classes">
         <include name="**/*.cap"/>
@@ -60,18 +62,20 @@
         <include name="**/*.exp"/>
       </fileset>
       <regexpmapper from="(.*)\.(.*)"
-        to="AndroidSE.\2"
-        casesensitive="yes"/>
+          to="AndroidSE.\2"
+          casesensitive="yes"/>
     </copy>
   </target>
 
   <target name="androidse.verify" depends="androidse.convert">
-    <verifycap capfile="${applet.build.dir}/AndroidSE.cap" outfile="${applet.build.dir}/digest.txt">
-      <exportfiles dir="${AndroidSE.dir}/api_export_files_3.0.5" includes="**/*.exp"/>
+    <verifycap capfile="${applet.build.dir}/AndroidSE.cap"
+        outfile="${applet.build.dir}/digest.txt">
+      <exportfiles dir="${AndroidSE.dir}/api_export_files_3.0.5"
+          includes="**/*.exp"/>
       <classpath refid="androidse.tools.jars"/>
     </verifycap>
   </target>
-  
-<target name="default" depends="androidse.verify" />
+
+  <target name="default" depends="androidse.verify"/>
 
 </project>

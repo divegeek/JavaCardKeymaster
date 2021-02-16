@@ -21,42 +21,46 @@ import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 /**
- * KMByteTag represents BYTES Tag Type from android keymaster hal specifications. The tag value of this tag
- * is the KMByteBlob pointer i.e. offset of KMByteBlob in memory heap.
- * struct{byte TAG_TYPE; short length; struct{short BYTES_TAG; short tagKey; short blobPtr}}
+ * KMByteTag represents BYTES Tag Type from android keymaster hal specifications. The tag value of
+ * this tag is the KMByteBlob pointer i.e. offset of KMByteBlob in memory heap. struct{byte
+ * TAG_TYPE; short length; struct{short BYTES_TAG; short tagKey; short blobPtr}}
  */
 
 public class KMByteTag extends KMTag {
+
   private static KMByteTag prototype;
   private static short instPtr;
 
   // The allowed tag keys of type bool tag
   private static final short[] tags = {
-    APPLICATION_ID,
-    APPLICATION_DATA,
-    ROOT_OF_TRUST,
-    UNIQUE_ID,
-    ATTESTATION_CHALLENGE,
-    ATTESTATION_APPLICATION_ID,
-    ATTESTATION_ID_BRAND,
-    ATTESTATION_ID_DEVICE,
-    ATTESTATION_ID_PRODUCT,
-    ATTESTATION_ID_SERIAL,
-    ATTESTATION_ID_IMEI,
-    ATTESTATION_ID_MEID,
-    ATTESTATION_ID_MANUFACTURER,
-    ATTESTATION_ID_MODEL,
-    ASSOCIATED_DATA,
-    NONCE,
-    CONFIRMATION_TOKEN,
-    VERIFIED_BOOT_KEY,
-    VERIFIED_BOOT_HASH
+      APPLICATION_ID,
+      APPLICATION_DATA,
+      ROOT_OF_TRUST,
+      UNIQUE_ID,
+      ATTESTATION_CHALLENGE,
+      ATTESTATION_APPLICATION_ID,
+      ATTESTATION_ID_BRAND,
+      ATTESTATION_ID_DEVICE,
+      ATTESTATION_ID_PRODUCT,
+      ATTESTATION_ID_SERIAL,
+      ATTESTATION_ID_IMEI,
+      ATTESTATION_ID_MEID,
+      ATTESTATION_ID_MANUFACTURER,
+      ATTESTATION_ID_MODEL,
+      ASSOCIATED_DATA,
+      NONCE,
+      CONFIRMATION_TOKEN,
+      VERIFIED_BOOT_KEY,
+      VERIFIED_BOOT_HASH
   };
 
-  private KMByteTag() {}
+  private KMByteTag() {
+  }
 
   private static KMByteTag proto(short ptr) {
-    if (prototype == null) prototype = new KMByteTag();
+    if (prototype == null) {
+      prototype = new KMByteTag();
+    }
     instPtr = ptr;
     return prototype;
   }
@@ -64,10 +68,10 @@ public class KMByteTag extends KMTag {
   // pointer to an empty instance used as expression
   public static short exp() {
     short blobPtr = KMByteBlob.exp();
-    short ptr = instance(TAG_TYPE, (short)6);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), BYTES_TAG);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), INVALID_TAG);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), blobPtr);
+    short ptr = instance(TAG_TYPE, (short) 6);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), BYTES_TAG);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), INVALID_TAG);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 4), blobPtr);
     return ptr;
   }
 
@@ -82,18 +86,20 @@ public class KMByteTag extends KMTag {
     if (!validateKey(key)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    if(heap[byteBlob] != BYTE_BLOB_TYPE) {
+    if (heap[byteBlob] != BYTE_BLOB_TYPE) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    short ptr = instance(TAG_TYPE, (short)6);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), BYTES_TAG);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), byteBlob);
+    short ptr = instance(TAG_TYPE, (short) 6);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), BYTES_TAG);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), key);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 4), byteBlob);
     return ptr;
   }
 
   public static KMByteTag cast(short ptr) {
-    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[ptr] != TAG_TYPE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     if (Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE)) != BYTES_TAG) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
@@ -101,7 +107,7 @@ public class KMByteTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -109,11 +115,11 @@ public class KMByteTag extends KMTag {
   }
 
   public short getValue() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
-    short blobPtr = Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+    short blobPtr = Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
     return KMByteBlob.cast(blobPtr).length();
   }
 
