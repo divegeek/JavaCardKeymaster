@@ -66,6 +66,7 @@ public class KMError {
   public static final short KEY_REQUIRES_UPGRADE = 62;
 
   public static final short ATTESTATION_APPLICATION_ID_MISSING = 65;
+  public static final short CANNOT_ATTEST_IDS = 66;
   public static final short ROLLBACK_RESISTANCE_UNAVAILABLE = 67;
 
   public static final short DEVICE_LOCKED = 72;

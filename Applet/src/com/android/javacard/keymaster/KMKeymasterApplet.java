@@ -1388,7 +1388,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMKeyParameters.findTag(
             KMType.BOOL_TAG, KMType.DEVICE_UNIQUE_ATTESTATION, data[KEY_PARAMETERS]);
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
-      KMException.throwIt(KMError.UNIMPLEMENTED);
+      KMException.throwIt(KMError.CANNOT_ATTEST_IDS);
     }
     // The key which is being attested should be asymmetric i.e. RSA or EC
     tmpVariables[0] = KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]);
