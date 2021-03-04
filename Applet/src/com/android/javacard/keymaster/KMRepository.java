@@ -258,17 +258,17 @@ public class KMRepository implements KMUpgradable {
 
   public void releaseAllOperations() {
     short index = 0;
-    byte[] var;
+    byte[] oprHandleBuf;
     while (index < MAX_OPS) {
-      var = ((byte[]) ((Object[]) operationStateTable[index])[0]);
-      if (var[OPERATION_HANDLE_STATUS_OFFSET] == 1) {
+      oprHandleBuf = ((byte[]) ((Object[]) operationStateTable[index])[0]);
+      if (oprHandleBuf[OPERATION_HANDLE_STATUS_OFFSET] == 1) {
         Object[] slot = (Object[]) ((Object[]) operationStateTable[index])[1];
         Object[] ops = ((Object[]) slot[1]);
         ((KMOperation) ops[0]).abort();
         JCSystem.beginTransaction();
         Util.arrayFillNonAtomic((byte[]) slot[0], (short) 0,
                 (short) ((byte[]) slot[0]).length, (byte) 0);
-        Util.arrayFillNonAtomic(var, (short) 0, (short) var.length, (byte) 0);
+        Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
         ops[0] = null;
         JCSystem.commitTransaction();
       }
