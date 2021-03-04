@@ -233,7 +233,7 @@ public class KMRepository implements KMUpgradable {
 
   public void releaseOperation(KMOperationState op) {
     short index = 0;
-    byte[] var;
+    byte[] oprHandleBuf;
     short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
     getOperationHandle(
         op.getHandle(),
@@ -241,16 +241,38 @@ public class KMRepository implements KMUpgradable {
         KMByteBlob.cast(buf).getStartOff(),
         KMByteBlob.cast(buf).length());
     while (index < MAX_OPS) {
-      var = ((byte[]) ((Object[]) operationStateTable[index])[0]);
-      if ((var[OPERATION_HANDLE_STATUS_OFFSET] == 1) &&
-          (0 == Util.arrayCompare(var,
+      oprHandleBuf = ((byte[]) ((Object[]) operationStateTable[index])[0]);
+      if ((oprHandleBuf[OPERATION_HANDLE_STATUS_OFFSET] == 1) &&
+          (0 == Util.arrayCompare(oprHandleBuf,
               OPERATION_HANDLE_OFFSET,
               KMByteBlob.cast(buf).getBuffer(),
               KMByteBlob.cast(buf).getStartOff(),
               KMByteBlob.cast(buf).length()))) {
-        Util.arrayFillNonAtomic(var, (short) 0, (short) var.length, (byte) 0);
+        JCSystem.beginTransaction();
+        Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
+        JCSystem.commitTransaction();
         op.release();
         break;
+      }
+      index++;
+    }
+  }
+
+  public void releaseAllOperations() {
+    short index = 0;
+    byte[] oprHandleBuf;
+    while (index < MAX_OPS) {
+      oprHandleBuf = ((byte[]) ((Object[]) operationStateTable[index])[0]);
+      if (oprHandleBuf[OPERATION_HANDLE_STATUS_OFFSET] == 1) {
+        Object[] slot = (Object[]) ((Object[]) operationStateTable[index])[1];
+        Object[] ops = ((Object[]) slot[1]);
+        ((KMOperation) ops[0]).abort();
+        JCSystem.beginTransaction();
+        Util.arrayFillNonAtomic((byte[]) slot[0], (short) 0,
+                (short) ((byte[]) slot[0]).length, (byte) 0);
+        Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
+        ops[0] = null;
+        JCSystem.commitTransaction();
       }
       index++;
     }
