@@ -3142,6 +3142,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   // This command is executed to set the boot parameters.
+  // releaseAllOperations has to be called on every boot, so
+  // it is called from inside setBootParams. Later in future if
+  // setBootParams is removed, then make sure that releaseAllOperations
+  // is moved to a place where it is called on every boot.
   private void processSetBootParamsCmd(APDU apdu) {
     receiveIncoming(apdu);
     byte[] scratchPad = apdu.getBuffer();
@@ -3229,6 +3233,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
     repository.clearComputedHmac();
     repository.clearHmacNonce();
+
+    //Clear all the operation state.
+    repository.releaseAllOperations();
 
     // Hmac is cleared, so generate a new Hmac nonce.
     seProvider.newRandomNumber(scratchPad, (short) 0, KMRepository.HMAC_SEED_NONCE_SIZE);
