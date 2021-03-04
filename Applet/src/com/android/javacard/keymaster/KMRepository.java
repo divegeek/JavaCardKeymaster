@@ -233,7 +233,7 @@ public class KMRepository implements KMUpgradable {
 
   public void releaseOperation(KMOperationState op) {
     short index = 0;
-    byte[] var;
+    byte[] oprHandleBuf;
     short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
     getOperationHandle(
         op.getHandle(),
@@ -241,14 +241,16 @@ public class KMRepository implements KMUpgradable {
         KMByteBlob.cast(buf).getStartOff(),
         KMByteBlob.cast(buf).length());
     while (index < MAX_OPS) {
-      var = ((byte[]) ((Object[]) operationStateTable[index])[0]);
-      if ((var[OPERATION_HANDLE_STATUS_OFFSET] == 1) &&
-          (0 == Util.arrayCompare(var,
+      oprHandleBuf = ((byte[]) ((Object[]) operationStateTable[index])[0]);
+      if ((oprHandleBuf[OPERATION_HANDLE_STATUS_OFFSET] == 1) &&
+          (0 == Util.arrayCompare(oprHandleBuf,
               OPERATION_HANDLE_OFFSET,
               KMByteBlob.cast(buf).getBuffer(),
               KMByteBlob.cast(buf).getStartOff(),
               KMByteBlob.cast(buf).length()))) {
-        Util.arrayFillNonAtomic(var, (short) 0, (short) var.length, (byte) 0);
+        JCSystem.beginTransaction();
+        Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
+        JCSystem.commitTransaction();
         op.release();
         break;
       }
