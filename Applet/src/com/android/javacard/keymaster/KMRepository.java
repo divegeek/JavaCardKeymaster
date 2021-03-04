@@ -256,6 +256,26 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
+  public void releaseAllOperations() {
+    short index = 0;
+    byte[] oprHandleBuf;
+    while (index < MAX_OPS) {
+      oprHandleBuf = ((byte[]) ((Object[]) operationStateTable[index])[0]);
+      if (oprHandleBuf[OPERATION_HANDLE_STATUS_OFFSET] == 1) {
+        Object[] slot = (Object[]) ((Object[]) operationStateTable[index])[1];
+        Object[] ops = ((Object[]) slot[1]);
+        ((KMOperation) ops[0]).abort();
+        JCSystem.beginTransaction();
+        Util.arrayFillNonAtomic((byte[]) slot[0], (short) 0,
+                (short) ((byte[]) slot[0]).length, (byte) 0);
+        Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
+        ops[0] = null;
+        JCSystem.commitTransaction();
+      }
+      index++;
+    }
+  }
+
   public void initComputedHmac(byte[] key, short start, short len) {
     if (len != COMPUTED_HMAC_KEY_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
