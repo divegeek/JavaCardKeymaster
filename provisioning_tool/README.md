@@ -11,7 +11,7 @@ This tool can be built along with aosp build. It has dependency on
 #### Sample resources for quick testing
 A sample json file is located in this directory with name [sample_json.txt](sample_json.txt)
 for your reference. Also the required certificates and keys can be found
-in test_certs directory. Copy the certificates and the key into the 
+in [test_certs](test_certs) directory. Copy the certificates and the key into the 
 emulator/device filesystem in their respective paths mentioned in the 
 sample_json.txt.
 
