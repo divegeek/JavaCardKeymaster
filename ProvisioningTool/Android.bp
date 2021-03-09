@@ -19,7 +19,7 @@ cc_binary {
     vendor: true,
     relative_install_path: "hw",
     srcs: [
-        "provision_tool.cpp",
+        "ProvisionTool.cpp",
     ],
     shared_libs: [
         "libdl",
