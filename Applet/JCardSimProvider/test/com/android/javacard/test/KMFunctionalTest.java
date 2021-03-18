@@ -446,6 +446,10 @@ public class KMFunctionalTest {
       (byte) 0xe9, (byte) 0x77, (byte) 0x4c, (byte) 0x45, (byte) 0xc3, (byte) 0xa3, (byte) 0xcf,
       (byte) 0x0d, (byte) 0x16, (byte) 0x10, (byte) 0xe4, (byte) 0x79, (byte) 0x43, (byte) 0x3a,
       (byte) 0x21, (byte) 0x5a, (byte) 0x30, (byte) 0xcf};
+  private static final int OS_VERSION = 1;
+  private static final int OS_PATCH_LEVEL = 1;
+  private static final int VENDOR_PATCH_LEVEL = 1;
+  private static final int BOOT_PATCH_LEVEL = 1;
 
   private CardSimulator simulator;
   private KMEncoder encoder;
@@ -657,7 +661,8 @@ public class KMFunctionalTest {
     provisionSharedSecret(simulator);
     provisionAttestIds(simulator);
     // set bootup parameters
-    setBootParams(simulator, (short) 1, (short) 1, (short) 0, (short) 0);
+    setBootParams(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
+            (short) VENDOR_PATCH_LEVEL, (short) BOOT_PATCH_LEVEL);
     provisionLocked(simulator);
   }
 
@@ -2699,18 +2704,61 @@ public class KMFunctionalTest {
     osPatch = KMIntegerTag.cast(osPatch).getValue();
     Assert.assertEquals(KMInteger.cast(osVersion).getShort(), 1);
     Assert.assertEquals(KMInteger.cast(osPatch).getShort(), 1);
-    setBootParams(simulator, (short) 2, (short) 2, (short) 1, (short) 1);
-    ret = upgradeKey(KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length), null, null);
-    keyBlobPtr = KMArray.cast(ret).get((short) 1);
-    ret = getKeyCharacteristics(keyBlobPtr);
-    keyCharacteristics = KMArray.cast(ret).get((short) 1);
-    hwParams = KMKeyCharacteristics.cast(keyCharacteristics).getHardwareEnforced();
-    osVersion = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_VERSION, hwParams);
-    osVersion = KMIntegerTag.cast(osVersion).getValue();
-    osPatch = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, hwParams);
-    osPatch = KMIntegerTag.cast(osPatch).getValue();
-    Assert.assertEquals(KMInteger.cast(osVersion).getShort(), 2);
-    Assert.assertEquals(KMInteger.cast(osPatch).getShort(), 2);
+    short NO_UPGRADE = 0x01;
+    short UPGRADE = 0x02;
+    short[][] test_data = {
+            {OS_VERSION, OS_PATCH_LEVEL, VENDOR_PATCH_LEVEL, BOOT_PATCH_LEVEL, NO_UPGRADE, KMError.OK },
+            {OS_VERSION+1, OS_PATCH_LEVEL, VENDOR_PATCH_LEVEL, BOOT_PATCH_LEVEL, UPGRADE,  KMError.OK },
+            {OS_VERSION, OS_PATCH_LEVEL+1, VENDOR_PATCH_LEVEL, BOOT_PATCH_LEVEL, UPGRADE,  KMError.OK },
+            {OS_VERSION, OS_PATCH_LEVEL, VENDOR_PATCH_LEVEL+1, BOOT_PATCH_LEVEL, UPGRADE,  KMError.OK },
+            {OS_VERSION, OS_PATCH_LEVEL, VENDOR_PATCH_LEVEL, BOOT_PATCH_LEVEL+1, UPGRADE,  KMError.OK },
+            {OS_VERSION+1, OS_PATCH_LEVEL+1, VENDOR_PATCH_LEVEL+1, BOOT_PATCH_LEVEL+1, UPGRADE,  KMError.OK },
+            {OS_VERSION+1, OS_PATCH_LEVEL, VENDOR_PATCH_LEVEL+1, BOOT_PATCH_LEVEL, UPGRADE,  KMError.OK },
+            {OS_VERSION+1, OS_PATCH_LEVEL+1, VENDOR_PATCH_LEVEL, BOOT_PATCH_LEVEL, UPGRADE,  KMError.OK },
+            {OS_VERSION, OS_PATCH_LEVEL, VENDOR_PATCH_LEVEL, BOOT_PATCH_LEVEL-1, NO_UPGRADE,  KMError.INVALID_ARGUMENT },
+            {OS_VERSION-1/*0*/, OS_PATCH_LEVEL, VENDOR_PATCH_LEVEL, BOOT_PATCH_LEVEL, UPGRADE,  KMError.OK },
+            {OS_VERSION, OS_PATCH_LEVEL, VENDOR_PATCH_LEVEL-1, BOOT_PATCH_LEVEL, NO_UPGRADE,  KMError.INVALID_ARGUMENT },
+            {OS_VERSION, OS_PATCH_LEVEL+1, VENDOR_PATCH_LEVEL-1, BOOT_PATCH_LEVEL, NO_UPGRADE,  KMError.INVALID_ARGUMENT },
+            {0, OS_PATCH_LEVEL+1, VENDOR_PATCH_LEVEL-1, BOOT_PATCH_LEVEL+1, NO_UPGRADE,  KMError.INVALID_ARGUMENT },
+    };
+    for (int i = 0; i < test_data.length; i++) {
+      setBootParams(simulator, (short) test_data[i][0], (short) test_data[i][1],
+              (short) test_data[i][2], (short) test_data[i][3]);
+      ret = upgradeKey(
+              KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
+              null, null);
+      Assert.assertEquals(test_data[i][5],
+              KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort());
+      keyBlobPtr = KMArray.cast(ret).get((short) 1);
+      if (test_data[i][4] == UPGRADE) Assert.assertNotEquals(KMByteBlob.cast(keyBlobPtr).length(), 0);
+      else Assert.assertEquals(KMByteBlob.cast(keyBlobPtr).length(), 0);
+      if (KMByteBlob.cast(keyBlobPtr).length() != 0) {
+        ret = getKeyCharacteristics(keyBlobPtr);
+        keyCharacteristics = KMArray.cast(ret).get((short) 1);
+        hwParams = KMKeyCharacteristics.cast(keyCharacteristics)
+                .getHardwareEnforced();
+        osVersion = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_VERSION,
+                hwParams);
+        osVersion = KMIntegerTag.cast(osVersion).getValue();
+        osPatch = KMKeyParameters.findTag(KMType.UINT_TAG,
+                KMType.OS_PATCH_LEVEL, hwParams);
+        osPatch = KMIntegerTag.cast(osPatch).getValue();
+        short ptr = KMKeyParameters.findTag(KMType.UINT_TAG,
+                KMType.VENDOR_PATCH_LEVEL, hwParams);
+        short vendorPatchLevel = KMIntegerTag.cast(ptr).getValue();
+        ptr = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.BOOT_PATCH_LEVEL,
+                hwParams);
+        short bootPatchLevel = KMIntegerTag.cast(ptr).getValue();
+        Assert.assertEquals(KMInteger.cast(osVersion).getShort(),
+                test_data[i][0]);
+        Assert.assertEquals(KMInteger.cast(osPatch).getShort(),
+                test_data[i][1]);
+        Assert.assertEquals(KMInteger.cast(vendorPatchLevel).getShort(),
+                test_data[i][2]);
+        Assert.assertEquals(KMInteger.cast(bootPatchLevel).getShort(),
+                test_data[i][3]);
+      }
+    }
     cleanUp();
   }
 
@@ -2759,8 +2807,6 @@ public class KMFunctionalTest {
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
     ret = decoder.decode(ret, respBuf, (short) 0, len);
-    short error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
-    Assert.assertEquals(error, KMError.OK);
     return ret;
   }
 
