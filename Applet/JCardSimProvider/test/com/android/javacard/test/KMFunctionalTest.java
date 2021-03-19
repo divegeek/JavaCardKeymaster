@@ -2730,8 +2730,10 @@ public class KMFunctionalTest {
       Assert.assertEquals(test_data[i][5],
               KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort());
       keyBlobPtr = KMArray.cast(ret).get((short) 1);
-      if (test_data[i][4] == UPGRADE) Assert.assertNotEquals(KMByteBlob.cast(keyBlobPtr).length(), 0);
-      else Assert.assertEquals(KMByteBlob.cast(keyBlobPtr).length(), 0);
+      if (test_data[i][4] == UPGRADE)
+        Assert.assertNotEquals(KMByteBlob.cast(keyBlobPtr).length(), 0);
+      else
+        Assert.assertEquals(KMByteBlob.cast(keyBlobPtr).length(), 0);
       if (KMByteBlob.cast(keyBlobPtr).length() != 0) {
         ret = getKeyCharacteristics(keyBlobPtr);
         keyCharacteristics = KMArray.cast(ret).get((short) 1);
