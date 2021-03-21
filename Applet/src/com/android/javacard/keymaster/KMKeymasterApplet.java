@@ -1097,7 +1097,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private boolean keyRequiresUpgrade(short tag, short systemParam) {
-    // validate the tag to be upgraded.
+    // validate the tag and check if key needs upgrade.
     tmpVariables[0] = KMKeyParameters.findTag(KMType.UINT_TAG, tag, data[HW_PARAMETERS]);
     tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
     tmpVariables[1] = KMInteger.uint_8((byte) 0);
