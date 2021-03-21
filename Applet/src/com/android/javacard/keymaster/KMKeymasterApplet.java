@@ -1096,23 +1096,29 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
-  private byte validateUpgradeKeyForTag(short tag, short systemParam) {
-    // validate characteristics to be upgraded.
+  private boolean keyRequiresUpgrade(short tag, short systemParam) {
+    // validate the tag to be upgraded.
     tmpVariables[0] = KMKeyParameters.findTag(KMType.UINT_TAG, tag, data[HW_PARAMETERS]);
     tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
     tmpVariables[1] = KMInteger.uint_8((byte) 0);
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
+      // OS version in key characteristics must be less the OS version stored in Javacard or the
+      // stored version must be zero. Then only upgrade is allowed else it is invalid argument.
       if ((tag == KMType.OS_VERSION
               && KMInteger.compare(tmpVariables[0], systemParam) == 1
-              && KMInteger.compare(systemParam, tmpVariables[1]) == 0)
-              || (KMInteger.compare(tmpVariables[0], systemParam) == -1)) {
+              && KMInteger.compare(systemParam, tmpVariables[1]) == 0)) {
         // Key needs upgrade.
-        return (byte) 1;
+        return true;
+      } else if ((KMInteger.compare(tmpVariables[0], systemParam) == -1)) {
+        // Each os version or patch level associated with the key must be less than it's
+        // corresponding value stored in Javacard, then only upgrade is allowed otherwise it
+        // is invalid argument.
+        return true;
       } else if (KMInteger.compare(tmpVariables[0], systemParam) == 1) {
         KMException.throwIt(KMError.INVALID_ARGUMENT);
       }
     }
-    return (byte) 0;
+    return false;
   }
 
   private void processUpgradeKeyCmd(APDU apdu) {
@@ -1142,25 +1148,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // parse existing key blob
     parseEncryptedKeyBlob(scratchPad);
-    // Use tmpVariables[4] to store the error code.
-    tmpVariables[4] = KMError.OK;
-    // Use tmpVariables[3] to check if key needs upgrade.
-    tmpVariables[3] = 0;
-    try {
-      tmpVariables[3] |= validateUpgradeKeyForTag(KMType.OS_VERSION, repository.getOsVersion());
-      tmpVariables[3] |= validateUpgradeKeyForTag(KMType.OS_PATCH_LEVEL, repository.getOsPatch());
-      tmpVariables[3] |= validateUpgradeKeyForTag(KMType.VENDOR_PATCH_LEVEL, repository.getVendorPatchLevel());
-      tmpVariables[3] |= validateUpgradeKeyForTag(KMType.BOOT_PATCH_LEVEL, repository.getBootPatchLevel());
-    } catch (KMException e) {
+    boolean keyRequiresUpgrade = false;
+    // Check if key requires upgrade.
+    keyRequiresUpgrade |= keyRequiresUpgrade(KMType.OS_VERSION, repository.getOsVersion());
+    keyRequiresUpgrade |= keyRequiresUpgrade(KMType.OS_PATCH_LEVEL, repository.getOsPatch());
+    keyRequiresUpgrade |= keyRequiresUpgrade(KMType.VENDOR_PATCH_LEVEL, repository.getVendorPatchLevel());
+    keyRequiresUpgrade |= keyRequiresUpgrade(KMType.BOOT_PATCH_LEVEL, repository.getBootPatchLevel());
 
-      if (KMException.reason != KMError.INVALID_ARGUMENT)
-        KMException.throwIt(KMException.reason);
-      // Key should not be upgraded and return error.
-      tmpVariables[3] = 0;
-      tmpVariables[4] = KMException.reason;
-    }
-
-    if (tmpVariables[3] == 1) {
+    if (keyRequiresUpgrade) {
       // copy origin
       data[ORIGIN] = KMEnumTag.getValue(KMType.ORIGIN, data[HW_PARAMETERS]);
       // create new key blob with current os version etc.
@@ -1170,7 +1165,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // prepare the response
     tmpVariables[0] = KMArray.instance((short) 2);
-    KMArray.cast(tmpVariables[0]).add((short) 0, KMInteger.uint_16(tmpVariables[4]));
+    KMArray.cast(tmpVariables[0]).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(tmpVariables[0]).add((short) 1, data[KEY_BLOB]);
 
     bufferStartOffset = repository.allocAvailableMemory();

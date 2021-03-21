@@ -2726,9 +2726,9 @@ public class KMFunctionalTest {
               (short) test_data[i][2], (short) test_data[i][3]);
       ret = upgradeKey(
               KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-              null, null);
-      Assert.assertEquals(test_data[i][5],
-              KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort());
+              null, null, test_data[i][5]);
+      if (test_data[i][5] != KMError.OK)
+        continue;
       keyBlobPtr = KMArray.cast(ret).get((short) 1);
       if (test_data[i][4] == UPGRADE)
         Assert.assertNotEquals(KMByteBlob.cast(keyBlobPtr).length(), 0);
@@ -2774,7 +2774,7 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
-  private short upgradeKey(short keyBlobPtr, byte[] clientId, byte[] appData) {
+  private short upgradeKey(short keyBlobPtr, byte[] clientId, byte[] appData, short expectedErr) {
     short tagCount = 0;
     short clientIdTag = 0;
     short appDataTag = 0;
@@ -2803,13 +2803,21 @@ public class KMFunctionalTest {
     CommandAPDU apdu = encodeApdu((byte) INS_UPGRADE_KEY_CMD, arr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    short ret = KMArray.instance((short) 2);
-    KMArray.cast(ret).add((short) 0, KMInteger.exp());
-    KMArray.cast(ret).add((short) 1, KMByteBlob.exp());
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
-    ret = decoder.decode(ret, respBuf, (short) 0, len);
-    return ret;
+    if (KMError.OK == expectedErr) {
+      short ret = KMArray.instance((short) 2);
+      KMArray.cast(ret).add((short) 0, KMInteger.exp());
+      KMArray.cast(ret).add((short) 1, KMByteBlob.exp());
+      ret = decoder.decode(ret, respBuf, (short) 0, len);
+      Assert.assertEquals(expectedErr, KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort());
+      return ret;
+    } else {
+      short ret = KMInteger.exp();
+      ret = decoder.decode(ret, respBuf, (short) 0, len);
+      Assert.assertEquals(expectedErr, KMInteger.cast(ret).getShort());
+      return ret;
+    }
   }
 
   @Test
