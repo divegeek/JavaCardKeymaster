@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -28,16 +29,17 @@ import javacard.framework.Util;
 public class KMKeyParameters extends KMType {
 
   private static KMKeyParameters prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   private KMKeyParameters() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMKeyParameters proto(short ptr) {
     if (prototype == null) {
       prototype = new KMKeyParameters();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -74,7 +76,7 @@ public class KMKeyParameters extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
   }
 
   public short length() {

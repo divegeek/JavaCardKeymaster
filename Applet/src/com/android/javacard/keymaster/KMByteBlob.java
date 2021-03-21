@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -28,16 +29,17 @@ import javacard.framework.Util;
 public class KMByteBlob extends KMType {
 
   private static KMByteBlob prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   private KMByteBlob() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMByteBlob proto(short ptr) {
     if (prototype == null) {
       prototype = new KMByteBlob();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -75,7 +77,7 @@ public class KMByteBlob extends KMType {
     if (index >= len) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    heap[(short) (instPtr + TLV_HEADER_SIZE + index)] = val;
+    heap[(short) (instPtr[0] + TLV_HEADER_SIZE + index)] = val;
   }
 
   // Get the byte
@@ -84,17 +86,17 @@ public class KMByteBlob extends KMType {
     if (index >= len) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    return heap[(short) (instPtr + TLV_HEADER_SIZE + index)];
+    return heap[(short) (instPtr[0] + TLV_HEADER_SIZE + index)];
   }
 
   // Get the start of blob
   public short getStartOff() {
-    return (short) (instPtr + TLV_HEADER_SIZE);
+    return (short) (instPtr[0] + TLV_HEADER_SIZE);
   }
 
   // Get the length of the blob
   public short length() {
-    return Util.getShort(heap, (short) (instPtr + 1));
+    return Util.getShort(heap, (short) (instPtr[0] + 1));
   }
 
   // Get the buffer pointer in which blob is contained.
@@ -127,8 +129,8 @@ public class KMByteBlob extends KMType {
   }
 
   public void decrementLength(short len) {
-    short length = Util.getShort(heap, (short) (instPtr + 1));
+    short length = Util.getShort(heap, (short) (instPtr[0] + 1));
     length = (short) (length - len);
-    Util.setShort(heap, (short) (instPtr + 1), length);
+    Util.setShort(heap, (short) (instPtr[0] + 1), length);
   }
 }

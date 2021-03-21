@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -37,9 +38,10 @@ public class KMHardwareAuthToken extends KMType {
   public static final byte MAC = 0x05;
 
   private static KMHardwareAuthToken prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   private KMHardwareAuthToken() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   public static short exp() {
@@ -58,7 +60,7 @@ public class KMHardwareAuthToken extends KMType {
     if (prototype == null) {
       prototype = new KMHardwareAuthToken();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -96,7 +98,7 @@ public class KMHardwareAuthToken extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
   }
 
   public short length() {

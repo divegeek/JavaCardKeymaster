@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -29,7 +30,7 @@ import javacard.framework.Util;
 public class KMByteTag extends KMTag {
 
   private static KMByteTag prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   // The allowed tag keys of type bool tag
   private static final short[] tags = {
@@ -55,13 +56,14 @@ public class KMByteTag extends KMTag {
   };
 
   private KMByteTag() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMByteTag proto(short ptr) {
     if (prototype == null) {
       prototype = new KMByteTag();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -107,7 +109,7 @@ public class KMByteTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -115,11 +117,11 @@ public class KMByteTag extends KMTag {
   }
 
   public short getValue() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
-    short blobPtr = Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    short blobPtr = Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 4));
     return KMByteBlob.cast(blobPtr).length();
   }
 
