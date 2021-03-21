@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -28,7 +29,7 @@ import javacard.framework.Util;
 public class KMEnumTag extends KMTag {
 
   private static KMEnumTag prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
 
   // The allowed tag keys of type enum tag.
@@ -39,13 +40,14 @@ public class KMEnumTag extends KMTag {
   private static Object[] enums = null;
 
   private KMEnumTag() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMEnumTag proto(short ptr) {
     if (prototype == null) {
       prototype = new KMEnumTag();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -88,7 +90,7 @@ public class KMEnumTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -96,7 +98,7 @@ public class KMEnumTag extends KMTag {
   }
 
   public byte getValue() {
-    return heap[(short) (instPtr + TLV_HEADER_SIZE + 4)];
+    return heap[(short) (instPtr[0] + TLV_HEADER_SIZE + 4)];
   }
 
   public static void create() {

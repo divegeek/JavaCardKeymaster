@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -28,7 +29,7 @@ import javacard.framework.Util;
 public class KMEnum extends KMType {
 
   private static KMEnum prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   // The allowed enum types.
   private static short[] types = {
@@ -45,13 +46,14 @@ public class KMEnum extends KMType {
   private static Object[] enums = null;
 
   private KMEnum() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMEnum proto(short ptr) {
     if (prototype == null) {
       prototype = new KMEnum();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -61,7 +63,7 @@ public class KMEnum extends KMType {
   }
 
   public short length() {
-    return Util.getShort(heap, (short) (instPtr + 1));
+    return Util.getShort(heap, (short) (instPtr[0] + 1));
   }
 
   public static KMEnum cast(short ptr) {
@@ -118,19 +120,19 @@ public class KMEnum extends KMType {
   }
 
   public void setVal(byte val) {
-    heap[(short) (instPtr + TLV_HEADER_SIZE + 2)] = val;
+    heap[(short) (instPtr[0] + TLV_HEADER_SIZE + 2)] = val;
   }
 
   public byte getVal() {
-    return heap[(short) (instPtr + TLV_HEADER_SIZE + 2)];
+    return heap[(short) (instPtr[0] + TLV_HEADER_SIZE + 2)];
   }
 
   public void setEnumType(short type) {
-    Util.setShort(heap, (short) (instPtr + TLV_HEADER_SIZE), type);
+    Util.setShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE), type);
   }
 
   public short getEnumType() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
   }
 
   // isValidTag enumeration keys and values.

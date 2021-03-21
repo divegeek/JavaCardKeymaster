@@ -86,10 +86,10 @@ public class KMRepository implements KMUpgradable {
   // Class Attributes
   private Object[] operationStateTable;
   private byte[] heap;
-  private short heapIndex;
+  private short[] heapIndex;
   private byte[] dataTable;
-  private short dataIndex;
-  private short reclaimIndex;
+  private short[] dataIndex;
+  private short[] reclaimIndex;
 
   // Singleton instance
   private static KMRepository repository;
@@ -99,10 +99,14 @@ public class KMRepository implements KMUpgradable {
   }
 
   public KMRepository(boolean isUpgrading) {
-    newDataTable(isUpgrading);
     heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
-    heapIndex = 0;
-    reclaimIndex = HEAP_SIZE;
+    heapIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
+    reclaimIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
+    dataIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
+    heapIndex[0] = (short) 0;
+    reclaimIndex[0] = HEAP_SIZE;
+    dataIndex[0] = (short) 0;
+    newDataTable(isUpgrading);
     operationStateTable = new Object[MAX_OPS];
     // create and initialize operation state table.
     //First byte in the operation handle buffer denotes whether the operation is
@@ -309,9 +313,9 @@ public class KMRepository implements KMUpgradable {
   }
 
   public void clean() {
-    Util.arrayFillNonAtomic(heap, (short) 0, heapIndex, (byte) 0);
-    heapIndex = 0;
-    reclaimIndex = HEAP_SIZE;
+    Util.arrayFillNonAtomic(heap, (short) 0, heapIndex[0], (byte) 0);
+    heapIndex[0] = (short) 0;
+    reclaimIndex[0] = HEAP_SIZE;
   }
 
   public void onDeselect() {
@@ -324,46 +328,46 @@ public class KMRepository implements KMUpgradable {
   // This function uses memory from the back of the heap(transient memory). Call
   // reclaimMemory function immediately after the use.
   public short allocReclaimableMemory(short length) {
-    if ((((short) (reclaimIndex - length)) <= heapIndex)
+    if ((((short) (reclaimIndex[0] - length)) <= heapIndex[0])
         || (length >= HEAP_SIZE / 2)) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    reclaimIndex -= length;
-    return reclaimIndex;
+    reclaimIndex[0] -= length;
+    return reclaimIndex[0];
   }
 
   // Reclaims the memory back.
   public void reclaimMemory(short length) {
-    if (reclaimIndex < heapIndex) {
+    if (reclaimIndex[0] < heapIndex[0]) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    reclaimIndex += length;
+    reclaimIndex[0] += length;
   }
 
   public short allocAvailableMemory() {
-    if (heapIndex >= heap.length) {
+    if (heapIndex[0] >= heap.length) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    short index = heapIndex;
-    heapIndex = (short) heap.length;
+    short index = heapIndex[0];
+    heapIndex[0] = (short) heap.length;
     return index;
   }
 
   public short alloc(short length) {
-    if ((((short) (heapIndex + length)) > heap.length) ||
-        (((short) (heapIndex + length)) > reclaimIndex)) {
+    if ((((short) (heapIndex[0] + length)) > heap.length) ||
+        (((short) (heapIndex[0] + length)) > reclaimIndex[0])) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    heapIndex += length;
-    return (short) (heapIndex - length);
+    heapIndex[0] += length;
+    return (short) (heapIndex[0] - length);
   }
 
   private short dataAlloc(short length) {
-    if (((short) (dataIndex + length)) > dataTable.length) {
+    if (((short) (dataIndex[0] + length)) > dataTable.length) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    dataIndex += length;
-    return (short) (dataIndex - length);
+    dataIndex[0] += length;
+    return (short) (dataIndex[0] - length);
   }
 
 
@@ -371,7 +375,7 @@ public class KMRepository implements KMUpgradable {
     if (!isUpgrading) {
       if (dataTable == null) {
         dataTable = new byte[DATA_MEM_SIZE];
-        dataIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
+        dataIndex[0] = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
       }
     }
   }
@@ -713,7 +717,7 @@ public class KMRepository implements KMUpgradable {
 
   @Override
   public void onRestore(Element ele) {
-    dataIndex = ele.readShort();
+    dataIndex[0] = ele.readShort();
     dataTable = (byte[]) ele.readObject();
   }
 

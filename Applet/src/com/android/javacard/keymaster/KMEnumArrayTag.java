@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -27,22 +28,23 @@ import javacard.framework.Util;
 public class KMEnumArrayTag extends KMTag {
 
   private static KMEnumArrayTag prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   // The allowed tag keys of enum array type.
-  private static short[] tags = {PURPOSE, BLOCK_MODE, DIGEST, PADDING};
+  private static final short[] tags = {PURPOSE, BLOCK_MODE, DIGEST, PADDING};
 
   // Tag Values.
   private static Object[] enums = null;
 
   private KMEnumArrayTag() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMEnumArrayTag proto(short ptr) {
     if (prototype == null) {
       prototype = new KMEnumArrayTag();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -107,7 +109,7 @@ public class KMEnumArrayTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -115,11 +117,11 @@ public class KMEnumArrayTag extends KMTag {
   }
 
   public short getValues() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
-    short blobPtr = Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    short blobPtr = Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 4));
     return KMByteBlob.cast(blobPtr).length();
   }
 

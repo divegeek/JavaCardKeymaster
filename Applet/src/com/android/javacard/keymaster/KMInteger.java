@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -29,16 +30,17 @@ public class KMInteger extends KMType {
   public static final short UINT_32 = 4;
   public static final short UINT_64 = 8;
   private static KMInteger prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   private KMInteger() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMInteger proto(short ptr) {
     if (prototype == null) {
       prototype = new KMInteger();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -115,7 +117,7 @@ public class KMInteger extends KMType {
 
   // Get the length of the integer
   public short length() {
-    return Util.getShort(heap, (short) (instPtr + 1));
+    return Util.getShort(heap, (short) (instPtr[0] + 1));
   }
 
   // Get the buffer pointer in which blob is contained.
@@ -125,7 +127,7 @@ public class KMInteger extends KMType {
 
   // Get the start of value
   public short getStartOff() {
-    return (short) (instPtr + TLV_HEADER_SIZE);
+    return (short) (instPtr[0] + TLV_HEADER_SIZE);
   }
 
   public void getValue(byte[] dest, short destOff, short length) {
@@ -136,28 +138,28 @@ public class KMInteger extends KMType {
       length = length();
       destOff += length;
     }
-    Util.arrayCopyNonAtomic(heap, (short) (instPtr + TLV_HEADER_SIZE), dest, destOff, length);
+    Util.arrayCopyNonAtomic(heap, (short) (instPtr[0] + TLV_HEADER_SIZE), dest, destOff, length);
   }
 
   public void setValue(byte[] src, short srcOff) {
-    Util.arrayCopyNonAtomic(src, srcOff, heap, (short) (instPtr + TLV_HEADER_SIZE), length());
+    Util.arrayCopyNonAtomic(src, srcOff, heap, (short) (instPtr[0] + TLV_HEADER_SIZE), length());
   }
 
   public short value(byte[] dest, short destOff) {
-    Util.arrayCopyNonAtomic(heap, (short) (instPtr + TLV_HEADER_SIZE), dest, destOff, length());
+    Util.arrayCopyNonAtomic(heap, (short) (instPtr[0] + TLV_HEADER_SIZE), dest, destOff, length());
     return length();
   }
 
   public short getShort() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 2));
   }
 
   public short getSignificantShort() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
   }
 
   public byte getByte() {
-    return heap[(short) (instPtr + TLV_HEADER_SIZE + 3)];
+    return heap[(short) (instPtr[0] + TLV_HEADER_SIZE + 3)];
   }
 
   public boolean isZero() {

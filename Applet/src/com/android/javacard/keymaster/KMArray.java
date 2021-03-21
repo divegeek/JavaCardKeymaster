@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -36,16 +37,17 @@ public class KMArray extends KMType {
   public static final short ANY_ARRAY_LENGTH = 0x1000;
   private static final short ARRAY_HEADER_SIZE = 4;
   private static KMArray prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   private KMArray() {
+    instPtr = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMArray proto(short ptr) {
     if (prototype == null) {
       prototype = new KMArray();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -90,7 +92,7 @@ public class KMArray extends KMType {
     }
     Util.setShort(
         heap,
-        (short) (instPtr + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short) (index * 2)),
+        (short) (instPtr[0] + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short) (index * 2)),
         objPtr);
   }
 
@@ -100,19 +102,19 @@ public class KMArray extends KMType {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     return Util.getShort(
-        heap, (short) (instPtr + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short) (index * 2)));
+        heap, (short) (instPtr[0] + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short) (index * 2)));
   }
 
   public short containedType() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
   }
 
   public short getStartOff() {
-    return (short) (instPtr + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE);
+    return (short) (instPtr[0] + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE);
   }
 
   public short length() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 2));
   }
 
   public byte[] getBuffer() {

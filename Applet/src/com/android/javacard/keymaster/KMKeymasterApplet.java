@@ -192,7 +192,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     seProvider = seImpl;
     boolean isUpgrading = seImpl.isUpgrading();
     repository = new KMRepository(isUpgrading);
-    byte[] buf = JCSystem.makeTransientByteArray((short) 32, JCSystem.CLEAR_ON_DESELECT);
     data = JCSystem.makeTransientShortArray((short) DATA_ARRAY_SIZE, JCSystem.CLEAR_ON_RESET);
     tmpVariables =
         JCSystem.makeTransientShortArray((short) TMP_VARIABLE_ARRAY_SIZE, JCSystem.CLEAR_ON_RESET);
@@ -466,7 +465,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
     } catch (KMException exception) {
       freeOperations();
-      sendError(apdu, KMException.reason);
+      sendError(apdu, KMException.getReason());
       exception.clear();
     } catch (ISOException exp) {
       sendError(apdu, mapISOErrorToKMError(exp.getReason()));

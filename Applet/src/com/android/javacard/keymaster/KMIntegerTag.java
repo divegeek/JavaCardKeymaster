@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -28,7 +29,7 @@ import javacard.framework.Util;
 public class KMIntegerTag extends KMTag {
 
   private static KMIntegerTag prototype;
-  private static short instPtr;
+  private short[] instPtr;
   // Allowed tag keys.
   private static final short[] tags = {
       // UINT
@@ -53,13 +54,14 @@ public class KMIntegerTag extends KMTag {
   };
 
   private KMIntegerTag() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMIntegerTag proto(short ptr) {
     if (prototype == null) {
       prototype = new KMIntegerTag();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -115,15 +117,15 @@ public class KMIntegerTag extends KMTag {
   }
 
   public short getTagType() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 2));
   }
 
   public short getValue() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
@@ -173,7 +175,7 @@ public class KMIntegerTag extends KMTag {
   }
 
   public boolean isValidKeySize(byte alg) {
-    short val = KMIntegerTag.cast(instPtr).getValue();
+    short val = KMIntegerTag.cast(instPtr[0]).getValue();
     if (KMInteger.cast(val).getSignificantShort() != 0) {
       return false;
     }

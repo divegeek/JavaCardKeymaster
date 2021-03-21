@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -30,7 +31,7 @@ import javacard.framework.Util;
 public class KMBoolTag extends KMTag {
 
   private static KMBoolTag prototype;
-  private static short instPtr;
+  private short[] instPtr;
 
   // The allowed tag keys of type bool tag.
   private static final short[] tags = {
@@ -49,13 +50,14 @@ public class KMBoolTag extends KMTag {
   };
 
   private KMBoolTag() {
+    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMBoolTag proto(short ptr) {
     if (prototype == null) {
       prototype = new KMBoolTag();
     }
-    instPtr = ptr;
+    prototype.instPtr[0] = ptr;
     return prototype;
   }
 
@@ -89,7 +91,7 @@ public class KMBoolTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -97,7 +99,7 @@ public class KMBoolTag extends KMTag {
   }
 
   public byte getVal() {
-    return heap[(short) (instPtr + TLV_HEADER_SIZE + 4)];
+    return heap[(short) (instPtr[0] + TLV_HEADER_SIZE + 4)];
   }
 
   // validate the tag key.
