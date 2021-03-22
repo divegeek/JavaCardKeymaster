@@ -1096,7 +1096,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
-  private boolean keyRequiresUpgrade(short tag, short systemParam) {
+  private boolean isKeyUpgradeRequired(short tag, short systemParam) {
     // validate the tag and check if key needs upgrade.
     tmpVariables[0] = KMKeyParameters.findTag(KMType.UINT_TAG, tag, data[HW_PARAMETERS]);
     tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
@@ -1148,14 +1148,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // parse existing key blob
     parseEncryptedKeyBlob(scratchPad);
-    boolean keyRequiresUpgrade = false;
+    boolean isKeyUpgradeRequired = false;
     // Check if key requires upgrade.
-    keyRequiresUpgrade |= keyRequiresUpgrade(KMType.OS_VERSION, repository.getOsVersion());
-    keyRequiresUpgrade |= keyRequiresUpgrade(KMType.OS_PATCH_LEVEL, repository.getOsPatch());
-    keyRequiresUpgrade |= keyRequiresUpgrade(KMType.VENDOR_PATCH_LEVEL, repository.getVendorPatchLevel());
-    keyRequiresUpgrade |= keyRequiresUpgrade(KMType.BOOT_PATCH_LEVEL, repository.getBootPatchLevel());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.OS_VERSION, repository.getOsVersion());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.OS_PATCH_LEVEL, repository.getOsPatch());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.VENDOR_PATCH_LEVEL, repository.getVendorPatchLevel());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.BOOT_PATCH_LEVEL, repository.getBootPatchLevel());
 
-    if (keyRequiresUpgrade) {
+    if (isKeyUpgradeRequired) {
       // copy origin
       data[ORIGIN] = KMEnumTag.getValue(KMType.ORIGIN, data[HW_PARAMETERS]);
       // create new key blob with current os version etc.
