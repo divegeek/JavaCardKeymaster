@@ -711,7 +711,7 @@ public class KMRepository implements KMUpgradable {
 
   @Override
   public void onSave(Element ele) {
-    ele.write(dataIndex);
+    ele.write(dataIndex[0]);
     ele.write(dataTable);
   }
 

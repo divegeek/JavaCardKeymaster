@@ -103,7 +103,9 @@ public class KMOperationImpl implements KMOperation {
         outputDataBuf, outputDataStart);
     if (cipherAlg == KMType.AES && blockMode == KMType.GCM) {
       // Every time Block size data is stored as intermediate result.
+      JCSystem.beginTransaction();
       aesGcmUpdatedLen += (short) (inputDataLength - len);
+      JCSystem.commitTransaction();
     }
     return len;
   }
