@@ -1096,6 +1096,31 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
+  private boolean isKeyUpgradeRequired(short tag, short systemParam) {
+    // validate the tag and check if key needs upgrade.
+    tmpVariables[0] = KMKeyParameters.findTag(KMType.UINT_TAG, tag, data[HW_PARAMETERS]);
+    tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
+    tmpVariables[1] = KMInteger.uint_8((byte) 0);
+    if (tmpVariables[0] != KMType.INVALID_VALUE) {
+      // OS version in key characteristics must be less the OS version stored in Javacard or the
+      // stored version must be zero. Then only upgrade is allowed else it is invalid argument.
+      if ((tag == KMType.OS_VERSION
+              && KMInteger.compare(tmpVariables[0], systemParam) == 1
+              && KMInteger.compare(systemParam, tmpVariables[1]) == 0)) {
+        // Key needs upgrade.
+        return true;
+      } else if ((KMInteger.compare(tmpVariables[0], systemParam) == -1)) {
+        // Each os version or patch level associated with the key must be less than it's
+        // corresponding value stored in Javacard, then only upgrade is allowed otherwise it
+        // is invalid argument.
+        return true;
+      } else if (KMInteger.compare(tmpVariables[0], systemParam) == 1) {
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+    }
+    return false;
+  }
+
   private void processUpgradeKeyCmd(APDU apdu) {
     // Receive the incoming request fully from the master into buffer.
     receiveIncoming(apdu);
@@ -1123,61 +1148,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // parse existing key blob
     parseEncryptedKeyBlob(scratchPad);
-    // validate characteristics to be upgraded.
-    tmpVariables[0] =
-        KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_VERSION, data[HW_PARAMETERS]);
-    tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
-    tmpVariables[1] =
-        KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, data[HW_PARAMETERS]);
-    tmpVariables[1] = KMIntegerTag.cast(tmpVariables[1]).getValue();
-    tmpVariables[2] = repository.getOsVersion();
-    tmpVariables[3] = repository.getOsPatch();
-    tmpVariables[4] = KMInteger.uint_8((byte) 0);
-    if (tmpVariables[0] != KMType.INVALID_VALUE) {
-      // os version in key characteristics must be less the os version stored in javacard or the
-      // stored version must be zero. Then only upgrade is allowed else it is invalid argument.
-      if (KMInteger.compare(tmpVariables[0], tmpVariables[2]) != -1
-          && KMInteger.compare(tmpVariables[2], tmpVariables[4]) != 0) {
-        // Key Should not be upgraded, but error code should be OK, As per VTS.
-        tmpVariables[5] = KMError.INVALID_ARGUMENT;
-      }
-    }
-    if (tmpVariables[1] != KMType.INVALID_VALUE) {
-      // The key characteristics should have had os patch level < os patch level stored in javacard
-      // then only upgrade is allowed.
-      if (KMInteger.compare(tmpVariables[1], tmpVariables[3]) != -1) {
-        // Key Should not be upgraded, but error code should be OK, As per VTS.
-        tmpVariables[5] = KMError.INVALID_ARGUMENT;
-      }
-    }
-    //Compare vendor patch levels
-    tmpVariables[1] =
-        KMKeyParameters.findTag(KMType.UINT_TAG, KMType.VENDOR_PATCH_LEVEL, data[HW_PARAMETERS]);
-    tmpVariables[1] = KMIntegerTag.cast(tmpVariables[1]).getValue();
-    tmpVariables[2] = repository.getVendorPatchLevel();
-    if (tmpVariables[1] != KMType.INVALID_VALUE) {
-      // The key characteristics should have had vendor patch level < vendor patch level stored in javacard
-      // then only upgrade is allowed.
-      if (KMInteger.compare(tmpVariables[1], tmpVariables[2]) != -1) {
-        // Key Should not be upgraded, but error code should be OK, As per VTS.
-        tmpVariables[5] = KMError.INVALID_ARGUMENT;
-      }
-    }
-    //Compare boot patch levels
-    tmpVariables[1] =
-        KMKeyParameters.findTag(KMType.UINT_TAG, KMType.BOOT_PATCH_LEVEL, data[HW_PARAMETERS]);
-    tmpVariables[1] = KMIntegerTag.cast(tmpVariables[1]).getValue();
-    tmpVariables[2] = repository.getBootPatchLevel();
-    if (tmpVariables[1] != KMType.INVALID_VALUE) {
-      // The key characteristics should have had boot patch level < boot patch level stored in javacard
-      // then only upgrade is allowed.
-      if (KMInteger.compare(tmpVariables[1], tmpVariables[2]) != -1) {
-        // Key Should not be upgraded, but error code should be OK, As per VTS.
-        tmpVariables[5] = KMError.INVALID_ARGUMENT;
-      }
-    }
+    boolean isKeyUpgradeRequired = false;
+    // Check if key requires upgrade.
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.OS_VERSION, repository.getOsVersion());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.OS_PATCH_LEVEL, repository.getOsPatch());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.VENDOR_PATCH_LEVEL, repository.getVendorPatchLevel());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.BOOT_PATCH_LEVEL, repository.getBootPatchLevel());
 
-    if (tmpVariables[5] != KMError.INVALID_ARGUMENT) {
+    if (isKeyUpgradeRequired) {
       // copy origin
       data[ORIGIN] = KMEnumTag.getValue(KMType.ORIGIN, data[HW_PARAMETERS]);
       // create new key blob with current os version etc.
