@@ -47,7 +47,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   @Override
   public void onRestore(Element element) {
     element.initRead();
-    provisionStatus[0] = element.readByte();
+    provisionStatus = element.readByte();
     keymasterState = element.readByte();
     repository.onRestore(element);
     seProvider.onRestore(element);
@@ -68,7 +68,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     // Create element.
     Element element = UpgradeManager.createElement(Element.TYPE_SIMPLE,
         primitiveCount, objectCount);
-    element.write(provisionStatus[0]);
+    element.write(provisionStatus);
     element.write(keymasterState);
     repository.onSave(element);
     seProvider.onSave(element);

@@ -88,7 +88,7 @@ public class KMRepository implements KMUpgradable {
   private byte[] heap;
   private short[] heapIndex;
   private byte[] dataTable;
-  private short[] dataIndex;
+  private short dataIndex;
   private short[] reclaimIndex;
 
   // Singleton instance
@@ -102,10 +102,8 @@ public class KMRepository implements KMUpgradable {
     heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
     heapIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
     reclaimIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
-    dataIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
     heapIndex[0] = (short) 0;
     reclaimIndex[0] = HEAP_SIZE;
-    dataIndex[0] = (short) 0;
     newDataTable(isUpgrading);
     operationStateTable = new Object[MAX_OPS];
     // create and initialize operation state table.
@@ -363,11 +361,11 @@ public class KMRepository implements KMUpgradable {
   }
 
   private short dataAlloc(short length) {
-    if (((short) (dataIndex[0] + length)) > dataTable.length) {
+    if (((short) (dataIndex + length)) > dataTable.length) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    dataIndex[0] += length;
-    return (short) (dataIndex[0] - length);
+    dataIndex += length;
+    return (short) (dataIndex - length);
   }
 
 
@@ -375,7 +373,7 @@ public class KMRepository implements KMUpgradable {
     if (!isUpgrading) {
       if (dataTable == null) {
         dataTable = new byte[DATA_MEM_SIZE];
-        dataIndex[0] = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
+        dataIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
       }
     }
   }
@@ -711,13 +709,13 @@ public class KMRepository implements KMUpgradable {
 
   @Override
   public void onSave(Element ele) {
-    ele.write(dataIndex[0]);
+    ele.write(dataIndex);
     ele.write(dataTable);
   }
 
   @Override
   public void onRestore(Element ele) {
-    dataIndex[0] = ele.readShort();
+    dataIndex = ele.readShort();
     dataTable = (byte[]) ele.readObject();
   }
 
