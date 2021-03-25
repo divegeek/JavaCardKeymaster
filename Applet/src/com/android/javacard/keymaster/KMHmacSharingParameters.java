@@ -33,10 +33,8 @@ public class KMHmacSharingParameters extends KMType {
   public static final byte NONCE = 0x01;
 
   private static KMHmacSharingParameters prototype;
-  private short[] instPtr;
 
   private KMHmacSharingParameters() {
-    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   public static short exp() {
@@ -51,7 +49,7 @@ public class KMHmacSharingParameters extends KMType {
     if (prototype == null) {
       prototype = new KMHmacSharingParameters();
     }
-    prototype.instPtr[0] = ptr;
+    instanceTable[KM_HMAC_SHARING_PARAMETERS_OFFSET] = ptr;
     return prototype;
   }
 
@@ -81,7 +79,7 @@ public class KMHmacSharingParameters extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_HMAC_SHARING_PARAMETERS_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {

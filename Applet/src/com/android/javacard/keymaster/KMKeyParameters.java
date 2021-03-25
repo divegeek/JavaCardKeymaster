@@ -29,17 +29,15 @@ import javacard.framework.Util;
 public class KMKeyParameters extends KMType {
 
   private static KMKeyParameters prototype;
-  private short[] instPtr;
 
   private KMKeyParameters() {
-    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMKeyParameters proto(short ptr) {
     if (prototype == null) {
       prototype = new KMKeyParameters();
     }
-    prototype.instPtr[0] = ptr;
+    instanceTable[KM_KEY_PARAMETERS_OFFSET] = ptr;
     return prototype;
   }
 
@@ -76,7 +74,7 @@ public class KMKeyParameters extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_KEY_PARAMETERS_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {
