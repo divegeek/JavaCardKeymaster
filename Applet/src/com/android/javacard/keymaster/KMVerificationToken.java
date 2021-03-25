@@ -37,10 +37,8 @@ public class KMVerificationToken extends KMType {
   public static final byte MAC = 0x04;
 
   private static KMVerificationToken prototype;
-  private short[] instPtr;
 
   private KMVerificationToken() {
-    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_DESELECT);
   }
 
   public static short exp() {
@@ -59,7 +57,7 @@ public class KMVerificationToken extends KMType {
     if (prototype == null) {
       prototype = new KMVerificationToken();
     }
-    prototype.instPtr[0] = ptr;
+    instanceTable[KM_VERIFICATION_TOKEN_OFFSET] = ptr;
     return prototype;
   }
 
@@ -96,7 +94,7 @@ public class KMVerificationToken extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_VERIFICATION_TOKEN_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {

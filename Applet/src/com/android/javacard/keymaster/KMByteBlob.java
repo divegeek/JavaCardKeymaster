@@ -29,17 +29,15 @@ import javacard.framework.Util;
 public class KMByteBlob extends KMType {
 
   private static KMByteBlob prototype;
-  private short[] instPtr;
 
   private KMByteBlob() {
-    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMByteBlob proto(short ptr) {
     if (prototype == null) {
       prototype = new KMByteBlob();
     }
-    prototype.instPtr[0] = ptr;
+    instanceTable[KM_BYTE_BLOB_OFFSET] = ptr;
     return prototype;
   }
 
@@ -77,7 +75,7 @@ public class KMByteBlob extends KMType {
     if (index >= len) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    heap[(short) (instPtr[0] + TLV_HEADER_SIZE + index)] = val;
+    heap[(short) (instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE + index)] = val;
   }
 
   // Get the byte
@@ -86,17 +84,17 @@ public class KMByteBlob extends KMType {
     if (index >= len) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    return heap[(short) (instPtr[0] + TLV_HEADER_SIZE + index)];
+    return heap[(short) (instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE + index)];
   }
 
   // Get the start of blob
   public short getStartOff() {
-    return (short) (instPtr[0] + TLV_HEADER_SIZE);
+    return (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE);
   }
 
   // Get the length of the blob
   public short length() {
-    return Util.getShort(heap, (short) (instPtr[0] + 1));
+    return Util.getShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1));
   }
 
   // Get the buffer pointer in which blob is contained.
@@ -129,8 +127,8 @@ public class KMByteBlob extends KMType {
   }
 
   public void decrementLength(short len) {
-    short length = Util.getShort(heap, (short) (instPtr[0] + 1));
+    short length = Util.getShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1));
     length = (short) (length - len);
-    Util.setShort(heap, (short) (instPtr[0] + 1), length);
+    Util.setShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1), length);
   }
 }

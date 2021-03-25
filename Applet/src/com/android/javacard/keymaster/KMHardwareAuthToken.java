@@ -38,10 +38,8 @@ public class KMHardwareAuthToken extends KMType {
   public static final byte MAC = 0x05;
 
   private static KMHardwareAuthToken prototype;
-  private short[] instPtr;
 
   private KMHardwareAuthToken() {
-    instPtr = (short[]) JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   public static short exp() {
@@ -60,7 +58,7 @@ public class KMHardwareAuthToken extends KMType {
     if (prototype == null) {
       prototype = new KMHardwareAuthToken();
     }
-    prototype.instPtr[0] = ptr;
+    instanceTable[KM_HARDWARE_AUTH_TOKEN_OFFSET] = ptr;
     return prototype;
   }
 
@@ -98,7 +96,7 @@ public class KMHardwareAuthToken extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr[0] + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_HARDWARE_AUTH_TOKEN_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {
