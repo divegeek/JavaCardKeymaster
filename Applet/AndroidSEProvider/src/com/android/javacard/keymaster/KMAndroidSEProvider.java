@@ -220,7 +220,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
       // Initialize attestationKey and preShared key with zeros.
       Util.arrayFillNonAtomic(tmpArray, (short) 0, TMP_ARRAY_SIZE, (byte) 0);
-      // Assuming secret key length of P-256 curve is 32 bytes.
+      // Create attestation key of P-256 curve.
       createAttestationKey(tmpArray, (short)0, (short) 32);
       // Pre-shared secret key length is 32 bytes.
       createPresharedKey(tmpArray, (short)0, (short) KMRepository.SHARED_SECRET_KEY_SIZE);
