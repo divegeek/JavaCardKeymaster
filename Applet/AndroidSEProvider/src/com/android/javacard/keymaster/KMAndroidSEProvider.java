@@ -218,6 +218,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
     //Allocate buffer for certificate chain.
     if (!isUpgrading()) {
       certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
+      // Initialize attestationKey and preShared key with zeros.
+      Util.arrayFillNonAtomic(tmpArray, (short) 0, TMP_ARRAY_SIZE, (byte) 0);
+      // Create attestation key of P-256 curve.
+      createAttestationKey(tmpArray, (short)0, (short) 32);
+      // Pre-shared secret key length is 32 bytes.
+      createPresharedKey(tmpArray, (short)0, (short) KMRepository.SHARED_SECRET_KEY_SIZE);
     }
     androidSEProvider = this;
   }
