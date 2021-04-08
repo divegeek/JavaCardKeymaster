@@ -993,22 +993,18 @@ public class KMAndroidSEProvider implements KMSEProvider {
         opr = getOperationInstanceFromPool();
         // Convert macLength to bytes
         macLength = (short) (macLength / 8);
-        JCSystem.beginTransaction();
         opr.setCipher(cipher);
         opr.setCipherAlgorithm(alg);
         opr.setBlockMode(blockMode);
         opr.setPaddingAlgorithm(padding);
         opr.setMode(purpose);
         opr.setMacLength(macLength);
-        JCSystem.commitTransaction();
         break;
       case KMType.HMAC:
         Signature signerVerifier = createHmacSignerVerifier(purpose, digest,
             keyBuf, keyStart, keyLength);
         opr = getOperationInstanceFromPool();
-        JCSystem.beginTransaction();
         opr.setSignature(signerVerifier);
-        JCSystem.commitTransaction();
         break;
       default:
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
@@ -1071,23 +1067,19 @@ public class KMAndroidSEProvider implements KMSEProvider {
           Signature signer = createRsaSigner(digest, padding, privKeyBuf,
               privKeyStart, privKeyLength, pubModBuf, pubModStart, pubModLength);
           opr = getOperationInstanceFromPool();
-          JCSystem.beginTransaction();
           opr.setSignature(signer);
           opr.setCipherAlgorithm(alg);
           opr.setPaddingAlgorithm(padding);
           opr.setMode(purpose);
-          JCSystem.commitTransaction();
           break;
         case KMType.DECRYPT:
           Cipher decipher = createRsaDecipher(padding, digest, privKeyBuf,
               privKeyStart, privKeyLength, pubModBuf, pubModStart, pubModLength);
           opr = getOperationInstanceFromPool();
-          JCSystem.beginTransaction();
           opr.setCipher(decipher);
           opr.setCipherAlgorithm(alg);
           opr.setPaddingAlgorithm(padding);
           opr.setMode(purpose);
-          JCSystem.commitTransaction();
           break;
         default:
           KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
@@ -1099,9 +1091,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
           Signature signer = createEcSigner(digest, privKeyBuf, privKeyStart,
               privKeyLength);
           opr = getOperationInstanceFromPool();
-          JCSystem.beginTransaction();
           opr.setSignature(signer);
-          JCSystem.commitTransaction();
           break;
         default:
           KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
