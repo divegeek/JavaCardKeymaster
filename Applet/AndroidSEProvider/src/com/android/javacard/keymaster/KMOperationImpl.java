@@ -248,15 +248,15 @@ public class KMOperationImpl implements KMOperation {
 
   @Override
   public void updateAAD(byte[] dataBuf, short dataStart, short dataLength) {
-    ((AEADCipher) cipher).updateAAD(dataBuf, dataStart, dataLength);
+    ((AEADCipher) operationInst[0]).updateAAD(dataBuf, dataStart, dataLength);
   }
 
   @Override
   public short getAESGCMOutputSize(short dataSize, short macLength) {
-    if (mode == KMType.ENCRYPT) {
-      return (short) (aesGcmUpdatedLen + dataSize + macLength);
+    if (parameters[OPER_MODE_OFFSET] == KMType.ENCRYPT) {
+      return (short) (parameters[AES_GCM_UPDATE_LEN_OFFSET] + dataSize + macLength);
     } else {
-      return (short) (aesGcmUpdatedLen + dataSize - macLength);
+      return (short) (parameters[AES_GCM_UPDATE_LEN_OFFSET] + dataSize - macLength);
     }
   }
 }
