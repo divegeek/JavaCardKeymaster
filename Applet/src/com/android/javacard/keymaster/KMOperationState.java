@@ -33,6 +33,8 @@ public class KMOperationState {
   private static final byte REFS = 1;
   private static final byte KMOPERATION = 0;
   private static final byte SLOT = 1;
+  private static final byte TRUE = 1;
+  private static final byte FALSE = 0;
   // byte type
   private static final byte ALG = 0;
   private static final byte PURPOSE = 1;
@@ -58,12 +60,12 @@ public class KMOperationState {
   private byte[] data;
   private Object[] objRefs;
   private static KMOperationState prototype;
-  private byte[] dFlag;
+  private byte[] isDataUpdated;
 
   private KMOperationState() {
     data = JCSystem.makeTransientByteArray(MAX_DATA, JCSystem.CLEAR_ON_RESET);
     objRefs = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
-    dFlag = JCSystem.makeTransientByteArray((short) 1, JCSystem.CLEAR_ON_RESET);
+    isDataUpdated = JCSystem.makeTransientByteArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMOperationState proto() {
@@ -93,13 +95,13 @@ public class KMOperationState {
   }
 
   public void persist() {
-    if (0 == dFlag[0]) {
+    if (FALSE == isDataUpdated[0]) {
       return;
     }
     KMRepository.instance().persistOperation(data,
         Util.getShort(data, OP_HANDLE),
         (KMOperation) objRefs[KMOPERATION]);
-    dFlag[0] = 0;
+    isDataUpdated[0] = FALSE;
   }
 
   public void setKeySize(short keySize) {
@@ -111,7 +113,7 @@ public class KMOperationState {
   }
 
   public void reset() {
-    dFlag[0] = 0;
+    isDataUpdated[0] = FALSE;
     objRefs[KMOPERATION] = null;
     objRefs[SLOT] = null;
     Util.arrayFillNonAtomic(
@@ -119,7 +121,7 @@ public class KMOperationState {
   }
 
   private void dataUpdated() {
-    dFlag[0] = 1;
+    isDataUpdated[0] = TRUE;
   }
 
   public void release() {
