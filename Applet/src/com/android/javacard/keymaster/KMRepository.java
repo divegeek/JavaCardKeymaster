@@ -258,9 +258,7 @@ public class KMRepository implements KMUpgradable {
           KMByteBlob.cast(buf).getBuffer(),
           KMByteBlob.cast(buf).getStartOff(),
           KMByteBlob.cast(buf).length()))) {
-        JCSystem.beginTransaction();
         Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
-        JCSystem.commitTransaction();
         op.release();
         break;
       }
@@ -277,12 +275,10 @@ public class KMRepository implements KMUpgradable {
         Object[] slot = (Object[]) ((Object[]) operationStateTable[index])[1];
         Object[] ops = ((Object[]) slot[1]);
         ((KMOperation) ops[0]).abort();
-        JCSystem.beginTransaction();
         Util.arrayFillNonAtomic((byte[]) slot[0], (short) 0,
           (short) ((byte[]) slot[0]).length, (byte) 0);
         Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
         ops[0] = null;
-        JCSystem.commitTransaction();
       }
       index++;
     }
