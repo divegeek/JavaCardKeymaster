@@ -500,9 +500,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private boolean isProvisioningComplete() {
     if ((0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_KEY))
-      && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_CHAIN))
-      && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_PARAMS))
-      && (0 != (provisionStatus & PROVISION_STATUS_PRESHARED_SECRET))) {
+        && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_CHAIN))
+        && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_PARAMS))
+        && (0 != (provisionStatus & PROVISION_STATUS_PRESHARED_SECRET))
+        && (0 != (provisionStatus & PROVISION_STATUS_BOOT_PARAM))) {
       return true;
     } else {
       return false;

@@ -41,7 +41,7 @@ public class KMRepository implements KMUpgradable {
   private static final short OPERATION_HANDLE_STATUS_SIZE = 1;
   private static final short OPERATION_HANDLE_OFFSET = 1;
   private static final short OPERATION_HANDLE_ENTRY_SIZE =
-    OPERATION_HANDLE_SIZE + OPERATION_HANDLE_STATUS_SIZE;
+      OPERATION_HANDLE_SIZE + OPERATION_HANDLE_STATUS_SIZE;
 
   // Data table offsets
   public static final byte COMPUTED_HMAC_KEY = 8;
@@ -105,27 +105,15 @@ public class KMRepository implements KMUpgradable {
     heapIndex[0] = (short) 0;
     reclaimIndex[0] = HEAP_SIZE;
     newDataTable(isUpgrading);
-    operationStateTable = JCSystem.makeTransientObjectArray(MAX_OPS, JCSystem.CLEAR_ON_RESET);
+    operationStateTable = new Object[MAX_OPS];
     // create and initialize operation state table.
     //First byte in the operation handle buffer denotes whether the operation is
     //reserved or unreserved.
     byte index = 0;
-    Object[] operationStateObj;
-    Object[] tempObj1;
-    Object[] tempObj2;
-
     while (index < MAX_OPS) {
-      operationStateObj = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
-      operationStateObj[0] = JCSystem.makeTransientByteArray(OPERATION_HANDLE_ENTRY_SIZE, JCSystem.CLEAR_ON_RESET);
-
-      tempObj1 = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
-      tempObj1[0] = JCSystem.makeTransientByteArray(KMOperationState.MAX_DATA, JCSystem.CLEAR_ON_RESET);
-
-      tempObj2 = JCSystem.makeTransientObjectArray(KMOperationState.MAX_REFS, JCSystem.CLEAR_ON_RESET);
-      tempObj1[1] = tempObj2;
-
-      operationStateObj[1] = tempObj1;
-      operationStateTable[index] = operationStateObj;
+      operationStateTable[index] = new Object[]{new byte[OPERATION_HANDLE_ENTRY_SIZE],
+          new Object[]{new byte[KMOperationState.MAX_DATA],
+              new Object[KMOperationState.MAX_REFS]}};
       index++;
     }
     //Initialize the device locked status
@@ -150,8 +138,8 @@ public class KMRepository implements KMUpgradable {
       opId = ((byte[]) ((Object[]) operationStateTable[index])[0]);
       if (0 == Util.arrayCompare(buf, off, opId, OPERATION_HANDLE_OFFSET, len)) {
         return KMOperationState
-          .read(opId, OPERATION_HANDLE_OFFSET,
-            (Object[]) ((Object[]) operationStateTable[index])[1]);
+            .read(opId, OPERATION_HANDLE_OFFSET,
+                (Object[]) ((Object[]) operationStateTable[index])[1]);
       }
       index++;
     }
@@ -163,14 +151,14 @@ public class KMRepository implements KMUpgradable {
   public KMOperationState findOperation(short operationHandle) {
     short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
     getOperationHandle(
-      operationHandle,
-      KMByteBlob.cast(buf).getBuffer(),
-      KMByteBlob.cast(buf).getStartOff(),
-      KMByteBlob.cast(buf).length());
+        operationHandle,
+        KMByteBlob.cast(buf).getBuffer(),
+        KMByteBlob.cast(buf).getStartOff(),
+        KMByteBlob.cast(buf).length());
     return findOperation(
-      KMByteBlob.cast(buf).getBuffer(),
-      KMByteBlob.cast(buf).getStartOff(),
-      KMByteBlob.cast(buf).length());
+        KMByteBlob.cast(buf).getBuffer(),
+        KMByteBlob.cast(buf).getStartOff(),
+        KMByteBlob.cast(buf).length());
   }
 
   /* opHandle is a KMInteger */
@@ -182,7 +170,7 @@ public class KMRepository implements KMUpgradable {
       /* Check for unreserved operation state */
       if (opId[OPERATION_HANDLE_STATUS_OFFSET] == 0) {
         return KMOperationState
-          .instance(opHandle, (Object[]) ((Object[]) operationStateTable[index])[1]);
+            .instance(opHandle, (Object[]) ((Object[]) operationStateTable[index])[1]);
       }
       index++;
     }
@@ -194,25 +182,27 @@ public class KMRepository implements KMUpgradable {
     byte[] opId;
     short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
     getOperationHandle(
-      opHandle,
-      KMByteBlob.cast(buf).getBuffer(),
-      KMByteBlob.cast(buf).getStartOff(),
-      KMByteBlob.cast(buf).length());
+        opHandle,
+        KMByteBlob.cast(buf).getBuffer(),
+        KMByteBlob.cast(buf).getStartOff(),
+        KMByteBlob.cast(buf).length());
     //Update an existing operation state.
     while (index < MAX_OPS) {
       opId = (byte[]) ((Object[]) operationStateTable[index])[0];
       if ((1 == opId[OPERATION_HANDLE_STATUS_OFFSET])
-        && (0 == Util.arrayCompare(
-        opId,
-        OPERATION_HANDLE_OFFSET,
-        KMByteBlob.cast(buf).getBuffer(),
-        KMByteBlob.cast(buf).getStartOff(),
-        KMByteBlob.cast(buf).length()))) {
+          && (0 == Util.arrayCompare(
+          opId,
+          OPERATION_HANDLE_OFFSET,
+          KMByteBlob.cast(buf).getBuffer(),
+          KMByteBlob.cast(buf).getStartOff(),
+          KMByteBlob.cast(buf).length()))) {
         Object[] slot = (Object[]) ((Object[]) operationStateTable[index])[1];
+        JCSystem.beginTransaction();
         Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0,
-          (short) ((byte[]) slot[0]).length);
+            (short) ((byte[]) slot[0]).length);
         Object[] ops = ((Object[]) slot[1]);
         ops[0] = op;
+        JCSystem.commitTransaction();
         return;
       }
       index++;
@@ -224,17 +214,19 @@ public class KMRepository implements KMUpgradable {
       opId = (byte[]) ((Object[]) operationStateTable[index])[0];
       if (0 == opId[OPERATION_HANDLE_STATUS_OFFSET]) {
         Object[] slot = (Object[]) ((Object[]) operationStateTable[index])[1];
+        JCSystem.beginTransaction();
         opId[OPERATION_HANDLE_STATUS_OFFSET] = 1;/*reserved */
         Util.arrayCopy(
-          KMByteBlob.cast(buf).getBuffer(),
-          KMByteBlob.cast(buf).getStartOff(),
-          opId,
-          OPERATION_HANDLE_OFFSET,
-          OPERATION_HANDLE_SIZE);
+            KMByteBlob.cast(buf).getBuffer(),
+            KMByteBlob.cast(buf).getStartOff(),
+            opId,
+            OPERATION_HANDLE_OFFSET,
+            OPERATION_HANDLE_SIZE);
         Util.arrayCopy(data, (short) 0, (byte[]) slot[0], (short) 0,
-          (short) ((byte[]) slot[0]).length);
+            (short) ((byte[]) slot[0]).length);
         Object[] ops = ((Object[]) slot[1]);
         ops[0] = op;
+        JCSystem.commitTransaction();
         break;
       }
       index++;
@@ -246,19 +238,21 @@ public class KMRepository implements KMUpgradable {
     byte[] oprHandleBuf;
     short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
     getOperationHandle(
-      op.getHandle(),
-      KMByteBlob.cast(buf).getBuffer(),
-      KMByteBlob.cast(buf).getStartOff(),
-      KMByteBlob.cast(buf).length());
+        op.getHandle(),
+        KMByteBlob.cast(buf).getBuffer(),
+        KMByteBlob.cast(buf).getStartOff(),
+        KMByteBlob.cast(buf).length());
     while (index < MAX_OPS) {
       oprHandleBuf = ((byte[]) ((Object[]) operationStateTable[index])[0]);
       if ((oprHandleBuf[OPERATION_HANDLE_STATUS_OFFSET] == 1) &&
-        (0 == Util.arrayCompare(oprHandleBuf,
-          OPERATION_HANDLE_OFFSET,
-          KMByteBlob.cast(buf).getBuffer(),
-          KMByteBlob.cast(buf).getStartOff(),
-          KMByteBlob.cast(buf).length()))) {
+          (0 == Util.arrayCompare(oprHandleBuf,
+              OPERATION_HANDLE_OFFSET,
+              KMByteBlob.cast(buf).getBuffer(),
+              KMByteBlob.cast(buf).getStartOff(),
+              KMByteBlob.cast(buf).length()))) {
+        JCSystem.beginTransaction();
         Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
+        JCSystem.commitTransaction();
         op.release();
         break;
       }
@@ -275,10 +269,12 @@ public class KMRepository implements KMUpgradable {
         Object[] slot = (Object[]) ((Object[]) operationStateTable[index])[1];
         Object[] ops = ((Object[]) slot[1]);
         ((KMOperation) ops[0]).abort();
+        JCSystem.beginTransaction();
         Util.arrayFillNonAtomic((byte[]) slot[0], (short) 0,
-          (short) ((byte[]) slot[0]).length, (byte) 0);
+                (short) ((byte[]) slot[0]).length, (byte) 0);
         Util.arrayFillNonAtomic(oprHandleBuf, (short) 0, (short) oprHandleBuf.length, (byte) 0);
         ops[0] = null;
+        JCSystem.commitTransaction();
       }
       index++;
     }
@@ -331,7 +327,7 @@ public class KMRepository implements KMUpgradable {
   // reclaimMemory function immediately after the use.
   public short allocReclaimableMemory(short length) {
     if ((((short) (reclaimIndex[0] - length)) <= heapIndex[0])
-      || (length >= HEAP_SIZE / 2)) {
+        || (length >= HEAP_SIZE / 2)) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     reclaimIndex[0] -= length;
@@ -357,7 +353,7 @@ public class KMRepository implements KMUpgradable {
 
   public short alloc(short length) {
     if ((((short) (heapIndex[0] + length)) > heap.length) ||
-      (((short) (heapIndex[0] + length)) > reclaimIndex[0])) {
+        (((short) (heapIndex[0] + length)) > reclaimIndex[0])) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     heapIndex[0] += length;
@@ -385,9 +381,9 @@ public class KMRepository implements KMUpgradable {
   public void restoreData(short blob) {
     JCSystem.beginTransaction();
     Util.arrayCopy(
-      KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff(), dataTable,
-      (short) 0,
-      KMByteBlob.cast(blob).length()
+        KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff(), dataTable,
+        (short) 0,
+        KMByteBlob.cast(blob).length()
     );
     JCSystem.commitTransaction();
   }
@@ -432,11 +428,11 @@ public class KMRepository implements KMUpgradable {
     short len = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
     if (len != 0) {
       Util.arrayCopyNonAtomic(
-        dataTable,
-        Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET)),
-        buf,
-        offset,
-        len);
+          dataTable,
+          Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET)),
+          buf,
+          offset,
+          len);
     }
     return len;
   }
@@ -484,7 +480,7 @@ public class KMRepository implements KMUpgradable {
   public short readData(short id) {
     short blob = KMByteBlob.instance(dataLength(id));
     if (readDataEntry(id, KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff())
-      == 0) {
+        == 0) {
       return 0;
     }
     return blob;
@@ -509,7 +505,7 @@ public class KMRepository implements KMUpgradable {
     short blob = readData(BOOT_OS_VERSION);
     if (blob != 0) {
       return KMInteger.uint_32(
-        KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
+          KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
       return KMInteger.uint_32(zero, (short) 0);
     }
@@ -519,7 +515,7 @@ public class KMRepository implements KMUpgradable {
     short blob = readData(VENDOR_PATCH_LEVEL);
     if (blob != 0) {
       return KMInteger.uint_32(
-        KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
+          KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
       return KMInteger.uint_32(zero, (short) 0);
     }
@@ -529,7 +525,7 @@ public class KMRepository implements KMUpgradable {
     short blob = readData(BOOT_PATCH_LEVEL);
     if (blob != 0) {
       return KMInteger.uint_32(
-        KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
+          KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
       return KMInteger.uint_32(zero, (short) 0);
     }
@@ -539,7 +535,7 @@ public class KMRepository implements KMUpgradable {
     short blob = readData(BOOT_OS_PATCH);
     if (blob != 0) {
       return KMInteger.uint_32(
-        KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
+          KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
       return KMInteger.uint_32(zero, (short) 0);
     }
@@ -567,19 +563,19 @@ public class KMRepository implements KMUpgradable {
 
     short blob = KMByteBlob.instance(totalLength);
     length = readDataEntry(BOOT_VERIFIED_BOOT_KEY, KMByteBlob.cast(blob)
-      .getBuffer(), KMByteBlob.cast(blob).getStartOff());
+        .getBuffer(), KMByteBlob.cast(blob).getStartOff());
 
     length += readDataEntry(BOOT_VERIFIED_BOOT_HASH, KMByteBlob.cast(blob)
-        .getBuffer(),
-      (short) (KMByteBlob.cast(blob).getStartOff() + length));
+            .getBuffer(),
+        (short) (KMByteBlob.cast(blob).getStartOff() + length));
 
     length += readDataEntry(BOOT_VERIFIED_BOOT_STATE, KMByteBlob.cast(blob)
-        .getBuffer(),
-      (short) (KMByteBlob.cast(blob).getStartOff() + length));
+            .getBuffer(),
+        (short) (KMByteBlob.cast(blob).getStartOff() + length));
 
     readDataEntry(BOOT_DEVICE_LOCKED_STATUS, KMByteBlob.cast(blob)
-        .getBuffer(),
-      (short) (KMByteBlob.cast(blob).getStartOff() + length));
+            .getBuffer(),
+        (short) (KMByteBlob.cast(blob).getStartOff() + length));
     return blob;
   }
 
@@ -615,7 +611,7 @@ public class KMRepository implements KMUpgradable {
     short blob = readData(DEVICE_LOCKED_TIME);
     if (blob != 0) {
       return KMInteger.uint_64(KMByteBlob.cast(blob).getBuffer(),
-        KMByteBlob.cast(blob).getStartOff());
+          KMByteBlob.cast(blob).getStartOff());
     } else {
       return KMInteger.uint_64(zero, (short) 0);
     }
