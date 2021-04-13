@@ -36,7 +36,6 @@ public class KMVerificationToken extends KMType {
   public static final byte MAC = 0x04;
 
   private static KMVerificationToken prototype;
-  private static short instPtr;
 
   private KMVerificationToken() {
   }
@@ -57,7 +56,7 @@ public class KMVerificationToken extends KMType {
     if (prototype == null) {
       prototype = new KMVerificationToken();
     }
-    instPtr = ptr;
+    instanceTable[KM_VERIFICATION_TOKEN_OFFSET] = ptr;
     return prototype;
   }
 
@@ -94,7 +93,7 @@ public class KMVerificationToken extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_VERIFICATION_TOKEN_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {

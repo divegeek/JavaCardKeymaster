@@ -31,6 +31,10 @@ public class KMOperationState {
   public static final byte MAX_REFS = 1;
   private static final byte DATA = 0;
   private static final byte REFS = 1;
+  private static final byte KMOPERATION = 0;
+  private static final byte SLOT = 1;
+  private static final byte TRUE = 1;
+  private static final byte FALSE = 0;
   // byte type
   private static final byte ALG = 0;
   private static final byte PURPOSE = 1;
@@ -53,14 +57,15 @@ public class KMOperationState {
 
   // Object References
   private static final byte OPERATION = 0;
-  private static KMOperation op;
-  private static byte[] data;
-  private static Object[] slot;
+  private byte[] data;
+  private Object[] objRefs;
   private static KMOperationState prototype;
-  private static boolean dFlag;
+  private byte[] isDataUpdated;
 
   private KMOperationState() {
     data = JCSystem.makeTransientByteArray(MAX_DATA, JCSystem.CLEAR_ON_RESET);
+    objRefs = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
+    isDataUpdated = JCSystem.makeTransientByteArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
   private static KMOperationState proto() {
@@ -73,28 +78,30 @@ public class KMOperationState {
   public static KMOperationState instance(short opHandle, Object[] slot) {
     KMOperationState opState = proto();
     opState.reset();
-    Util.setShort(data, OP_HANDLE, opHandle);
-    KMOperationState.slot = slot;
+    Util.setShort(prototype.data, OP_HANDLE, opHandle);
+    prototype.objRefs[SLOT] = slot;
     return opState;
   }
 
   public static KMOperationState read(byte[] oprHandle, short off, Object[] slot) {
     KMOperationState opState = proto();
     opState.reset();
-    Util.arrayCopy((byte[]) slot[DATA], (short) 0, data, (short) 0, (short) data.length);
+    Util.arrayCopy((byte[]) slot[DATA], (short) 0, prototype.data, (short) 0, (short) prototype.data.length);
     Object[] ops = ((Object[]) slot[REFS]);
-    op = (KMOperation) ops[OPERATION];
-    Util.setShort(data, OP_HANDLE, KMInteger.uint_64(oprHandle, off));
-    KMOperationState.slot = slot;
+    prototype.objRefs[KMOPERATION] = ops[OPERATION];
+    Util.setShort(prototype.data, OP_HANDLE, KMInteger.uint_64(oprHandle, off));
+    prototype.objRefs[SLOT] = slot;
     return opState;
   }
 
   public void persist() {
-    if (!dFlag) {
+    if (FALSE == isDataUpdated[0]) {
       return;
     }
-    KMRepository.instance().persistOperation(data, Util.getShort(data, OP_HANDLE), op);
-    dFlag = false;
+    KMRepository.instance().persistOperation(data,
+        Util.getShort(data, OP_HANDLE),
+        (KMOperation) objRefs[KMOPERATION]);
+    isDataUpdated[0] = FALSE;
   }
 
   public void setKeySize(short keySize) {
@@ -106,30 +113,31 @@ public class KMOperationState {
   }
 
   public void reset() {
-    dFlag = false;
-    op = null;
-    slot = null;
+    isDataUpdated[0] = FALSE;
+    objRefs[KMOPERATION] = null;
+    objRefs[SLOT] = null;
     Util.arrayFillNonAtomic(
         data, (short) 0, (short) data.length, (byte) 0);
   }
 
   private void dataUpdated() {
-    dFlag = true;
+    isDataUpdated[0] = TRUE;
   }
 
   public void release() {
-    Object[] ops = ((Object[]) slot[REFS]);
+    Object[] slots = (Object[]) objRefs[SLOT];
+    Object[] ops = ((Object[]) slots[REFS]);
     ((KMOperation) ops[OPERATION]).abort();
     JCSystem.beginTransaction();
     Util.arrayFillNonAtomic(
-        (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length, (byte) 0);
+        (byte[]) slots[0], (short) 0, (short) ((byte[]) slots[0]).length, (byte) 0);
     ops[OPERATION] = null;
     JCSystem.commitTransaction();
     reset();
   }
 
   public short getHandle() {
-    return Util.getShort(KMOperationState.data, OP_HANDLE);
+    return Util.getShort(data, OP_HANDLE);
   }
 
   public short getPurpose() {
@@ -141,14 +149,14 @@ public class KMOperationState {
     dataUpdated();
   }
 
-  public void setOperation(KMOperation operation) {
-    op = operation;
+  public void setOperation(KMOperation opr) {
+    objRefs[KMOPERATION] = opr;
     dataUpdated();
     persist();
   }
 
   public KMOperation getOperation() {
-    return op;
+    return (KMOperation) objRefs[KMOPERATION];
   }
 
   public boolean isAuthPerOperationReqd() {

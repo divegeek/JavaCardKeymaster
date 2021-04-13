@@ -30,22 +30,21 @@ import javacard.framework.Util;
 public class KMBoolTag extends KMTag {
 
   private static KMBoolTag prototype;
-  private static short instPtr;
 
   // The allowed tag keys of type bool tag.
   private static final short[] tags = {
-      CALLER_NONCE,
-      INCLUDE_UNIQUE_ID,
-      BOOTLOADER_ONLY,
-      ROLLBACK_RESISTANCE,
-      NO_AUTH_REQUIRED,
-      ALLOW_WHILE_ON_BODY,
-      TRUSTED_USER_PRESENCE_REQUIRED,
-      TRUSTED_CONFIRMATION_REQUIRED,
-      UNLOCKED_DEVICE_REQUIRED,
-      RESET_SINCE_ID_ROTATION,
-      EARLY_BOOT_ONLY,
-      DEVICE_UNIQUE_ATTESTATION
+    CALLER_NONCE,
+    INCLUDE_UNIQUE_ID,
+    BOOTLOADER_ONLY,
+    ROLLBACK_RESISTANCE,
+    NO_AUTH_REQUIRED,
+    ALLOW_WHILE_ON_BODY,
+    TRUSTED_USER_PRESENCE_REQUIRED,
+    TRUSTED_CONFIRMATION_REQUIRED,
+    UNLOCKED_DEVICE_REQUIRED,
+    RESET_SINCE_ID_ROTATION,
+    EARLY_BOOT_ONLY,
+    DEVICE_UNIQUE_ATTESTATION
   };
 
   private KMBoolTag() {
@@ -55,7 +54,7 @@ public class KMBoolTag extends KMTag {
     if (prototype == null) {
       prototype = new KMBoolTag();
     }
-    instPtr = ptr;
+    instanceTable[KM_BOOL_TAG_OFFSET] = ptr;
     return prototype;
   }
 
@@ -89,7 +88,7 @@ public class KMBoolTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instanceTable[KM_BOOL_TAG_OFFSET] + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -97,7 +96,7 @@ public class KMBoolTag extends KMTag {
   }
 
   public byte getVal() {
-    return heap[(short) (instPtr + TLV_HEADER_SIZE + 4)];
+    return heap[(short) (instanceTable[KM_BOOL_TAG_OFFSET] + TLV_HEADER_SIZE + 4)];
   }
 
   // validate the tag key.
