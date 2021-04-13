@@ -31,7 +31,6 @@ public class KMKeyCharacteristics extends KMType {
   public static final byte SOFTWARE_ENFORCED = 0x00;
   public static final byte HARDWARE_ENFORCED = 0x01;
   private static KMKeyCharacteristics prototype;
-  private static short instPtr;
 
   private KMKeyCharacteristics() {
   }
@@ -50,7 +49,7 @@ public class KMKeyCharacteristics extends KMType {
     if (prototype == null) {
       prototype = new KMKeyCharacteristics();
     }
-    instPtr = ptr;
+    instanceTable[KM_KEY_CHARACTERISTICS_OFFSET] = ptr;
     return prototype;
   }
 
@@ -80,7 +79,7 @@ public class KMKeyCharacteristics extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_KEY_CHARACTERISTICS_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {
