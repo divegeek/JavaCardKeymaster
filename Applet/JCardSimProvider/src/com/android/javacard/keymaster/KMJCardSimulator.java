@@ -1203,13 +1203,12 @@ public class KMJCardSimulator implements KMSEProvider {
   public void persistPartialCertificateChain(byte[] buf, short offset,
       short len, short totalLen) {
     //  _____________________________________________________
-    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 | 3 Bytes | Cert2|...
-    // |_________|________|_________|_______|_________|______|
+    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 |  Cert2 |...
+    // |_________|________|_________|_______|________|_______
     // First two bytes holds the length of the total buffer.
     // CBOR format:
-    // Next single byte holds the array header.
-    // Next 3 bytes holds the Byte array header with the cert1 length.
-    // Next 3 bytes holds the Byte array header with the cert2 length.
+    // Next single byte holds the byte string header.
+    // Next 3 bytes holds the total length of the certificate chain.
     if (totalLen > (short) (CERT_CHAIN_MAX_SIZE - 2)) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }

@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -275,11 +276,32 @@ public abstract class KMType {
   public static final short LENGTH_FROM_PDU = (short) 0xFFFF;
 
   public static final byte NO_VALUE = (byte) 0xff;
+  // Type offsets.
+  public static final byte KM_TYPE_BASE_OFFSET = 0;
+  public static final byte KM_ARRAY_OFFSET = KM_TYPE_BASE_OFFSET;
+  public static final byte KM_BOOL_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 1;
+  public static final byte KM_BYTE_BLOB_OFFSET = KM_TYPE_BASE_OFFSET + 2;
+  public static final byte KM_BYTE_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 3;
+  public static final byte KM_ENUM_OFFSET = KM_TYPE_BASE_OFFSET + 4;
+  public static final byte KM_ENUM_ARRAY_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 5;
+  public static final byte KM_ENUM_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 6;
+  public static final byte KM_HARDWARE_AUTH_TOKEN_OFFSET = KM_TYPE_BASE_OFFSET + 7;
+  public static final byte KM_HMAC_SHARING_PARAMETERS_OFFSET = KM_TYPE_BASE_OFFSET + 8;
+  public static final byte KM_INTEGER_OFFSET = KM_TYPE_BASE_OFFSET + 9;
+  public static final byte KM_INTEGER_ARRAY_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 10;
+  public static final byte KM_INTEGER_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 11;
+  public static final byte KM_KEY_CHARACTERISTICS_OFFSET = KM_TYPE_BASE_OFFSET + 12;
+  public static final byte KM_KEY_PARAMETERS_OFFSET = KM_TYPE_BASE_OFFSET + 13;
+  public static final byte KM_VERIFICATION_TOKEN_OFFSET = KM_TYPE_BASE_OFFSET + 14;
 
   protected static KMRepository repository;
   protected static byte[] heap;
+  // Instance table
+  public static final byte INSTANCE_TABLE_SIZE = 15;
+  protected static short[] instanceTable;
 
   public static void initialize() {
+    instanceTable = JCSystem.makeTransientShortArray(INSTANCE_TABLE_SIZE, JCSystem.CLEAR_ON_RESET);
     KMType.repository = KMRepository.instance();
     KMType.heap = repository.getHeap();
   }

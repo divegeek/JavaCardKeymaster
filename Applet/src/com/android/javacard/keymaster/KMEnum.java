@@ -28,18 +28,17 @@ import javacard.framework.Util;
 public class KMEnum extends KMType {
 
   private static KMEnum prototype;
-  private static short instPtr;
 
   // The allowed enum types.
   private static short[] types = {
-      HARDWARE_TYPE,
-      KEY_FORMAT,
-      KEY_DERIVATION_FUNCTION,
-      VERIFIED_BOOT_STATE,
-      DEVICE_LOCKED,
-      USER_AUTH_TYPE,
-      PURPOSE,
-      ECCURVE
+    HARDWARE_TYPE,
+    KEY_FORMAT,
+    KEY_DERIVATION_FUNCTION,
+    VERIFIED_BOOT_STATE,
+    DEVICE_LOCKED,
+    USER_AUTH_TYPE,
+    PURPOSE,
+    ECCURVE
   };
 
   private static Object[] enums = null;
@@ -51,7 +50,7 @@ public class KMEnum extends KMType {
     if (prototype == null) {
       prototype = new KMEnum();
     }
-    instPtr = ptr;
+    instanceTable[KM_ENUM_OFFSET] = ptr;
     return prototype;
   }
 
@@ -61,7 +60,7 @@ public class KMEnum extends KMType {
   }
 
   public short length() {
-    return Util.getShort(heap, (short) (instPtr + 1));
+    return Util.getShort(heap, (short) (instanceTable[KM_ENUM_OFFSET] + 1));
   }
 
   public static KMEnum cast(short ptr) {
@@ -97,40 +96,40 @@ public class KMEnum extends KMType {
     // The allowed enum values to corresponding enum types in the types array.
     if (enums == null) {
       enums =
-          new Object[]{
-              new byte[]{SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX},
-              new byte[]{X509, PKCS8, RAW},
-              new byte[]{
-                  DERIVATION_NONE,
-                  RFC5869_SHA256,
-                  ISO18033_2_KDF1_SHA1,
-                  ISO18033_2_KDF1_SHA256,
-                  ISO18033_2_KDF2_SHA1,
-                  ISO18033_2_KDF2_SHA256
-              },
-              new byte[]{SELF_SIGNED_BOOT, VERIFIED_BOOT, UNVERIFIED_BOOT, FAILED_BOOT},
-              new byte[]{DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
-              new byte[]{USER_AUTH_NONE, PASSWORD, FINGERPRINT, BOTH},
-              new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
-              new byte[]{P_224, P_256, P_384, P_521}
-          };
+        new Object[]{
+          new byte[]{SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX},
+          new byte[]{X509, PKCS8, RAW},
+          new byte[]{
+            DERIVATION_NONE,
+            RFC5869_SHA256,
+            ISO18033_2_KDF1_SHA1,
+            ISO18033_2_KDF1_SHA256,
+            ISO18033_2_KDF2_SHA1,
+            ISO18033_2_KDF2_SHA256
+          },
+          new byte[]{SELF_SIGNED_BOOT, VERIFIED_BOOT, UNVERIFIED_BOOT, FAILED_BOOT},
+          new byte[]{DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
+          new byte[]{USER_AUTH_NONE, PASSWORD, FINGERPRINT, BOTH},
+          new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
+          new byte[]{P_224, P_256, P_384, P_521}
+        };
     }
   }
 
   public void setVal(byte val) {
-    heap[(short) (instPtr + TLV_HEADER_SIZE + 2)] = val;
+    heap[(short) (instanceTable[KM_ENUM_OFFSET] + TLV_HEADER_SIZE + 2)] = val;
   }
 
   public byte getVal() {
-    return heap[(short) (instPtr + TLV_HEADER_SIZE + 2)];
+    return heap[(short) (instanceTable[KM_ENUM_OFFSET] + TLV_HEADER_SIZE + 2)];
   }
 
   public void setEnumType(short type) {
-    Util.setShort(heap, (short) (instPtr + TLV_HEADER_SIZE), type);
+    Util.setShort(heap, (short) (instanceTable[KM_ENUM_OFFSET] + TLV_HEADER_SIZE), type);
   }
 
   public short getEnumType() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_ENUM_OFFSET] + TLV_HEADER_SIZE));
   }
 
   // isValidTag enumeration keys and values.

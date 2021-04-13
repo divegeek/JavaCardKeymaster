@@ -28,7 +28,6 @@ import javacard.framework.Util;
 public class KMIntegerArrayTag extends KMTag {
 
   private static KMIntegerArrayTag prototype;
-  private static short instPtr;
 
   private static final short[] tags = {USER_SECURE_ID};
 
@@ -39,7 +38,7 @@ public class KMIntegerArrayTag extends KMTag {
     if (prototype == null) {
       prototype = new KMIntegerArrayTag();
     }
-    instPtr = ptr;
+    instanceTable[KM_INTEGER_ARRAY_TAG_OFFSET] = ptr;
     return prototype;
   }
 
@@ -95,15 +94,15 @@ public class KMIntegerArrayTag extends KMTag {
   }
 
   public short getTagType() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE + 2));
   }
 
   public short getValues() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
@@ -137,7 +136,7 @@ public class KMIntegerArrayTag extends KMTag {
 
   public static boolean contains(short tagId, short tagValue, short params) {
     short tag =
-        KMKeyParameters.findTag(KMType.UINT_ARRAY_TAG, tagId, params);
+      KMKeyParameters.findTag(KMType.UINT_ARRAY_TAG, tagId, params);
     if (tag != KMType.INVALID_VALUE) {
       short index = 0;
       tag = KMIntegerArrayTag.cast(tag).getValues();
