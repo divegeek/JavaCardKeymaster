@@ -27,10 +27,9 @@ import javacard.framework.Util;
 public class KMEnumArrayTag extends KMTag {
 
   private static KMEnumArrayTag prototype;
-  private static short instPtr;
 
   // The allowed tag keys of enum array type.
-  private static short[] tags = {PURPOSE, BLOCK_MODE, DIGEST, PADDING};
+  private static final short[] tags = {PURPOSE, BLOCK_MODE, DIGEST, PADDING};
 
   // Tag Values.
   private static Object[] enums = null;
@@ -42,7 +41,7 @@ public class KMEnumArrayTag extends KMTag {
     if (prototype == null) {
       prototype = new KMEnumArrayTag();
     }
-    instPtr = ptr;
+    instanceTable[KM_ENUM_ARRAY_TAG_OFFSET] = ptr;
     return prototype;
   }
 
@@ -107,7 +106,7 @@ public class KMEnumArrayTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instanceTable[KM_ENUM_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -115,11 +114,11 @@ public class KMEnumArrayTag extends KMTag {
   }
 
   public short getValues() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    return Util.getShort(heap, (short) (instanceTable[KM_ENUM_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
-    short blobPtr = Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    short blobPtr = Util.getShort(heap, (short) (instanceTable[KM_ENUM_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE + 4));
     return KMByteBlob.cast(blobPtr).length();
   }
 
@@ -127,14 +126,14 @@ public class KMEnumArrayTag extends KMTag {
     if (enums == null) {
       // allowed tag values.
       enums =
-          new Object[]{
-              new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
-              new byte[]{ECB, CBC, CTR, GCM},
-              new byte[]{DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
-              new byte[]{
-                  PADDING_NONE, RSA_OAEP, RSA_PSS, RSA_PKCS1_1_5_ENCRYPT, RSA_PKCS1_1_5_SIGN, PKCS7
-              }
-          };
+        new Object[]{
+          new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
+          new byte[]{ECB, CBC, CTR, GCM},
+          new byte[]{DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
+          new byte[]{
+            PADDING_NONE, RSA_OAEP, RSA_PSS, RSA_PKCS1_1_5_ENCRYPT, RSA_PKCS1_1_5_SIGN, PKCS7
+          }
+        };
     }
   }
 
@@ -234,10 +233,10 @@ public class KMEnumArrayTag extends KMTag {
       switch (alg) {
         case KMType.RSA:
           if (padding != KMType.RSA_OAEP
-              && padding != KMType.PADDING_NONE
-              && padding != KMType.RSA_PKCS1_1_5_SIGN
-              && padding != KMType.RSA_PKCS1_1_5_ENCRYPT
-              && padding != KMType.RSA_PSS) {
+            && padding != KMType.PADDING_NONE
+            && padding != KMType.RSA_PKCS1_1_5_SIGN
+            && padding != KMType.RSA_PKCS1_1_5_ENCRYPT
+            && padding != KMType.RSA_PSS) {
             return false;
           }
           break;
