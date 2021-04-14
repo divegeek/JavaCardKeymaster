@@ -213,7 +213,7 @@ public class KMOperationImpl implements KMOperation {
         signBuf, signStart);
     } finally {
       KMAndroidSEProvider.getInstance().releaseSignatureInstance(signature);
-      setSigner(null);
+      setSignature(null);
     }
     return len;
   }
@@ -227,7 +227,7 @@ public class KMOperationImpl implements KMOperation {
         signBuf, signStart, signLength);
     } finally {
       KMAndroidSEProvider.getInstance().releaseSignatureInstance(signature);
-      setSigner(null);
+      setSignature(null);
     }
     return ret;
   }
@@ -241,7 +241,7 @@ public class KMOperationImpl implements KMOperation {
     }
     if (signature != null) {
       KMAndroidSEProvider.getInstance().releaseSignatureInstance(signature);
-      setSigner(null);
+      setSignature(null);
     }
     KMAndroidSEProvider.getInstance().releaseOperationInstance(this);
   }
