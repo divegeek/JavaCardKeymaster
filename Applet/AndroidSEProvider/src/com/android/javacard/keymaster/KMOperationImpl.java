@@ -234,7 +234,6 @@ public class KMOperationImpl implements KMOperation {
 
   @Override
   public void abort() {
-    // do nothing
     if (cipher != null) {
       KMAndroidSEProvider.getInstance().releaseCipherInstance(cipher);
       resetCipher();
