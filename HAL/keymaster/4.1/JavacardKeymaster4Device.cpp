@@ -51,6 +51,9 @@
 #define INS_END_KM_CMD 0x7F
 #define SW_KM_OPR 0UL
 #define SB_KM_OPR 1UL
+#define CANARY_BIT_FLAG ( 1 << 30)
+#define UNSET_CANARY_BIT(a) (a &= ~CANARY_BIT_FLAG)
+#define TWOS_COMPLIMENT(a) (a = ~a + 1)
 
 namespace keymaster {
 namespace V4_1 {
@@ -181,18 +184,6 @@ static T translateExtendedErrorsToHalErrors(T& errorCode) {
     return err;
 }
 
-template<typename T = ErrorCode>
-static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const std::vector<uint8_t>& response, bool
-        hasErrorCode) {
-    std::unique_ptr<Item> item(nullptr);
-    T errorCode = T::OK;
-    std::tie(item, errorCode) = cb.decodeData<T>(response, hasErrorCode);
-
-    if (T::OK != errorCode)
-        errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
-    return {std::move(item), errorCode};
-}
-
 /* Generate new operation handle */
 static ErrorCode generateOperationHandle(uint64_t& oprHandle) {
     std::map<uint64_t, std::pair<uint64_t, uint64_t>>::iterator it;
@@ -238,6 +229,43 @@ static bool isStrongboxOperation(uint64_t halGeneratedOperationHandle) {
 /* Delete the operation handle entry from operation table. */
 static void deleteOprHandleEntry(uint64_t halGeneratedOperationHandle) {
     operationTable.erase(halGeneratedOperationHandle);
+}
+
+/* Clears all the strongbox operation handle entries from operation table */
+static void clearStrongboxOprHandleEntries() {
+    std::map<uint64_t, std::pair<uint64_t, uint64_t>>::iterator it = operationTable.begin();
+    for(; it != operationTable.end(); ++it) {
+        if (isStrongboxOperation(it->first))
+            operationTable.erase(it);
+    }
+}
+
+template<typename T = ErrorCode>
+static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const std::vector<uint8_t>& response, bool
+        hasErrorCode) {
+    std::unique_ptr<Item> item(nullptr);
+    T errorCode = T::OK;
+    std::tie(item, errorCode) = cb.decodeData<T>(response, hasErrorCode);
+    int32_t temp = static_cast<int32_t>(errorCode);
+
+    //Check if secure element is reset
+    bool canaryBitSet = (0 != (temp & CANARY_BIT_FLAG));
+
+    if (canaryBitSet) {
+        //Clear the operation table for Strongbox operations entries.
+        clearStrongboxOprHandleEntries();
+        UNSET_CANARY_BIT(temp);
+    }
+    // SE sends errocode as unsigned value so convert the unsigned value
+    // into a signed value of same magnitude.
+    TWOS_COMPLIMENT(temp);
+
+    //Write back temp to errorCode
+    errorCode = static_cast<T>(temp);
+
+    if (T::OK != errorCode)
+        errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
+    return {std::move(item), errorCode};
 }
 
 ErrorCode encodeParametersVerified(const VerificationToken& verificationToken, std::vector<uint8_t>& asn1ParamsVerified) {
@@ -394,7 +422,7 @@ static bool isSEProvisioned() {
         return ret;
     }
     //Check if SE is provisioned.
-    std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
+    std::tie(item, errorCode) = decodeData(cborConverter, std::vector<uint8_t>(response.begin(), response.end()-2),
             true);
     if(item != NULL) {
         uint64_t status;
@@ -463,7 +491,7 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
     ErrorCode ret = sendData(Instruction::INS_GET_HW_INFO_CMD, input, resp);
     if (ret == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, ret) = cborConverter_.decodeData(std::vector<uint8_t>(resp.begin(), resp.end()-2),
+        std::tie(item, ret) = decodeData(cborConverter_, std::vector<uint8_t>(resp.begin(), resp.end()-2),
                 false);
         if (item != nullptr) {
             std::vector<uint8_t> temp;
@@ -630,7 +658,6 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(Instruction::INS_GENERATE_KEY_CMD, cborData, cborOutData);
-
     if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
