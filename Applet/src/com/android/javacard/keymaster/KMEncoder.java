@@ -90,24 +90,27 @@ public class KMEncoder {
   }
 
   // array{KMError.OK,Array{KMByteBlobs}}
-  public void encodeCertChain(byte[] buffer, short offset, short length) {
+  public void encodeCertChain(byte[] buffer, short offset, short length, short errInt32Ptr) {
     bufferRef[0] = buffer;
     scratchBuf[START_OFFSET] = offset;
-    scratchBuf[LEN_OFFSET] = (short) (offset + 3);
+    scratchBuf[LEN_OFFSET] += (offset + 1);
+    //Total length is ArrayHeader + UIntHeader + length(errInt32Ptr)
+    scratchBuf[LEN_OFFSET] += (short) (2 + KMInteger.cast(errInt32Ptr).length());
 
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
-    writeByte(UINT_TYPE); // Error.OK
+    encodeInteger(errInt32Ptr);
   }
 
   //array{KMError.OK,Array{KMByteBlobs}}
-  public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength) {
+  public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength, short errInt32Ptr) {
     bufferRef[0] = certBuffer;
     scratchBuf[START_OFFSET] = certStart;
     scratchBuf[LEN_OFFSET] = (short) (certStart + 1);
     //Array header - 2 elements i.e. 1 byte
     scratchBuf[START_OFFSET]--;
-    // Error.Ok - 1 byte
-    scratchBuf[START_OFFSET]--;
+    // errInt32Ptr - CanaryBit + ErrorCode - 4 bytes
+    // Integer header - 1 byte
+    scratchBuf[START_OFFSET] -= (KMInteger.cast(errInt32Ptr).length() + 1);
     //Array header - 2 elements i.e. 1 byte
     scratchBuf[START_OFFSET]--;
     // Cert Byte blob - typically 2 bytes length i.e. 3 bytes header
@@ -120,7 +123,7 @@ public class KMEncoder {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
-    writeByte(UINT_TYPE); // Error.OK
+    encodeInteger(errInt32Ptr); //CanaryBit + ErrorCode
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 1); // Array of 1 element
     writeMajorTypeWithLength(BYTES_TYPE, certLength); // Cert Byte Blob of length
     return bufferStart;
