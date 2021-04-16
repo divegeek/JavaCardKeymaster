@@ -56,7 +56,7 @@ public class KMEncoder {
     bufferRef[0] = null;
     scratchBuf[START_OFFSET] = (short) 0;
     scratchBuf[LEN_OFFSET] = (short) 0;
-    scratchBuf[STACK_PTR_OFFSET] = (short) 0;    
+    scratchBuf[STACK_PTR_OFFSET] = (short) 0;
   }
 
   private void push(short objPtr) {
