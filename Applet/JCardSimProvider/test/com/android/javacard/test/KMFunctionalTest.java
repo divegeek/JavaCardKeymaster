@@ -1967,6 +1967,10 @@ public class KMFunctionalTest {
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
     short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, (short) respBuf.length);
+    if (triggerReset) {
+      short error = KMInteger.cast(ret).getSignificantShort();
+      Assert.assertEquals(error, CANARY_BIT_FLAG);
+    }
     return ret;
   }
 
