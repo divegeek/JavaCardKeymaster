@@ -454,6 +454,8 @@ public class KMFunctionalTest {
   private static final byte CBOR_ARRAY_MAJOR_TYPE = (byte) 0x80;
   private static final byte CBOR_UINT_MAJOR_TYPE = 0x00;
   private static final short CANARY_BIT_FLAG = (short) 0x4000;
+  private static final boolean RESET = true;
+  private static final boolean NO_RESET = false;
 
   private CardSimulator simulator;
   private KMEncoder encoder;
@@ -1947,14 +1949,20 @@ public class KMFunctionalTest {
     return respBuf[0];
   }
 
-  private short abort(short opHandle) {
+  private short abort(short opHandle, boolean triggerReset) {
     short arrPtr = KMArray.instance((short) 1);
     KMArray.cast(arrPtr).add((short) 0, opHandle);
     CommandAPDU apdu = encodeApdu((byte) INS_ABORT_OPERATION_CMD, arrPtr);
     // print(commandAPDU.getBytes());
+    if (triggerReset) {
+      simulator.reset();
+      AID appletAID1 = AIDUtil.create("A000000062");
+      simulator.selectApplet(appletAID1);
+    }
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
-    return respBuf[0];
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, (short) respBuf.length);
+    return ret;
   }
 
   public short getKeyCharacteristics(short keyBlob) {
@@ -2767,53 +2775,24 @@ public class KMFunctionalTest {
     }
     cleanUp();
   }
-  
-  /*public void testBeginResetUpdate() {
-    byte[] input = new byte[] {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
-    // Generate Key
-    short ret = generateHmacKey(null, null);
-    // Store the generated key in a new byte blob.
-    short keyBlobPtr = KMArray.cast(ret).get((short) 1);
-    byte[] keyBlob = new byte[KMByteBlob.cast(keyBlobPtr).length()];
-    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
-        KMByteBlob.cast(keyBlobPtr).getStartOff(), keyBlob,
-        (short) 0, (short) keyBlob.length);
-    short inParams = getHmacParams(KMType.SHA2_256, true);
 
-    //Call begin operation.
-    ret = begin(KMType.SIGN, keyBlobPtr, KMKeyParameters.instance(inParams), (short) 0);
-    // Get the operation handle.
-    short opHandle = KMArray.cast(ret).get((short) 2);
-    byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
-    KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
-    //Get the keyblobptr again.
-    keyBlobPtr = KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length);
-        
-    // Call update operation and check if the canary bit is set or not.
-    short dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
-    // update with trigger reset.
-    ret = update(opHandle, dataPtr, (short) 0, (short) 0, (short) 0, true);
-    short canaryBitFlag = KMInteger.cast(ret).getSignificantShort();
-    short err = KMInteger.cast(ret).getShort();
-    Assert.assertEquals(CANARY_BIT_FLAG , canaryBitFlag);
-    Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE , err);
-    
-   // Call finish operation and check if the canary bit is set or not.
-    dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
-    // finish with trigger reset.
-    ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0, KMError.OK, true);
-    short canaryBitFlag = KMInteger.cast(ret).getSignificantShort();
-    short err = KMInteger.cast(ret).getShort();
-    Assert.assertEquals(CANARY_BIT_FLAG , canaryBitFlag);
-    Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE , err);
-  }*/
-  
   public void testBeginResetUpdate() {
     byte[] input = new byte[] {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
-    
-    //begin, begin1, update, update1, finish, begin2, abort
+    // Test different combinations of reset events happening in the ordered flow of
+    // begin - begin1 - update - update1 - finish - finish1 - abort
     boolean[][] resetEvents = {
-        {false, true, false, false, false, false, false},  
+        //begin, begin1, update, update1, finish, finish1, abort
+        {NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET},
+        {RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET},
+        {NO_RESET, RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET},
+        {NO_RESET, NO_RESET, RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET},
+        {NO_RESET, NO_RESET, NO_RESET, RESET, NO_RESET, NO_RESET, NO_RESET},
+        {NO_RESET, NO_RESET, NO_RESET, NO_RESET, RESET, NO_RESET, NO_RESET},
+        {NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET, RESET, NO_RESET},
+        {NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET, RESET},
+        {NO_RESET, NO_RESET, NO_RESET, RESET, RESET, NO_RESET, NO_RESET},
+        {NO_RESET, RESET, RESET, NO_RESET, NO_RESET, NO_RESET, NO_RESET},
+        {RESET, RESET, RESET, RESET, RESET, RESET, RESET},
     };
     for(int i = 0; i < resetEvents.length; i++) {
       // Generate Key----------------
@@ -2835,7 +2814,7 @@ public class KMFunctionalTest {
       KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
       //Get the keyblobptr again.
       keyBlobPtr = KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length);
-      //Call begin operation----------------
+      //Call begin end----------------
       
       //Call begin1 operation----------------
       inParams = getHmacParams(KMType.SHA2_256, true);
@@ -2846,18 +2825,66 @@ public class KMFunctionalTest {
       KMInteger.cast(opHandle1).getValue(opHandleBuf1, (short) 0, (short) opHandleBuf1.length);
       //Get the keyblobptr again.
       keyBlobPtr = KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length);
-      //Call begin1 operation----------------
-      
+      //Call begin1 end----------------
+
       //Call update operation----------------
       // Call update operation and check if the canary bit is set or not.
       short dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
+      opHandle = KMInteger.instance(opHandleBuf, (short) 0, (short) opHandleBuf.length);
       // update with trigger reset.
       ret = update(opHandle, dataPtr, (short) 0, (short) 0, (short) 0, resetEvents[i][2]);
+      // If a reset event occurred then expect INVALID_OPERATION_HANDLE.
       if (resetEvents[i][1] || resetEvents[i][2]) {
         short err = KMInteger.cast(ret).getShort();
         Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE, err);
       }
-      //Call update operation----------------
+      //Call update end----------------
+
+      //Call update1 operation----------------
+      // Call update1 operation and check if the canary bit is set or not.
+      dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
+      opHandle1 = KMInteger.instance(opHandleBuf1, (short) 0, (short) opHandleBuf1.length);
+      // update with trigger reset.
+      ret = update(opHandle1, dataPtr, (short) 0, (short) 0, (short) 0, resetEvents[i][3]);
+      // If a reset event occurred then expect INVALID_OPERATION_HANDLE.
+      if (resetEvents[i][2] || resetEvents[i][3]) {
+        short err = KMInteger.cast(ret).getShort();
+        Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE, err);
+      }
+      //Call update end----------------
+
+      //Call finish operation----------------
+      // Call finish operation and check if the canary bit is set or not.
+      dataPtr = KMByteBlob.instance((short) 0);
+      opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+      short expectedErr = KMError.OK;
+      // If a reset event occurred then expect INVALID_OPERATION_HANDLE.
+      if (resetEvents[i][1] | resetEvents[i][2] | resetEvents[i][3] | resetEvents[i][4])
+        expectedErr = KMError.INVALID_OPERATION_HANDLE;
+      ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0, expectedErr, resetEvents[i][4]);
+      //Call finish end----------------
+
+      //Call finish1 operation----------------
+      // Call finish1 operation and check if the canary bit is set or not.
+      dataPtr = KMByteBlob.instance((short) 0);
+      opHandle1 = KMInteger.instance(opHandleBuf1, (short) 0, (short) opHandleBuf1.length);
+      expectedErr = KMError.OK;
+      // If a reset event occurred then expect INVALID_OPERATION_HANDLE.
+      if (resetEvents[i][2] | resetEvents[i][3] | resetEvents[i][4] | resetEvents[i][5])
+        expectedErr = KMError.INVALID_OPERATION_HANDLE;
+      ret = finish(opHandle1, dataPtr, null, (short) 0, (short) 0, (short) 0, expectedErr, resetEvents[i][5]);
+      //Call finish end----------------
+
+      //Call abort operation----------------
+      // Call abort operation and check if the canary bit is set or not.
+      opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
+      ret = abort(opHandle, resetEvents[i][6]);
+      if (resetEvents[i][2] | resetEvents[i][3] | resetEvents[i][4] | resetEvents[i][5] | resetEvents[i][6]) {
+        short err = KMInteger.cast(ret).getShort();
+        Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE, err);
+      }
+      //Call finish end----------------
+      KMRepository.instance().clean();
     }
   }
 
@@ -2952,7 +2979,8 @@ public class KMFunctionalTest {
     byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
     KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
     opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
-    abort(opHandle);
+    ret = abort(opHandle, false);
+    Assert.assertEquals(KMError.OK, KMInteger.cast(ret).getShort());
     short dataPtr = KMByteBlob.instance(plainData, (short) 0, (short) plainData.length);
     opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
     ret = update(opHandle, dataPtr, (short) 0, (short) 0, (short) 0, false);

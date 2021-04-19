@@ -308,6 +308,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Call this fucntion before processing the apdu.
   private void updateCardResetFlag() {
     if (repository.isResetEventOccurred()) {
+      // Release all the operation instances.
+      seProvider.releaseAllOperations();
       JCSystem.beginTransaction();
       cardResetStatus = CANARY_BIT_FLAG;
       JCSystem.commitTransaction();
@@ -322,7 +324,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   @Override
   public void process(APDU apdu) {
     try {
-      // Get and udpate the card reset status before processing apdu.
+      // Get and update the card reset status before processing apdu.
       updateCardResetFlag();
       repository.onProcess();
       // Verify whether applet is in correct state.
