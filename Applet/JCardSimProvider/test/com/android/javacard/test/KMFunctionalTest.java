@@ -678,6 +678,13 @@ public class KMFunctionalTest {
     simulator.deleteApplet(appletAID);
   }
 
+  private void resetAndSelect() {
+    simulator.reset();
+    AID appletAID = AIDUtil.create("A000000062");
+    // Select applet
+    simulator.selectApplet(appletAID);
+  }
+
 
   private CommandAPDU encodeApdu(byte ins, short cmd) {
     byte[] buf = new byte[2500];
@@ -1955,9 +1962,7 @@ public class KMFunctionalTest {
     CommandAPDU apdu = encodeApdu((byte) INS_ABORT_OPERATION_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     if (triggerReset) {
-      simulator.reset();
-      AID appletAID1 = AIDUtil.create("A000000062");
-      simulator.selectApplet(appletAID1);
+      resetAndSelect();
     }
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
@@ -2776,7 +2781,7 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
-  public void testBeginResetUpdate() {
+  public void testCardRest() {
     byte[] input = new byte[] {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
     // Test different combinations of reset events happening in the ordered flow of
     // begin - begin1 - update - update1 - finish - finish1 - abort
@@ -2891,7 +2896,7 @@ public class KMFunctionalTest {
   @Test
   public void testCardResetFunctionality() {
     init();
-    testBeginResetUpdate();
+    testCardRest();
     cleanUp();
   }
 
@@ -3351,9 +3356,7 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short) 3, hwToken);
     CommandAPDU apdu = encodeApdu((byte) INS_BEGIN_OPERATION_CMD, arrPtr);
     if (triggerReset) {
-      simulator.reset();
-      AID appletAID = AIDUtil.create("A000000062");
-      simulator.selectApplet(appletAID);
+      resetAndSelect();
     }
     //print(apdu.getBytes(),(short)0,(short)apdu.getBytes().length);
     ResponseAPDU response = simulator.transmitCommand(apdu);
@@ -3447,9 +3450,7 @@ public class KMFunctionalTest {
     CommandAPDU apdu = encodeApdu((byte) INS_FINISH_OPERATION_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     if (triggerReset) {
-      simulator.reset();
-      AID appletAID = AIDUtil.create("A000000062");
-      simulator.selectApplet(appletAID);
+      resetAndSelect();
     }
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
@@ -3504,9 +3505,7 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short) 4, verToken);
     CommandAPDU apdu = encodeApdu((byte) INS_UPDATE_OPERATION_CMD, arrPtr);
     if (triggerReset) {
-      simulator.reset();
-      AID appletAID = AIDUtil.create("A000000062");
-      simulator.selectApplet(appletAID);
+      resetAndSelect();
     }
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
