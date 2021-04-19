@@ -94,11 +94,8 @@ public class KMRepository implements KMUpgradable {
   // Operation table.
   private static final short OPER_TABLE_DATA_OFFSET = 0;
   private static final short OPER_TABLE_OPR_OFFSET = 1;
-  private static final short OPER_DATA_LEN = OPERATION_HANDLE_ENTRY_SIZE + KMOperationState.MAX_DATA + 1;
+  private static final short OPER_DATA_LEN = OPERATION_HANDLE_ENTRY_SIZE + KMOperationState.MAX_DATA;
   private static final short DATA_ARRAY_LENGTH = MAX_OPS * OPER_DATA_LEN;
-  // Last byte in the operation data table represents the SE Reset flag.
-  private static final short SE_RESET_FLAG_OFFSET = DATA_ARRAY_LENGTH - 1;
-  public static final byte SE_RESET_STATUS_FLAG = 0x7F;
 
 
   // Singleton instance
@@ -113,14 +110,13 @@ public class KMRepository implements KMUpgradable {
     heapIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
     reclaimIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
     heapIndex[0] = (short) 0;
-    reclaimIndex[0] = HEAP_SIZE;
     newDataTable(isUpgrading);
 
     operationStateTable = new Object[2];
     operationStateTable[0] = JCSystem.makeTransientByteArray(DATA_ARRAY_LENGTH, JCSystem.CLEAR_ON_RESET);
     operationStateTable[1] = JCSystem.makeTransientObjectArray(MAX_OPS, JCSystem.CLEAR_ON_RESET);
-    //Set the reset flag
-    resetSeStatusFlag();
+    //Set the reset flags
+    resetHeapEndIndex();
 
     //Initialize the device locked status
     if (!isUpgrading) {
@@ -130,12 +126,15 @@ public class KMRepository implements KMUpgradable {
     repository = this;
   }
 
-  public void resetSeStatusFlag() {
-    ((byte[]) operationStateTable[0])[SE_RESET_FLAG_OFFSET] = SE_RESET_STATUS_FLAG;
+  public void resetHeapEndIndex() {
+    reclaimIndex[0] = HEAP_SIZE;
   }
 
+  // This function should only be called before processing any of the APUs.
+  // Once we start processing the APDU the reclainIndex[0] will change to 
+  // a lesser value than HEAP_SIZE
   public boolean isResetEventOccurred() {
-    if (((byte[]) operationStateTable[0])[SE_RESET_FLAG_OFFSET] == SE_RESET_STATUS_FLAG) {
+    if (reclaimIndex[0] == HEAP_SIZE) {
       return false;
     }
     return true;
@@ -320,12 +319,15 @@ public class KMRepository implements KMUpgradable {
   }
 
   public void onProcess() {
+    // When card reset happens reclaimIndex[0] will be equal to 0.
+    // So make sure the reclaimIndex[0] is always equal to HEAP_SIZE
+    resetHeapEndIndex();
   }
 
   public void clean() {
     Util.arrayFillNonAtomic(heap, (short) 0, heapIndex[0], (byte) 0);
     heapIndex[0] = (short) 0;
-    reclaimIndex[0] = HEAP_SIZE;
+    resetHeapEndIndex();
   }
 
   public void onDeselect() {

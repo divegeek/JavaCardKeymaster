@@ -41,7 +41,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final short KM_HAL_VERSION = (short) 0x4000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
-  private static final short CANARY_BIT_FLAG = (short) 0x40;
+  private static final short CANARY_BIT_FLAG = (short) 0x4000;
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
@@ -156,7 +156,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte OUTPUT_DATA = 25;
   public static final byte HW_TOKEN = 26;
   public static final byte VERIFICATION_TOKEN = 27;
-  protected static final byte SIGNATURE = 28;
+  public static final byte SIGNATURE = 28;
 
   // AddRngEntropy
   protected static final short MAX_SEED_SIZE = 2048;
@@ -188,6 +188,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static short[] tmpVariables;
   protected static short[] data;
   protected static byte provisionStatus = NOT_PROVISIONED;
+  protected static short cardResetStatus = 0x00;
 
   /**
    * Registers this applet.
@@ -200,6 +201,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (!isUpgrading) {
       keymasterState = KMKeymasterApplet.INIT_STATE;
       seProvider.createMasterKey((short) (KMRepository.MASTER_KEY_SIZE * 8));
+    } else {
+      cardResetStatus = CANARY_BIT_FLAG;
     }
     KMType.initialize();
     encoder = new KMEncoder();
@@ -301,6 +304,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
     }
   }
+  
+  // Call this fucntion before processing the apdu.
+  private void updateCardResetFlag() {
+    if (repository.isResetEventOccurred()) {
+      JCSystem.beginTransaction();
+      cardResetStatus = CANARY_BIT_FLAG;
+      JCSystem.commitTransaction();
+    }
+  }
 
   /**
    * Processes an incoming APDU and handles it using command objects.
@@ -310,6 +322,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   @Override
   public void process(APDU apdu) {
     try {
+      // Get and udpate the card reset status before processing apdu.
+      updateCardResetFlag();
       repository.onProcess();
       // Verify whether applet is in correct state.
       if ((keymasterState == KMKeymasterApplet.INIT_STATE)
@@ -3831,16 +3845,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private static short getErrorStatusWithCanaryBitSet(short err) {
     short int32Ptr = KMInteger.instance((short) 4);
-    if (repository.isResetEventOccurred()) {
-      repository.resetSeStatusFlag();
-      //Set the canary bit
-      Util.setShort(KMInteger.cast(int32Ptr).getBuffer(),
-          KMInteger.cast(int32Ptr).getStartOff(),
-          CANARY_BIT_FLAG);
-    }
+
+    Util.setShort(KMInteger.cast(int32Ptr).getBuffer(),
+        KMInteger.cast(int32Ptr).getStartOff(),
+        cardResetStatus);
+
     Util.setShort(KMInteger.cast(int32Ptr).getBuffer(),
         (short) (KMInteger.cast(int32Ptr).getStartOff() + 2),
         err);
+
+    if (cardResetStatus != 0x00) {
+      JCSystem.beginTransaction();
+      cardResetStatus = 0x00;
+      JCSystem.commitTransaction();
+    }
     return int32Ptr;
   }
 
