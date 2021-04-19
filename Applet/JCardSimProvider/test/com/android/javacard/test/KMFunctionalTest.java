@@ -450,6 +450,10 @@ public class KMFunctionalTest {
   private static final int OS_PATCH_LEVEL = 1;
   private static final int VENDOR_PATCH_LEVEL = 1;
   private static final int BOOT_PATCH_LEVEL = 1;
+  private static final short MAJOR_TYPE_MASK = 0xE0;
+  private static final byte CBOR_ARRAY_MAJOR_TYPE = (byte) 0x80;
+  private static final byte CBOR_UINT_MAJOR_TYPE = 0x00;
+  private static final short CANARY_BIT_FLAG = (short) 0x4000;
 
   private CardSimulator simulator;
   private KMEncoder encoder;
@@ -930,7 +934,7 @@ public class KMFunctionalTest {
     inParams = getAesDesParams(KMType.AES, KMType.ECB, KMType.PKCS7, null);
     short beginResp = begin(KMType.DECRYPT,
         KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMKeyParameters.instance(inParams), (short) 0);
+        KMKeyParameters.instance(inParams), (short) 0, false);
     Assert.assertEquals(beginResp, KMError.DEVICE_LOCKED);
     short hwToken = KMHardwareAuthToken.instance();
     KMHardwareAuthToken.cast(hwToken).setTimestamp(KMInteger.uint_16((byte) 2));
@@ -2383,7 +2387,7 @@ public class KMFunctionalTest {
   public byte[] EncryptMessage(byte[] input, short params, byte[] keyBlob) {
     short ret = begin(KMType.ENCRYPT,
         KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMKeyParameters.instance(params), (short) 0);
+        KMKeyParameters.instance(params), (short) 0, false);
     // Get the operation handle.
     short opHandle = KMArray.cast(ret).get((short) 2);
     byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
@@ -2393,7 +2397,7 @@ public class KMFunctionalTest {
 
     ret = finish(opHandle,
         KMByteBlob.instance(input, (short) 0, (short) input.length), null,
-        (short) 0, (short) 0, (short) 0, KMError.OK);
+        (short) 0, (short) 0, (short) 0, KMError.OK, false);
     short dataPtr = KMArray.cast(ret).get((short) 2);
     byte[] output = new byte[KMByteBlob.cast(dataPtr).length()];
     if (KMByteBlob.cast(dataPtr).length() > 0) {
@@ -2407,7 +2411,7 @@ public class KMFunctionalTest {
   public byte[] DecryptMessage(byte[] input, short params, byte[] keyBlob) {
     short ret = begin(KMType.DECRYPT,
         KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMKeyParameters.instance(params), (short) 0);
+        KMKeyParameters.instance(params), (short) 0, false);
     // Get the operation handle.
     short opHandle = KMArray.cast(ret).get((short) 2);
     byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
@@ -2417,7 +2421,7 @@ public class KMFunctionalTest {
 
     ret = finish(opHandle,
         KMByteBlob.instance(input, (short) 0, (short) input.length), null,
-        (short) 0, (short) 0, (short) 0, KMError.OK);
+        (short) 0, (short) 0, (short) 0, KMError.OK, false);
     short dataPtr = KMArray.cast(ret).get((short) 2);
     byte[] output = new byte[KMByteBlob.cast(dataPtr).length()];
     if (KMByteBlob.cast(dataPtr).length() > 0) {
@@ -2447,7 +2451,7 @@ public class KMFunctionalTest {
             KMType.PKCS7, new byte[12]);
     short ret = begin(KMType.ENCRYPT,
             KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-            KMKeyParameters.instance(desPkcs7Params), (short) 0);
+            KMKeyParameters.instance(desPkcs7Params), (short) 0, false);
     Assert.assertTrue(ret == KMError.UNSUPPORTED_BLOCK_MODE);
     cleanUp();
   }
@@ -2479,7 +2483,7 @@ public class KMFunctionalTest {
 
     short ret = begin(KMType.DECRYPT,
         KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMKeyParameters.instance(desPkcs7Params), (short) 0);
+        KMKeyParameters.instance(desPkcs7Params), (short) 0, false);
     // Get the operation handle.
     short opHandle = KMArray.cast(ret).get((short) 2);
     byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
@@ -2492,7 +2496,7 @@ public class KMFunctionalTest {
         (short) cipherText1.length);
     opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
     ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0,
-        KMError.INVALID_ARGUMENT);
+        KMError.INVALID_ARGUMENT, false);
     cleanUp();
   }
 
@@ -2550,7 +2554,7 @@ public class KMFunctionalTest {
       // Do Begin operation.
       short ret = begin(KMType.DECRYPT,
           KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-          KMKeyParameters.instance(pkcs1Params), (short) 0);
+          KMKeyParameters.instance(pkcs1Params), (short) 0, false);
 
       // Get the operation handle.
       short opHandle = KMArray.cast(ret).get((short) 2);
@@ -2563,7 +2567,7 @@ public class KMFunctionalTest {
           (short) cipherText1.length);
       // Finish should return UNKNOWN_ERROR.
       ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0,
-          KMError.UNKNOWN_ERROR);
+          KMError.UNKNOWN_ERROR, false);
     }
     cleanUp();
   }
@@ -2763,6 +2767,106 @@ public class KMFunctionalTest {
     }
     cleanUp();
   }
+  
+  /*public void testBeginResetUpdate() {
+    byte[] input = new byte[] {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    // Generate Key
+    short ret = generateHmacKey(null, null);
+    // Store the generated key in a new byte blob.
+    short keyBlobPtr = KMArray.cast(ret).get((short) 1);
+    byte[] keyBlob = new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
+        KMByteBlob.cast(keyBlobPtr).getStartOff(), keyBlob,
+        (short) 0, (short) keyBlob.length);
+    short inParams = getHmacParams(KMType.SHA2_256, true);
+
+    //Call begin operation.
+    ret = begin(KMType.SIGN, keyBlobPtr, KMKeyParameters.instance(inParams), (short) 0);
+    // Get the operation handle.
+    short opHandle = KMArray.cast(ret).get((short) 2);
+    byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+    KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
+    //Get the keyblobptr again.
+    keyBlobPtr = KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length);
+        
+    // Call update operation and check if the canary bit is set or not.
+    short dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
+    // update with trigger reset.
+    ret = update(opHandle, dataPtr, (short) 0, (short) 0, (short) 0, true);
+    short canaryBitFlag = KMInteger.cast(ret).getSignificantShort();
+    short err = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(CANARY_BIT_FLAG , canaryBitFlag);
+    Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE , err);
+    
+   // Call finish operation and check if the canary bit is set or not.
+    dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
+    // finish with trigger reset.
+    ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0, KMError.OK, true);
+    short canaryBitFlag = KMInteger.cast(ret).getSignificantShort();
+    short err = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(CANARY_BIT_FLAG , canaryBitFlag);
+    Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE , err);
+  }*/
+  
+  public void testBeginResetUpdate() {
+    byte[] input = new byte[] {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    
+    //begin, begin1, update, update1, finish, begin2, abort
+    boolean[][] resetEvents = {
+        {false, true, false, false, false, false, false},  
+    };
+    for(int i = 0; i < resetEvents.length; i++) {
+      // Generate Key----------------
+      short ret = generateHmacKey(null, null);
+      // Store the generated key in a new byte blob.
+      short keyBlobPtr = KMArray.cast(ret).get((short) 1);
+      byte[] keyBlob = new byte[KMByteBlob.cast(keyBlobPtr).length()];
+      Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
+          KMByteBlob.cast(keyBlobPtr).getStartOff(), keyBlob,
+          (short) 0, (short) keyBlob.length);
+      short inParams = getHmacParams(KMType.SHA2_256, true);
+      // Generate Key----------------
+      
+      //Call begin operation----------------
+      ret = begin(KMType.SIGN, keyBlobPtr, KMKeyParameters.instance(inParams), (short) 0, resetEvents[i][0]);
+      // Get the operation handle.
+      short opHandle = KMArray.cast(ret).get((short) 2);
+      byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+      KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
+      //Get the keyblobptr again.
+      keyBlobPtr = KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length);
+      //Call begin operation----------------
+      
+      //Call begin1 operation----------------
+      inParams = getHmacParams(KMType.SHA2_256, true);
+      ret = begin(KMType.SIGN, keyBlobPtr, KMKeyParameters.instance(inParams), (short) 0, resetEvents[i][1]);
+      // Get the operation handle.
+      short opHandle1 = KMArray.cast(ret).get((short) 2);
+      byte[] opHandleBuf1 = new byte[KMRepository.OPERATION_HANDLE_SIZE];
+      KMInteger.cast(opHandle1).getValue(opHandleBuf1, (short) 0, (short) opHandleBuf1.length);
+      //Get the keyblobptr again.
+      keyBlobPtr = KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length);
+      //Call begin1 operation----------------
+      
+      //Call update operation----------------
+      // Call update operation and check if the canary bit is set or not.
+      short dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
+      // update with trigger reset.
+      ret = update(opHandle, dataPtr, (short) 0, (short) 0, (short) 0, resetEvents[i][2]);
+      if (resetEvents[i][1] || resetEvents[i][2]) {
+        short err = KMInteger.cast(ret).getShort();
+        Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE, err);
+      }
+      //Call update operation----------------
+    }
+  }
+
+  @Test
+  public void testCardResetFunctionality() {
+    init();
+    testBeginResetUpdate();
+    cleanUp();
+  }
 
   @Test
   public void testDestroyAttIds() {
@@ -2843,7 +2947,7 @@ public class KMFunctionalTest {
     byte[] plainData = "Hello World 123!".getBytes();
     short ret = begin(KMType.ENCRYPT,
         KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMKeyParameters.instance(inParams), (short) 0);
+        KMKeyParameters.instance(inParams), (short) 0, false);
     short opHandle = KMArray.cast(ret).get((short) 2);
     byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
     KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
@@ -2851,7 +2955,8 @@ public class KMFunctionalTest {
     abort(opHandle);
     short dataPtr = KMByteBlob.instance(plainData, (short) 0, (short) plainData.length);
     opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
-    ret = update(opHandle, dataPtr, (short) 0, (short) 0, (short) 0);
+    ret = update(opHandle, dataPtr, (short) 0, (short) 0, (short) 0, false);
+    ret = KMInteger.cast(ret).getShort();
     Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE, ret);
     cleanUp();
   }
@@ -3140,7 +3245,7 @@ public class KMFunctionalTest {
       byte[] signature,
       boolean updateFlag,
       boolean aesGcmFlag) {
-    short beginResp = begin(keyPurpose, keyBlob, inParams, hwToken);
+    short beginResp = begin(keyPurpose, keyBlob, inParams, hwToken, false);
     short opHandle = KMArray.cast(beginResp).get((short) 2);
     byte[] opHandleBuf = new byte[KMRepository.OPERATION_HANDLE_SIZE];
     KMInteger.cast(opHandle).getValue(opHandleBuf, (short) 0, (short) opHandleBuf.length);
@@ -3168,7 +3273,7 @@ public class KMFunctionalTest {
         inParams = KMKeyParameters.instance(inParams);
       }
       opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
-      ret = update(opHandle, dataPtr, inParams, (short) 0, (short) 0);
+      ret = update(opHandle, dataPtr, inParams, (short) 0, (short) 0, false);
       dataPtr = KMArray.cast(ret).get((short) 3);
       if (KMByteBlob.cast(dataPtr).length() > 0) {
         Util.arrayCopyNonAtomic(
@@ -3187,9 +3292,9 @@ public class KMFunctionalTest {
 
     opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
     if (keyPurpose == KMType.VERIFY) {
-      ret = finish(opHandle, dataPtr, signature, (short) 0, (short) 0, (short) 0, KMError.OK);
+      ret = finish(opHandle, dataPtr, signature, (short) 0, (short) 0, (short) 0, KMError.OK, false);
     } else {
-      ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0, KMError.OK);
+      ret = finish(opHandle, dataPtr, null, (short) 0, (short) 0, (short) 0, KMError.OK, false);
     }
     if (len > 0) {
       dataPtr = KMArray.cast(ret).get((short) 2);
@@ -3207,7 +3312,7 @@ public class KMFunctionalTest {
     return ret;
   }
 
-  public short begin(byte keyPurpose, short keyBlob, short keyParmas, short hwToken) {
+  public short begin(byte keyPurpose, short keyBlob, short keyParmas, short hwToken, boolean triggerReset) {
     short arrPtr = KMArray.instance((short) 4);
     KMArray.cast(arrPtr).add((short) 0, KMEnum.instance(KMType.PURPOSE, keyPurpose));
     KMArray.cast(arrPtr).add((short) 1, keyBlob);
@@ -3217,6 +3322,11 @@ public class KMFunctionalTest {
     }
     KMArray.cast(arrPtr).add((short) 3, hwToken);
     CommandAPDU apdu = encodeApdu((byte) INS_BEGIN_OPERATION_CMD, arrPtr);
+    if (triggerReset) {
+      simulator.reset();
+      AID appletAID = AIDUtil.create("A000000062");
+      simulator.selectApplet(appletAID);
+    }
     //print(apdu.getBytes(),(short)0,(short)apdu.getBytes().length);
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 3);
@@ -3226,19 +3336,31 @@ public class KMFunctionalTest {
     KMArray.cast(ret).add((short) 2, KMInteger.exp());
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
-    if (len > 5) {
+    byte majorType = readMajorType(respBuf);
+    //if (len > 5) {
+    if (majorType == CBOR_ARRAY_MAJOR_TYPE) {
       ret = decoder.decode(ret, respBuf, (short) 0, len);
       short error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
       Assert.assertEquals(error, KMError.OK);
+      if (triggerReset) {
+        error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getSignificantShort();
+        Assert.assertEquals(error, CANARY_BIT_FLAG);
+      }
       return ret;
-    } else {
-      if (len == 3) {
+    } else {//Major type UINT.
+      ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+      if (triggerReset) {
+        short error = KMInteger.cast(ret).getSignificantShort();
+        Assert.assertEquals(error, CANARY_BIT_FLAG);
+      }
+      return KMInteger.cast(ret).getShort();
+      /*if (len == 3) {
         return respBuf[0];
       }
       if (len == 4) {
         return respBuf[1];
       }
-      return Util.getShort(respBuf, (short) 0);
+      return Util.getShort(respBuf, (short) 0);*/
     }
   }
 
@@ -3270,7 +3392,7 @@ public class KMFunctionalTest {
   }
 
   public short finish(short operationHandle, short data, byte[] signature, short inParams,
-      short hwToken, short verToken, short expectedErr) {
+      short hwToken, short verToken, short expectedErr, boolean triggerReset) {
     if (hwToken == 0) {
       hwToken = KMHardwareAuthToken.instance();
     }
@@ -3296,6 +3418,11 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short) 5, verToken);
     CommandAPDU apdu = encodeApdu((byte) INS_FINISH_OPERATION_CMD, arrPtr);
     // print(commandAPDU.getBytes());
+    if (triggerReset) {
+      simulator.reset();
+      AID appletAID = AIDUtil.create("A000000062");
+      simulator.selectApplet(appletAID);
+    }
     ResponseAPDU response = simulator.transmitCommand(apdu);
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
@@ -3313,16 +3440,24 @@ public class KMFunctionalTest {
     ret = decoder.decode(ret, respBuf, (short) 0, len);
     if (expectedErr == KMError.OK) {
       error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
+      if (triggerReset) {
+        short canaryBit = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getSignificantShort();
+        Assert.assertEquals(canaryBit, CANARY_BIT_FLAG);
+      }
     } else {
       error = KMInteger.cast(ret).getShort();
       error = translateExtendedErrorCodes(error);
+      if (triggerReset) {
+        short canaryBit = KMInteger.cast(ret).getSignificantShort();
+        Assert.assertEquals(canaryBit, CANARY_BIT_FLAG);
+      }
     }
     Assert.assertEquals(error, expectedErr);
     return ret;
   }
 
   public short update(short operationHandle, short data, short inParams, short hwToken,
-      short verToken) {
+      short verToken, boolean triggerReset) {
     if (hwToken == 0) {
       hwToken = KMHardwareAuthToken.instance();
     }
@@ -3340,6 +3475,11 @@ public class KMFunctionalTest {
     KMArray.cast(arrPtr).add((short) 3, hwToken);
     KMArray.cast(arrPtr).add((short) 4, verToken);
     CommandAPDU apdu = encodeApdu((byte) INS_UPDATE_OPERATION_CMD, arrPtr);
+    if (triggerReset) {
+      simulator.reset();
+      AID appletAID = AIDUtil.create("A000000062");
+      simulator.selectApplet(appletAID);
+    }
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     short ret = KMArray.instance((short) 4);
@@ -3350,14 +3490,28 @@ public class KMFunctionalTest {
     KMArray.cast(ret).add((short) 3, KMByteBlob.exp());
     byte[] respBuf = response.getBytes();
     short len = (short) respBuf.length;
-    if (len > 5) {
+    byte majorType = readMajorType(respBuf);
+    if (majorType == CBOR_ARRAY_MAJOR_TYPE) {
       ret = decoder.decode(ret, respBuf, (short) 0, len);
       short error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
       Assert.assertEquals(error, KMError.OK);
+      if (triggerReset) {
+        error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getSignificantShort();
+        Assert.assertEquals(error, CANARY_BIT_FLAG);
+      }
     } else {
-      ret = respBuf[1];
+      ret = decoder.decode(KMInteger.exp(), respBuf, (short)0, len);
+      if (triggerReset) {
+        short canaryBit = KMInteger.cast(ret).getSignificantShort();
+        Assert.assertEquals(canaryBit, CANARY_BIT_FLAG);
+      }
     }
     return ret;
+  }
+  
+  private byte readMajorType(byte[] resp) {
+    byte val = resp[0];
+    return (byte) (val & MAJOR_TYPE_MASK);
   }
 
   private void print(short blob) {
