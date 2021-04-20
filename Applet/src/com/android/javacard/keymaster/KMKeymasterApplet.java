@@ -665,7 +665,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short int32Ptr = getErrorStatusWithCanaryBitSet(KMError.OK);
     //Total Extra length
     // Add arrayHeader and (CanaryBitSet + KMError.OK)
-    tmpVariables[2] = (short) (2 + KMInteger.cast(int32Ptr).length());
+    tmpVariables[2] = (short) (1 + encoder.getEncodedIntegerLength(int32Ptr));
     tmpVariables[0] += tmpVariables[2];
     tmpVariables[1] = KMByteBlob.instance(tmpVariables[0]);
     bufferRef[0] = KMByteBlob.cast(tmpVariables[1]).getBuffer();
@@ -3865,10 +3865,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private static void sendError(APDU apdu, short err) {
-    bufferProp[BUF_START_OFFSET] = repository.alloc((short) 2);
+    bufferProp[BUF_START_OFFSET] = repository.alloc((short) 5);
     short int32Ptr = getErrorStatusWithCanaryBitSet(err);
-    bufferProp[BUF_LEN_OFFSET] = encoder.encode(int32Ptr, (byte[]) bufferRef[0],
-        bufferProp[BUF_START_OFFSET]);
+    bufferProp[BUF_LEN_OFFSET] = encoder.encodeError(int32Ptr, (byte[]) bufferRef[0],
+        bufferProp[BUF_START_OFFSET], (short) 5);
     sendOutgoing(apdu);
   }
 
