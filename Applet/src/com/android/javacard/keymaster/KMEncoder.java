@@ -315,7 +315,7 @@ public class KMEncoder {
     case 3: case 4: //Uint32
       return (short) 5;
     case 5: case 6: case 7: case 8: //Uint64
-      return (short) 5;
+      return (short) 9;
     default:
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }

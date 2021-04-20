@@ -202,6 +202,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       keymasterState = KMKeymasterApplet.INIT_STATE;
       seProvider.createMasterKey((short) (KMRepository.MASTER_KEY_SIZE * 8));
     } else {
+      // This flag is explicitly set after upgrade, to make sure that
+      // Keymaster HAL releases its operation state table.
       cardResetStatus = CANARY_BIT_FLAG;
     }
     KMType.initialize();
