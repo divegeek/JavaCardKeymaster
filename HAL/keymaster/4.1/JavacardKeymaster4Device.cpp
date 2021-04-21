@@ -232,17 +232,21 @@ static void deleteOprHandleEntry(uint64_t halGeneratedOperationHandle) {
 }
 
 /* Clears all the strongbox operation handle entries from operation table */
-static void clearStrongboxOprHandleEntries() {
-    std::map<uint64_t, std::pair<uint64_t, uint64_t>>::iterator it = operationTable.begin();
-    for(; it != operationTable.end(); ++it) {
-        if (isStrongboxOperation(it->first))
-            operationTable.erase(it);
+static void clearStrongboxOprHandleEntries(const std::unique_ptr<OperationContext>& oprCtx) {
+    if (nullptr != oprCtx) {
+        std::map<uint64_t, std::pair<uint64_t, uint64_t>>::iterator it = operationTable.begin();
+        for(; it != operationTable.end(); ++it) {
+            if (isStrongboxOperation(it->first)) {
+                oprCtx->clearOperationData(it->second.first);
+                operationTable.erase(it);
+            }
+        }
     }
 }
 
 template<typename T = ErrorCode>
 static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const std::vector<uint8_t>& response, bool
-        hasErrorCode) {
+        hasErrorCode, const std::unique_ptr<OperationContext>& oprCtx=std::unique_ptr<OperationContext>(nullptr)) {
     std::unique_ptr<Item> item(nullptr);
     T errorCode = T::OK;
     std::tie(item, errorCode) = cb.decodeData<T>(response, hasErrorCode);
@@ -253,7 +257,7 @@ static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const 
 
     if (canaryBitSet) {
         //Clear the operation table for Strongbox operations entries.
-        clearStrongboxOprHandleEntries();
+        clearStrongboxOprHandleEntries(oprCtx);
         UNSET_CANARY_BIT(temp);
     }
     // SE sends errocode as unsigned value so convert the unsigned value
@@ -422,6 +426,7 @@ static bool isSEProvisioned() {
         return ret;
     }
     //Check if SE is provisioned.
+    std::unique_ptr<OperationContext> oprCtx(nullptr);
     std::tie(item, errorCode) = decodeData(cborConverter, std::vector<uint8_t>(response.begin(), response.end()-2),
             true);
     if(item != NULL) {
@@ -791,7 +796,6 @@ Return<void> JavacardKeymaster4Device::getKeyCharacteristics(const hidl_vec<uint
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(Instruction::INS_GET_KEY_CHARACTERISTICS_CMD, cborData, cborOutData);
-
     if(errorCode == ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
@@ -1050,7 +1054,7 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
             if(errorCode == ErrorCode::OK) {
                 //Skip last 2 bytes in cborData, it contains status.
                 std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                        true);
+                        true, oprCtx_);
                 if (item != nullptr) {
                     if(!cborConverter_.getKeyParameters(item, 1, outParams) ||
                             !cborConverter_.getUint64(item, 2, operationHandle)) {
@@ -1139,7 +1143,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t halGeneratedOprHandle, co
             if(errorCode == ErrorCode::OK) {
                 //Skip last 2 bytes in cborData, it contains status.
                 std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                        true);
+                        true, oprCtx_);
                 if (item != nullptr) {
                     /*Ignore inputConsumed from javacard SE since HAL consumes all the input */
                     //cborConverter_.getUint64(item, 1, inputConsumed);
@@ -1267,7 +1271,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t halGeneratedOprHandle, co
             if(errorCode == ErrorCode::OK) {
                 //Skip last 2 bytes in cborData, it contains status.
                 std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                        true);
+                        true, oprCtx_);
                 if (item != nullptr) {
                     //There is a change that this finish callback may gets called multiple times if the input data size
                     //is larger the MAX_ALLOWED_INPUT_SIZE (Refer OperationContext) so parse and get the outParams only
@@ -1326,7 +1330,7 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t halGeneratedOprHandle
         if(errorCode == ErrorCode::OK) {
             //Skip last 2 bytes in cborData, it contains status.
             std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                    true);
+                    true, oprCtx_);
         }
     }
     /* Delete the entry on this operationHandle */
