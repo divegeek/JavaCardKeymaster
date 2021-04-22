@@ -2888,7 +2888,7 @@ public class KMFunctionalTest {
       // Call abort operation and check if the canary bit is set or not.
       opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
       ret = abort(opHandle, resetEvents[i][6]);
-      if (resetEvents[i][2] | resetEvents[i][3] | resetEvents[i][4] | resetEvents[i][5] | resetEvents[i][6]) {
+      if (resetEvents[i][1] || resetEvents[i][2] | resetEvents[i][3] | resetEvents[i][4] | resetEvents[i][5] | resetEvents[i][6]) {
         short err = KMInteger.cast(ret).getShort();
         Assert.assertEquals(KMError.INVALID_OPERATION_HANDLE, err);
       }
