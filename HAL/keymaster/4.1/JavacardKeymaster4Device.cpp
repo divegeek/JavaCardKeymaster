@@ -92,6 +92,7 @@ enum class Instruction {
     INS_EARLY_BOOT_ENDED_CMD = INS_END_KM_PROVISION_CMD+21,
     INS_GET_CERT_CHAIN_CMD = INS_END_KM_PROVISION_CMD+22,
     INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD+8,
+    INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD+9,
 };
 
 enum ProvisionStatus {
@@ -519,15 +520,45 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
     return Void();
 }
 
+static ErrorCode setAndroidSystemProperties(CborConverter cborConverter_) {
+    ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
+    cppbor::Array array;
+    std::unique_ptr<Item> item;
+    std::vector<uint8_t> cborOutData;
+
+    array.add(GetOsVersion()).
+        add(GetOsPatchlevel()).
+        add(GetVendorPatchlevel());
+
+    std::vector<uint8_t> cborData = array.encode();
+    errorCode = sendData(Instruction::INS_SET_VERSION_PATCHLEVEL_CMD, cborData, cborOutData);
+    if (ErrorCode::OK == errorCode) {
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
+                true);
+    }
+    return errorCode;
+}
+
 Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacSharingParameters>& params, computeSharedHmac_cb _hidl_cb) {
     cppbor::Array array;
     std::unique_ptr<Item> item;
     std::vector<uint8_t> cborOutData;
     hidl_vec<uint8_t> sharingCheck;
-
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> tempVec;
     cppbor::Array outerArray;
+
+    // The Android system properties like OS_VERSION, OS_PATCHLEVEL and VENDOR_PATCHLEVEL are to 
+    // be delivered to the Applet when the HAL is first loaded. This is one of the ideal places
+    // to send this information to the Applet as computeSharedHmac is called everytime when Android
+    // device boots.
+    if (ErrorCode::OK != (errorCode = setAndroidSystemProperties(cborConverter_))) {
+        LOG(ERROR) << " Failed to set os_version, os_patchlevel and vendor_patchlevel err: " << (int32_t)errorCode;
+        return Void();
+    }
+
+
     for(size_t i = 0; i < params.size(); ++i) {
         cppbor::Array innerArray;
         innerArray.add(static_cast<std::vector<uint8_t>>(params[i].seed));
