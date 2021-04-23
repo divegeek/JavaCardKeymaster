@@ -88,6 +88,8 @@ publicKey, EcCurve& eccurve);
 
 ErrorCode getCertificateChain(std::vector<uint8_t>& chainBuffer, std::vector<std::vector<uint8_t>>& certChain);
 
+uint32_t GetVendorPatchlevel();
+
 class KmParamSet : public keymaster_key_param_set_t {
     public:
         explicit KmParamSet(const hidl_vec<KeyParameter>& keyParams)
