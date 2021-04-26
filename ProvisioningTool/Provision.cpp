@@ -50,6 +50,7 @@ enum class Instruction {
     INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD+6,
     INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD+7,
     INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD+8,
+    INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD+9,
 };
 
 enum ProvisionStatus {
@@ -325,6 +326,24 @@ ErrorCode Provision::provisionPreSharedSecret(std::vector<uint8_t>& preSharedSec
     return errorCode;
 }
 
+ErrorCode Provision::setAndroidSystemProperties() {
+    ErrorCode errorCode = ErrorCode::OK;
+    cppbor::Array array;
+    std::vector<uint8_t> apdu;
+    std::vector<uint8_t> response;
+    Instruction ins = Instruction::INS_SET_VERSION_PATCHLEVEL_CMD;
+
+    array.add(GetOsVersion()).
+        add(GetOsPatchlevel()).
+        add(GetVendorPatchlevel());
+    std::vector<uint8_t> cborData = array.encode();
+
+    if(ErrorCode::OK != (errorCode = sendProvisionData(pTransportFactory, ins, cborData, response))) {
+        return errorCode;
+    }
+    return errorCode;
+}
+
 ErrorCode Provision::provisionBootParameters(BootParams& bootParams) {
     ErrorCode errorCode = ErrorCode::OK;
     cppbor::Array array;
@@ -332,10 +351,7 @@ ErrorCode Provision::provisionBootParameters(BootParams& bootParams) {
     std::vector<uint8_t> response;
     Instruction ins = Instruction::INS_SET_BOOT_PARAMS_CMD;
 
-    array.add(GetOsVersion()).
-        add(GetOsPatchlevel()).
-        add(bootParams.vendorPatchLevel).
-        add(bootParams.bootPatchLevel).
+    array.add(bootParams.bootPatchLevel).
         /* Verified Boot Key */
         add(bootParams.verifiedBootKey).
         /* Verified Boot Hash */
