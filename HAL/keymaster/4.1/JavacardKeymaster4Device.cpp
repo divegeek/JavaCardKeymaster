@@ -233,9 +233,12 @@ static void deleteOprHandleEntry(uint64_t halGeneratedOperationHandle) {
 
 /* Clears all the strongbox operation handle entries from operation table */
 static void clearStrongboxOprHandleEntries(const std::unique_ptr<OperationContext>& oprCtx) {
+    LOG(WARNING) << "secure element reset occurred. All the below mentioned operation handles becomes invalid"
+        << " and the owners of these operations has to restart the operation again.";
     auto it = operationTable.begin();
     while (it != operationTable.end()) {
         if (it->second.second == SB_KM_OPR) { //Strongbox operation
+            LOG(WARNING) << "operation handle: "(int32_t) it->first << " is invalid";
             oprCtx->clearOperationData(it->second.first);
             it = operationTable.erase(it);
         } else {
@@ -1038,6 +1041,9 @@ Return<void> JavacardKeymaster4Device::update(uint64_t halGeneratedOprHandle, co
     uint64_t operationHandle;
     UpdateOperationResponse response;
     if (ErrorCode::OK != (errorCode = getOrigOperationHandle(halGeneratedOprHandle, operationHandle))) {
+        LOG(ERROR) << " Operation handle is invalid. This could happen if invalid operation handle is passed or if"
+            << " secure element reset occurred. In case if secure element reset occured owner"
+            << "has to restart this operation again.";
         _hidl_cb(errorCode, inputConsumed, outParams, output);
         return Void();
     }
@@ -1139,6 +1145,9 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t halGeneratedOprHandle, co
     FinishOperationResponse response;
 
     if (ErrorCode::OK != (errorCode = getOrigOperationHandle(halGeneratedOprHandle, operationHandle))) {
+        LOG(ERROR) << " Operation handle is invalid. This could happen if invalid operation handle is passed or if"
+            << " secure element reset occurred. In case if secure element reset occured owner"
+            << "has to restart this operation again.";
         _hidl_cb(errorCode, outParams, output);
         return Void();
     }
@@ -1258,6 +1267,8 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t halGeneratedOprHandle
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     uint64_t operationHandle;
     if (ErrorCode::OK != (errorCode = getOrigOperationHandle(halGeneratedOprHandle, operationHandle))) {
+        LOG(ERROR) << " Operation handle is invalid. This could happen if invalid operation handle is passed or if"
+            << " secure element reset occurred.";
         return errorCode;
     }
     AbortOperationRequest request;
