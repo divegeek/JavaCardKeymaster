@@ -3235,6 +3235,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     enumVal = KMEnum.cast(tmpVariables[4]).getVal();
     repository.setBootloaderLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
 
+    // Clear Android system properties expect boot patch level as it is
+    // already set.
+    repository.clearAndroidSystemProperties();
+
     // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
     repository.clearComputedHmac();
     repository.clearHmacNonce();
