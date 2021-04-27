@@ -531,7 +531,7 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
             }
         }
     }
-#if (!defined(USE_OMAPI) && !defined(USE_SEHAL))
+#ifdef VTS_EMULATOR
     /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
      * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to getHmacSharing
      * parameters.
@@ -557,11 +557,11 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> tempVec;
     cppbor::Array outerArray;
+#ifndef VTS_EMULATOR
     // The Android system properties like OS_VERSION, OS_PATCHLEVEL and VENDOR_PATCHLEVEL are to 
     // be delivered to the Applet when the HAL is first loaded. Incase if settting system properties
     // failed at construction time then this is one of the ideal places to send this information
     // to the Applet as computeSharedHmac is called everytime when Android device boots.
-#if (defined(USE_OMAPI) || defined(USE_SEHAL))
     if (!isEachSystemPropertySet) {
         errorCode = setAndroidSystemProperties(cborConverter_);
         if (ErrorCode::OK != errorCode) {
@@ -600,7 +600,7 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
             }
         }
     }
-#if (!defined(USE_OMAPI) && !defined(USE_SEHAL))
+#ifdef VTS_EMULATOR
     /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
      * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to
      * computeSharedHmac.
