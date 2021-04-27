@@ -42,6 +42,7 @@ public class KMRepository implements KMUpgradable {
   private static final short OPERATION_HANDLE_OFFSET = 1;
   private static final short OPERATION_HANDLE_ENTRY_SIZE =
       OPERATION_HANDLE_SIZE + OPERATION_HANDLE_STATUS_SIZE;
+  private static final byte POWER_RESET_STATUS_FLAG = (byte) 0xEF;
 
   // Data table offsets
   public static final byte COMPUTED_HMAC_KEY = 8;
@@ -90,6 +91,8 @@ public class KMRepository implements KMUpgradable {
   private byte[] dataTable;
   private short dataIndex;
   private short[] reclaimIndex;
+  // This variable is used to check if power reset event occurred.
+  private byte[] powerResetStatus;
 
   // Operation table.
   private static final short OPER_TABLE_DATA_OFFSET = 0;
@@ -109,35 +112,42 @@ public class KMRepository implements KMUpgradable {
     heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
     heapIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
     reclaimIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
+    powerResetStatus = JCSystem.makeTransientByteArray((short) 1, JCSystem.CLEAR_ON_RESET);
     heapIndex[0] = (short) 0;
+    reclaimIndex[0] = HEAP_SIZE;
+    powerResetStatus[0] = POWER_RESET_STATUS_FLAG;
     newDataTable(isUpgrading);
 
     operationStateTable = new Object[2];
     operationStateTable[0] = JCSystem.makeTransientByteArray(DATA_ARRAY_LENGTH, JCSystem.CLEAR_ON_RESET);
     operationStateTable[1] = JCSystem.makeTransientObjectArray(MAX_OPS, JCSystem.CLEAR_ON_RESET);
-    //Set the reset flags
-    resetHeapEndIndex();
 
     //Initialize the device locked status
     if (!isUpgrading) {
       setDeviceLock(false);
       setDeviceLockPasswordOnly(false);
+    } else {
+      // In case of upgrade, the applet is deleted and installed again so all
+      // volatile memory is erased. so it is necessary to force the power reset flag
+      // to 0 so that the HAL can clear its operation state.
+      powerResetStatus[0] = (byte) 0;
     }
     repository = this;
   }
 
-  public void resetHeapEndIndex() {
-    reclaimIndex[0] = HEAP_SIZE;
-  }
-
   // This function should only be called before processing any of the APUs.
-  // Once we start processing the APDU the reclainIndex[0] will change to 
-  // a lesser value than HEAP_SIZE
-  public boolean isResetEventOccurred() {
-    if (reclaimIndex[0] == HEAP_SIZE) {
+  // Transient memory is cleared in two cases:
+  // 1. Card reset event
+  // 2. Applet upgrade.
+  public boolean isPowerResetEventOccurred() {
+    if (powerResetStatus[0] == POWER_RESET_STATUS_FLAG) {
       return false;
     }
     return true;
+  }
+
+  public void restorePowerResetStatus() {
+    powerResetStatus[0] = POWER_RESET_STATUS_FLAG;
   }
 
   public void getOperationHandle(short oprHandle, byte[] buf, short off, short len) {
@@ -319,15 +329,12 @@ public class KMRepository implements KMUpgradable {
   }
 
   public void onProcess() {
-    // When card reset happens reclaimIndex[0] will be equal to 0.
-    // So make sure the reclaimIndex[0] is always equal to HEAP_SIZE
-    resetHeapEndIndex();
   }
 
   public void clean() {
     Util.arrayFillNonAtomic(heap, (short) 0, heapIndex[0], (byte) 0);
     heapIndex[0] = (short) 0;
-    resetHeapEndIndex();
+    reclaimIndex[0] = HEAP_SIZE;
   }
 
   public void onDeselect() {
