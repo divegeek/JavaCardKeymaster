@@ -85,6 +85,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD + 6; //0x06
   private static final byte INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 7; //0x07
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 8; //0x08
+  private static final byte INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD + 9; //0x09
   // Top 32 commands are reserved for provisioning.
   private static final byte INS_END_KM_PROVISION_CMD = 0x20;
 
@@ -467,6 +468,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           case INS_GET_CERT_CHAIN_CMD:
             processGetCertChainCmd(apdu);
             break;
+          case INS_SET_VERSION_PATCHLEVEL_CMD:
+            processSetVersionAndPatchLevels(apdu);
+            break;
           default:
             ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
         }
@@ -638,6 +642,47 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     seProvider.addRngEntropy(blob.getBuffer(), blob.getStartOff(), blob.length());
+    sendError(apdu, KMError.OK);
+  }
+
+  private void processSetVersionAndPatchLevels(APDU apdu) {
+    receiveIncoming(apdu);
+    byte[] scratchPad = apdu.getBuffer();
+    // Argument 1 OS Version
+    tmpVariables[0] = KMInteger.exp();
+    // Argument 2 OS Patch level
+    tmpVariables[1] = KMInteger.exp();
+    // Argument 3 Vendor Patch level
+    tmpVariables[2] = KMInteger.exp();
+    // Array of expected arguments
+    short argsProto = KMArray.instance((short) 3);
+    KMArray.cast(argsProto).add((short) 0, tmpVariables[0]);
+    KMArray.cast(argsProto).add((short) 1, tmpVariables[1]);
+    KMArray.cast(argsProto).add((short) 2, tmpVariables[2]);
+    // Decode the arguments
+    short args = decoder.decode(argsProto, (byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET], bufferProp[BUF_LEN_OFFSET]);
+    //reclaim memory
+    repository.reclaimMemory(bufferProp[BUF_LEN_OFFSET]);
+
+    tmpVariables[0] = KMArray.cast(args).get((short) 0);
+    tmpVariables[1] = KMArray.cast(args).get((short) 1);
+    tmpVariables[2] = KMArray.cast(args).get((short) 2);
+
+    repository.setOsVersion(
+      KMInteger.cast(tmpVariables[0]).getBuffer(),
+      KMInteger.cast(tmpVariables[0]).getStartOff(),
+      KMInteger.cast(tmpVariables[0]).length());
+
+    repository.setOsPatch(
+      KMInteger.cast(tmpVariables[1]).getBuffer(),
+      KMInteger.cast(tmpVariables[1]).getStartOff(),
+      KMInteger.cast(tmpVariables[1]).length());
+
+    repository.setVendorPatchLevel(
+      KMInteger.cast(tmpVariables[2]).getBuffer(),
+      KMInteger.cast(tmpVariables[2]).getStartOff(),
+      KMInteger.cast(tmpVariables[2]).length());
+
     sendError(apdu, KMError.OK);
   }
 
@@ -3135,32 +3180,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void processSetBootParamsCmd(APDU apdu) {
     receiveIncoming(apdu);
     byte[] scratchPad = apdu.getBuffer();
-    // Argument 1 OS Version
+    // Argument 0 Boot Patch level
     tmpVariables[0] = KMInteger.exp();
-    // Argument 2 OS Patch level
-    tmpVariables[1] = KMInteger.exp();
-    // Argument 3 Vendor Patch level
-    tmpVariables[2] = KMInteger.exp();
-    // Argument 4 Boot Patch level
-    tmpVariables[3] = KMInteger.exp();
-    // Argument 5 Verified Boot Key
-    tmpVariables[4] = KMByteBlob.exp();
-    // Argument 6 Verified Boot Hash
-    tmpVariables[5] = KMByteBlob.exp();
-    // Argument 7 Verified Boot State
-    tmpVariables[6] = KMEnum.instance(KMType.VERIFIED_BOOT_STATE);
-    // Argument 8 Device Locked
-    tmpVariables[7] = KMEnum.instance(KMType.DEVICE_LOCKED);
-    // Array of expected arguments
-    short argsProto = KMArray.instance((short) 8);
+    // Argument 1 Verified Boot Key
+    tmpVariables[1] = KMByteBlob.exp();
+    // Argument 2 Verified Boot Hash
+    tmpVariables[2] = KMByteBlob.exp();
+    // Argument 3 Verified Boot State
+    tmpVariables[3] = KMEnum.instance(KMType.VERIFIED_BOOT_STATE);
+    // Argument 4 Device Locked
+    tmpVariables[4] = KMEnum.instance(KMType.DEVICE_LOCKED);
+    // Array of e4pected arguments
+    short argsProto = KMArray.instance((short) 5);
     KMArray.cast(argsProto).add((short) 0, tmpVariables[0]);
     KMArray.cast(argsProto).add((short) 1, tmpVariables[1]);
     KMArray.cast(argsProto).add((short) 2, tmpVariables[2]);
     KMArray.cast(argsProto).add((short) 3, tmpVariables[3]);
     KMArray.cast(argsProto).add((short) 4, tmpVariables[4]);
-    KMArray.cast(argsProto).add((short) 5, tmpVariables[5]);
-    KMArray.cast(argsProto).add((short) 6, tmpVariables[6]);
-    KMArray.cast(argsProto).add((short) 7, tmpVariables[7]);
     // Decode the arguments
     short args = decoder.decode(argsProto, (byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET], bufferProp[BUF_LEN_OFFSET]);
     //reclaim memory
@@ -3171,50 +3207,37 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[2] = KMArray.cast(args).get((short) 2);
     tmpVariables[3] = KMArray.cast(args).get((short) 3);
     tmpVariables[4] = KMArray.cast(args).get((short) 4);
-    tmpVariables[5] = KMArray.cast(args).get((short) 5);
-    tmpVariables[6] = KMArray.cast(args).get((short) 6);
-    tmpVariables[7] = KMArray.cast(args).get((short) 7);
-    if (KMByteBlob.cast(tmpVariables[4]).length() > KMRepository.BOOT_KEY_MAX_SIZE) {
+    if (KMByteBlob.cast(tmpVariables[1]).length() > KMRepository.BOOT_KEY_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    if (KMByteBlob.cast(tmpVariables[5]).length() > KMRepository.BOOT_HASH_MAX_SIZE) {
+    if (KMByteBlob.cast(tmpVariables[2]).length() > KMRepository.BOOT_HASH_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
 
-    repository.setOsVersion(
+    repository.setBootPatchLevel(
         KMInteger.cast(tmpVariables[0]).getBuffer(),
         KMInteger.cast(tmpVariables[0]).getStartOff(),
         KMInteger.cast(tmpVariables[0]).length());
-    repository.setOsPatch(
-        KMInteger.cast(tmpVariables[1]).getBuffer(),
-        KMInteger.cast(tmpVariables[1]).getStartOff(),
-        KMInteger.cast(tmpVariables[1]).length());
-
-    repository.setVendorPatchLevel(
-        KMInteger.cast(tmpVariables[2]).getBuffer(),
-        KMInteger.cast(tmpVariables[2]).getStartOff(),
-        KMInteger.cast(tmpVariables[2]).length());
-
-    repository.setBootPatchLevel(
-        KMInteger.cast(tmpVariables[3]).getBuffer(),
-        KMInteger.cast(tmpVariables[3]).getStartOff(),
-        KMInteger.cast(tmpVariables[3]).length());
 
     repository.setVerifiedBootKey(
-        KMByteBlob.cast(tmpVariables[4]).getBuffer(),
-        KMByteBlob.cast(tmpVariables[4]).getStartOff(),
-        KMByteBlob.cast(tmpVariables[4]).length());
+        KMByteBlob.cast(tmpVariables[1]).getBuffer(),
+        KMByteBlob.cast(tmpVariables[1]).getStartOff(),
+        KMByteBlob.cast(tmpVariables[1]).length());
 
     repository.setVerifiedBootHash(
-        KMByteBlob.cast(tmpVariables[5]).getBuffer(),
-        KMByteBlob.cast(tmpVariables[5]).getStartOff(),
-        KMByteBlob.cast(tmpVariables[5]).length());
+        KMByteBlob.cast(tmpVariables[2]).getBuffer(),
+        KMByteBlob.cast(tmpVariables[2]).getStartOff(),
+        KMByteBlob.cast(tmpVariables[2]).length());
 
-    byte enumVal = KMEnum.cast(tmpVariables[6]).getVal();
+    byte enumVal = KMEnum.cast(tmpVariables[3]).getVal();
     repository.setBootState(enumVal);
 
-    enumVal = KMEnum.cast(tmpVariables[7]).getVal();
+    enumVal = KMEnum.cast(tmpVariables[4]).getVal();
     repository.setBootloaderLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
+
+    // Clear Android system properties expect boot patch level as it is
+    // already set.
+    repository.clearAndroidSystemProperties();
 
     // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
     repository.clearComputedHmac();

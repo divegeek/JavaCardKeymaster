@@ -136,8 +136,9 @@ void usage() {
     printf("-c, --cert_chain jsonFile \t Provision attestation certificate chain \n");
     printf("-p, --cert_params jsonFile \t Provision attestation certificate parameters \n");
     printf("-i, --attest_ids jsonFile \t Provision attestation IDs \n");
-    printf("-r, --shared_secret jsonFile \t Provion shared secret  \n");
-    printf("-b, --set_boot_params jsonFile \t Provion boot parameters  \n");
+    printf("-r, --shared_secret jsonFile \t Provision shared secret  \n");
+    printf("-b, --set_boot_params jsonFile \t Set boot parameters  \n");
+    printf("-e, --set_system_properties \t Set system properties  \n");
     printf("-s, --provision_status \t Prints the provision status.\n");
     printf("-l, --lock_provision  \t  Locks the provision commands.\n");
 }
@@ -174,6 +175,18 @@ bool getBootParameterBlobValue(Json::Value& bootParamsObj, const char* key, std:
     return true;
 }
 
+bool setAndroidSystemProperties() {
+    ErrorCode err = ErrorCode::OK;
+    bool ret = false;
+    if (ErrorCode::OK != (err = mProvision.setAndroidSystemProperties())) {
+        printf("\n set boot parameters failed with err:%d \n", (int32_t)err);
+        return ret;
+    }
+    printf("\n SE successfully accepted system properties.\n");
+    return true;
+
+}
+
 bool setBootParameters(const char* filename) {
     Json::Value bootParamsObj;
     bool ret = false;
@@ -186,18 +199,6 @@ bool setBootParameters(const char* filename) {
     bootParamsObj = root.get("set_boot_params", bootParamsObj);
     if (!bootParamsObj.isNull()) {
 
-        if(!getBootParameterIntValue(bootParamsObj, "os_version", &bootParams.osVersion)) {
-            printf("\n Invalid value for os_version or os_version tag missing\n");
-            return ret;
-        }
-        if(!getBootParameterIntValue(bootParamsObj, "os_patch_level", &bootParams.osPatchLevel)) {
-            printf("\n Invalid value for os_patch_level or os_patch_level tag missing\n");
-            return ret;
-        }
-        if(!getBootParameterIntValue(bootParamsObj, "vendor_patch_level", &bootParams.vendorPatchLevel)) {
-            printf("\n Invalid value for vendor_patch_level or vendor_patch_level tag missing\n");
-            return ret;
-        }
         if(!getBootParameterIntValue(bootParamsObj, "boot_patch_level", &bootParams.bootPatchLevel)) {
             printf("\n Invalid value for boot_patch_level or boot_patch_level tag missing\n");
             return ret;
@@ -492,6 +493,9 @@ bool provision(const char* filename) {
     if(!setBootParameters(filename)) {
         return false;
     }
+    if(!setAndroidSystemProperties()) {
+        return false;
+    }
     return true;
 }
 
@@ -525,6 +529,7 @@ int main(int argc, char* argv[])
         {"attest_ids",       required_argument, NULL, 'i'},
         {"shared_secret",    required_argument, NULL, 'r'},
         {"set_boot_params",  required_argument, NULL, 'b'},
+        {"set_system_properties",  no_argument, NULL, 'e'},
         {"provision_status", no_argument,       NULL, 's'},
         {"lock_provision",   no_argument,       NULL, 'l'},
         {"help",             no_argument,       NULL, 'h'},
@@ -539,7 +544,7 @@ int main(int argc, char* argv[])
     mProvision.init();
 
     /* getopt_long stores the option index here. */
-    while ((c = getopt_long(argc, argv, ":slha:k:c:p:i:r:b:", longOpts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, ":slhea:k:c:p:i:r:b:", longOpts, NULL)) != -1) {
         switch(c) {
             case 'a':
                 //all
@@ -575,6 +580,11 @@ int main(int argc, char* argv[])
                 //set boot params
                 if(!setBootParameters(optarg))
                     printf("\n Failed to set boot parameters.\n");
+                break;
+            case 'e':
+                //set Android system properties
+                if(!setAndroidSystemProperties())
+                    printf("\n Failed to set android system properties.\n");
                 break;
             case 's':
                 if(!getProvisionStatus())
