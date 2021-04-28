@@ -231,12 +231,12 @@ static void deleteOprHandleEntry(uint64_t halGeneratedOperationHandle) {
 
 /* Clears all the strongbox operation handle entries from operation table */
 static void clearStrongboxOprHandleEntries(const std::unique_ptr<OperationContext>& oprCtx) {
-    LOG(WARNING) << "secure element reset occurred. All the below mentioned operation handles becomes invalid"
-        << " and the owners of these operations has to restart the operation again.";
+    LOG(WARNING) << "secure element reset occurred. All the below operation handles for private key operations"
+        << " becomes invalid and the owners of these operations has to restart the operation again.";
     auto it = operationTable.begin();
     while (it != operationTable.end()) {
         if (it->second.second == SB_KM_OPR) { //Strongbox operation
-            LOG(WARNING) << "operation handle: "(int32_t) it->first << " is invalid";
+            LOG(WARNING) << "operation handle: " << it->first << " is invalid";
             oprCtx->clearOperationData(it->second.first);
             it = operationTable.erase(it);
         } else {
@@ -288,7 +288,7 @@ static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const 
 
     // SE sends errocode as unsigned value so convert the unsigned value
     // into a signed value of same magnitude and copy back to errorCode.
-    errorCode = static_cast<T>(get2sCompliment(tempErrorCode));
+    errorCode = static_cast<T>(get2sCompliment(tempErrCode));
 
     if (T::OK != errorCode)
         errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
