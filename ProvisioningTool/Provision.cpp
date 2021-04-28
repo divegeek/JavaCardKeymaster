@@ -35,9 +35,7 @@
 #define APDU_P1  0x40
 #define APDU_P2  0x00
 #define APDU_RESP_STATUS_OK 0x9000
-#define CANARY_BIT_FLAG ( 1 << 30)
-#define UNSET_CANARY_BIT(a) (a &= ~CANARY_BIT_FLAG)
-#define TWOS_COMPLIMENT(a) (a = ~a + 1)
+#define SE_POWER_RESET_STATUS_FLAG ( 1 << 30)
 
 namespace keymaster {
 namespace V4_1 {
@@ -122,6 +120,28 @@ static T translateExtendedErrorsToHalErrors(T& errorCode) {
     return err;
 }
 
+/**
+ * Returns the negative value of the same number.
+ */
+static inline int32_t get2sCompliment(uint32_t value) { 
+    return static_cast<int32_t>(~value+1); 
+}
+
+/**
+ * This function separates the original error code from the
+ * power reset flag and returns the original error code.
+ */
+static uint32_t extractOriginalErrorCode(uint32_t errorCode) {
+    //Check if secure element is reset
+    bool isSeResetOccurred = (0 != (errorCode & SE_POWER_RESET_STATUS_FLAG));
+
+    if (isSeResetOccurred) {
+        LOG(ERROR) << "Secure element reset happened";
+        return (errorCode & ~SE_POWER_RESET_STATUS_FLAG);
+    }
+    return errorCode;
+}
+
 template<typename T>
 static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const std::vector<uint8_t>& response) {
     std::unique_ptr<Item> item(nullptr);
@@ -129,18 +149,11 @@ static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const 
     std::tie(item, errorCode) = cb.decodeData<T>(response, true);
     int32_t temp = static_cast<int32_t>(errorCode);
 
-    bool canaryBitSet = (0 != (temp & CANARY_BIT_FLAG));
+    uint32_t tempErrCode = extractOriginalErrorCode(static_cast<uint32_t>(errorCode));
 
-    if (canaryBitSet) {
-        LOG(INFO) << "Secureelement reset happened";
-        UNSET_CANARY_BIT(temp);
-    }
     // SE sends errocode as unsigned value so convert the unsigned value
-    // into a signed value of same magnitude.
-    TWOS_COMPLIMENT(temp);
-
-    //Write back temp to errorCode
-    errorCode = static_cast<T>(temp);
+    // into a signed value of same magnitude and copy back to errorCode.
+    errorCode = static_cast<T>(get2sCompliment(tempErrCode));
 
     if (T::OK != errorCode)
         errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);

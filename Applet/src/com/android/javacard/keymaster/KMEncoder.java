@@ -108,7 +108,7 @@ public class KMEncoder {
     scratchBuf[LEN_OFFSET] = (short) (certStart + 1);
     //Array header - 2 elements i.e. 1 byte
     scratchBuf[START_OFFSET]--;
-    // errInt32Ptr - CanaryBit + ErrorCode - 4 bytes
+    // errInt32Ptr - PowerResetStatus + ErrorCode - 4 bytes
     // Integer header - 1 byte
     scratchBuf[START_OFFSET] -= getEncodedIntegerLength(errInt32Ptr);
     //Array header - 2 elements i.e. 1 byte
@@ -123,7 +123,7 @@ public class KMEncoder {
     }
     bufferStart = scratchBuf[START_OFFSET];
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
-    encodeInteger(errInt32Ptr); //CanaryBit + ErrorCode
+    encodeInteger(errInt32Ptr); //PowerResetStatus + ErrorCode
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 1); // Array of 1 element
     writeMajorTypeWithLength(BYTES_TYPE, certLength); // Cert Byte Blob of length
     return bufferStart;

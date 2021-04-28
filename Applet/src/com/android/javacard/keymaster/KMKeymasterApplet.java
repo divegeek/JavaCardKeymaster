@@ -653,7 +653,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] = seProvider.getCertificateChainLength();
     short int32Ptr = getErrorStatusWithPowerResetStatusSet(KMError.OK);
     //Total Extra length
-    // Add arrayHeader and (CanaryBitSet + KMError.OK)
+    // Add arrayHeader and (PowerResetStatus + KMError.OK)
     tmpVariables[2] = (short) (1 + encoder.getEncodedIntegerLength(int32Ptr));
     tmpVariables[0] += tmpVariables[2];
     tmpVariables[1] = KMByteBlob.instance(tmpVariables[0]);
