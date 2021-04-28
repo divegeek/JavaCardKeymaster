@@ -453,7 +453,7 @@ public class KMFunctionalTest {
   private static final short MAJOR_TYPE_MASK = 0xE0;
   private static final byte CBOR_ARRAY_MAJOR_TYPE = (byte) 0x80;
   private static final byte CBOR_UINT_MAJOR_TYPE = 0x00;
-  private static final short CANARY_BIT_FLAG = (short) 0x4000;
+  private static final short SE_POWER_RESET_FLAG = (short) 0x4000;
   private static final boolean RESET = true;
   private static final boolean NO_RESET = false;
 
@@ -1969,7 +1969,7 @@ public class KMFunctionalTest {
     short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, (short) respBuf.length);
     if (triggerReset) {
       short error = KMInteger.cast(ret).getSignificantShort();
-      Assert.assertEquals(error, CANARY_BIT_FLAG);
+      Assert.assertEquals(error, SE_POWER_RESET_FLAG);
     }
     return ret;
   }
@@ -2837,7 +2837,7 @@ public class KMFunctionalTest {
       //Call begin1 end----------------
 
       //Call update operation----------------
-      // Call update operation and check if the canary bit is set or not.
+      // Call update operation and check if the secure element power reset flag is set or not.
       short dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
       opHandle = KMInteger.instance(opHandleBuf, (short) 0, (short) opHandleBuf.length);
       // update with trigger reset.
@@ -2850,7 +2850,7 @@ public class KMFunctionalTest {
       //Call update end----------------
 
       //Call update1 operation----------------
-      // Call update1 operation and check if the canary bit is set or not.
+      // Call update1 operation and check if the secure element power reset flag is set or not.
       dataPtr = KMByteBlob.instance(input, (short) 0, (short) input.length);
       opHandle1 = KMInteger.instance(opHandleBuf1, (short) 0, (short) opHandleBuf1.length);
       // update with trigger reset.
@@ -2863,7 +2863,7 @@ public class KMFunctionalTest {
       //Call update end----------------
 
       //Call finish operation----------------
-      // Call finish operation and check if the canary bit is set or not.
+      // Call finish operation and check if the secure element power reset flag is set or not.
       dataPtr = KMByteBlob.instance((short) 0);
       opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
       short expectedErr = KMError.OK;
@@ -2874,7 +2874,7 @@ public class KMFunctionalTest {
       //Call finish end----------------
 
       //Call finish1 operation----------------
-      // Call finish1 operation and check if the canary bit is set or not.
+      // Call finish1 operation and check if the secure element power reset flag is set or not.
       dataPtr = KMByteBlob.instance((short) 0);
       opHandle1 = KMInteger.instance(opHandleBuf1, (short) 0, (short) opHandleBuf1.length);
       expectedErr = KMError.OK;
@@ -2885,7 +2885,7 @@ public class KMFunctionalTest {
       //Call finish end----------------
 
       //Call abort operation----------------
-      // Call abort operation and check if the canary bit is set or not.
+      // Call abort operation and check if the secure element power reset flag is set or not.
       opHandle = KMInteger.uint_64(opHandleBuf, (short) 0);
       ret = abort(opHandle, resetEvents[i][6]);
       if (resetEvents[i][1] || resetEvents[i][2] | resetEvents[i][3] | resetEvents[i][4] | resetEvents[i][5] | resetEvents[i][6]) {
@@ -3379,14 +3379,14 @@ public class KMFunctionalTest {
       Assert.assertEquals(error, KMError.OK);
       if (triggerReset) {
         error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getSignificantShort();
-        Assert.assertEquals(error, CANARY_BIT_FLAG);
+        Assert.assertEquals(error, SE_POWER_RESET_FLAG);
       }
       return ret;
     } else {//Major type UINT.
       ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
       if (triggerReset) {
         short error = KMInteger.cast(ret).getSignificantShort();
-        Assert.assertEquals(error, CANARY_BIT_FLAG);
+        Assert.assertEquals(error, SE_POWER_RESET_FLAG);
       }
       return KMInteger.cast(ret).getShort();
       /*if (len == 3) {
@@ -3474,15 +3474,15 @@ public class KMFunctionalTest {
     if (expectedErr == KMError.OK) {
       error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
       if (triggerReset) {
-        short canaryBit = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getSignificantShort();
-        Assert.assertEquals(canaryBit, CANARY_BIT_FLAG);
+        short powerResetStatus = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getSignificantShort();
+        Assert.assertEquals(powerResetStatus, SE_POWER_RESET_FLAG);
       }
     } else {
       error = KMInteger.cast(ret).getShort();
       error = translateExtendedErrorCodes(error);
       if (triggerReset) {
-        short canaryBit = KMInteger.cast(ret).getSignificantShort();
-        Assert.assertEquals(canaryBit, CANARY_BIT_FLAG);
+        short powerResetStatus = KMInteger.cast(ret).getSignificantShort();
+        Assert.assertEquals(powerResetStatus, SE_POWER_RESET_FLAG);
       }
     }
     Assert.assertEquals(error, expectedErr);
@@ -3528,13 +3528,13 @@ public class KMFunctionalTest {
       Assert.assertEquals(error, KMError.OK);
       if (triggerReset) {
         error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getSignificantShort();
-        Assert.assertEquals(error, CANARY_BIT_FLAG);
+        Assert.assertEquals(error, SE_POWER_RESET_FLAG);
       }
     } else {
       ret = decoder.decode(KMInteger.exp(), respBuf, (short)0, len);
       if (triggerReset) {
-        short canaryBit = KMInteger.cast(ret).getSignificantShort();
-        Assert.assertEquals(canaryBit, CANARY_BIT_FLAG);
+        short powerResetStatus = KMInteger.cast(ret).getSignificantShort();
+        Assert.assertEquals(powerResetStatus, SE_POWER_RESET_FLAG);
       }
     }
     return ret;
