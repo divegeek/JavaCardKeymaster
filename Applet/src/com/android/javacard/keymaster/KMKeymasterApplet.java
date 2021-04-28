@@ -41,7 +41,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final short KM_HAL_VERSION = (short) 0x4000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
-  private static final short POWER_RESET_STATUS_FLAG = (short) 0x4000;
+  private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
@@ -651,7 +651,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void processGetCertChainCmd(APDU apdu) {
     // Make the response
     tmpVariables[0] = seProvider.getCertificateChainLength();
-    short int32Ptr = getErrorStatusWithPowerResetStatusSet(KMError.OK);
+    short int32Ptr = buildErrorStatus(KMError.OK);
     //Total Extra length
     // Add arrayHeader and (PowerResetStatus + KMError.OK)
     tmpVariables[2] = (short) (1 + encoder.getEncodedIntegerLength(int32Ptr));
@@ -847,7 +847,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processGetProvisionStatusCmd(APDU apdu) {
     tmpVariables[0] = KMArray.instance((short) 2);
-    KMArray.cast(tmpVariables[0]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[0]).add((short) 1, KMInteger.uint_16(provisionStatus));
 
     bufferProp[BUF_START_OFFSET] = repository.allocAvailableMemory();
@@ -922,7 +922,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     checkVersionAndPatchLevel(scratchPad);
     // make response.
     tmpVariables[0] = KMArray.instance((short) 2);
-    KMArray.cast(tmpVariables[0]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[0]).add((short) 1, data[KEY_CHARACTERISTICS]);
 
     bufferProp[BUF_START_OFFSET] = repository.allocAvailableMemory();
@@ -939,7 +939,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMHmacSharingParameters.cast(tmpVariables[2]).setSeed(KMByteBlob.instance((short) 0));
     // prepare the response
     tmpVariables[3] = KMArray.instance((short) 2);
-    KMArray.cast(tmpVariables[3]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[3]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[3]).add((short) 1, tmpVariables[2]);
 
     bufferProp[BUF_START_OFFSET] = repository.allocAvailableMemory();
@@ -1105,7 +1105,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[1] = KMByteBlob.instance(scratchPad, tmpVariables[6], tmpVariables[5]);
     // prepare the response
     tmpVariables[0] = KMArray.instance((short) 2);
-    KMArray.cast(tmpVariables[0]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[0]).add((short) 1, tmpVariables[1]);
 
     bufferProp[BUF_START_OFFSET] = repository.allocAvailableMemory();
@@ -1183,7 +1183,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // prepare the response
     tmpVariables[0] = KMArray.instance((short) 2);
-    KMArray.cast(tmpVariables[0]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[0]).add((short) 1, data[KEY_BLOB]);
 
     bufferProp[BUF_START_OFFSET] = repository.allocAvailableMemory();
@@ -1461,7 +1461,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     cert.build();
     bufferProp[BUF_START_OFFSET] =
         encoder.encodeCert((byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET], cert.getCertStart(), cert.getCertLength(),
-            getErrorStatusWithPowerResetStatusSet(KMError.OK));
+            buildErrorStatus(KMError.OK));
     bufferProp[BUF_LEN_OFFSET] = (short) (cert.getCertLength() + (cert.getCertStart() - bufferProp[BUF_START_OFFSET]));
     sendOutgoing(apdu);
   }
@@ -1626,7 +1626,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (data[OUTPUT_DATA] == KMType.INVALID_VALUE) {
       data[OUTPUT_DATA] = KMByteBlob.instance((short) 0);
     }
-    KMArray.cast(tmpVariables[2]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[2]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[2]).add((short) 1, tmpVariables[1]);
     KMArray.cast(tmpVariables[2]).add((short) 2, data[OUTPUT_DATA]);
 
@@ -2108,7 +2108,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (data[OUTPUT_DATA] == KMType.INVALID_VALUE) {
       data[OUTPUT_DATA] = KMByteBlob.instance((short) 0);
     }
-    KMArray.cast(tmpVariables[2]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[2]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[2]).add((short) 1, KMInteger.uint_16(tmpVariables[3]));
     KMArray.cast(tmpVariables[2]).add((short) 2, tmpVariables[1]);
     KMArray.cast(tmpVariables[2]).add((short) 3, data[OUTPUT_DATA]);
@@ -2214,7 +2214,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     tmpVariables[1] = KMKeyParameters.instance(tmpVariables[2]);
     tmpVariables[0] = KMArray.instance((short) 3);
-    KMArray.cast(tmpVariables[0]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[0]).add((short) 1, tmpVariables[1]);
     KMArray.cast(tmpVariables[0]).add((short) 2, data[OP_HANDLE]);
 
@@ -2824,7 +2824,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // prepare the response
     tmpVariables[0] = KMArray.instance((short) 3);
-    KMArray.cast(tmpVariables[0]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[0]).add((short) 1, data[KEY_BLOB]);
     KMArray.cast(tmpVariables[0]).add((short) 2, data[KEY_CHARACTERISTICS]);
 
@@ -3326,7 +3326,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // prepare the response
     tmpVariables[0] = KMArray.instance((short) 3);
-    KMArray.cast(tmpVariables[0]).add((short) 0, getErrorStatusWithPowerResetStatusSet(KMError.OK));
+    KMArray.cast(tmpVariables[0]).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(tmpVariables[0]).add((short) 1, data[KEY_BLOB]);
     KMArray.cast(tmpVariables[0]).add((short) 2, data[KEY_CHARACTERISTICS]);
 
@@ -3834,11 +3834,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return tmpVariables[3];
   }
 
-  private static short getErrorStatusWithPowerResetStatusSet(short err) {
+  // This function masks the error code with POWER_RESET_MASK_FLAG
+  // in case if card reset event occurred. The clients of the Applet
+  // has to extract the power reset status from the error code and
+  // process accordingly.
+  private static short buildErrorStatus(short err) {
     short int32Ptr = KMInteger.instance((short) 4);
     short powerResetStatus = 0;
     if (repository.isPowerResetEventOccurred()) {
-      powerResetStatus = POWER_RESET_STATUS_FLAG;
+      powerResetStatus = POWER_RESET_MASK_FLAG;
     }
 
     Util.setShort(KMInteger.cast(int32Ptr).getBuffer(),
@@ -3849,13 +3853,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         (short) (KMInteger.cast(int32Ptr).getStartOff() + 2),
         err);
 
+    // reset power reset status flag to its default value.
     repository.restorePowerResetStatus();
     return int32Ptr;
   }
 
   private static void sendError(APDU apdu, short err) {
     bufferProp[BUF_START_OFFSET] = repository.alloc((short) 5);
-    short int32Ptr = getErrorStatusWithPowerResetStatusSet(err);
+    short int32Ptr = buildErrorStatus(err);
     bufferProp[BUF_LEN_OFFSET] = encoder.encodeError(int32Ptr, (byte[]) bufferRef[0],
         bufferProp[BUF_START_OFFSET], (short) 5);
     sendOutgoing(apdu);
