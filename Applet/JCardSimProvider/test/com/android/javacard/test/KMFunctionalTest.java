@@ -92,6 +92,7 @@ public class KMFunctionalTest {
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD + 6; //0x06
   private static final byte INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 7; //0x07
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 8; //0x08
+  private static final byte INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD + 9; //0x09
   // Top 32 commands are reserved for provisioning.
   private static final byte INS_END_KM_PROVISION_CMD = 0x20;
 
@@ -473,8 +474,8 @@ public class KMFunctionalTest {
     provisionCmd(simulator);
   }
 
-  private void setBootParams(CardSimulator simulator, short osVersion,
-      short osPatchLevel, short vendorPatchLevel, short bootPatchLevel) {
+  private void setAndroidOSSystemProperties(CardSimulator simulator, short osVersion,
+                                            short osPatchLevel, short vendorPatchLevel) {
     // Argument 1 OS Version
     short versionPtr = KMInteger.uint_16(osVersion);
     // short versionTagPtr = KMIntegerTag.instance(KMType.UINT_TAG,
@@ -482,31 +483,43 @@ public class KMFunctionalTest {
     // Argument 2 OS Patch level
     short patchPtr = KMInteger.uint_16(osPatchLevel);
     short vendorpatchPtr = KMInteger.uint_16((short) vendorPatchLevel);
-    short bootpatchPtr = KMInteger.uint_16((short) bootPatchLevel);
-    // Argument 3 Verified Boot Key
-    byte[] bootKeyHash = "00011122233344455566677788899900".getBytes();
-    short bootKeyPtr = KMByteBlob.instance(bootKeyHash, (short) 0,
-        (short) bootKeyHash.length);
-    // Argument 4 Verified Boot Hash
-    short bootHashPtr = KMByteBlob.instance(bootKeyHash, (short) 0,
-        (short) bootKeyHash.length);
-    // Argument 5 Verified Boot State
-    short bootStatePtr = KMEnum.instance(KMType.VERIFIED_BOOT_STATE,
-        KMType.VERIFIED_BOOT);
-    // Argument 6 Device Locked
-    short deviceLockedPtr = KMEnum.instance(KMType.DEVICE_LOCKED,
-        KMType.DEVICE_LOCKED_FALSE);
     // Arguments
-    short arrPtr = KMArray.instance((short) 8);
+    short arrPtr = KMArray.instance((short) 3);
     KMArray vals = KMArray.cast(arrPtr);
     vals.add((short) 0, versionPtr);
     vals.add((short) 1, patchPtr);
     vals.add((short) 2, vendorpatchPtr);
-    vals.add((short) 3, bootpatchPtr);
-    vals.add((short) 4, bootKeyPtr);
-    vals.add((short) 5, bootHashPtr);
-    vals.add((short) 6, bootStatePtr);
-    vals.add((short) 7, deviceLockedPtr);
+    CommandAPDU apdu = encodeApdu((byte) INS_SET_VERSION_PATCHLEVEL_CMD, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    Assert.assertEquals(0x9000, response.getSW());
+
+  }
+
+  private void setBootParams(CardSimulator simulator, short bootPatchLevel) {
+    // Argument 0 boot patch level
+    short bootpatchPtr = KMInteger.uint_16((short) bootPatchLevel);
+    // Argument 1 Verified Boot Key
+    byte[] bootKeyHash = "00011122233344455566677788899900".getBytes();
+    short bootKeyPtr = KMByteBlob.instance(bootKeyHash, (short) 0,
+        (short) bootKeyHash.length);
+    // Argument 2 Verified Boot Hash
+    short bootHashPtr = KMByteBlob.instance(bootKeyHash, (short) 0,
+        (short) bootKeyHash.length);
+    // Argument 3 Verified Boot State
+    short bootStatePtr = KMEnum.instance(KMType.VERIFIED_BOOT_STATE,
+        KMType.VERIFIED_BOOT);
+    // Argument 4 Device Locked
+    short deviceLockedPtr = KMEnum.instance(KMType.DEVICE_LOCKED,
+        KMType.DEVICE_LOCKED_FALSE);
+    // Arguments
+    short arrPtr = KMArray.instance((short) 5);
+    KMArray vals = KMArray.cast(arrPtr);
+    vals.add((short) 0, bootpatchPtr);
+    vals.add((short) 1, bootKeyPtr);
+    vals.add((short) 2, bootHashPtr);
+    vals.add((short) 3, bootStatePtr);
+    vals.add((short) 4, deviceLockedPtr);
     CommandAPDU apdu = encodeApdu((byte) INS_SET_BOOT_PARAMS_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
@@ -661,8 +674,10 @@ public class KMFunctionalTest {
     provisionSharedSecret(simulator);
     provisionAttestIds(simulator);
     // set bootup parameters
-    setBootParams(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
-            (short) VENDOR_PATCH_LEVEL, (short) BOOT_PATCH_LEVEL);
+    setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
+    // set android system properties
+    setAndroidOSSystemProperties(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
+      (short) VENDOR_PATCH_LEVEL);
     provisionLocked(simulator);
   }
 
@@ -2722,11 +2737,12 @@ public class KMFunctionalTest {
             {0, OS_PATCH_LEVEL+1, VENDOR_PATCH_LEVEL-1, BOOT_PATCH_LEVEL+1, NO_UPGRADE,  KMError.INVALID_ARGUMENT },
     };
     for (int i = 0; i < test_data.length; i++) {
-      setBootParams(simulator, (short) test_data[i][0], (short) test_data[i][1],
-              (short) test_data[i][2], (short) test_data[i][3]);
+      setAndroidOSSystemProperties(simulator, (short) test_data[i][0], (short) test_data[i][1],
+        (short) test_data[i][2]);
+      setBootParams(simulator, (short) test_data[i][3]);
       ret = upgradeKey(
-              KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-              null, null, test_data[i][5]);
+        KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
+        null, null, test_data[i][5]);
       if (test_data[i][5] != KMError.OK)
         continue;
       keyBlobPtr = KMArray.cast(ret).get((short) 1);
@@ -2738,27 +2754,27 @@ public class KMFunctionalTest {
         ret = getKeyCharacteristics(keyBlobPtr);
         keyCharacteristics = KMArray.cast(ret).get((short) 1);
         hwParams = KMKeyCharacteristics.cast(keyCharacteristics)
-                .getHardwareEnforced();
+          .getHardwareEnforced();
         osVersion = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.OS_VERSION,
-                hwParams);
+          hwParams);
         osVersion = KMIntegerTag.cast(osVersion).getValue();
         osPatch = KMKeyParameters.findTag(KMType.UINT_TAG,
-                KMType.OS_PATCH_LEVEL, hwParams);
+          KMType.OS_PATCH_LEVEL, hwParams);
         osPatch = KMIntegerTag.cast(osPatch).getValue();
         short ptr = KMKeyParameters.findTag(KMType.UINT_TAG,
-                KMType.VENDOR_PATCH_LEVEL, hwParams);
+          KMType.VENDOR_PATCH_LEVEL, hwParams);
         short vendorPatchLevel = KMIntegerTag.cast(ptr).getValue();
         ptr = KMKeyParameters.findTag(KMType.UINT_TAG, KMType.BOOT_PATCH_LEVEL,
-                hwParams);
+          hwParams);
         short bootPatchLevel = KMIntegerTag.cast(ptr).getValue();
         Assert.assertEquals(KMInteger.cast(osVersion).getShort(),
-                test_data[i][0]);
+          test_data[i][0]);
         Assert.assertEquals(KMInteger.cast(osPatch).getShort(),
-                test_data[i][1]);
+          test_data[i][1]);
         Assert.assertEquals(KMInteger.cast(vendorPatchLevel).getShort(),
-                test_data[i][2]);
+          test_data[i][2]);
         Assert.assertEquals(KMInteger.cast(bootPatchLevel).getShort(),
-                test_data[i][3]);
+          test_data[i][3]);
       }
     }
     cleanUp();

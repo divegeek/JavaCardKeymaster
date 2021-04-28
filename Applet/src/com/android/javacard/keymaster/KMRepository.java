@@ -57,7 +57,7 @@ public class KMRepository implements KMUpgradable {
   public static final byte CERT_ISSUER = 10;
   public static final byte CERT_EXPIRY_TIME = 11;
   public static final byte BOOT_OS_VERSION = 12;
-  public static final byte BOOT_OS_PATCH = 13;
+  public static final byte BOOT_OS_PATCH_LEVEL = 13;
   public static final byte VENDOR_PATCH_LEVEL = 14;
   public static final byte BOOT_PATCH_LEVEL = 15;
   public static final byte BOOT_VERIFIED_BOOT_KEY = 16;
@@ -532,7 +532,7 @@ public class KMRepository implements KMUpgradable {
   }
 
   public short getOsPatch() {
-    short blob = readData(BOOT_OS_PATCH);
+    short blob = readData(BOOT_OS_PATCH_LEVEL);
     if (blob != 0) {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
@@ -638,6 +638,14 @@ public class KMRepository implements KMUpgradable {
     writeDataEntry(BOOT_PATCH_LEVEL, buf, start, len);
   }
 
+  public void clearAndroidSystemProperties() {
+    clearDataEntry(BOOT_OS_VERSION);
+    clearDataEntry(BOOT_OS_PATCH_LEVEL);
+    clearDataEntry(VENDOR_PATCH_LEVEL);
+    // Don't clear BOOT_PATCH_LEVEL as it is part of
+    // boot parameters.
+  }
+
   public void setBootloaderLocked(boolean flag) {
     short start = alloc(DEVICE_LOCK_FLAG_SIZE);
     if (flag) {
@@ -683,7 +691,7 @@ public class KMRepository implements KMUpgradable {
     if (len != OS_PATCH_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
-    writeDataEntry(BOOT_OS_PATCH, buf, start, len);
+    writeDataEntry(BOOT_OS_PATCH_LEVEL, buf, start, len);
   }
 
   public void setVerifiedBootKey(byte[] buf, short start, short len) {
