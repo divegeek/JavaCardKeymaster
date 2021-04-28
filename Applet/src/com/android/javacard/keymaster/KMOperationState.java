@@ -28,11 +28,7 @@ import javacard.framework.Util;
 public class KMOperationState {
 
   public static final byte MAX_DATA = 20;
-  public static final byte MAX_REFS = 1;
-  private static final byte DATA = 0;
-  private static final byte REFS = 1;
-  private static final byte KMOPERATION = 0;
-  private static final byte SLOT = 1;
+  private static final byte OPERATION = 0;
   private static final byte TRUE = 1;
   private static final byte FALSE = 0;
   // byte type
@@ -56,7 +52,6 @@ public class KMOperationState {
   private static final byte AES_GCM_UPDATE_ALLOWED = 8;
 
   // Object References
-  private static final byte OPERATION = 0;
   private byte[] data;
   private Object[] objRefs;
   private static KMOperationState prototype;
@@ -64,7 +59,7 @@ public class KMOperationState {
 
   private KMOperationState() {
     data = JCSystem.makeTransientByteArray(MAX_DATA, JCSystem.CLEAR_ON_RESET);
-    objRefs = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
+    objRefs = JCSystem.makeTransientObjectArray((short) 1, JCSystem.CLEAR_ON_RESET);
     isDataUpdated = JCSystem.makeTransientByteArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
@@ -75,22 +70,19 @@ public class KMOperationState {
     return prototype;
   }
 
-  public static KMOperationState instance(short opHandle, Object[] slot) {
+  public static KMOperationState instance(short opHandle) {
     KMOperationState opState = proto();
     opState.reset();
     Util.setShort(prototype.data, OP_HANDLE, opHandle);
-    prototype.objRefs[SLOT] = slot;
     return opState;
   }
 
-  public static KMOperationState read(byte[] oprHandle, short off, Object[] slot) {
+  public static KMOperationState read(byte[] oprHandle, short off, byte[] data, short dataOff, Object opr) {
     KMOperationState opState = proto();
     opState.reset();
-    Util.arrayCopy((byte[]) slot[DATA], (short) 0, prototype.data, (short) 0, (short) prototype.data.length);
-    Object[] ops = ((Object[]) slot[REFS]);
-    prototype.objRefs[KMOPERATION] = ops[OPERATION];
+    Util.arrayCopy(data, dataOff, prototype.data, (short) 0, (short) prototype.data.length);
+    prototype.objRefs[OPERATION] = opr;
     Util.setShort(prototype.data, OP_HANDLE, KMInteger.uint_64(oprHandle, off));
-    prototype.objRefs[SLOT] = slot;
     return opState;
   }
 
@@ -100,7 +92,7 @@ public class KMOperationState {
     }
     KMRepository.instance().persistOperation(data,
         Util.getShort(data, OP_HANDLE),
-        (KMOperation) objRefs[KMOPERATION]);
+        (KMOperation) objRefs[OPERATION]);
     isDataUpdated[0] = FALSE;
   }
 
@@ -114,8 +106,7 @@ public class KMOperationState {
 
   public void reset() {
     isDataUpdated[0] = FALSE;
-    objRefs[KMOPERATION] = null;
-    objRefs[SLOT] = null;
+    objRefs[OPERATION] = null;
     Util.arrayFillNonAtomic(
         data, (short) 0, (short) data.length, (byte) 0);
   }
@@ -125,14 +116,8 @@ public class KMOperationState {
   }
 
   public void release() {
-    Object[] slots = (Object[]) objRefs[SLOT];
-    Object[] ops = ((Object[]) slots[REFS]);
-    ((KMOperation) ops[OPERATION]).abort();
-    JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(
-        (byte[]) slots[0], (short) 0, (short) ((byte[]) slots[0]).length, (byte) 0);
-    ops[OPERATION] = null;
-    JCSystem.commitTransaction();
+    if (objRefs[OPERATION] != null)
+      ((KMOperation) objRefs[OPERATION]).abort();
     reset();
   }
 
@@ -150,13 +135,13 @@ public class KMOperationState {
   }
 
   public void setOperation(KMOperation opr) {
-    objRefs[KMOPERATION] = opr;
+    objRefs[OPERATION] = opr;
     dataUpdated();
     persist();
   }
 
   public KMOperation getOperation() {
-    return (KMOperation) objRefs[KMOPERATION];
+    return (KMOperation) objRefs[OPERATION];
   }
 
   public boolean isAuthPerOperationReqd() {
