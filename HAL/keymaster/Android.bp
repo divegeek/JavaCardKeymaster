@@ -47,13 +47,14 @@ cc_binary {
         "libjc_common",
         "libcrypto",
     ],
-    product_variables: {
-        debuggable: {
-            cflags: [
-            "-DVTS_EMULATOR",
-            ]
-       }
-    }
+    arch: {
+        x86_64: {
+            cflags: ["-DVTS_EMULATOR"],
+        },
+        x86: {
+            cflags: ["-DVTS_EMULATOR"],
+        },
+    },
 }
 
 cc_library {

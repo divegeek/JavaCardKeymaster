@@ -25,10 +25,13 @@ namespace keymaster {
 namespace V4_1 {
 namespace javacard {
 
-typedef struct BootParams_ {
+typedef struct SystemProperties__ {
 	uint32_t osVersion;
 	uint32_t osPatchLevel;
 	uint32_t vendorPatchLevel;
+} SystemProperties;
+
+typedef struct BootParams_ {
 	uint32_t bootPatchLevel;
 	std::vector<uint8_t> verifiedBootKey;
 	std::vector<uint8_t> verifiedBootKeyHash;
@@ -77,6 +80,11 @@ public:
      * Provision the boot parameters.
      */
 	ErrorCode provisionBootParameters(BootParams& bootParams );
+    /**
+     * Set system properties.
+     */
+	ErrorCode setAndroidSystemProperties();
+
     /**
      * Locks the provision. After this no more provision commanands are allowed.
      */

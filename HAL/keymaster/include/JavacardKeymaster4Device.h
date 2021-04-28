@@ -91,6 +91,7 @@ protected:
 private:
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
     std::unique_ptr<OperationContext> oprCtx_;
+    bool isEachSystemPropertySet;
 };
 
 }  // namespace javacard
