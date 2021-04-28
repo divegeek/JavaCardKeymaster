@@ -253,26 +253,18 @@ static inline int32_t get2sCompliment(uint32_t value) {
 }
 
 /**
- * This function separates the original error code from the
- * power reset flag and returns the original error code.
- */
-static inline uint32_t extractActualErrorCode(uint32_t err) { 
-    // Unset the power rest flag.
-    return (err & ~SE_POWER_RESET_STATUS_FLAG);
-}
-
-/**
  * Clears all the strongbox operation handle entries if secure element power reset happens.
- * And also extracts the original error code value.
+ * And also extracts the error code value after unmasking the power reset status flag.
  */
-static uint32_t handleSePowerResetAndExtractOriginalErrorCode(const std::unique_ptr<OperationContext>& oprCtx, uint32_t errorCode) {
+static uint32_t handleErrorCode(const std::unique_ptr<OperationContext>& oprCtx, uint32_t errorCode) {
     //Check if secure element is reset
     bool isSeResetOccurred = (0 != (errorCode & SE_POWER_RESET_STATUS_FLAG));
 
     if (isSeResetOccurred) {
         //Clear the operation table for Strongbox operations entries.
         clearStrongboxOprHandleEntries(oprCtx);
-        return extractActualErrorCode(errorCode);
+        // Unmask the power reset status flag.
+        errorCode &= ~SE_POWER_RESET_STATUS_FLAG;
     }
     return errorCode;
 }
@@ -284,7 +276,7 @@ static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const 
     T errorCode = T::OK;
     std::tie(item, errorCode) = cb.decodeData<T>(response, hasErrorCode);
 
-    uint32_t tempErrCode = handleSePowerResetAndExtractOriginalErrorCode(oprCtx, static_cast<uint32_t>(errorCode));
+    uint32_t tempErrCode = handleErrorCode(oprCtx, static_cast<uint32_t>(errorCode));
 
     // SE sends errocode as unsigned value so convert the unsigned value
     // into a signed value of same magnitude and copy back to errorCode.
