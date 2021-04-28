@@ -91,7 +91,9 @@ public class KMRepository implements KMUpgradable {
   private byte[] dataTable;
   private short dataIndex;
   private short[] reclaimIndex;
-  // This variable is used to check if power reset event occurred.
+  // This variable is used to monitor the power reset status as the Applet does not get
+  // any power reset event. Initially the value of this variable is set to POWER_RESET_STATUS_FLAG.
+  // If the power reset happens then this value becomes 0.
   private byte[] powerResetStatus;
 
   // Operation table.
@@ -135,7 +137,8 @@ public class KMRepository implements KMUpgradable {
     repository = this;
   }
 
-  // This function should only be called before processing any of the APUs.
+  // This function checks if card reset event occurred and this function
+  // should only be called before processing any of the APUs.
   // Transient memory is cleared in two cases:
   // 1. Card reset event
   // 2. Applet upgrade.
@@ -146,6 +149,10 @@ public class KMRepository implements KMUpgradable {
     return true;
   }
 
+  /**
+   * This function sets the power reset status flag to its
+   * default value.
+   */
   public void restorePowerResetStatus() {
     powerResetStatus[0] = POWER_RESET_STATUS_FLAG;
   }
