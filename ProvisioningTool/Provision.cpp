@@ -131,13 +131,13 @@ static inline int32_t get2sCompliment(uint32_t value) {
  * This function separates the original error code from the
  * power reset flag and returns the original error code.
  */
-static uint32_t extractOriginalErrorCode(uint32_t errorCode) {
+static uint32_t extractErrorCode(uint32_t errorCode) {
     //Check if secure element is reset
     bool isSeResetOccurred = (0 != (errorCode & SE_POWER_RESET_STATUS_FLAG));
 
     if (isSeResetOccurred) {
         LOG(ERROR) << "Secure element reset happened";
-        return (errorCode & ~SE_POWER_RESET_STATUS_FLAG);
+        errorCode &= ~SE_POWER_RESET_STATUS_FLAG;
     }
     return errorCode;
 }
@@ -147,9 +147,8 @@ static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const 
     std::unique_ptr<Item> item(nullptr);
     T errorCode = T::OK;
     std::tie(item, errorCode) = cb.decodeData<T>(response, true);
-    int32_t temp = static_cast<int32_t>(errorCode);
 
-    uint32_t tempErrCode = extractOriginalErrorCode(static_cast<uint32_t>(errorCode));
+    uint32_t tempErrCode = extractErrorCode(static_cast<uint32_t>(errorCode));
 
     // SE sends errocode as unsigned value so convert the unsigned value
     // into a signed value of same magnitude and copy back to errorCode.
