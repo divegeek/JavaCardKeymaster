@@ -51,9 +51,7 @@
 #define INS_END_KM_CMD 0x7F
 #define SW_KM_OPR 0UL
 #define SB_KM_OPR 1UL
-#define CANARY_BIT_FLAG ( 1 << 30)
-#define UNSET_CANARY_BIT(a) (a &= ~CANARY_BIT_FLAG)
-#define TWOS_COMPLIMENT(a) (a = ~a + 1)
+#define SE_POWER_RESET_STATUS_FLAG ( 1 << 30)
 
 namespace keymaster {
 namespace V4_1 {
@@ -247,28 +245,50 @@ static void clearStrongboxOprHandleEntries(const std::unique_ptr<OperationContex
     }
 }
 
+/**
+ * Returns the negative value of the same number.
+ */
+static inline int32_t get2sCompliment(uint32_t value) { 
+    return static_cast<int32_t>(~value+1); 
+}
+
+/**
+ * This function separates the original error code from the
+ * power reset flag and returns the original error code.
+ */
+static inline uint32_t extractActualErrorCode(uint32_t err) { 
+    // Unset the power rest flag.
+    return (err & ~SE_POWER_RESET_STATUS_FLAG);
+}
+
+/**
+ * Clears all the strongbox operation handle entries if secure element power reset happens.
+ * And also extracts the original error code value.
+ */
+static uint32_t handleSePowerResetAndExtractOriginalErrorCode(const std::unique_ptr<OperationContext>& oprCtx, uint32_t errorCode) {
+    //Check if secure element is reset
+    bool isSeResetOccurred = (0 != (errorCode & SE_POWER_RESET_STATUS_FLAG));
+
+    if (isSeResetOccurred) {
+        //Clear the operation table for Strongbox operations entries.
+        clearStrongboxOprHandleEntries(oprCtx);
+        return extractActualErrorCode(errorCode);
+    }
+    return errorCode;
+}
+
 template<typename T = ErrorCode>
 static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const std::vector<uint8_t>& response, bool
         hasErrorCode, const std::unique_ptr<OperationContext>& oprCtx) {
     std::unique_ptr<Item> item(nullptr);
     T errorCode = T::OK;
     std::tie(item, errorCode) = cb.decodeData<T>(response, hasErrorCode);
-    int32_t temp = static_cast<int32_t>(errorCode);
 
-    //Check if secure element is reset
-    bool canaryBitSet = (0 != (temp & CANARY_BIT_FLAG));
+    uint32_t tempErrCode = handleSePowerResetAndExtractOriginalErrorCode(oprCtx, static_cast<uint32_t>(errorCode));
 
-    if (canaryBitSet) {
-        //Clear the operation table for Strongbox operations entries.
-        clearStrongboxOprHandleEntries(oprCtx);
-        UNSET_CANARY_BIT(temp);
-    }
     // SE sends errocode as unsigned value so convert the unsigned value
-    // into a signed value of same magnitude.
-    TWOS_COMPLIMENT(temp);
-
-    //Write back temp to errorCode
-    errorCode = static_cast<T>(temp);
+    // into a signed value of same magnitude and copy back to errorCode.
+    errorCode = static_cast<T>(get2sCompliment(tempErrorCode));
 
     if (T::OK != errorCode)
         errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
