@@ -416,20 +416,23 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return object;
   }
 
+  private void releaseInstance(Object[] pool, short index) {
+    if (((KMInstance) pool[index]).reserved != 0) {
+      JCSystem.beginTransaction();
+      ((KMInstance) pool[index]).reserved = 0;
+      JCSystem.commitTransaction();
+    }
+  }
+
   private void releaseInstance(Object[] pool, Object object) {
     short index = 0;
     short len = (short) pool.length;
     while (index < len) {
       if (pool[index] != null) {
         if (object == ((KMInstance) pool[index]).object) {
-          JCSystem.beginTransaction();
-          ((KMInstance) pool[index]).reserved = 0;
-          JCSystem.commitTransaction();
+          releaseInstance(pool, index);
           break;
         }
-      } else {
-        // Reached end.
-        break;
       }
       index++;
     }
@@ -1274,5 +1277,23 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public KMPreSharedKey getPresharedKey() {
     return (KMPreSharedKey) preSharedKey;
+  }
+
+  private void releasePool(Object[] pool) {
+    short index = 0;
+    short len = (short) pool.length;
+    while (index < len) {
+      if (pool[index] != null) {
+        releaseInstance(pool, index);
+      }
+      index++;
+    }
+  }
+
+  @Override
+  public void releaseAllOperations() {
+    releasePool(cipherPool);
+    releasePool(sigPool);
+    releasePool(operationPool);
   }
 }
