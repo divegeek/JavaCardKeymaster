@@ -2758,9 +2758,9 @@ public class KMFunctionalTest {
             {0, OS_PATCH_LEVEL+1, VENDOR_PATCH_LEVEL-1, BOOT_PATCH_LEVEL+1, NO_UPGRADE,  KMError.INVALID_ARGUMENT },
     };
     for (int i = 0; i < test_data.length; i++) {
-      setAndroidOSSystemProperties(simulator, (short) test_data[i][0], (short) test_data[i][1],
-        (short) test_data[i][2]);
       setBootParams(simulator, (short) test_data[i][3]);
+      setAndroidOSSystemProperties(simulator, (short) test_data[i][0], (short) test_data[i][1],
+          (short) test_data[i][2]);
       ret = upgradeKey(
         KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
         null, null, test_data[i][5]);
