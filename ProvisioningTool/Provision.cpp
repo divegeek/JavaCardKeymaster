@@ -35,6 +35,7 @@
 #define APDU_P1  0x40
 #define APDU_P2  0x00
 #define APDU_RESP_STATUS_OK 0x9000
+#define SE_POWER_RESET_STATUS_FLAG ( 1 << 30)
 
 namespace keymaster {
 namespace V4_1 {
@@ -53,6 +54,23 @@ enum class Instruction {
     INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD+9,
 };
 
+//Extended error codes
+enum ExtendedErrors {
+    SW_CONDITIONS_NOT_SATISFIED = -10001,
+    UNSUPPORTED_CLA = -10002,
+    INVALID_P1P2 = -10003,
+    UNSUPPORTED_INSTRUCTION = -10004,
+    CMD_NOT_ALLOWED = -10005,
+    SW_WRONG_LENGTH = -10006,
+    INVALID_DATA = -10007,
+    CRYPTO_ILLEGAL_USE = -10008,
+    CRYPTO_ILLEGAL_VALUE = -10009,
+    CRYPTO_INVALID_INIT = -10010,
+    CRYPTO_NO_SUCH_ALGORITHM = -10011,
+    CRYPTO_UNINITIALIZED_KEY = -10012,
+    GENERIC_UNKNOWN_ERROR = -10013
+};
+
 enum ProvisionStatus {
     NOT_PROVISIONED = 0x00,
     PROVISION_STATUS_ATTESTATION_KEY = 0x01,
@@ -68,6 +86,79 @@ enum ProvisionStatus {
 static ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut);
 static ErrorCode sendProvisionData(std::unique_ptr<se_transport::TransportFactory>& transport, Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response);
 static uint16_t getStatus(std::vector<uint8_t>& inputData);
+template<typename T = ErrorCode>
+static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const std::vector<uint8_t>& response);
+template<typename T = ErrorCode>
+static T translateExtendedErrorsToHalErrors(T& errorCode);
+
+template<typename T>
+static T translateExtendedErrorsToHalErrors(T& errorCode) {
+    T err;
+    switch(static_cast<int32_t>(errorCode)) {
+        case SW_CONDITIONS_NOT_SATISFIED:
+        case UNSUPPORTED_CLA:
+        case INVALID_P1P2:
+        case INVALID_DATA:
+        case CRYPTO_ILLEGAL_USE:
+        case CRYPTO_ILLEGAL_VALUE:
+        case CRYPTO_INVALID_INIT:
+        case CRYPTO_UNINITIALIZED_KEY:
+        case GENERIC_UNKNOWN_ERROR:
+            err = T::UNKNOWN_ERROR;
+            break;
+        case CRYPTO_NO_SUCH_ALGORITHM:
+            err = T::UNSUPPORTED_ALGORITHM;
+            break;
+        case UNSUPPORTED_INSTRUCTION:
+        case CMD_NOT_ALLOWED:
+        case SW_WRONG_LENGTH:
+            err = T::UNIMPLEMENTED;
+            break;
+        default:
+            err = static_cast<T>(errorCode);
+            break;
+    }
+    return err;
+}
+
+/**
+ * Returns the negative value of the same number.
+ */
+static inline int32_t get2sCompliment(uint32_t value) { 
+    return static_cast<int32_t>(~value+1); 
+}
+
+/**
+ * This function separates the original error code from the
+ * power reset flag and returns the original error code.
+ */
+static uint32_t extractErrorCode(uint32_t errorCode) {
+    //Check if secure element is reset
+    bool isSeResetOccurred = (0 != (errorCode & SE_POWER_RESET_STATUS_FLAG));
+
+    if (isSeResetOccurred) {
+        LOG(ERROR) << "Secure element reset happened";
+        errorCode &= ~SE_POWER_RESET_STATUS_FLAG;
+    }
+    return errorCode;
+}
+
+template<typename T>
+static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const std::vector<uint8_t>& response) {
+    std::unique_ptr<Item> item(nullptr);
+    T errorCode = T::OK;
+    std::tie(item, errorCode) = cb.decodeData<T>(response, true);
+
+    uint32_t tempErrCode = extractErrorCode(static_cast<uint32_t>(errorCode));
+
+    // SE sends errocode as unsigned value so convert the unsigned value
+    // into a signed value of same magnitude and copy back to errorCode.
+    errorCode = static_cast<T>(get2sCompliment(tempErrCode));
+
+    if (T::OK != errorCode)
+        errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
+    return {std::move(item), errorCode};
+}
 
 static inline X509* parseDerCertificate(std::vector<uint8_t>& certData) {
     X509 *x509 = NULL;
@@ -174,8 +265,7 @@ static ErrorCode sendProvisionData(std::unique_ptr<se_transport::TransportFactor
 
     if((response.size() > 2)) {
         //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, ret) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
-                true);
+        std::tie(item, ret) = decodeData(cborConverter, std::vector<uint8_t>(response.begin(), response.end()-2));
     } else {
         ret = ErrorCode::UNKNOWN_ERROR;
     }
@@ -382,8 +472,7 @@ ErrorCode Provision::getProvisionStatus(uint64_t& status) {
         return errorCode;
     }
     //Check if SE is provisioned.
-    std::tie(item, errorCode) = cborConverter.decodeData(std::vector<uint8_t>(response.begin(), response.end()-2),
-            true);
+    std::tie(item, errorCode) = decodeData(cborConverter, std::vector<uint8_t>(response.begin(), response.end()-2));
     if(item != NULL) {
 
         if(!cborConverter.getUint64(item, 1, status)) {

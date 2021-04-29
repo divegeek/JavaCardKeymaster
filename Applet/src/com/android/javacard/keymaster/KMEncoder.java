@@ -56,7 +56,7 @@ public class KMEncoder {
     bufferRef[0] = null;
     scratchBuf[START_OFFSET] = (short) 0;
     scratchBuf[LEN_OFFSET] = (short) 0;
-    scratchBuf[STACK_PTR_OFFSET] = (short) 0;    
+    scratchBuf[STACK_PTR_OFFSET] = (short) 0;
   }
 
   private void push(short objPtr) {
@@ -90,24 +90,27 @@ public class KMEncoder {
   }
 
   // array{KMError.OK,Array{KMByteBlobs}}
-  public void encodeCertChain(byte[] buffer, short offset, short length) {
+  public void encodeCertChain(byte[] buffer, short offset, short length, short errInt32Ptr) {
     bufferRef[0] = buffer;
     scratchBuf[START_OFFSET] = offset;
-    scratchBuf[LEN_OFFSET] = (short) (offset + 3);
+    scratchBuf[LEN_OFFSET] = (short) (offset + 1);
+    //Total length is ArrayHeader + [UIntHeader + length(errInt32Ptr)]
+    scratchBuf[LEN_OFFSET] += (short) (1 + getEncodedIntegerLength(errInt32Ptr));
 
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
-    writeByte(UINT_TYPE); // Error.OK
+    encodeInteger(errInt32Ptr);
   }
 
   //array{KMError.OK,Array{KMByteBlobs}}
-  public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength) {
+  public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength, short errInt32Ptr) {
     bufferRef[0] = certBuffer;
     scratchBuf[START_OFFSET] = certStart;
     scratchBuf[LEN_OFFSET] = (short) (certStart + 1);
     //Array header - 2 elements i.e. 1 byte
     scratchBuf[START_OFFSET]--;
-    // Error.Ok - 1 byte
-    scratchBuf[START_OFFSET]--;
+    // errInt32Ptr - PowerResetStatus + ErrorCode - 4 bytes
+    // Integer header - 1 byte
+    scratchBuf[START_OFFSET] -= getEncodedIntegerLength(errInt32Ptr);
     //Array header - 2 elements i.e. 1 byte
     scratchBuf[START_OFFSET]--;
     // Cert Byte blob - typically 2 bytes length i.e. 3 bytes header
@@ -115,31 +118,22 @@ public class KMEncoder {
     if (certLength >= SHORT_PAYLOAD) {
       scratchBuf[START_OFFSET]--;
     }
-    bufferStart = scratchBuf[START_OFFSET];
     if (scratchBuf[START_OFFSET] < bufferStart) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
+    bufferStart = scratchBuf[START_OFFSET];
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
-    writeByte(UINT_TYPE); // Error.OK
+    encodeInteger(errInt32Ptr); //PowerResetStatus + ErrorCode
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 1); // Array of 1 element
     writeMajorTypeWithLength(BYTES_TYPE, certLength); // Cert Byte Blob of length
     return bufferStart;
   }
 
-  public short encodeError(short err, byte[] buffer, short startOff, short length) {
+  public short encodeError(short errInt32Ptr, byte[] buffer, short startOff, short length) {
     bufferRef[0] = buffer;
     scratchBuf[START_OFFSET] = startOff;
-    scratchBuf[LEN_OFFSET] = (short) (startOff + length);
-    // encode the err as UINT with value in err - should not be greater then 5 bytes.
-    if (err < UINT8_LENGTH) {
-      writeByte((byte) (UINT_TYPE | err));
-    } else if (err < 0x100) {
-      writeByte((byte) (UINT_TYPE | UINT8_LENGTH));
-      writeByte((byte) err);
-    } else {
-      writeByte((byte) (UINT_TYPE | UINT16_LENGTH));
-      writeShort(err);
-    }
+    scratchBuf[LEN_OFFSET] = (short) (startOff + length + 1);
+    encodeInteger(errInt32Ptr);
     return (short) (scratchBuf[START_OFFSET] - startOff);
   }
 
@@ -289,6 +283,45 @@ public class KMEncoder {
     writeByteValue(KMEnum.cast(obj).getVal());
   }
 
+  /* The total length of UINT Major type along with actual length of
+   * integer is returned.
+   */
+  public short getEncodedIntegerLength(short obj) {
+    byte[] val = KMInteger.cast(obj).getBuffer();
+    short len = KMInteger.cast(obj).length();
+    short startOff = KMInteger.cast(obj).getStartOff();
+    byte index = 0;
+    // find out the most significant byte
+    while (index < len) {
+      if (val[(short) (startOff + index)] > 0) {
+        break;
+      } else if (val[(short) (startOff + index)] < 0) {
+        break;
+      }
+      index++; // index will be equal to len if value is 0.
+    }
+    // find the difference between most significant byte and len
+    short diff = (short) (len - index);
+    switch (diff) {
+    case 0: case 1: //Byte | Short
+      if ((val[(short) (startOff + index)] < UINT8_LENGTH) &&
+          (val[(short) (startOff + index)] >= 0)) {
+        return (short) 1;
+      } else {
+        return (short) 2;
+      }
+    case 2: //Short
+      return (short) 3;
+    case 3: case 4: //Uint32
+      return (short) 5;
+    case 5: case 6: case 7: case 8: //Uint64
+      return (short) 9;
+    default:
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    return 0;
+  }
+  
   private void encodeInteger(short obj) {
     byte[] val = KMInteger.cast(obj).getBuffer();
     short len = KMInteger.cast(obj).length();
