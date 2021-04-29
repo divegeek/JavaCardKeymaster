@@ -559,4 +559,10 @@ public interface KMSEProvider extends KMUpgradable {
    */
   KMPreSharedKey getPresharedKey();
 
+  /**
+   * Releases all the instance back to pool.
+   * Generally this is used when card is reset.
+   */
+  void releaseAllOperations();
+
 }
