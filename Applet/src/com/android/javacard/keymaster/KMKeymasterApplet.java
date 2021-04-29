@@ -390,6 +390,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         switch (apduIns) {
           case INS_SET_BOOT_PARAMS_CMD:
             if (seProvider.isBootSignalEventSupported()
+                && (keymasterState == KMKeymasterApplet.ACTIVE_STATE)
                 && (!seProvider.isDeviceRebooted())) {
               ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
             }
