@@ -1315,4 +1315,9 @@ public class KMJCardSimulator implements KMSEProvider {
   public KMPreSharedKey getPresharedKey() {
     return (KMPreSharedKey) preSharedKey;
   }
+
+  @Override
+  public void releaseAllOperations() {
+    //Do nothing.
+  }
 }
