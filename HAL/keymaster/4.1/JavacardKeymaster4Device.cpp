@@ -438,7 +438,11 @@ ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<ui
     return (ErrorCode::OK);//success
 }
 
-static ErrorCode setAndroidSystemProperties(CborConverter& cborConverter_) {
+/**
+ * Sends android system properties like os_version, os_patchlevel and vendor_patchlevel to
+ * the Applet.
+ */
+static ErrorCode setAndroidSystemProperties(CborConverter& cborConverter_, const std::unique_ptr<OperationContext>& oprCtx) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     cppbor::Array array;
     std::unique_ptr<Item> item;
@@ -453,7 +457,7 @@ static ErrorCode setAndroidSystemProperties(CborConverter& cborConverter_) {
     if (ErrorCode::OK == errorCode) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                true);
+                true, oprCtx);
     }
     if (ErrorCode::OK != errorCode) 
         LOG(ERROR) << "Failed to set os_version, os_patchlevel and vendor_patchlevel err: " << (int32_t) errorCode;
@@ -471,7 +475,7 @@ JavacardKeymaster4Device::JavacardKeymaster4Device(): softKm_(new ::keymaster::A
     // Send Android system properties like os_version, os_patchlevel and vendor_patchlevel
     // to the Applet. Incase if setting system properties fails here, again try setting
     // it from computeSharedHmac.
-    if (ErrorCode::OK == setAndroidSystemProperties(cborConverter_)) {
+    if (ErrorCode::OK == setAndroidSystemProperties(cborConverter_, oprCtx_)) {
         isEachSystemPropertySet = true;
     }
 
