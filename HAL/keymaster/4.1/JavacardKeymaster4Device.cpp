@@ -727,7 +727,7 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
     cppbor::Array subArray;
 
     if(keyFormat != KeyFormat::PKCS8 && keyFormat != KeyFormat::RAW) {
-        LOG(DEBUG) << "INS_IMPORT_KEY_CMD unsupported key format " << (int32_t)keyFormat;
+        LOG(ERROR) << "INS_IMPORT_KEY_CMD unsupported key format " << (int32_t)keyFormat;
         _hidl_cb(ErrorCode::UNSUPPORTED_KEY_FORMAT, keyBlob, keyCharacteristics);
         return Void();
     }
@@ -1130,7 +1130,7 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
                 }
             }
         } else {
-            LOG(ERROR) << "INS_BEGIN_OPERATION_CMD couldn't find tag: " << (int32_t)Tag::ALGORITHM;
+            LOG(ERROR) << "INS_BEGIN_OPERATION_CMD couldn't find algorithm tag: " << (int32_t)Tag::ALGORITHM;
         }
     } else {
         LOG(ERROR) << "INS_BEGIN_OPERATION_CMD error in getKeyCharacteristics status: " << (int32_t) errorCode;
