@@ -283,8 +283,8 @@ static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const 
     errorCode = static_cast<T>(get2sCompliment(tempErrCode));
 
     if (T::OK != errorCode) {
-        errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
         LOG(ERROR) << "error in decodeData: " << (int32_t) errorCode;
+        errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
     }
     LOG(DEBUG) << "decodeData status: " << (int32_t) errorCode;
     return {std::move(item), errorCode};
