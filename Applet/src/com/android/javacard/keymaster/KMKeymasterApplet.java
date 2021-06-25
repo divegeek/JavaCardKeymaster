@@ -1512,6 +1512,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
+  private boolean isEmpty(byte[] buf, short offset, short len) {
+    boolean empty = true;
+    short index = 0;
+    while (index < len) {
+      if (buf[index] != 0) {
+        empty = false;
+        break;
+      }
+      index++;
+    }
+    return empty;
+  }
+
   // --------------------------------
   private void addAttestationIds(KMAttestationCert cert) {
     final short[] attTags =
@@ -1527,10 +1540,30 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         };
     byte index = 0;
     short attIdTag;
+    short attIdTagValue;
+    short storedAttId;
     while (index < (short) attTags.length) {
-      attIdTag = repository.getAttId(mapToAttId(attTags[index]));
-      if (attIdTag != 0) {
-        attIdTag = KMByteTag.instance(attTags[index], attIdTag);
+      attIdTag = KMKeyParameters.findTag(KMType.BYTES_TAG, attTags[index], data[KEY_PARAMETERS]);
+      if (attIdTag != KMType.INVALID_VALUE) {
+        attIdTagValue = KMByteTag.cast(attIdTag).getValue();
+        storedAttId = repository.getAttId(mapToAttId(attTags[index]));
+        // Return CANNOT_ATTEST_IDS if Attestation IDs are not provisioned or
+        // Attestation IDs are deleted.
+        if (storedAttId == 0 ||
+            isEmpty(KMByteBlob.cast(storedAttId).getBuffer(),
+                    KMByteBlob.cast(storedAttId).getStartOff(),
+                    KMByteBlob.cast(storedAttId).length())) {
+          KMException.throwIt(KMError.CANNOT_ATTEST_IDS);
+        }
+        // Return INVALID_TAG if Attestation IDs does not match.
+        if ((KMByteBlob.cast(storedAttId).length() != KMByteBlob.cast(attIdTagValue).length()) ||
+            (0 != Util.arrayCompare(KMByteBlob.cast(storedAttId).getBuffer(),
+                                    KMByteBlob.cast(storedAttId).getStartOff(),
+                                    KMByteBlob.cast(attIdTagValue).getBuffer(),
+                                    KMByteBlob.cast(attIdTagValue).getStartOff(),
+                                    KMByteBlob.cast(storedAttId).length()))) {
+          KMException.throwIt(KMError.INVALID_TAG);
+        }
         cert.extensionTag(attIdTag, true);
       }
       index++;
