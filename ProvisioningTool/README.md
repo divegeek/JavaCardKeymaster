@@ -9,10 +9,11 @@ This tool can be built along with aosp build. It has dependency on
 [libjc_provision](Android.bp).
 
 #### Sample resources for quick testing
-Two sample json files are located in this directory with names sample_json_cf.txt
-and sample_json_gf.txt for your reference. Use sample_json_cf.txt for cuttlefish
-target and use sample_json_gf.txt for goldfish target. Also the required certificates
-and keys can be found in [test_resources](test_resources) directory. Copy the
+Two sample json files are located in this directory with names
+[sample_json_cf.txt](sample_json_cf.txt) and and [sample_json_gf.txt](sample_json_gf.txt)
+for your reference. Use sample_json_cf.txt for cuttlefish target and use
+sample_json_gf.txt for goldfish target. Also the required certificates and
+keys can be found in [test_resources](test_resources) directory. Copy the
 certificates and the key into the emulator/device filesystem in their respective
 paths mentioned in the sample json file.
 
