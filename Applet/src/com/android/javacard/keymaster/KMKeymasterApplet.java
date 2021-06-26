@@ -1442,6 +1442,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       rsaCert = false;
     }
     KMAttestationCert cert = seProvider.getAttestationCert(rsaCert);
+    // Validate and add attestation ids.
+    validateAndaddAttestationIds(cert);
     // Save attestation application id - must be present.
     tmpVariables[0] =
         KMKeyParameters.findTag(
@@ -1485,7 +1487,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMKeyParameters.findTag(KMType.DATE_TAG, KMType.USAGE_EXPIRE_DATETIME, data[SW_PARAMETERS]);
     cert.notAfter(tmpVariables[2], repository.getCertExpiryTime(), scratchPad, (short) 0);
 
-    addAttestationIds(cert);
     addTags(KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getHardwareEnforced(), true, cert);
     addTags(
         KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getSoftwareEnforced(), false, cert);
@@ -1526,7 +1527,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   // --------------------------------
-  private void addAttestationIds(KMAttestationCert cert) {
+  private void validateAndaddAttestationIds(KMAttestationCert cert) {
     final short[] attTags =
         new short[]{
             KMType.ATTESTATION_ID_BRAND,
