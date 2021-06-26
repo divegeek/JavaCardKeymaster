@@ -1443,7 +1443,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     KMAttestationCert cert = seProvider.getAttestationCert(rsaCert);
     // Validate and add attestation ids.
-    validateAndaddAttestationIds(cert);
+    addAttestationIds(cert);
     // Save attestation application id - must be present.
     tmpVariables[0] =
         KMKeyParameters.findTag(
@@ -1527,7 +1527,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   // --------------------------------
-  private void validateAndaddAttestationIds(KMAttestationCert cert) {
+  // Only add the Attestation ids which are requested in the attestation parameters.
+  // If the requested attestation ids are not provisioned or deleted then
+  // throw CANNOT_ATTEST_IDS error. If there is mismatch in the attestation
+  // id values of both the requested parameters and the provisioned parameters
+  // then throw INVALID_TAG error.
+  private void addAttestationIds(KMAttestationCert cert) {
     final short[] attTags =
         new short[]{
             KMType.ATTESTATION_ID_BRAND,
