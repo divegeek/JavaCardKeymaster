@@ -1,13 +1,13 @@
 {
    "attest_ids": {
-      "brand": "Google",
-      "device": "Pixel 3A",
-      "product": "Pixel",
-      "serial": "UGYJFDjFeRuBEH",
-      "imei": "987080543071019",
-      "meid": "27863510227963",
-      "manufacturer": "Foxconn",
-      "model": "HD1121"
+      "brand": "Android",
+      "device": "generic_x86_64",
+      "product": "aosp_x86_64",
+      "serial": "",
+      "imei": "000000000000000",
+      "meid": "000000000000000",
+      "manufacturer": "unknown",
+      "model": "AOSP on x86_64"
    },
    "shared_secret": "0000000000000000000000000000000000000000000000000000000000000000",
    "set_boot_params": {
@@ -15,7 +15,7 @@
       "verified_boot_key": "0000000000000000000000000000000000000000000000000000000000000000",
       "verified_boot_key_hash": "0000000000000000000000000000000000000000000000000000000000000000",
       "boot_state": 2,
-      "device_locked": 0
+      "device_locked": 1
    },
    "attest_key": "/data/vendor/batch_key.der",
    "attest_cert_chain": [
