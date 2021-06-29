@@ -15,7 +15,7 @@
       "verified_boot_key": "0000000000000000000000000000000000000000000000000000000000000000",
       "verified_boot_key_hash": "0000000000000000000000000000000000000000000000000000000000000000",
       "boot_state": 2,
-      "device_locked": 0
+      "device_locked": 1
    },
    "attest_key": "/data/vendor/batch_key.der",
    "attest_cert_chain": [
