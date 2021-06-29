@@ -1442,6 +1442,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       rsaCert = false;
     }
     KMAttestationCert cert = seProvider.getAttestationCert(rsaCert);
+    // Validate and add attestation ids.
+    addAttestationIds(cert);
     // Save attestation application id - must be present.
     tmpVariables[0] =
         KMKeyParameters.findTag(
@@ -1485,7 +1487,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMKeyParameters.findTag(KMType.DATE_TAG, KMType.USAGE_EXPIRE_DATETIME, data[SW_PARAMETERS]);
     cert.notAfter(tmpVariables[2], repository.getCertExpiryTime(), scratchPad, (short) 0);
 
-    addAttestationIds(cert);
     addTags(KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getHardwareEnforced(), true, cert);
     addTags(
         KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getSoftwareEnforced(), false, cert);
@@ -1512,7 +1513,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
+  private boolean isEmpty(byte[] buf, short offset, short len) {
+    boolean empty = true;
+    short index = 0;
+    while (index < len) {
+      if (buf[index] != 0) {
+        empty = false;
+        break;
+      }
+      index++;
+    }
+    return empty;
+  }
+
   // --------------------------------
+  // Only add the Attestation ids which are requested in the attestation parameters.
+  // If the requested attestation ids are not provisioned or deleted then
+  // throw CANNOT_ATTEST_IDS error. If there is mismatch in the attestation
+  // id values of both the requested parameters and the provisioned parameters
+  // then throw INVALID_TAG error.
   private void addAttestationIds(KMAttestationCert cert) {
     final short[] attTags =
         new short[]{
@@ -1527,10 +1546,30 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         };
     byte index = 0;
     short attIdTag;
+    short attIdTagValue;
+    short storedAttId;
     while (index < (short) attTags.length) {
-      attIdTag = repository.getAttId(mapToAttId(attTags[index]));
-      if (attIdTag != 0) {
-        attIdTag = KMByteTag.instance(attTags[index], attIdTag);
+      attIdTag = KMKeyParameters.findTag(KMType.BYTES_TAG, attTags[index], data[KEY_PARAMETERS]);
+      if (attIdTag != KMType.INVALID_VALUE) {
+        attIdTagValue = KMByteTag.cast(attIdTag).getValue();
+        storedAttId = repository.getAttId(mapToAttId(attTags[index]));
+        // Return CANNOT_ATTEST_IDS if Attestation IDs are not provisioned or
+        // Attestation IDs are deleted.
+        if (storedAttId == 0 ||
+            isEmpty(KMByteBlob.cast(storedAttId).getBuffer(),
+                    KMByteBlob.cast(storedAttId).getStartOff(),
+                    KMByteBlob.cast(storedAttId).length())) {
+          KMException.throwIt(KMError.CANNOT_ATTEST_IDS);
+        }
+        // Return INVALID_TAG if Attestation IDs does not match.
+        if ((KMByteBlob.cast(storedAttId).length() != KMByteBlob.cast(attIdTagValue).length()) ||
+            (0 != Util.arrayCompare(KMByteBlob.cast(storedAttId).getBuffer(),
+                                    KMByteBlob.cast(storedAttId).getStartOff(),
+                                    KMByteBlob.cast(attIdTagValue).getBuffer(),
+                                    KMByteBlob.cast(attIdTagValue).getStartOff(),
+                                    KMByteBlob.cast(storedAttId).length()))) {
+          KMException.throwIt(KMError.INVALID_TAG);
+        }
         cert.extensionTag(attIdTag, true);
       }
       index++;
