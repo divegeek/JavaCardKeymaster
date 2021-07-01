@@ -23,11 +23,8 @@ cc_binary {
     srcs: [
         "4.1/service.cpp",
         "4.1/JavacardKeymaster4Device.cpp",
-        "4.1/CborConverter.cpp",
         "4.1/JavacardSoftKeymasterContext.cpp",
         "4.1/JavacardOperationContext.cpp",
-        "4.1/CommonUtils.cpp",
-        "4.1/Provision.cpp",
     ],
     local_include_dirs: [
         "include",
@@ -47,8 +44,17 @@ cc_binary {
         "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
         "libjc_transport",
+        "libjc_common",
         "libcrypto",
     ],
+    arch: {
+        x86_64: {
+            cflags: ["-DVTS_EMULATOR"],
+        },
+        x86: {
+            cflags: ["-DVTS_EMULATOR"],
+        },
+    },
 }
 
 cc_library {
@@ -101,5 +107,36 @@ cc_library {
         "libbinder",
         "libbase",
         "liblog",
+    ],
+}
+
+cc_library {
+    name: "libjc_common",
+    vendor_available: true,
+    srcs: [
+        "4.1/CommonUtils.cpp",
+        "4.1/CborConverter.cpp",
+    ],
+    local_include_dirs: [
+        "include",
+    ],
+    export_include_dirs: [
+        "include"
+    ],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libdl",
+        "libbase",
+        "libutils",
+        "libhardware",
+        "libhidlbase",
+	    "libsoftkeymasterdevice",
+        "libkeymaster_messages",
+	    "libkeymaster_portable",
+        "libcppbor",
+        "android.hardware.keymaster@4.1",
+        "android.hardware.keymaster@4.0",
+	    "libcrypto",
     ],
 }

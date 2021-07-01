@@ -1,3 +1,18 @@
+/*
+ * Copyright(C) 2020 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.android.javacard.keymaster;
 
 /**
@@ -8,6 +23,7 @@ package com.android.javacard.keymaster;
  * instance of cert.
  */
 public interface KMAttestationCert {
+
   /**
    * Set verified boot hash.
    *
@@ -33,14 +49,6 @@ public interface KMAttestationCert {
   KMAttestationCert verifiedBootState(byte val);
 
   /**
-   * Set authentication key Id from CA Certificate set during provisioning.
-   *
-   * @param obj This is a KMByteBlob containing authentication Key Id.
-   * @return instance of KMAttestationCert
-   */
-  KMAttestationCert authKey(short obj);
-
-  /**
    * Set uniqueId received from CA certificate during provisioning.
    *
    * @param scratchpad Buffer to store intermediate results.
@@ -52,18 +60,17 @@ public interface KMAttestationCert {
    * @param attestAppIdOff Start offset of the attestAppId buffer.
    * @param attestAppIdLen Length of the attestAppId buffer.
    * @param resetSinceIdRotation This holds the information of RESET_SINCE_ID_ROTATION.
-   * @param key This buffer contains the master secret.
-   * @param keyOff Start offset of the master key.
-   * @param keyLen Length of the master key.
+   * @param instance of the master key.
    * @return instance of KMAttestationCert.
    */
   KMAttestationCert makeUniqueId(byte[] scratchpad, short scratchPadOff, byte[] creationTime,
-          short creationTimeOff, short creationTimeLen, byte[] attestAppId,
-          short attestAppIdOff, short attestAppIdLen, byte resetSinceIdRotation,
-          byte[] key, short keyOff, short keyLen);
+      short creationTimeOff, short creationTimeLen, byte[] attestAppId,
+      short attestAppIdOff, short attestAppIdLen, byte resetSinceIdRotation,
+      KMMasterKey masterKey);
 
   /**
-   * Set start time received from creation/activation time tag. Used for certificate's valid period.
+   * Set start time received from creation/activation time tag. Used for certificate's valid
+   * period.
    *
    * @param obj This is a KMByteBlob object containing start time.
    * @param scratchpad Buffer to store intermediate results.
@@ -73,17 +80,18 @@ public interface KMAttestationCert {
 
 
   /**
-   * Set expiry time received from expiry time tag or ca certificates expiry time.
-   * Used for certificate's valid period.
+   * Set expiry time received from expiry time tag or ca certificates expiry time. Used for
+   * certificate's valid period.
    *
    * @param usageExpiryTimeObj This is a KMByteBlob containing expiry time.
-   * @param certExpirtyTimeObj This is a KMByteblob containing expirty time extracted from certificate.
+   * @param certExpirtyTimeObj This is a KMByteblob containing expirty time extracted from
+   * certificate.
    * @param scratchpad Buffer to store intermediate results.
    * @param offset Variable used to store intermediate results.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert notAfter(short usageExpiryTimeObj,
-          short certExpirtyTimeObj, byte[] scratchPad, short offset);
+      short certExpirtyTimeObj, byte[] scratchPad, short offset);
 
   /**
    * Set device lock status received during booting time or due to device lock command.
@@ -110,12 +118,12 @@ public interface KMAttestationCert {
   KMAttestationCert attestationChallenge(short obj);
 
   /**
-   * Set extension tag received from key characteristics which needs to be added to android extension.
-   * This method will called once for each tag.
+   * Set extension tag received from key characteristics which needs to be added to android
+   * extension. This method will called once for each tag.
    *
    * @param tag is the KMByteBlob containing KMTag.
-   * @param hwEnforced is true if the tag has to be added to hw enforced list or
-   *                    else added to sw enforced list.
+   * @param hwEnforced is true if the tag has to be added to hw enforced list or else added to sw
+   * enforced list.
    * @return instance of KMAttestationCert
    */
   KMAttestationCert extensionTag(short tag, boolean hwEnforced);
@@ -137,14 +145,6 @@ public interface KMAttestationCert {
    * @return instance of KMAttestationCert
    */
   KMAttestationCert buffer(byte[] buf, short bufStart, short maxLen);
-
-  /**
-   * Set signing key to be used to sign the cert.
-   *
-   * @param privateKey This is ECPrivateKey with curve P-256.
-   * @return instance of KMAttestationCert
-   */
-  KMAttestationCert signingKey(short privateKey);
 
   /**
    * Get the start of the certificate
@@ -169,7 +169,6 @@ public interface KMAttestationCert {
 
   /**
    * Build the certificate. After this method the certificate is ready.
-   *
    */
   void build();
 }

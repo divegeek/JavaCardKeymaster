@@ -19,15 +19,16 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
+
 /**
- * KMVerificationToken represents VerificationToken structure from android keymaster hal specifications.
- * It corresponds to CBOR array type.
- * struct{byte type=VERIFICATION_TOKEN_TYPE; short length=2; short arrayPtr} where arrayPtr is a pointer to
- * ordered array with following elements:
- * {KMInteger Challenge; KMInteger Timestamp; KMByteBlob PARAMETERS_VERIFIED; SecurityLevel level;
- * KMByteBlob Mac}.
+ * KMVerificationToken represents VerificationToken structure from android keymaster hal
+ * specifications. It corresponds to CBOR array type. struct{byte type=VERIFICATION_TOKEN_TYPE;
+ * short length=2; short arrayPtr} where arrayPtr is a pointer to ordered array with following
+ * elements: {KMInteger Challenge; KMInteger Timestamp; KMByteBlob PARAMETERS_VERIFIED;
+ * SecurityLevel level; KMByteBlob Mac}.
  */
 public class KMVerificationToken extends KMType {
+
   public static final byte CHALLENGE = 0x00;
   public static final byte TIMESTAMP = 0x01;
   public static final byte PARAMETERS_VERIFIED = 0x02;
@@ -35,12 +36,12 @@ public class KMVerificationToken extends KMType {
   public static final byte MAC = 0x04;
 
   private static KMVerificationToken prototype;
-  private static short instPtr;
 
-  private KMVerificationToken() {}
+  private KMVerificationToken() {
+  }
 
   public static short exp() {
-    short arrPtr = KMArray.instance((short)5);
+    short arrPtr = KMArray.instance((short) 5);
     KMArray arr = KMArray.cast(arrPtr);
     arr.add(CHALLENGE, KMInteger.exp());
     arr.add(TIMESTAMP, KMInteger.exp());
@@ -52,39 +53,47 @@ public class KMVerificationToken extends KMType {
   }
 
   private static KMVerificationToken proto(short ptr) {
-    if (prototype == null) prototype = new KMVerificationToken();
-    instPtr = ptr;
+    if (prototype == null) {
+      prototype = new KMVerificationToken();
+    }
+    instanceTable[KM_VERIFICATION_TOKEN_OFFSET] = ptr;
     return prototype;
   }
 
   public static short instance() {
-    short arrPtr = KMArray.instance((short)5);
+    short arrPtr = KMArray.instance((short) 5);
     KMArray arr = KMArray.cast(arrPtr);
-    arr.add(CHALLENGE, KMInteger.uint_16((short)0));
-    arr.add(TIMESTAMP, KMInteger.uint_16((short)0));
-    arr.add(PARAMETERS_VERIFIED, KMByteBlob.instance((short)0));
+    arr.add(CHALLENGE, KMInteger.uint_16((short) 0));
+    arr.add(TIMESTAMP, KMInteger.uint_16((short) 0));
+    arr.add(PARAMETERS_VERIFIED, KMByteBlob.instance((short) 0));
     arr.add(SECURITY_LEVEL, KMEnum.instance(KMType.HARDWARE_TYPE, KMType.STRONGBOX));
-    arr.add(MAC, KMByteBlob.instance((short)0));
+    arr.add(MAC, KMByteBlob.instance((short) 0));
     return instance(arrPtr);
   }
 
   public static short instance(short vals) {
     KMArray arr = KMArray.cast(vals);
-    if(arr.length() != 5)ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-    short ptr = KMType.instance(VERIFICATION_TOKEN_TYPE, (short)2);
-    Util.setShort(heap, (short)(ptr + TLV_HEADER_SIZE), vals);
+    if (arr.length() != 5) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
+    short ptr = KMType.instance(VERIFICATION_TOKEN_TYPE, (short) 2);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), vals);
     return ptr;
   }
 
   public static KMVerificationToken cast(short ptr) {
-    if (heap[ptr] != VERIFICATION_TOKEN_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[ptr] != VERIFICATION_TOKEN_TYPE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     short arrPtr = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
-    if(heap[arrPtr] != ARRAY_TYPE)  ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[arrPtr] != ARRAY_TYPE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     return proto(ptr);
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_VERIFICATION_TOKEN_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {
@@ -131,7 +140,7 @@ public class KMVerificationToken extends KMType {
   }
 
   public void setParametersVerified(short vals) {
-   // KMKeyParameters.cast(vals);
+    // KMKeyParameters.cast(vals);
     KMByteBlob.cast(vals);
     short arrPtr = getVals();
     KMArray.cast(arrPtr).add(PARAMETERS_VERIFIED, vals);

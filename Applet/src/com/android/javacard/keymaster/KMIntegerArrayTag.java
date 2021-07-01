@@ -21,21 +21,24 @@ import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 /**
- * KMIntegerArrayTag represents UINT_REP and ULONG_REP tags specified in keymaster hal specs. struct{byte
- * TAG_TYPE; short length; struct{short UINT_TAG/ULONG_TAG; short tagKey; short arrPtr}, where arrPtr
- * is the pointer to KMArray of KMInteger instances.
+ * KMIntegerArrayTag represents UINT_REP and ULONG_REP tags specified in keymaster hal specs.
+ * struct{byte TAG_TYPE; short length; struct{short UINT_TAG/ULONG_TAG; short tagKey; short arrPtr},
+ * where arrPtr is the pointer to KMArray of KMInteger instances.
  */
 public class KMIntegerArrayTag extends KMTag {
+
   private static KMIntegerArrayTag prototype;
-  private static short instPtr;
 
   private static final short[] tags = {USER_SECURE_ID};
 
-  private KMIntegerArrayTag() {}
+  private KMIntegerArrayTag() {
+  }
 
   private static KMIntegerArrayTag proto(short ptr) {
-    if (prototype == null) prototype = new KMIntegerArrayTag();
-    instPtr = ptr;
+    if (prototype == null) {
+      prototype = new KMIntegerArrayTag();
+    }
+    instanceTable[KM_INTEGER_ARRAY_TAG_OFFSET] = ptr;
     return prototype;
   }
 
@@ -44,10 +47,10 @@ public class KMIntegerArrayTag extends KMTag {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short arrPtr = KMArray.exp(KMType.INTEGER_TYPE);
-    short ptr = instance(TAG_TYPE, (short)6);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), tagType);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), INVALID_TAG);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), arrPtr);
+    short ptr = instance(TAG_TYPE, (short) 6);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), tagType);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), INVALID_TAG);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 4), arrPtr);
     return ptr;
   }
 
@@ -69,18 +72,20 @@ public class KMIntegerArrayTag extends KMTag {
     if (!validateKey(key)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    if(heap[arrObj] != ARRAY_TYPE) {
+    if (heap[arrObj] != ARRAY_TYPE) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    short ptr = instance(TAG_TYPE, (short)6);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), tagType);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+2), key);
-    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE+4), arrObj);
+    short ptr = instance(TAG_TYPE, (short) 6);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), tagType);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), key);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 4), arrObj);
     return ptr;
   }
 
   public static KMIntegerArrayTag cast(short ptr) {
-    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[ptr] != TAG_TYPE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     short tagType = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
     if (!validateTagType(tagType)) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
@@ -89,15 +94,15 @@ public class KMIntegerArrayTag extends KMTag {
   }
 
   public short getTagType() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+2));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE + 2));
   }
 
   public short getValues() {
-    return Util.getShort(heap, (short)(instPtr+TLV_HEADER_SIZE+4));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_ARRAY_TAG_OFFSET] + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {

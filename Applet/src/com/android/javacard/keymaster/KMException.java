@@ -16,26 +16,40 @@
 
 package com.android.javacard.keymaster;
 
+import javacard.framework.JCSystem;
+
 /**
  * KMException is shared instance of exception used for all exceptions in the applet. It is used to
  * throw EMError errors.
  */
 public class KMException extends RuntimeException {
-  public static short reason;
+
+  public short[] reason;
   public static KMException exception;
-  private KMException(){
+
+  private KMException() {
+    reason = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
-  public static void throwIt(short reason){
-    KMException.reason = reason;
-    throw instance();
+
+  public static void throwIt(short reason) {
+    instance();
+    exception.reason[(short) 0] = reason;
+    throw exception;
   }
-  public static KMException instance(){
-    if(exception == null ) exception = new KMException();
+
+  public static KMException instance() {
+    if (exception == null) {
+      exception = new KMException();
+    }
     return exception;
   }
 
-  public void clear(){
-    reason = KMError.UNKNOWN_ERROR;
+  public void clear() {
+    exception.reason[(short) 0] = KMError.UNKNOWN_ERROR;
+  }
+
+  public static short getReason() {
+    return exception.reason[0];
   }
 }
 

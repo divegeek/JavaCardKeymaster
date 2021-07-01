@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
@@ -27,7 +28,8 @@ import javacard.framework.Util;
  * prototype objects which just cast the structure over contiguous memory buffer.
  */
 public abstract class KMType {
-  public static final short INVALID_VALUE = (short)0x8000;
+
+  public static final short INVALID_VALUE = (short) 0x8000;
   protected static final byte TLV_HEADER_SIZE = 3;
 
   // Types
@@ -231,7 +233,7 @@ public abstract class KMType {
   // Reset Since Id Rotation
   public static final short RESET_SINCE_ID_ROTATION = (short) 0x03EC;
   //Early boot ended.
-  public static final short EARLY_BOOT_ENDED = (short) 0x0131;
+  public static final short EARLY_BOOT_ONLY = (short) 0x0131;
   //Device unique attestation.
   public static final short DEVICE_UNIQUE_ATTESTATION = (short) 0x02D0;
 
@@ -274,21 +276,52 @@ public abstract class KMType {
   public static final short LENGTH_FROM_PDU = (short) 0xFFFF;
 
   public static final byte NO_VALUE = (byte) 0xff;
+  // Type offsets.
+  public static final byte KM_TYPE_BASE_OFFSET = 0;
+  public static final byte KM_ARRAY_OFFSET = KM_TYPE_BASE_OFFSET;
+  public static final byte KM_BOOL_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 1;
+  public static final byte KM_BYTE_BLOB_OFFSET = KM_TYPE_BASE_OFFSET + 2;
+  public static final byte KM_BYTE_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 3;
+  public static final byte KM_ENUM_OFFSET = KM_TYPE_BASE_OFFSET + 4;
+  public static final byte KM_ENUM_ARRAY_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 5;
+  public static final byte KM_ENUM_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 6;
+  public static final byte KM_HARDWARE_AUTH_TOKEN_OFFSET = KM_TYPE_BASE_OFFSET + 7;
+  public static final byte KM_HMAC_SHARING_PARAMETERS_OFFSET = KM_TYPE_BASE_OFFSET + 8;
+  public static final byte KM_INTEGER_OFFSET = KM_TYPE_BASE_OFFSET + 9;
+  public static final byte KM_INTEGER_ARRAY_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 10;
+  public static final byte KM_INTEGER_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 11;
+  public static final byte KM_KEY_CHARACTERISTICS_OFFSET = KM_TYPE_BASE_OFFSET + 12;
+  public static final byte KM_KEY_PARAMETERS_OFFSET = KM_TYPE_BASE_OFFSET + 13;
+  public static final byte KM_VERIFICATION_TOKEN_OFFSET = KM_TYPE_BASE_OFFSET + 14;
 
   protected static KMRepository repository;
   protected static byte[] heap;
+  // Instance table
+  public static final byte INSTANCE_TABLE_SIZE = 15;
+  protected static short[] instanceTable;
 
   public static void initialize() {
+    instanceTable = JCSystem.makeTransientShortArray(INSTANCE_TABLE_SIZE, JCSystem.CLEAR_ON_RESET);
     KMType.repository = KMRepository.instance();
     KMType.heap = repository.getHeap();
   }
 
-  public static byte getType(short ptr){return heap[ptr];}
-  public static short length(short ptr){return Util.getShort(heap, (short)(ptr+1));}
-  public static short getValue(short ptr){return Util.getShort(heap, (short)(ptr+TLV_HEADER_SIZE));}
+  public static byte getType(short ptr) {
+    return heap[ptr];
+  }
 
-  protected static short instance(byte type, short length){
-    if (length < 0) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+  public static short length(short ptr) {
+    return Util.getShort(heap, (short) (ptr + 1));
+  }
+
+  public static short getValue(short ptr) {
+    return Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
+  }
+
+  protected static short instance(byte type, short length) {
+    if (length < 0) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
     short ptr = repository.alloc((short) (length + TLV_HEADER_SIZE));
     heap[ptr] = type;
     Util.setShort(heap, (short) (ptr + 1), length);

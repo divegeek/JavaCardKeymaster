@@ -16,11 +16,15 @@
  */
 
 #include <CommonUtils.h>
+#include <regex.h>
+#include <regex.h>
+#include <android-base/properties.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/ec.h>
 #include <openssl/bn.h>
 #include <openssl/nid.h>
+#include <android-base/logging.h>
 #include <keymaster/km_openssl/openssl_err.h>
 #include <keymaster/km_openssl/openssl_utils.h>
 #include <keymaster/km_openssl/rsa_key.h>
@@ -34,6 +38,13 @@
 namespace keymaster {
 namespace V4_1 {
 namespace javacard {
+
+constexpr char kVendorPatchlevelProp[] = "ro.vendor.build.security_patch";
+constexpr char kVendorPatchlevelRegex[] = "^([0-9]{4})-([0-9]{2})-([0-9]{2})$";
+constexpr size_t kYearMatch = 1;
+constexpr size_t kMonthMatch = 2;
+constexpr size_t kDayMatch = 3;
+constexpr size_t kVendorPatchlevelMatchCount = kDayMatch + 1;
 
 hidl_vec<KeyParameter> kmParamSet2Hidl(const keymaster_key_param_set_t& set) {
     hidl_vec<KeyParameter> result;
@@ -270,6 +281,70 @@ ErrorCode getCertificateChain(std::vector<uint8_t>& chainBuffer, std::vector<std
         }
     }
     return ErrorCode::OK;
+}
+
+uint32_t match_to_uint32(const char* expression, const regmatch_t& match) {
+    if (match.rm_so == -1) return 0;
+
+    size_t len = match.rm_eo - match.rm_so;
+    std::string s(expression + match.rm_so, len);
+    return std::stoul(s);
+}
+
+std::string wait_and_get_property(const char* prop) {
+    std::string prop_value;
+    while (!android::base::WaitForPropertyCreation(prop)) {
+        LOG(ERROR) << "waited 15s for %s, still waiting..." << prop;
+    }
+    prop_value = android::base::GetProperty(prop, "" /* default */);
+    return prop_value;
+}
+
+
+uint32_t GetVendorPatchlevel(const char* patchlevel_str) {
+    regex_t regex;
+    if (regcomp(&regex, kVendorPatchlevelRegex, REG_EXTENDED) != 0) {
+        LOG(ERROR) << "Failed to compile Vendor patchlevel regex! " << kVendorPatchlevelRegex;
+        return 0;
+    }
+
+    regmatch_t matches[kVendorPatchlevelMatchCount];
+    int not_match =
+        regexec(&regex, patchlevel_str, kVendorPatchlevelMatchCount, matches, 0 /* flags */);
+    regfree(&regex);
+    if (not_match) {
+        LOG(ERROR) << "Vendor patchlevel string does not match expected format.  Using patchlevel 0";
+        return 0;
+    }
+
+    uint32_t year = match_to_uint32(patchlevel_str, matches[kYearMatch]);
+    uint32_t month = match_to_uint32(patchlevel_str, matches[kMonthMatch]);
+    uint32_t day = match_to_uint32(patchlevel_str, matches[kDayMatch]);
+
+    if (month < 1 || month > 12) {
+        LOG(ERROR) << "Invalid patch month " << month;
+        return 0;
+    }
+    bool isLeapYear = (0 == year % 4) ? true : false;
+    int maxDaysForMonth = 31;
+    switch(month) {
+        case 4: case 6: case 9: case 11:
+            maxDaysForMonth = 30;
+            break;
+        case 2:
+            maxDaysForMonth = isLeapYear ? 29 : 28;
+            break;
+    }
+    if (day < 1 || day > maxDaysForMonth) {
+        LOG(ERROR) << "Invalid patch day " << day;
+        return 0;
+    }
+    return year * 10000 + month * 100 + day;
+}
+
+uint32_t GetVendorPatchlevel() {
+    std::string patchlevel = wait_and_get_property(kVendorPatchlevelProp);
+    return GetVendorPatchlevel(patchlevel.c_str());
 }
 
 

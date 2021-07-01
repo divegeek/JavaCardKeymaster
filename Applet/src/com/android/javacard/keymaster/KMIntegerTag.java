@@ -19,13 +19,15 @@ package com.android.javacard.keymaster;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
+
 /**
  * KMIntegerTag represents UINT, ULONG and DATE tags specified in keymaster hal specs. struct{byte
- * TAG_TYPE; short length; struct{short UINT_TAG/ULONG_TAG/DATE_TAG; short tagKey; 4 or 8 byte value}}
+ * TAG_TYPE; short length; struct{short UINT_TAG/ULONG_TAG/DATE_TAG; short tagKey; 4 or 8 byte
+ * value}}
  */
 public class KMIntegerTag extends KMTag {
+
   private static KMIntegerTag prototype;
-  private static short instPtr;
   // Allowed tag keys.
   private static final short[] tags = {
     // UINT
@@ -49,11 +51,14 @@ public class KMIntegerTag extends KMTag {
     CREATION_DATETIME
   };
 
-  private KMIntegerTag() {}
+  private KMIntegerTag() {
+  }
 
   private static KMIntegerTag proto(short ptr) {
-    if (prototype == null) prototype = new KMIntegerTag();
-    instPtr = ptr;
+    if (prototype == null) {
+      prototype = new KMIntegerTag();
+    }
+    instanceTable[KM_INTEGER_TAG_OFFSET] = ptr;
     return prototype;
   }
 
@@ -98,7 +103,9 @@ public class KMIntegerTag extends KMTag {
   }
 
   public static KMIntegerTag cast(short ptr) {
-    if (heap[ptr] != TAG_TYPE) ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    if (heap[ptr] != TAG_TYPE) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     short tagType = Util.getShort(heap, (short) (ptr + TLV_HEADER_SIZE));
     if (!validateTagType(tagType)) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
@@ -107,15 +114,15 @@ public class KMIntegerTag extends KMTag {
   }
 
   public short getTagType() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_TAG_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_TAG_OFFSET] + TLV_HEADER_SIZE + 2));
   }
 
   public short getValue() {
-    return Util.getShort(heap, (short) (instPtr + TLV_HEADER_SIZE + 4));
+    return Util.getShort(heap, (short) (instanceTable[KM_INTEGER_TAG_OFFSET] + TLV_HEADER_SIZE + 4));
   }
 
   public short length() {
@@ -152,7 +159,7 @@ public class KMIntegerTag extends KMTag {
   }
 
   public static short getValue(
-      byte[] buf, short offset, short tagType, short tagKey, short keyParameters) {
+    byte[] buf, short offset, short tagType, short tagKey, short keyParameters) {
     short ptr;
     if ((tagType == UINT_TAG) || (tagType == ULONG_TAG) || (tagType == DATE_TAG)) {
       ptr = KMKeyParameters.findTag(tagType, tagKey, keyParameters);
@@ -165,26 +172,36 @@ public class KMIntegerTag extends KMTag {
   }
 
   public boolean isValidKeySize(byte alg) {
-    short val = KMIntegerTag.cast(instPtr).getValue();
+    short val = KMIntegerTag.cast(instanceTable[KM_INTEGER_TAG_OFFSET]).getValue();
     if (KMInteger.cast(val).getSignificantShort() != 0) {
       return false;
     }
     val = KMInteger.cast(val).getShort();
     switch (alg) {
       case KMType.RSA:
-        if (val == 2048) return true;
+        if (val == 2048) {
+          return true;
+        }
         break;
       case KMType.AES:
-        if (val == 128 || val == 256) return true;
+        if (val == 128 || val == 256) {
+          return true;
+        }
         break;
       case KMType.DES:
-        if (val == 192 || val == 168) return true;
+        if (val == 192 || val == 168) {
+          return true;
+        }
         break;
       case KMType.EC:
-        if (val == 256) return true;
+        if (val == 256) {
+          return true;
+        }
         break;
       case KMType.HMAC:
-        if (val % 8 == 0 && val >= 64 && val <= 512) return true;
+        if (val % 8 == 0 && val >= 64 && val <= 512) {
+          return true;
+        }
         break;
       default:
         break;
