@@ -18,7 +18,7 @@
 #define SYSTEM_KEYMASTER_JAVA_CARD_SOFT_KEYMASTER_CONTEXT_H_
 
 #include <keymaster/contexts/pure_soft_keymaster_context.h>
-
+#include <keymaster/contexts/soft_attestation_cert.h>
 namespace keymaster {
 
 class SoftKeymasterKeyRegistrations;

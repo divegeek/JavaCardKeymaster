@@ -15,12 +15,12 @@
       "verified_boot_key": "0000000000000000000000000000000000000000000000000000000000000000",
       "verified_boot_key_hash": "0000000000000000000000000000000000000000000000000000000000000000",
       "boot_state": 2,
-      "device_locked": 1
+      "device_locked": 0
    },
-   "attest_key": "/data/vendor/batch_key.der",
+   "attest_key": "test_resources/batch_key.der",
    "attest_cert_chain": [
-   "/data/vendor/batch_cert.der",
-   "/data/vendor/intermediate_cert.der",
-   "/data/vendor/ca_cert.der"
+   "test_resources/batch_cert.der",
+   "test_resources/intermediate_cert.der",
+   "test_resources/ca_cert.der"
    ]
 }
