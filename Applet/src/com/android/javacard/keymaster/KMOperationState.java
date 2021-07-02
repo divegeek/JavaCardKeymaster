@@ -250,4 +250,21 @@ public class KMOperationState {
   public short getMacLength() {
     return Util.getShort(data, MAC_LENGTH);
   }
+  public byte getBufferingMode(){
+    byte alg = getAlgorithm();
+    short purpose = getPurpose();
+    short digest = getDigest();
+    short blockMode = getBlockMode();
+    short padding = getPadding();
+    if(alg == KMType.RSA && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN){
+      return KMType.BUF_RSA_NO_DIGEST;
+    }
+    if(alg == KMType.EC && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN){
+      return KMType.BUF_EC_NO_DIGEST;
+    }
+    if(alg == KMType.AES || alg == KMType.DES){
+      return KMType.BUF_BLOCK_ALIGN;
+    }
+    return KMType.BUF_NONE;
+  }
 }

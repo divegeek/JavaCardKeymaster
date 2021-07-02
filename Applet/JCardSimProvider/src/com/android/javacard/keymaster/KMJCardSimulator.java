@@ -1179,6 +1179,32 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
+  public short rsaSign256Pkcs1(
+      byte[] secret,
+      short secretStart,
+      short secretLength,
+      byte[] modBuf,
+      short modStart,
+      short modLength,
+      byte[] inputDataBuf,
+      short inputDataStart,
+      short inputDataLength,
+      byte[] outputDataBuf,
+      short outputDataStart){
+    Signature signer = createRsaSigner(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN,secret,secretStart,secretLength,modBuf,modStart,modLength);
+    return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
+        outputDataBuf, outputDataStart);
+  }
+
+  @Override
+  public short ecSign256(byte[] secret, short secretStart, short secretLength,
+      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+      byte[] outputDataBuf, short outputDataStart){
+    Signature signer = createEcSigner(KMType.SHA2_256, secret, secretStart, secretLength);
+    return signer.sign(inputDataBuf, inputDataStart, inputDataLength, outputDataBuf, outputDataStart);
+  }
+
+  @Override
   public short ecSign256(KMAttestationKey attestationKey,
       byte[] inputDataBuf, short inputDataStart, short inputDataLength,
       byte[] outputDataBuf, short outputDataStart) {

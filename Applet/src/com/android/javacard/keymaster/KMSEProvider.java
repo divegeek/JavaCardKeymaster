@@ -363,6 +363,23 @@ public interface KMSEProvider extends KMUpgradable {
       byte[] outputDataBuf,
       short outputDataStart);
 
+  short ecSign256(byte[] secret, short secretStart, short secretLength,
+      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+      byte[] outputDataBuf, short outputDataStart);
+
+  short rsaSign256Pkcs1(
+      byte[] secret,
+      short secretStart,
+      short secretLength,
+      byte[] modBuf,
+      short modStart,
+      short modLength,
+      byte[] inputDataBuf,
+      short inputDataStart,
+      short inputDataLength,
+      byte[] outputDataBuf,
+      short outputDataStart);
+
   /**
    * This creates a persistent operation for signing, verify, encryption and decryption using HMAC,
    * AES and DES algorithms when keymaster hal's beginOperation function is executed. The

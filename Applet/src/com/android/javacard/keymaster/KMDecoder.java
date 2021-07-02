@@ -116,6 +116,8 @@ public class KMDecoder {
 
   private short decodeTag(short tagType, short exp) {
     switch (tagType) {
+      case KMType.BIGNUM_TAG:
+        return decodeBignumTag(exp);
       case KMType.BYTES_TAG:
         return decodeBytesTag(exp);
       case KMType.BOOL_TAG:
@@ -144,7 +146,7 @@ public class KMDecoder {
 
   private short decodeHwAuthToken(short exp) {
     short vals = decode(KMHardwareAuthToken.cast(exp).getVals());
-    return KMHardwareAuthToken.instance(vals);
+    return KMHardwareAuthToken.cast(exp).instance(vals);
   }
 
   private short decodeHmacSharingParam(short exp) {
@@ -221,6 +223,12 @@ public class KMDecoder {
     readTagKey(KMByteTag.cast(exp).getTagType());
     // The value must be byte blob
     return KMByteTag.instance(scratchBuf[TAG_KEY_OFFSET], decode(KMByteTag.cast(exp).getValue()));
+  }
+
+private short decodeBignumTag(short exp) {
+    readTagKey(KMBignumTag.cast(exp).getTagType());
+    // The value must be byte blob
+    return KMBignumTag.instance(scratchBuf[TAG_KEY_OFFSET], decode(KMBignumTag.cast(exp).getValue()));
   }
 
   private short decodeArray(short exp) {

@@ -76,7 +76,7 @@ public interface KMAttestationCert {
    * @param scratchpad Buffer to store intermediate results.
    * @return instance of KMAttestationCert.
    */
-  KMAttestationCert notBefore(short obj, byte[] scratchpad);
+  KMAttestationCert notBefore(short obj, boolean derEncoded, byte[] scratchpad);
 
 
   /**
@@ -90,8 +90,7 @@ public interface KMAttestationCert {
    * @param offset Variable used to store intermediate results.
    * @return instance of KMAttestationCert
    */
-  KMAttestationCert notAfter(short usageExpiryTimeObj,
-      short certExpirtyTimeObj, byte[] scratchPad, short offset);
+  KMAttestationCert notAfter(short usageExpiryTimeObj, boolean derEncoded, byte[] scratchPad);
 
   /**
    * Set device lock status received during booting time or due to device lock command.
@@ -154,13 +153,6 @@ public interface KMAttestationCert {
   short getCertStart();
 
   /**
-   * Get the end of the certificate
-   *
-   * @return end of the attestation cert.
-   */
-  short getCertEnd();
-
-  /**
    * Get the length of the certificate
    *
    * @return length of the attestation cert.
@@ -171,4 +163,25 @@ public interface KMAttestationCert {
    * Build the certificate. After this method the certificate is ready.
    */
   void build();
+
+  /**
+   * Set the Serial number in the certificate. If no serial number is set then serial  number is 1.
+   *
+   * @param serialNumber
+   */
+  boolean serialNumber(short serialNumber);
+
+  /**
+   * Set the Subject Name in the certificate.
+   *
+   * @param subject
+   */
+  boolean subjectName(short subject);
+
+  /**
+   * Set attestation key and mode.
+   * @param attestKey KMByteBlob of the key
+   * @param mode
+   */
+  KMAttestationCert attestKey(short attestKey, boolean rsaSign, byte mode);
 }

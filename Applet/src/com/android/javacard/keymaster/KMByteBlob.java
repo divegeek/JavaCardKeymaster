@@ -47,13 +47,17 @@ public class KMByteBlob extends KMType {
 
   // return an empty byte blob instance
   public static short instance(short length) {
-    return KMType.instance(BYTE_BLOB_TYPE, length);
+//    return KMType.instance(BYTE_BLOB_TYPE, length);
+    short ptr = KMType.instance(BYTE_BLOB_TYPE, (short)(length+2));
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), (short)(ptr+TLV_HEADER_SIZE+OFFSET_SIZE));
+    Util.setShort(heap, (short)(ptr + 1), length);
+    return ptr;
   }
 
   // byte blob from existing buf
   public static short instance(byte[] buf, short startOff, short length) {
     short ptr = instance(length);
-    Util.arrayCopyNonAtomic(buf, startOff, heap, (short) (ptr + TLV_HEADER_SIZE), length);
+    Util.arrayCopyNonAtomic(buf, startOff, heap, (short)(ptr+TLV_HEADER_SIZE+OFFSET_SIZE), length);
     return ptr;
   }
 
@@ -74,7 +78,7 @@ public class KMByteBlob extends KMType {
     if (index >= len) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    heap[(short) (instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE + index)] = val;
+    heap[(short) (getStartOff() + index)] = val;
   }
 
   // Get the byte
@@ -83,7 +87,7 @@ public class KMByteBlob extends KMType {
     if (index >= len) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    return heap[(short) (instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE + index)];
+    return heap[(short) (getStartOff() + index)];
   }
 
   // Get the start of blob
@@ -110,12 +114,20 @@ public class KMByteBlob extends KMType {
     Util.arrayCopyNonAtomic(heap, getStartOff(), destBuf, destStart, destLength);
     return destLength;
   }
+  //TODO check the following method - why length()>srcLength
+//  public void setValue(byte[] srcBuf, short srcStart, short srcLength) {
+//    if (length() > srcLength) {
+//      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+//    }
+//    Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), length());
+//  }
 
-  public void setValue(byte[] srcBuf, short srcStart, short srcLength) {
-    if (length() > srcLength) {
+public void setValue(byte[] srcBuf, short srcStart, short srcLength) {
+    if (length() < srcLength) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), length());
+    Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), srcLength);
+    setLength(srcLength);
   }
 
   public boolean isValid() {
@@ -129,5 +141,13 @@ public class KMByteBlob extends KMType {
     short length = Util.getShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1));
     length = (short) (length - len);
     Util.setShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1), length);
+  }
+
+  public void setStartOff(short offset){
+    Util.setShort(heap, (short)(instPtr+TLV_HEADER_SIZE), offset);
+  }
+
+  public void setLength(short len){
+    Util.setShort(heap, (short)(instPtr+1), len);
   }
 }

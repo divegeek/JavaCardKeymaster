@@ -29,7 +29,7 @@ public class KMEnumArrayTag extends KMTag {
   private static KMEnumArrayTag prototype;
 
   // The allowed tag keys of enum array type.
-  private static final short[] tags = {PURPOSE, BLOCK_MODE, DIGEST, PADDING};
+  private static final short[] tags = {PURPOSE, BLOCK_MODE, DIGEST, PADDING, RSA_OAEP_MGF_DIGEST};
 
   // Tag Values.
   private static Object[] enums = null;
@@ -132,7 +132,9 @@ public class KMEnumArrayTag extends KMTag {
           new byte[]{DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
           new byte[]{
             PADDING_NONE, RSA_OAEP, RSA_PSS, RSA_PKCS1_1_5_ENCRYPT, RSA_PKCS1_1_5_SIGN, PKCS7
-          }
+          },
+          new byte[]{DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
+          };
         };
     }
   }
