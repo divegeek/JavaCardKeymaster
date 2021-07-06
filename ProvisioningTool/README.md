@@ -1,18 +1,18 @@
 # Provisioning tool
-This directory contains two tools. One which constructs the apdus and dumps them to a json file, Other which gets the apuds from the json file and provision them into a secure element simulator. Both the tools can be compiled and executed from a Linux machine.
+This directory contains two tools. One which constructs the apdus and dumps them to a json file, Other which gets the apuds from the json file and provision them into a secure element simulator. Both the tools can be compiled and executed from a Linux machine.  
 
 #### Build instruction
-The default target generates both the executables. One construct_apdus and the other provision.
-$ make
-Individual targets can also be selected as shown below
-$ make construct_apdus
-$ make provision
-Make clean will remove all the object files and binaries
+The default target generates both the executables. One construct_apdus and the other provision.  
+$ make  
+Individual targets can also be selected as shown below  
+$ make construct_apdus  
+$ make provision  
+Make clean will remove all the object files and binaries  
 $ make clean
 
 #### Environment setup
-Before executing the binaries make sure LD_LIBRARY_PATH is set
-export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH
+Before executing the binaries make sure LD_LIBRARY_PATH is set  
+export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH  
 
 #### Sample resources for quick testing
 Two sample json files are located in this directory with names
@@ -29,7 +29,7 @@ Usage: construct_apdus options
 Valid options are:
 -h, --help                        show the help message and exit.
 -v, --km_version version Version of the keymaster (4.1 for keymaster; 5.0 for keymint)
--i, --input  jsonFile	 Input json file
+-i, --input  jsonFile 	 Input json file 
 -o, --output jsonFile 	 Output json file
 </pre>
 

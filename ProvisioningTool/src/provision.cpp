@@ -26,6 +26,7 @@
 #include <cppbor/cppbor.h>
 #include <cppbor/cppbor_parse.h>
 
+#define SE_POWER_RESET_STATUS_FLAG (1 << 30)
 enum ProvisionStatus {
     NOT_PROVISIONED = 0x00,
     PROVISION_STATUS_ATTESTATION_KEY = 0x01,
@@ -51,14 +52,14 @@ using cppbor::MajorType;
 // static function declarations
 static uint16_t getApduStatus(std::vector<uint8_t>& inputData);
 static int sendData(std::shared_ptr<SocketTransport>& pSocket, std::string input, std::vector<uint8_t>& response);
-static int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey, std::vector<uint8_t>& response);
-static int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t &value);
+static int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, std::vector<uint8_t>& response);
+static int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey);
+static int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t *value);
 
 
 // Print usage.
 void usage() {
-    printf("Usage: Please consturcture the apdu(s) with help of construct apdu tool and pass the output file to this utility.\n"); 
-    printf("provision [options]\n");
+    printf("Usage: provision [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
     printf("-v, --km_version version \t Version of the keymaster(4.1 for keymaster; 5 for keymint \n");
@@ -96,7 +97,7 @@ static int sendData(std::shared_ptr<SocketTransport>& pSocket, std::string input
     return SUCCESS;
 }
 
-int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t &value) {
+int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t* value) {
     Array *arr = nullptr;
 
     if (MajorType::ARRAY != item.get()->type()) {
@@ -106,10 +107,19 @@ int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t &v
     if (arr->size() < (pos + 1)) {
         return FAILURE;
     }
-    std::unique_ptr<Item> subItem = std::move((*arr)[pos]);
-    const Uint* uintVal = subItem.get()->asUint();
-    value = uintVal->value();
+    *value = arr->get(pos)->asUint()->value();
     return SUCCESS;
+}
+
+
+uint64_t unmaskPowerResetFlag(uint64_t errorCode) {
+    bool isSeResetOccurred = (0 != (errorCode & SE_POWER_RESET_STATUS_FLAG));
+
+    if (isSeResetOccurred) {
+        printf("\n Secure element reset happened\n");
+        errorCode &= ~SE_POWER_RESET_STATUS_FLAG;
+    }
+    return errorCode;
 }
 
 int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, std::vector<uint8_t>& response) {
@@ -120,7 +130,7 @@ int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, s
     if(item != nullptr) {
         uint64_t err;
         if(MajorType::ARRAY == item.get()->type()) {
-            if(SUCCESS != getUint64(item, 0, err)) {
+            if(SUCCESS != getUint64(item, 0, &err)) {
                 printf("\n Failed to parse the error code \n");
                 return FAILURE;
             }
@@ -128,6 +138,7 @@ int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, s
             const Uint* uintVal = item.get()->asUint();
             err = uintVal->value();
         }
+        err = unmaskPowerResetFlag(err);
         if (err != 0) {
             printf("\n Failed with error:%ld", err);
             return FAILURE;
@@ -139,10 +150,11 @@ int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, s
     return SUCCESS;
 }
 
-int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey, std::vector<uint8_t>& response) {
+int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey) {
     Json::Value val = root.get(jsonKey, Json::Value::nullRef);
     if (!val.isNull()) {
         if (val.isString()) {
+            std::vector<uint8_t> response;
             if (SUCCESS != provisionData(pSocket, hex2str(val.asString()), response)) {
                 printf("\n Error while provisioning %s \n", jsonKey);
                 return FAILURE;
@@ -183,25 +195,24 @@ int processInputFile() {
         printf("\n Failed to open connection \n");
         return FAILURE;
     }
-    std::vector<uint8_t> response;
 
     if (keymasterVersion == KEYMASTER_VERSION) {
         printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
-        if (0 != provisionData(pSocket, kAttestKey, response) ||
-                0 != provisionData(pSocket, kAttestCertChain, response) ||
-                0 != provisionData(pSocket, kAttestCertParams, response)) {
+        if (0 != provisionData(pSocket, kAttestKey) ||
+                0 != provisionData(pSocket, kAttestCertChain) ||
+                0 != provisionData(pSocket, kAttestCertParams)) {
             return FAILURE;
         }
     } else {
         printf("\n Selected keymint version(%f) for provisioning \n", keymasterVersion);
-        if ( 0 != provisionData(pSocket, kDeviceUniqueKey, response) ||
-                0 != provisionData(pSocket, kAdditionalCertChain, response)) {
+        if ( 0 != provisionData(pSocket, kDeviceUniqueKey) ||
+                0 != provisionData(pSocket, kAdditionalCertChain)) {
             return FAILURE;
         }
     }
-    if (0 != provisionData(pSocket, kAttestationIds, response) ||
-            0 != provisionData(pSocket, kSharedSecret, response) ||
-            0 != provisionData(pSocket, kBootParams, response)) {
+    if (0 != provisionData(pSocket, kAttestationIds) ||
+            0 != provisionData(pSocket, kSharedSecret) ||
+            0 != provisionData(pSocket, kBootParams)) {
         return FAILURE;
     }
     return SUCCESS;
@@ -237,7 +248,7 @@ int getProvisionStatus() {
     auto [item, pos, message] = cppbor::parse(response);
     if(item != nullptr) {
         uint64_t status;
-        if(SUCCESS != getUint64(item, 1, status)) {
+        if(SUCCESS != getUint64(item, 1, &status)) {
             printf("\n Failed to get the provision status.\n");
             return FAILURE;
         }

@@ -31,6 +31,7 @@
 #include <constants.h>
 #include <utils.h>
 #include "cppbor/cppbor.h"
+#include "cppcose/cppcose.h"
 
 // static globals.
 static double keymasterVersion = -1;
@@ -43,6 +44,13 @@ using namespace std;
 using cppbor::Array;
 using cppbor::Map;
 using cppbor::Bstr;
+using cppcose::CoseKey;
+using cppcose::EC2;
+using cppcose::ES256;
+using cppcose::P256;
+using cppcose::SIGN;
+using cppcose::bytevec;
+
 
 // static function declarations
 static int processInputFile();
@@ -57,17 +65,20 @@ static int processSetBootParameters();
 static int readDataFromFile(const char *fileName, std::vector<uint8_t>& data);
 static int addApduHeader(const int ins, std::vector<uint8_t>& inputData);
 static int ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>&publicKey);
+static int ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, 
+                             std::vector<uint8_t>& pub_x, std::vector<uint8_t>& pub_y);
 static X509* parseDerCertificate(std::vector<uint8_t>& certData);
 static int getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate);
 static int getDerSubjectName(X509* x509, std::vector<uint8_t>& subject);
-static int getBootParameterIntValue(Json::Value& bootParamsObj, const char* key, uint32_t *value);
-static int getBootParameterBlobValue(Json::Value& bootParamsObj, const char* key, std::vector<uint8_t>& blob);
+static int getIntValue(Json::Value& Obj, const char* key, uint32_t *value);
+static int getBlobValue(Json::Value& Obj, const char* key, std::vector<uint8_t>& blob);
+static int getStringValue(Json::Value& Obj, const char* key, std::string& str);
+static int getDeviceUniqueKey(bytevec& privKey, bytevec& x, bytevec& y);
 
 
 // Print usage.
 void usage() {
-    printf("Usage: Please give jason files with values as input to generate the apdus command. Please refer to sample_json files available in the folder for reference. Sample json files are written using hardcode parameters to be used for testing setup on cuttlefilsh emulator and goldfish emulators\n");
-    printf("construct_apdus [options]\n");
+    printf("Usage: construct_apdus [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
     printf("-v, --km_version version \t Version of the keymaster (4.1 for keymaster; 5 for keymint) \n");
@@ -129,7 +140,7 @@ int getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate) {
 }
 
 
-int getBootParameterIntValue(Json::Value& bootParamsObj, const char* key, uint32_t *value) {
+int getIntValue(Json::Value& bootParamsObj, const char* key, uint32_t *value) {
     Json::Value val = bootParamsObj[key];
     if(val.empty())
         return FAILURE;
@@ -142,7 +153,21 @@ int getBootParameterIntValue(Json::Value& bootParamsObj, const char* key, uint32
     return SUCCESS;
 }
 
-int getBootParameterBlobValue(Json::Value& bootParamsObj, const char* key, std::vector<uint8_t>& blob) {
+int getStringValue(Json::Value& Obj, const char* key, std::string& str) {
+    Json::Value val = Obj[key];
+    if(val.empty())
+        return FAILURE;
+
+    if(!val.isString())
+        return FAILURE;
+
+    str = val.asString();
+
+    return SUCCESS;
+
+}
+
+int getBlobValue(Json::Value& bootParamsObj, const char* key, std::vector<uint8_t>& blob) {
     Json::Value val = bootParamsObj[key];
     if(val.empty())
         return FAILURE;
@@ -179,7 +204,7 @@ int processInputFile() {
     } else {
         printf("\n Selected keymint version(%f) for provisioning \n", keymasterVersion);
         if ( 0 != processDeviceUniqueKey() ||
-                0 != processAttestationCertificateChain()) {
+                0 != processAdditionalCertificateChain()) {
             return FAILURE;
         }
     }
@@ -192,6 +217,163 @@ int processInputFile() {
         return FAILURE;
     }
     printf("\n Successfully written json to outfile: %s\n ", outputFileName.c_str());
+    return SUCCESS;
+}
+
+int processAdditionalCertificateChain() {
+    Json::Value signerInfo = root.get(kSignerInfo, Json::Value::nullRef);
+    if (!signerInfo.isNull()) {
+        std::string signerName;
+        std::string signingKeyFile;
+        std::vector<uint8_t> previousKey;
+        Array array;
+
+        if (SUCCESS != getStringValue(signerInfo, "signer_name", signerName)) {
+            printf("\n Improper value for signer_name in json file \n");
+            return FAILURE;
+        }
+
+        Json::Value keys = signerInfo.get("signing_keys", Json::Value::nullRef);
+        if (!keys.isNull()) {
+            if (!keys.isArray()) {
+                printf("\n Improper value for signing_keys in json file \n");
+                return FAILURE;
+            }
+            for(uint32_t i = 0; i < keys.size(); i++) {
+                std::vector<uint8_t> data;
+                std::vector<uint8_t> privateKey;
+                std::vector<uint8_t> x_coord;
+                std::vector<uint8_t> y_coord;
+
+                if (!keys[i].isString()) {
+                    printf("\n Improper value for signing_keys in json file \n");
+                    return FAILURE;
+                }
+
+                if(SUCCESS != readDataFromFile(keys[i].asString().data(), data)) {
+                    printf("\n Failed to read the attestation key from the file.\n");
+                    return FAILURE;
+                }
+                if (SUCCESS != ecRawKeyFromPKCS8(data, privateKey, x_coord, y_coord)) {
+                    return FAILURE;
+                }
+
+                if (i == 0) {
+                    // self-signed.
+                    previousKey = privateKey;
+                }
+
+                auto rootCoseSign =
+                    cppcose::constructCoseSign1(previousKey, /* Signing key */
+                            cppbor::Map() /* Payload CoseKey */
+                            .add(CoseKey::KEY_TYPE, EC2)
+                            .add(CoseKey::ALGORITHM, ES256)
+                            .add(CoseKey::CURVE, P256)
+                            .add(CoseKey::KEY_OPS, SIGN)
+                            .add(CoseKey::PUBKEY_X, x_coord)
+                            .add(CoseKey::PUBKEY_Y, y_coord)
+                            .canonicalize()
+                            .encode(),
+                            {} /* AAD */);
+                if (!rootCoseSign) {
+                    printf("\n Failed to construct CoseSign1 %s\n", rootCoseSign.moveMessage().c_str());
+                    return FAILURE;
+                }
+
+                // Add to cbor array
+                array.add(rootCoseSign.moveValue());
+                previousKey = privateKey;
+            }
+        }
+
+        std::vector<uint8_t> dk_priv;
+        std::vector<uint8_t> dk_pub_x;
+        std::vector<uint8_t> dk_pub_y;
+        if (SUCCESS == getDeviceUniqueKey(dk_priv, dk_pub_x, dk_pub_y)) {
+            auto dkCoseSign =
+                cppcose::constructCoseSign1(previousKey, /* Signing key */
+                        cppbor::Map() /* Payload CoseKey */
+                                .add(CoseKey::KEY_TYPE, EC2)
+                                .add(CoseKey::ALGORITHM, ES256)
+                                .add(CoseKey::CURVE, P256)
+                                .add(CoseKey::KEY_OPS, SIGN)
+                                .add(CoseKey::PUBKEY_X, dk_pub_x)
+                                .add(CoseKey::PUBKEY_Y, dk_pub_y)
+                                .canonicalize()
+                        .encode(),
+                        {} /* AAD */);
+            if (!dkCoseSign) {
+                printf("\n Failed to construct CoseSign1 %s\n", dkCoseSign.moveMessage().c_str());
+                return FAILURE;
+            }
+            array.add(dkCoseSign.moveValue());
+            std::vector<uint8_t> cborData = Map().add(signerName, std::move(array)).encode();
+            if(SUCCESS != addApduHeader(kAdditionalCertChainCmd, cborData)) {
+                return FAILURE;
+            }
+            // Write to json.
+            writerRoot[kAdditionalCertChain] = getHexString(cborData);
+        } else {
+            return FAILURE;
+        }
+
+    } else {
+        printf("\n Improper value for signer_info in json file \n");
+        return FAILURE;
+    }
+    printf("\n Constructed additional cert chain APDU successfully. \n");
+    return SUCCESS;
+}
+
+int getDeviceUniqueKey(bytevec& privKey, bytevec& x, bytevec& y) {
+    Json::Value keyFile = root.get(kDeviceUniqueKey, Json::Value::nullRef);
+    if (!keyFile.isNull()) {
+        std::vector<uint8_t> data;
+
+        std::string keyFileName = keyFile.asString();
+        if(SUCCESS != readDataFromFile(keyFileName.data(), data)) {
+            printf("\n Failed to read the attestation key from the file.\n");
+            return FAILURE;
+        }
+        if (SUCCESS != ecRawKeyFromPKCS8(data, privKey, x, y)) {
+            return FAILURE;
+        }
+    } else {
+        printf("\n Improper value for device_unique_key in json file \n");
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+int processDeviceUniqueKey() {
+    std::vector<uint8_t> privateKey;
+    std::vector<uint8_t> x_coord;
+    std::vector<uint8_t> y_coord;
+    if (SUCCESS == getDeviceUniqueKey(privateKey, x_coord, y_coord)) {
+        // Construct COSE_Key
+        cppbor::Map cose_public_key_map = cppbor::Map()
+                                          .add(CoseKey::KEY_TYPE, EC2)
+                                          .add(CoseKey::ALGORITHM, ES256)
+                                          .add(CoseKey::CURVE, P256)
+                                          .add(CoseKey::KEY_OPS, SIGN)
+                                          .add(CoseKey::PUBKEY_X, x_coord)
+                                          .add(CoseKey::PUBKEY_Y, y_coord)
+                                          .add(CoseKey::PRIVATE_KEY, privateKey);
+ 
+        Array array;
+        array.add(std::move(cose_public_key_map.canonicalize()));
+        std::vector<uint8_t> cborData = array.encode();
+
+        if(SUCCESS != addApduHeader(kDeviceUniqueKeyCmd, cborData)) {
+            return FAILURE;
+        }
+        // Write to json.
+        writerRoot[kDeviceUniqueKey] = getHexString(cborData);
+
+    } else {
+        return FAILURE;
+    }
+    printf("\n Constructed device unique key APDU successfully. \n");
     return SUCCESS;
 }
 
@@ -426,23 +608,23 @@ int processSetBootParameters() {
     Json::Value bootParamsObj = root.get("set_boot_params", Json::Value::nullRef);
     if (!bootParamsObj.isNull()) {
 
-        if(SUCCESS != getBootParameterIntValue(bootParamsObj, "boot_patch_level", &bootPatchLevel)) {
+        if(SUCCESS != getIntValue(bootParamsObj, "boot_patch_level", &bootPatchLevel)) {
             printf("\n Invalid value for boot_patch_level or boot_patch_level tag missing\n");
             return FAILURE;
         }
-        if(SUCCESS != getBootParameterBlobValue(bootParamsObj, "verified_boot_key", verifiedBootKey)) {
+        if(SUCCESS != getBlobValue(bootParamsObj, "verified_boot_key", verifiedBootKey)) {
             printf("\n Invalid value for verified_boot_key or verified_boot_key tag missing\n");
             return FAILURE;
         }
-        if(SUCCESS != getBootParameterBlobValue(bootParamsObj, "verified_boot_key_hash", verifiedBootKeyHash)) {
+        if(SUCCESS != getBlobValue(bootParamsObj, "verified_boot_key_hash", verifiedBootKeyHash)) {
             printf("\n Invalid value for verified_boot_key_hash or verified_boot_key_hash tag missing\n");
             return FAILURE;
         }
-        if(SUCCESS != getBootParameterIntValue(bootParamsObj, "boot_state", &verifiedBootState)) {
+        if(SUCCESS != getIntValue(bootParamsObj, "boot_state", &verifiedBootState)) {
             printf("\n Invalid value for boot_state or boot_state tag missing\n");
             return FAILURE;
         }
-        if(SUCCESS != getBootParameterIntValue(bootParamsObj, "device_locked", &deviceLocked)) {
+        if(SUCCESS != getIntValue(bootParamsObj, "device_locked", &deviceLocked)) {
             printf("\n Invalid value for device_locked or device_locked tag missing\n");
             return FAILURE;
         }
@@ -469,6 +651,66 @@ int processSetBootParameters() {
 
     //---------------------------------
     printf("\n Constructed boot paramters APDU successfully \n");
+    return SUCCESS;
+}
+
+int ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret,
+        std::vector<uint8_t>& pub_x, std::vector<uint8_t>& pub_y) {
+    const uint8_t *data = pkcs8Blob.data();
+    EVP_PKEY *evpkey = d2i_PrivateKey(EVP_PKEY_EC, nullptr, &data, pkcs8Blob.size());
+    if(!evpkey) {
+        printf("\n Failed to decode private key from PKCS8, Error: %ld", ERR_peek_last_error());
+        return FAILURE;
+    }
+    EVP_PKEY_Ptr pkey(evpkey);
+
+    EC_KEY_Ptr ec_key(EVP_PKEY_get1_EC_KEY(pkey.get()));
+    if(!ec_key.get()) {
+        printf("\n Failed to create EC_KEY, Error: %ld", ERR_peek_last_error());
+        return FAILURE;
+    }
+
+    //Get EC Group
+    const EC_GROUP *group = EC_KEY_get0_group(ec_key.get());
+    if(group == NULL) {
+        printf("\n Failed to get the EC_GROUP from ec_key.");
+        return FAILURE;
+    }
+
+    //Extract private key.
+    const BIGNUM *privBn = EC_KEY_get0_private_key(ec_key.get());
+    int privKeyLen = BN_num_bytes(privBn);
+    std::unique_ptr<uint8_t[]> privKey(new uint8_t[privKeyLen]);
+    BN_bn2bin(privBn, privKey.get());
+    secret.insert(secret.begin(), privKey.get(), privKey.get()+privKeyLen);
+
+    //Extract public key.
+    BIGNUM_Ptr x(BN_new());
+    BIGNUM_Ptr y(BN_new());
+    std::vector<uint8_t> dataX(kAffinePointLength);
+    std::vector<uint8_t> dataY(kAffinePointLength);
+    BN_CTX_Ptr ctx(BN_CTX_new());
+    if (ctx == nullptr) {
+        printf("\nFailed to get BN_CTX \n");
+        return FAILURE;
+    }
+    const EC_POINT *point = EC_KEY_get0_public_key(ec_key.get());
+
+    if (!EC_POINT_get_affine_coordinates_GFp(EC_KEY_get0_group(ec_key.get()), point, x.get(), 
+                                             y.get(), ctx.get())) {
+        printf("\nFailed to get affine coordinates\n");
+        return FAILURE;
+    }   
+    if (BN_bn2binpad(x.get(), dataX.data(), kAffinePointLength) != kAffinePointLength) {
+        printf("\nFailed to get x coordinate\n");
+        return FAILURE;
+    }   
+    if (BN_bn2binpad(y.get(), dataY.data(), kAffinePointLength) != kAffinePointLength) {
+        printf("\nFailed to get y coordinate\n");
+        return FAILURE;
+    }
+    pub_x = dataX;
+    pub_y = dataY;
     return SUCCESS;
 }
 
@@ -563,11 +805,6 @@ exit:
     fclose(fp);
     return ret;
 }
-
-// TODO
-static int processDeviceUniqueKey() { return 0; }
-static int processAdditionalCertificateChain() { return 0; }
-
 
 int main(int argc, char* argv[]) {
     int c;

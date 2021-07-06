@@ -37,7 +37,6 @@
 #define APDU_P2  0x00
 #define INS_BEGIN_KM_CMD 0x00
 #define APDU_RESP_STATUS_OK 0x9000
-#define SE_POWER_RESET_STATUS_FLAG ( 1 << 30)
 
 
 
@@ -53,7 +52,16 @@ struct OpenSslObjectDeleter {
 DEFINE_OPENSSL_OBJECT_POINTER(EC_KEY)
 DEFINE_OPENSSL_OBJECT_POINTER(EVP_PKEY)
 DEFINE_OPENSSL_OBJECT_POINTER(X509)
+DEFINE_OPENSSL_OBJECT_POINTER(EC_POINT)
+DEFINE_OPENSSL_OBJECT_POINTER(EC_GROUP)
+DEFINE_OPENSSL_OBJECT_POINTER(BN_CTX)
+DEFINE_OPENSSL_OBJECT_POINTER(EVP_MD_CTX)
 
+typedef OpenSslObjectDeleter<BIGNUM, void, BN_free> BIGNUM_Delete;
+typedef UniquePtr<BIGNUM, BIGNUM_Delete> BIGNUM_Ptr;
+
+// EC Affine point length for Nist P256.
+constexpr uint32_t kAffinePointLength = 32;
 
 // Tags
 constexpr uint64_t kTagAlgorithm = 268435458u;
@@ -85,6 +93,7 @@ constexpr char kBootParams[] = "boot_params";
 constexpr char kAttestationIds[] = "attestation_ids";
 constexpr char kDeviceUniqueKey[] = "device_unique_key";
 constexpr char kAdditionalCertChain[] = "additional_cert_chain";
+constexpr char kSignerInfo[] = "signer_info";
 constexpr char kProvisionStatus[] = "provision_status";
 constexpr char kLockProvision[] = "lock_provision";
 

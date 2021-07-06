@@ -2,8 +2,9 @@ CC = g++
 SRC_DIR = src
 # source files for construct_apdus 
 CONSTRUCT_APDUS_SRC = $(SRC_DIR)/construct_apdus.cpp \
-                      $(SRC_DIR)/cppbor.cpp \
-                      $(SRC_DIR)/cppbor_parse.cpp \
+                      $(SRC_DIR)/cppbor/cppbor.cpp \
+                      $(SRC_DIR)/cppbor/cppbor_parse.cpp \
+                      $(SRC_DIR)/cppcose/cppcose.cpp \
                       $(SRC_DIR)/utils.cpp \
 
 CONSTRUCT_APDUS_OBJFILES = $(CONSTRUCT_APDUS_SRC:.cpp=.o)
@@ -12,8 +13,8 @@ CONSTRUCT_APDUS_BIN = construct_apdus
 # source files for provision
 PROVISION_SRC = $(SRC_DIR)/provision.cpp \
                 $(SRC_DIR)/socket.cpp \
-                $(SRC_DIR)/cppbor.cpp \
-                $(SRC_DIR)/cppbor_parse.cpp \
+                $(SRC_DIR)/cppbor/cppbor.cpp \
+                $(SRC_DIR)/cppbor/cppbor_parse.cpp \
                 $(SRC_DIR)/utils.cpp \
 
 PROVISION_OBJFILES = $(PROVISION_SRC:.cpp=.o)
