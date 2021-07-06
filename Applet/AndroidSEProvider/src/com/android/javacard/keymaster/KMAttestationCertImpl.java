@@ -84,8 +84,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte keyUsageKeyEncipher = (byte) 0x20; // 2nd- bit
   private static final byte keyUsageDataEncipher = (byte) 0x10; // 3rd- bit
 
-  private static final byte KEYMASTER_VERSION = 4;
-  private static final byte ATTESTATION_VERSION = 3;
+  private static final byte KEYMASTER_VERSION = 41;
+  private static final byte ATTESTATION_VERSION = 4;
   private static final byte[] pubExponent = {0x01, 0x00, 0x01};
   private static final byte SERIAL_NUM = (byte) 0x01;
   private static final byte X509_VERSION = (byte) 0x02;
@@ -462,14 +462,16 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     // Below are the allowed hardwareEnforced Authorization tags inside the attestation certificate's extension.
     short[] tagIds = {
         KMType.BOOT_PATCH_LEVEL, KMType.VENDOR_PATCH_LEVEL,
+        KMType.ATTESTATION_ID_MODEL, KMType.ATTESTATION_ID_MANUFACTURER,
+        KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI,
+        KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
+        KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
         KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
-        KMType.ORIGIN, KMType.APPLICATION_ID,
-        KMType.TRUSTED_CONFIRMATION_REQUIRED,
-        KMType.TRUSTED_USER_PRESENCE_REQUIRED, KMType.ALLOW_WHILE_ON_BODY,
-        KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE, KMType.NO_AUTH_REQUIRED,
-        KMType.ROLLBACK_RESISTANCE, KMType.RSA_PUBLIC_EXPONENT,
-        KMType.ECCURVE, KMType.PADDING, KMType.DIGEST, KMType.KEYSIZE,
-        KMType.ALGORITHM, KMType.PURPOSE};
+        KMType.ORIGIN, KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE,
+        KMType.NO_AUTH_REQUIRED, KMType.USER_SECURE_ID,
+        KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE, KMType.MIN_MAC_LENGTH,
+        KMType.CALLER_NONCE, KMType.PADDING, KMType.DIGEST, KMType.BLOCK_MODE,
+        KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE};
 
     byte index = 0;
     do {
