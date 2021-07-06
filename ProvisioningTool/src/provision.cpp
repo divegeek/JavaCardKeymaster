@@ -59,6 +59,7 @@ static int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint
 
 // Print usage.
 void usage() {
+    printf("Usage: Please consturcture the apdu(s) with help of construct apdu tool and pass the output file to this utility.\n");
     printf("Usage: provision [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
