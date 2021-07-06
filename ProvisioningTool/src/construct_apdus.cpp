@@ -79,7 +79,7 @@ static int getDeviceUniqueKey(bytevec& privKey, bytevec& x, bytevec& y);
 // Print usage.
 void usage() {
     printf("Usage: Please give json files with values as input to generate the apdus command. Please refer to sample_json files available in the folder for reference. Sample json files are written using hardcode parameters to be used for testing setup on cuttlefilsh emulator and goldfish emulators\n");
-    printf("Usage: construct_apdus [options]\n");
+    printf("construct_apdus [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
     printf("-v, --km_version version \t Version of the keymaster (4.1 for keymaster; 5 for keymint) \n");

@@ -60,7 +60,7 @@ static int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint
 // Print usage.
 void usage() {
     printf("Usage: Please consturcture the apdu(s) with help of construct apdu tool and pass the output file to this utility.\n");
-    printf("Usage: provision [options]\n");
+    printf("provision [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
     printf("-v, --km_version version \t Version of the keymaster(4.1 for keymaster; 5 for keymint \n");
