@@ -70,7 +70,7 @@ void usage() {
     printf("construct_apdus [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
-    printf("-v, --km_version version \t Version of the keymaster (4.1 for keymaster; 5 for keymint) \n");
+    printf("-v, --km_version version \t Version of the keymaster (40 or 41 for respective keymaster version; 100 for keymint) \n");
     printf("-i, --input  jsonFile \t Input json file \n");
     printf("-o, --output jsonFile \t Output json file \n");
 }
@@ -169,7 +169,7 @@ int processInputFile() {
         return FAILURE;
     }
 
-    if (keymasterVersion == KEYMASTER_VERSION) {
+    if (keymasterVersion == KEYMASTER_VERSION40 || keymasterVersion == KEYMASTER_VERSION41) {
         printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
         if (0 != processAttestationKey() ||
                 0 != processAttestationCertificateChain() ||
@@ -624,7 +624,7 @@ int main(int argc, char* argv[]) {
         usage();
         return FAILURE;
     }
-    if (keymasterVersion != KEYMASTER_VERSION && keymasterVersion != KEYMINT_VERSION) {
+    if (keymasterVersion != KEYMASTER_VERSION40 && keymasterVersion != KEYMASTER_VERSION41 && keymasterVersion != KEYMINT_VERSION) {
         printf("\n Error unknown version.");
         return FAILURE;
     }

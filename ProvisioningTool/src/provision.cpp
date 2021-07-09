@@ -61,7 +61,7 @@ void usage() {
     printf("provision [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
-    printf("-v, --km_version version \t Version of the keymaster(4.1 for keymaster; 5 for keymint \n");
+    printf("-v, --km_version version \t Version of the keymaster(4.0 or 4.1 for keymaster; 100 for keymint \n");
     printf("-i, --input  jsonFile \t Input json file \n");
     printf("-s, --provision_status jsonFile \t Gets the provision status of applet. \n");
     printf("-l, --lock_provision jsonFile \t Gets the provision status of applet. \n");
@@ -169,7 +169,7 @@ int openConnection(std::shared_ptr<SocketTransport>& pSocket) {
 // Parses the input json file. Sends the apdus to JCServer.
 int processInputFile() {
 
-    if (keymasterVersion != KEYMASTER_VERSION && keymasterVersion != KEYMINT_VERSION) {
+    if (keymasterVersion != KEYMASTER_VERSION40 && keymasterVersion != KEYMASTER_VERSION41 && keymasterVersion != KEYMINT_VERSION) {
         printf("\n Error unknown version.\n");
         usage();
         return FAILURE;
@@ -185,7 +185,7 @@ int processInputFile() {
     }
     std::vector<uint8_t> response;
 
-    if (keymasterVersion == KEYMASTER_VERSION) {
+    if (keymasterVersion == KEYMASTER_VERSION40 || keymasterVersion == KEYMASTER_VERSION41) {
         printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
         if (0 != provisionData(pSocket, kAttestKey, response) ||
                 0 != provisionData(pSocket, kAttestCertChain, response) ||

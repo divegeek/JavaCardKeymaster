@@ -25,13 +25,14 @@
 
 #define SUCCESS 0
 #define FAILURE 1
-#define KEYMASTER_VERSION 4.1
-#define KEYMINT_VERSION 5
+#define KEYMASTER_VERSION40 40
+#define KEYMASTER_VERSION41 41
+#define KEYMINT_VERSION 100
 #define P1_40 0x40
 #define P1_50 0x50
 #define APDU_CLS 0x80
 #define APDU_P1(version)  \
-         (version == KEYMASTER_VERSION) ? \
+         (version == KEYMASTER_VERSION40 || version == KEYMASTER_VERSION41) ? \
          P1_40 : \
          P1_50
 #define APDU_P2  0x00
