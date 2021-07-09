@@ -16,16 +16,16 @@
 */
 
 #include <android-base/logging.h>
-#include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
+#include <android/hardware/keymaster/4.0/IKeymasterDevice.h>
 #include <hidl/HidlTransportSupport.h>
 #include <JavacardKeymaster4Device.h>
 
 int main() {
     ::android::hardware::configureRpcThreadpool(1, true);
-    auto keymaster = new ::keymaster::V4_1::javacard::JavacardKeymaster4Device();
+    auto keymaster = new ::keymaster::V4_0::javacard::JavacardKeymaster4Device();
     auto status = keymaster->registerAsService("strongbox");
     if (status != android::OK) {
-        LOG(FATAL) << "Could not register service for Javacard Keymaster 4.1 (" << status << ")";
+        LOG(FATAL) << "Could not register service for Javacard Keymaster 4.0 (" << status << ")";
         return -1;
     }
 

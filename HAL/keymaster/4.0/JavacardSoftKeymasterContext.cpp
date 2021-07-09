@@ -30,12 +30,12 @@
 #include <CommonUtils.h>
 
 using std::unique_ptr;
-using ::keymaster::V4_1::javacard::KmParamSet;
+using ::keymaster::V4_0::javacard::KmParamSet;
 
 namespace keymaster {
 
 JavaCardSoftKeymasterContext::JavaCardSoftKeymasterContext(keymaster_security_level_t security_level)
-    : PureSoftKeymasterContext(KmVersion::KEYMASTER_4_1, security_level) {}
+    : PureSoftKeymasterContext(KmVersion::KEYMASTER_4, security_level) {}
 
 JavaCardSoftKeymasterContext::~JavaCardSoftKeymasterContext() {}
 

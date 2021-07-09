@@ -15,16 +15,16 @@
  ** limitations under the License.
  */
 
-#ifndef KEYMASTER_V4_1_JAVACARD_OPERATIONCONTEXT_H_
-#define KEYMASTER_V4_1_JAVACARD_OPERATIONCONTEXT_H_
+#ifndef KEYMASTER_V4_0_JAVACARD_OPERATIONCONTEXT_H_
+#define KEYMASTER_V4_0_JAVACARD_OPERATIONCONTEXT_H_
 
 #include <iostream>
-#include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
+#include <android/hardware/keymaster/4.0/IKeymasterDevice.h>
 
 #define MAX_BUF_SIZE 256
 
 namespace keymaster {
-namespace V4_1 {
+namespace V4_0 {
 namespace javacard {
 
 using ::android::hardware::hidl_vec;
@@ -148,7 +148,7 @@ private:
 };
 
 }  // namespace javacard
-}  // namespace V4_1
+}  // namespace V4_0
 }  // namespace keymaster
 
-#endif  // KEYMASTER_V4_1_JAVACARD_OPERATIONCONTEXT_H_
+#endif  // KEYMASTER_V4_0_JAVACARD_OPERATIONCONTEXT_H_

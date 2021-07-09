@@ -23,7 +23,7 @@
 #include <cppbor.h>
 #include <cppbor_parse.h>
 #include <hidl/HidlSupport.h>
-#include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
+#include <android/hardware/keymaster/4.0/IKeymasterDevice.h>
 
 using namespace cppbor;
 
@@ -154,8 +154,7 @@ class CborConverter
         /**
          * Get the ErrorCode value at the give position from the item pointer.
          */
-        template<typename T, typename = std::enable_if_t<(std::is_same_v<T, ErrorCode>) ||
-            (std::is_same_v<T, ::android::hardware::keymaster::V4_1::ErrorCode>)>>
+        template<typename T, typename = std::enable_if_t<(std::is_same_v<T, ErrorCode>)>>
             inline bool getErrorCode(const std::unique_ptr<Item>& item, const uint32_t pos, T& errorCode) {
                 bool ret = false;
                 uint64_t errorVal;

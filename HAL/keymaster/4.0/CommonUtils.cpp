@@ -36,7 +36,7 @@
 #define LENGTH_VALUE_MASK 0x7F
 
 namespace keymaster {
-namespace V4_1 {
+namespace V4_0 {
 namespace javacard {
 
 constexpr char kVendorPatchlevelProp[] = "ro.vendor.build.security_patch";
@@ -349,5 +349,5 @@ uint32_t GetVendorPatchlevel() {
 
 
 }  // namespace javacard
-}  // namespace V4_1
+}  // namespace V4_0
 }  // namespace keymaster

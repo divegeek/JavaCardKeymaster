@@ -26,7 +26,7 @@
 #define MAX_EC_BUFFER_SIZE      32
 
 namespace keymaster {
-namespace V4_1 {
+namespace V4_0 {
 namespace javacard {
 
 enum class Operation {
@@ -381,5 +381,5 @@ ErrorCode OperationContext::handleInternalUpdate(uint64_t operHandle, uint8_t* d
 
 
 }  // namespace javacard
-}  // namespace V4_1
+}  // namespace V4_0
 }  // namespace keymaster

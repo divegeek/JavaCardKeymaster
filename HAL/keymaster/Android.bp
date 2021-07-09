@@ -15,16 +15,16 @@
 
 
 cc_binary {
-    name: "android.hardware.keymaster@4.1-strongbox.service",
+    name: "android.hardware.keymaster@4.0-strongbox.service",
     relative_install_path: "hw",
     vendor: true,
-    init_rc: ["4.1/android.hardware.keymaster@4.1-strongbox.service.rc"],
-    vintf_fragments: ["4.1/android.hardware.keymaster@4.1-strongbox.service.xml"],
+    init_rc: ["4.0/android.hardware.keymaster@4.0-strongbox.service.rc"],
+    vintf_fragments: ["4.0/android.hardware.keymaster@4.0-strongbox.service.xml"],
     srcs: [
-        "4.1/service.cpp",
-        "4.1/JavacardKeymaster4Device.cpp",
-        "4.1/JavacardSoftKeymasterContext.cpp",
-        "4.1/JavacardOperationContext.cpp",
+        "4.0/service.cpp",
+        "4.0/JavacardKeymaster4Device.cpp",
+        "4.0/JavacardSoftKeymasterContext.cpp",
+        "4.0/JavacardOperationContext.cpp",
     ],
     local_include_dirs: [
         "include",
@@ -42,7 +42,6 @@ cc_binary {
         "libkeymaster_messages",
         "libkeymaster_portable",
         "libcppbor_external",
-        "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
         "libjc_transport",
         "libjc_common",
@@ -56,11 +55,11 @@ cc_binary {
 cc_library {
     name: "libJavacardKeymaster41",
     srcs: [
-        "4.1/JavacardKeymaster4Device.cpp",
-        "4.1/CborConverter.cpp",
-        "4.1/JavacardSoftKeymasterContext.cpp",
-        "4.1/JavacardOperationContext.cpp",
-        "4.1/CommonUtils.cpp",
+        "4.0/JavacardKeymaster4Device.cpp",
+        "4.0/CborConverter.cpp",
+        "4.0/JavacardSoftKeymasterContext.cpp",
+        "4.0/JavacardOperationContext.cpp",
+        "4.0/CommonUtils.cpp",
     ],
     local_include_dirs: [
         "include",
@@ -78,7 +77,7 @@ cc_library {
         "libkeymaster_messages",
         "libkeymaster_portable",
         "libcppbor_external",
-        "android.hardware.keymaster@4.1",
+        "android.hardware.keymaster@4.0",
         "android.hardware.keymaster@4.0",
         "libjc_transport",
 	"libcrypto",
@@ -94,8 +93,8 @@ cc_library {
     },
 
     srcs: [
-        "4.1/SocketTransport.cpp",
-        "4.1/OmapiTransport.cpp"
+        "4.0/SocketTransport.cpp",
+        "4.0/OmapiTransport.cpp"
     ],
     export_include_dirs: [
         "include"
@@ -111,8 +110,8 @@ cc_library {
     name: "libjc_common",
     vendor_available: true,
     srcs: [
-        "4.1/CommonUtils.cpp",
-        "4.1/CborConverter.cpp",
+        "4.0/CommonUtils.cpp",
+        "4.0/CborConverter.cpp",
     ],
     local_include_dirs: [
         "include",
@@ -133,7 +132,6 @@ cc_library {
         "libkeymaster_messages",
 	"libkeymaster_portable",
         "libcppbor_external",
-        "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
 	"libcrypto",
     ],
@@ -143,5 +141,5 @@ prebuilt_etc {
     name: "android.hardware.strongbox_keystore.xml",
     sub_dir: "permissions",
     vendor: true,
-    src: "4.1/android.hardware.strongbox_keystore.xml",
+    src: "4.0/android.hardware.strongbox_keystore.xml",
 }

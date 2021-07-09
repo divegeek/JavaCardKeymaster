@@ -15,10 +15,10 @@
  ** limitations under the License.
  */
 
-#ifndef KEYMASTER_V4_1_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
-#define KEYMASTER_V4_1_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
+#ifndef KEYMASTER_V4_0_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
+#define KEYMASTER_V4_0_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
 
-#include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
+#include <android/hardware/keymaster/4.0/IKeymasterDevice.h>
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
 #include <android-base/properties.h>
@@ -30,7 +30,7 @@
 #include <JavacardOperationContext.h>
 
 namespace keymaster {
-namespace V4_1 {
+namespace V4_0 {
 namespace javacard {
 
 using ::android::hardware::hidl_vec;
@@ -49,10 +49,10 @@ using ::android::hardware::keymaster::V4_0::KeyPurpose;
 using ::android::hardware::keymaster::V4_0::OperationHandle;
 using ::android::hardware::keymaster::V4_0::SecurityLevel;
 using ::android::hardware::keymaster::V4_0::VerificationToken;
-using ::android::hardware::keymaster::V4_1::IKeymasterDevice;
+using ::android::hardware::keymaster::V4_0::IKeymasterDevice;
 using ::android::hardware::keymaster::V4_0::Tag;
 
-using V41ErrorCode = ::android::hardware::keymaster::V4_1::ErrorCode;
+using V41ErrorCode = ::android::hardware::keymaster::V4_0::ErrorCode;
 
 class JavacardKeymaster4Device : public IKeymasterDevice {
   public:
@@ -81,10 +81,6 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     Return<void> finish(uint64_t operationHandle, const hidl_vec<KeyParameter>& inParams, const hidl_vec<uint8_t>& input, const hidl_vec<uint8_t>& signature, const HardwareAuthToken& authToken, const VerificationToken& verificationToken, finish_cb _hidl_cb) override;
     Return<ErrorCode> abort(uint64_t operationHandle) override;
 
-    // Methods from ::android::hardware::keymaster::V4_1::IKeymasterDevice follow.
-    Return<V41ErrorCode> deviceLocked(bool passwordOnly, const VerificationToken& verificationToken) override;
-    Return<V41ErrorCode> earlyBootEnded() override;
-
 protected:
     CborConverter cborConverter_;
 	
@@ -95,7 +91,7 @@ private:
 };
 
 }  // namespace javacard
-}  // namespace V4_1
+}  // namespace V4_0
 }  // namespace keymaster
 
-#endif  // KEYMASTER_V4_1_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
+#endif  // KEYMASTER_V4_0_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
