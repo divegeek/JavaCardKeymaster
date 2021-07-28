@@ -1577,7 +1577,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     boolean empty = true;
     short index = 0;
     while (index < len) {
-      if (buf[index] != 0) {
+      if (buf[(short) (index + offset)] != 0) {
         empty = false;
         break;
       }
