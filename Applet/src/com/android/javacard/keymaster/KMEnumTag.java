@@ -29,10 +29,9 @@ public class KMEnumTag extends KMTag {
 
   private static KMEnumTag prototype;
 
-
   // The allowed tag keys of type enum tag.
   private static short[] tags = {
-    ALGORITHM, ECCURVE, BLOB_USAGE_REQ, USER_AUTH_TYPE, ORIGIN, HARDWARE_TYPE
+      ALGORITHM, ECCURVE, BLOB_USAGE_REQ, USER_AUTH_TYPE, ORIGIN, HARDWARE_TYPE
   };
 
   private static Object[] enums = null;
@@ -44,7 +43,7 @@ public class KMEnumTag extends KMTag {
     if (prototype == null) {
       prototype = new KMEnumTag();
     }
-    instanceTable[KM_ENUM_TAG_OFFSET] = ptr;
+    KMType.instanceTable[KM_ENUM_TAG_OFFSET] = ptr;
     return prototype;
   }
 
@@ -87,7 +86,7 @@ public class KMEnumTag extends KMTag {
   }
 
   public short getKey() {
-    return Util.getShort(heap, (short) (instanceTable[KM_ENUM_TAG_OFFSET] + TLV_HEADER_SIZE + 2));
+    return Util.getShort(heap, (short) (KMType.instanceTable[KM_ENUM_TAG_OFFSET] + TLV_HEADER_SIZE + 2));
   }
 
   public short getTagType() {
@@ -95,22 +94,22 @@ public class KMEnumTag extends KMTag {
   }
 
   public byte getValue() {
-    return heap[(short) (instanceTable[KM_ENUM_TAG_OFFSET] + TLV_HEADER_SIZE + 4)];
+    return heap[(short) (KMType.instanceTable[KM_ENUM_TAG_OFFSET] + TLV_HEADER_SIZE + 4)];
   }
 
   public static void create() {
     if (enums == null) {
       // enum tag values.
       enums =
-        new Object[]{
-          new byte[]{RSA, DES, EC, AES, HMAC},
-          new byte[]{P_224, P_256, P_384, P_521},
-          new byte[]{STANDALONE, REQUIRES_FILE_SYSTEM},
-          new byte[]{USER_AUTH_NONE, PASSWORD, FINGERPRINT, (byte) (PASSWORD & FINGERPRINT),
-            ANY},
-          new byte[]{GENERATED, DERIVED, IMPORTED, UNKNOWN, SECURELY_IMPORTED},
-          new byte[]{SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX}
-        };
+          new Object[]{
+              new byte[]{RSA, DES, EC, AES, HMAC},
+              new byte[]{P_224, P_256, P_384, P_521},
+              new byte[]{STANDALONE, REQUIRES_FILE_SYSTEM},
+              new byte[]{USER_AUTH_NONE, PASSWORD, FINGERPRINT, (byte) (PASSWORD & FINGERPRINT),
+                  ANY},
+              new byte[]{GENERATED, DERIVED, IMPORTED, UNKNOWN, SECURELY_IMPORTED},
+              new byte[]{SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX}
+          };
     }
   }
 
@@ -145,8 +144,8 @@ public class KMEnumTag extends KMTag {
     return false;
   }
 
-  public static short getValue(short tagType, short keyParameters) {
-    short tagPtr = KMKeyParameters.findTag(KMType.ENUM_TAG, tagType, keyParameters);
+  public static short getValue(short tagKey, short keyParameters) {
+    short tagPtr = KMKeyParameters.findTag(KMType.ENUM_TAG, tagKey, keyParameters);
     if (tagPtr != KMType.INVALID_VALUE) {
       return heap[(short) (tagPtr + TLV_HEADER_SIZE + 4)];
     }

@@ -59,6 +59,11 @@ public abstract class KMType {
   public static final short TAG_TYPE_MASK = (short) 0xF000;
 
   // Enum Tag
+  // Internal tags
+  public static final short RULE = 0x7FFF;
+  public static final byte IGNORE_INVALID_TAGS = 0x00;
+  public static final byte FAIL_ON_INVALID_TAGS = 0x01;
+
   // Algorithm Enum Tag key and values
   public static final short ALGORITHM = 0x0002;
   public static final byte RSA = 0x01;
@@ -143,9 +148,10 @@ public abstract class KMType {
   public static final byte DECRYPT = 0x01;
   public static final byte SIGN = 0x02;
   public static final byte VERIFY = 0x03;
+  public static final byte DERIVE_KEY = 0x04;
   public static final byte WRAP_KEY = 0x05;
-  public static final byte ATTEST_KEY = (byte) 0x7F;
-
+  public static final byte AGREE_KEY = 0x06;
+  public static final byte ATTEST_KEY = (byte) 0x07;
   // Block mode
   public static final short BLOCK_MODE = 0x0004;
   public static final byte ECB = 0x01;
@@ -172,6 +178,9 @@ public abstract class KMType {
   public static final byte RSA_PKCS1_1_5_SIGN = 0x05;
   public static final byte PKCS7 = 0x40;
 
+  // OAEP MGF Digests - only SHA-1 is supported in Javacard
+  public static final short RSA_OAEP_MGF_DIGEST = 0xCB;
+
   // Integer Tag - UINT, ULONG and DATE
   // UINT tags
   // Keysize
@@ -196,6 +205,8 @@ public abstract class KMType {
   public static final short BOOT_PATCH_LEVEL = 0x02CF;
   // Mac Length
   public static final short MAC_LENGTH = 0x03EB;
+  // Usage Count Limit
+  public static final short USAGE_COUNT_LIMIT = 0x195;
 
   // ULONG tags
   // RSA Public Exponent
@@ -205,8 +216,9 @@ public abstract class KMType {
   public static final short ACTIVE_DATETIME = 0x0190;
   public static final short ORIGINATION_EXPIRE_DATETIME = 0x0191;
   public static final short USAGE_EXPIRE_DATETIME = 0x0192;
-  public static final short CREATION_DATETIME = 0x02BD;//0x0193;
-
+  public static final short CREATION_DATETIME = 0x02BD;;
+  public static final short CERTIFICATE_NOT_BEFORE = 0x03F0;
+  public static final short CERTIFICATE_NOT_AFTER = 0x03F1;
   // Integer Array Tags - ULONG_REP and UINT_REP.
   // User Secure Id
   public static final short USER_SECURE_ID = (short) 0x01F6;
@@ -272,6 +284,10 @@ public abstract class KMType {
   public static final short NONCE = (short) 0x03E9;
   // Confirmation Token
   public static final short CONFIRMATION_TOKEN = (short) 0x03ED;
+  // Serial Number - this is a big num but in applet we handle it as byte blob
+  public static final short CERTIFICATE_SERIAL_NUM = (short) 0x03EE;
+  // Subject Name
+  public static final short CERTIFICATE_SUBJECT_NAME = (short) 0x03EF;
 
   public static final short LENGTH_FROM_PDU = (short) 0xFFFF;
 
@@ -293,11 +309,23 @@ public abstract class KMType {
   public static final byte KM_KEY_CHARACTERISTICS_OFFSET = KM_TYPE_BASE_OFFSET + 12;
   public static final byte KM_KEY_PARAMETERS_OFFSET = KM_TYPE_BASE_OFFSET + 13;
   public static final byte KM_VERIFICATION_TOKEN_OFFSET = KM_TYPE_BASE_OFFSET + 14;
+  public static final byte KM_BIGNUM_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 15;
+
+  // Attestation types
+  public static final byte NO_CERT = 0;
+  public static final byte ATTESTATION_CERT = 1;
+  public static final byte SELF_SIGNED_CERT = 2;
+  public static final byte FAKE_CERT = 3;
+  // Buffering Mode
+  public static final byte BUF_NONE = 0;
+  public static final byte BUF_RSA_NO_DIGEST = 1;
+  public static final byte BUF_EC_NO_DIGEST = 2;
+  public static final byte BUF_BLOCK_ALIGN = 3;
 
   protected static KMRepository repository;
   protected static byte[] heap;
   // Instance table
-  public static final byte INSTANCE_TABLE_SIZE = 15;
+  public static final byte INSTANCE_TABLE_SIZE = 16;
   protected static short[] instanceTable;
 
   public static void initialize() {

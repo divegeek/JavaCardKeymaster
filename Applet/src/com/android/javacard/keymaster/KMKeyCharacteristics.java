@@ -22,26 +22,30 @@ import javacard.framework.Util;
 
 /**
  * KMKeyCharacteristics represents KeyCharacteristics structure from android keymaster hal
- * specifications. It corresponds to CBOR array type. struct{byte KEY_CHAR_TYPE; short length=2;
- * short arrayPtr} where arrayPtr is a pointer to ordered array with following elements:
- * {KMKeyParameters sofEnf; KMKeyParameters hwEnf}
+ * specifications. It corresponds to CBOR array type. struct{byte KEY_CHAR_TYPE; short length=3;
+ * short arrayPtr} where arrayPtr is a pointer to ordered array with 1 or 3 following elements:
+ * {KMKeyParameters sb; KMKeyParameters tee; KMKeyParameters keystore}
  */
 public class KMKeyCharacteristics extends KMType {
 
-  public static final byte SOFTWARE_ENFORCED = 0x00;
-  public static final byte HARDWARE_ENFORCED = 0x01;
+  public static final byte STRONGBOX_ENFORCED = 0x00;
+  public static final byte TEE_ENFORCED = 0x01;
+  public static final byte KEYSTORE_ENFORCED = 0x02;
   private static KMKeyCharacteristics prototype;
 
   private KMKeyCharacteristics() {
   }
 
   public static short exp() {
-    short softEnf = KMKeyParameters.exp();
-    short hwEnf = KMKeyParameters.exp();
-    short arrPtr = KMArray.instance((short) 2);
+    short sb = KMKeyParameters.exp();
+    short tee = KMKeyParameters.exp();
+    short keystore = KMKeyParameters.exp();
+    short arrPtr = KMArray.instance((short) 3);
+
     KMArray arr = KMArray.cast(arrPtr);
-    arr.add(SOFTWARE_ENFORCED, softEnf);
-    arr.add(HARDWARE_ENFORCED, hwEnf);
+    arr.add(STRONGBOX_ENFORCED, sb);
+    arr.add(TEE_ENFORCED, tee);
+    arr.add(KEYSTORE_ENFORCED, keystore);
     return instance(arrPtr);
   }
 
@@ -49,18 +53,18 @@ public class KMKeyCharacteristics extends KMType {
     if (prototype == null) {
       prototype = new KMKeyCharacteristics();
     }
-    instanceTable[KM_KEY_CHARACTERISTICS_OFFSET] = ptr;
+    KMType.instanceTable[KM_KEY_CHARACTERISTICS_OFFSET] = ptr;
     return prototype;
   }
 
   public static short instance() {
-    short arrPtr = KMArray.instance((short) 2);
+    short arrPtr = KMArray.instance((short) 3);
     return instance(arrPtr);
   }
 
   public static short instance(short vals) {
-    short ptr = KMType.instance(KEY_CHAR_TYPE, (short) 2);
-    if (KMArray.cast(vals).length() != 2) {
+    short ptr = KMType.instance(KEY_CHAR_TYPE, (short) 3);
+    if (KMArray.cast(vals).length() != 3) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), vals);
@@ -79,7 +83,7 @@ public class KMKeyCharacteristics extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instanceTable[KM_KEY_CHARACTERISTICS_OFFSET] + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (KMType.instanceTable[KM_KEY_CHARACTERISTICS_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {
@@ -87,25 +91,36 @@ public class KMKeyCharacteristics extends KMType {
     return KMArray.cast(arrPtr).length();
   }
 
-  public short getSoftwareEnforced() {
+  public short getKeystoreEnforced() {
     short arrPtr = getVals();
-    return KMArray.cast(arrPtr).get(SOFTWARE_ENFORCED);
+    return KMArray.cast(arrPtr).get(KEYSTORE_ENFORCED);
   }
 
-  public short getHardwareEnforced() {
+  public short getTeeEnforced() {
     short arrPtr = getVals();
-    return KMArray.cast(arrPtr).get(HARDWARE_ENFORCED);
+    return KMArray.cast(arrPtr).get(TEE_ENFORCED);
   }
 
-  public void setSoftwareEnforced(short ptr) {
+  public short getStrongboxEnforced() {
+    short arrPtr = getVals();
+    return KMArray.cast(arrPtr).get(STRONGBOX_ENFORCED);
+  }
+
+  public void setKeystoreEnforced(short ptr) {
     KMKeyParameters.cast(ptr);
     short arrPtr = getVals();
-    KMArray.cast(arrPtr).add(SOFTWARE_ENFORCED, ptr);
+    KMArray.cast(arrPtr).add(KEYSTORE_ENFORCED, ptr);
   }
 
-  public void setHardwareEnforced(short ptr) {
+  public void setTeeEnforced(short ptr) {
     KMKeyParameters.cast(ptr);
     short arrPtr = getVals();
-    KMArray.cast(arrPtr).add(HARDWARE_ENFORCED, ptr);
+    KMArray.cast(arrPtr).add(TEE_ENFORCED, ptr);
+  }
+
+  public void setStrongboxEnforced(short ptr) {
+    KMKeyParameters.cast(ptr);
+    short arrPtr = getVals();
+    KMArray.cast(arrPtr).add(STRONGBOX_ENFORCED, ptr);
   }
 }

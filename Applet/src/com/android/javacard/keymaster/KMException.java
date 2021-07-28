@@ -24,33 +24,32 @@ import javacard.framework.JCSystem;
  */
 public class KMException extends RuntimeException {
 
-  public short[] reason;
-  public static KMException exception;
+  private static short[] reason;
+  private static KMException exception;
 
   private KMException() {
-    reason = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
-
-  public static void throwIt(short reason) {
-    instance();
-    exception.reason[(short) 0] = reason;
+  public static short reason(){
+    return reason[0];
+  }
+  public static void throwIt(short e) {
+    if(reason == null) {
+      reason = JCSystem.makeTransientShortArray((short)1,JCSystem.CLEAR_ON_DESELECT);
+    }
+    if(exception == null){
+      exception = new KMException();
+    }
+    reason[0] = e;
     throw exception;
   }
-
+/*
   public static KMException instance() {
     if (exception == null) {
       exception = new KMException();
     }
     return exception;
   }
-
-  public void clear() {
-    exception.reason[(short) 0] = KMError.UNKNOWN_ERROR;
-  }
-
-  public static short getReason() {
-    return exception.reason[0];
-  }
+*/
 }
 
 

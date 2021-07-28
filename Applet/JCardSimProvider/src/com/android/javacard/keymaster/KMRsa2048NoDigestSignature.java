@@ -137,6 +137,7 @@ public class KMRsa2048NoDigestSignature extends Signature {
       }
     } else {//pkcs1 no digest
       if (len > 245) {
+        KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
         return false;
       }
     }

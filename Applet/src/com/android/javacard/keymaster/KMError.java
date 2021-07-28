@@ -71,6 +71,14 @@ public class KMError {
 
   public static final short DEVICE_LOCKED = 72;
   public static final short EARLY_BOOT_ENDED = 73;
+  public static final short ATTESTATION_KEYS_NOT_PROVISIONED =74;
+  public static final short INCOMPATIBLE_MGF_DIGEST = 78;
+  public static final short UNSUPPORTED_MGF_DIGEST = 79;
+  public static final short MISSING_NOT_BEFORE = 80;
+  public static final short MISSING_NOT_AFTER = 81;
+  public static final short MISSING_ISSUER_SUBJECT_NAME = 82;
+  public static final short INVALID_ISSUER_SUBJECT_NAME = 83;
+
   public static final short UNIMPLEMENTED = 100;
   public static final short UNKNOWN_ERROR = 1000;
 
@@ -82,6 +90,7 @@ public class KMError {
   public static final short CMD_NOT_ALLOWED = 10005;
   public static final short SW_WRONG_LENGTH = 10006;
   public static final short INVALID_DATA = 10007;
+
   //Crypto errors
   public static final short CRYPTO_ILLEGAL_USE = 10008;
   public static final short CRYPTO_ILLEGAL_VALUE = 10009;
@@ -91,4 +100,27 @@ public class KMError {
   //Generic Unknown error.
   public static final short GENERIC_UNKNOWN_ERROR = 10013;
 
+
+  public static short translate(short err) {
+    switch(err) {
+      case SW_CONDITIONS_NOT_SATISFIED:
+      case UNSUPPORTED_CLA:
+      case INVALID_P1P2:
+      case INVALID_DATA:
+      case CRYPTO_ILLEGAL_USE:
+      case CRYPTO_ILLEGAL_VALUE:
+      case CRYPTO_INVALID_INIT:
+      case CRYPTO_UNINITIALIZED_KEY:
+      case GENERIC_UNKNOWN_ERROR:
+      case UNKNOWN_ERROR:
+        return UNKNOWN_ERROR;
+      case CRYPTO_NO_SUCH_ALGORITHM:
+        return UNSUPPORTED_ALGORITHM;
+      case UNSUPPORTED_INSTRUCTION:
+      case CMD_NOT_ALLOWED:
+      case SW_WRONG_LENGTH:
+        return UNIMPLEMENTED;
+    }
+    return err;
+  }
 }

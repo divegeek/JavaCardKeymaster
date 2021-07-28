@@ -46,11 +46,11 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte[] androidExtn = {
       0x06, 0x0A, 0X2B, 0X06, 0X01, 0X04, 0X01, (byte) 0XD6, 0X79, 0X02, 0X01, 0X11
   };
-
+  private static final short RSA_SIG_LEN = 256;
   private static final short ECDSA_MAX_SIG_LEN = 72;
-  //Signature algorithm identifier - always ecdsaWithSha256 - 1.2.840.10045.4.3.2
+  //Signature algorithm identifier - ecdsaWithSha256 - 1.2.840.10045.4.3.2
   //SEQUENCE of alg OBJ ID and parameters = NULL.
-  private static final byte[] X509SignAlgIdentifier = {
+  private static final byte[] X509EcdsaSignAlgIdentifier = {
       0x30,
       0x0A,
       0x06,
@@ -63,6 +63,25 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       0x04,
       0x03,
       0x02
+  };
+  // Signature algorithm identifier - sha256WithRSAEncryption - 1.2.840.113549.1.1.11
+  // SEQUENCE of alg OBJ ID and parameters = NULL.
+  private static final byte[] X509RsaSignAlgIdentifier = {
+      0x30,
+      0x0D,
+      0x06,
+      0x09,
+      0x2A,
+      (byte) 0x86,
+      0x48,
+      (byte) 0x86,
+      (byte) 0xF7,
+      0x0D,
+      0x01,
+      0x01,
+      0x0B,
+      0x05,
+      0x00
   };
   // Validity is not fixed field
   // Subject is a fixed field with only CN= Android Keystore Key - same for all the keys
@@ -77,26 +96,28 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte keyUsageSign = (byte) 0x80; // 0 bit
   private static final byte keyUsageKeyEncipher = (byte) 0x20; // 2nd- bit
   private static final byte keyUsageDataEncipher = (byte) 0x10; // 3rd- bit
+  private static final byte keyUsageKeyAgreement = (byte) 0x08; // 4th- bit
+  private static final byte keyUsageCertSign = (byte) 0x04; // 5th- bit
 
-  private static final byte KEYMASTER_VERSION = 41;
-  private static final byte ATTESTATION_VERSION = 4;
+  private static final byte KEYMASTER_VERSION = 100;
+  private static final byte ATTESTATION_VERSION = 3;
   private static final byte[] pubExponent = {0x01, 0x00, 0x01};
   private static final byte SERIAL_NUM = (byte) 0x01;
   private static final byte X509_VERSION = (byte) 0x02;
 
   private static short certStart;
-  private static short signatureOffset;
-  private static short tbsOffset;
+  private static short certLength;
+  private static short tbsStart;
   private static short tbsLength;
-
-  private static short stackPtr;
   private static byte[] stack;
-  private static short start;
-  private static short length;
-  //  private static KMRepository repo;
+  private static short stackPtr;
+  private static short bufStart;
+  private static short bufLength;
+
   private static short uniqueId;
   private static short attChallenge;
   private static short notBefore;
+
   private static short notAfter;
   private static short pubKey;
   private static short[] swParams;
@@ -112,7 +133,15 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static byte verifiedState;
   private static short verifiedHash;
   private static short issuer;
+  private static short subjectName;
   private static short signPriv;
+  private static short serialNum;
+
+  private static byte   certMode;
+  private static short certAttestKey ;
+  private static boolean certRsaSign;
+  private static final byte SERIAL_NUM_MAX_LEN = 20;
+  private static final byte SUBJECT_NAME_MAX_LEN = 32;
 
   private KMAttestationCertImpl() {
   }
@@ -130,9 +159,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     stack = null;
     stackPtr = 0;
     certStart = 0;
-    signatureOffset = 0;
-    start = 0;
-    length = 0;
+    certLength = 0;
+    bufStart = 0;
+    bufLength = 0;
     tbsLength = 0;
     if (swParams == null) {
       swParams = JCSystem.makeTransientShortArray((short) MAX_PARAMS, JCSystem.CLEAR_ON_RESET);
@@ -156,6 +185,12 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     rsaCert = true;
     deviceLocked = 0;
     signPriv = 0;
+    certMode = KMType.NO_CERT;
+    certAttestKey = KMType.INVALID_VALUE;
+    certRsaSign = true;
+    issuer = KMType.INVALID_VALUE;
+    subjectName = KMType.INVALID_VALUE;
+    serialNum = KMType.INVALID_VALUE;
   }
 
   @Override
@@ -182,30 +217,40 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   }
 
   @Override
-  public KMAttestationCert notBefore(short obj, byte[] scratchpad) {
-    // convert milliseconds to UTC date
-    notBefore = KMUtils.convertToDate(obj, scratchpad, true);
+  public KMAttestationCert notBefore(short obj, boolean derEncoded, byte[] scratchpad) {
+    if(!derEncoded) {
+      // convert milliseconds to UTC date
+      notBefore = KMUtils.convertToDate(obj, scratchpad, true);
+    }else{
+      notBefore = KMByteBlob.instance(KMByteBlob.cast(obj).getBuffer(),
+          KMByteBlob.cast(obj).getStartOff(), KMByteBlob.cast(obj).length());
+    }
     return this;
   }
 
   @Override
-  public KMAttestationCert notAfter(short usageExpiryTimeObj,
-      short certExpirtyTimeObj, byte[] scratchPad, short tmpVar) {
-    if (usageExpiryTimeObj != KMType.INVALID_VALUE) {
-      // compare if the expiry time is greater then 2051 then use generalized
-      // time format else use utc time format.
-      usageExpiryTimeObj = KMIntegerTag.cast(usageExpiryTimeObj).getValue();
-      tmpVar = KMInteger.uint_64(KMUtils.firstJan2051, (short) 0);
-      if (KMInteger.compare(usageExpiryTimeObj, tmpVar) >= 0) {
-        usageExpiryTimeObj = KMUtils.convertToDate(usageExpiryTimeObj, scratchPad,
-            false);
+  public KMAttestationCert notAfter(short usageExpiryTimeObj, boolean derEncoded, byte[] scratchPad) {
+    if(!derEncoded) {
+      if (usageExpiryTimeObj != KMType.INVALID_VALUE) {
+        // compare if the expiry time is greater then 2051 then use generalized
+        // time format else use utc time format.
+        usageExpiryTimeObj = KMIntegerTag.cast(usageExpiryTimeObj).getValue();
+        short tmpVar = KMInteger.uint_64(KMUtils.firstJan2051, (short) 0);
+        if (KMInteger.compare(usageExpiryTimeObj, tmpVar) >= 0) {
+          usageExpiryTimeObj = KMUtils.convertToDate(usageExpiryTimeObj, scratchPad,
+              false);
+        } else {
+          usageExpiryTimeObj = KMUtils
+              .convertToDate(usageExpiryTimeObj, scratchPad, true);
+        }
+        notAfter = usageExpiryTimeObj;
       } else {
-        usageExpiryTimeObj = KMUtils
-            .convertToDate(usageExpiryTimeObj, scratchPad, true);
+        //notAfter = certExpirtyTimeObj;
       }
-      notAfter = usageExpiryTimeObj;
-    } else {
-      notAfter = certExpirtyTimeObj;
+    }else{
+      notAfter = KMByteBlob.instance(KMByteBlob.cast(usageExpiryTimeObj).getBuffer(),
+          KMByteBlob.cast(usageExpiryTimeObj).getStartOff(),
+          KMByteBlob.cast(usageExpiryTimeObj).length());
     }
     return this;
   }
@@ -263,6 +308,10 @@ public class KMAttestationCertImpl implements KMAttestationCert {
         keyUsage = (byte) (keyUsage | keyUsageKeyEncipher);
       } else if (KMEnumArrayTag.cast(tag).get(index) == KMType.DECRYPT) {
         keyUsage = (byte) (keyUsage | keyUsageDataEncipher);
+      } else if (KMEnumArrayTag.cast(tag).get(index) == KMType.AGREE_KEY){
+        keyUsage = (byte) (keyUsage | keyUsageKeyAgreement);
+      }else if (KMEnumArrayTag.cast(tag).get(index) == KMType.ATTEST_KEY){
+        keyUsage = (byte) (keyUsage | keyUsageCertSign);
       }
       index++;
     }
@@ -273,9 +322,12 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     }
   }
 
-  private static void pushTbsCert(boolean rsaCert) {
+//TODO Serial number, X509Version needa to be passed as parameter
+  private static void pushTbsCert(boolean rsaCert, boolean rsa) {
     short last = stackPtr;
-    pushExtensions();
+    if(certMode == KMType.ATTESTATION_CERT) {
+      pushExtensions();
+    }
     // subject public key info
     if (rsaCert) {
       pushRsaSubjectKeyInfo();
@@ -283,7 +335,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       pushEccSubjectKeyInfo();
     }
     // subject
-    pushBytes(X509Subject, (short) 0, (short) X509Subject.length);
+    pushBytes(KMByteBlob.cast(subjectName).getBuffer(), KMByteBlob.cast(subjectName).getStartOff(),
+        KMByteBlob.cast(subjectName).length());
     pushValidity();
     // issuer - der encoded
     pushBytes(
@@ -291,10 +344,15 @@ public class KMAttestationCertImpl implements KMAttestationCert {
         KMByteBlob.cast(issuer).getStartOff(),
         KMByteBlob.cast(issuer).length());
     // Algorithm Id
-    pushAlgorithmId(X509SignAlgIdentifier);
+    if(rsa) {
+      pushAlgorithmId(X509RsaSignAlgIdentifier);
+    }else{
+      pushAlgorithmId(X509EcdsaSignAlgIdentifier);
+    }
     // Serial Number
-    pushByte(SERIAL_NUM);
-    pushIntegerHeader((short) 1);
+    pushBytes(KMByteBlob.cast(serialNum).getBuffer(), KMByteBlob.cast(serialNum).getStartOff(),
+        KMByteBlob.cast(serialNum).length());
+    pushIntegerHeader(KMByteBlob.cast(serialNum).length());
     // Version
     pushByte(X509_VERSION);
     pushIntegerHeader((short) 1);
@@ -456,16 +514,14 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     // Below are the allowed hardwareEnforced Authorization tags inside the attestation certificate's extension.
     short[] tagIds = {
         KMType.BOOT_PATCH_LEVEL, KMType.VENDOR_PATCH_LEVEL,
-        KMType.ATTESTATION_ID_MODEL, KMType.ATTESTATION_ID_MANUFACTURER,
-        KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI,
-        KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
-        KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
         KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
-        KMType.ORIGIN, KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE,
-        KMType.NO_AUTH_REQUIRED, KMType.USER_SECURE_ID,
-        KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE, KMType.MIN_MAC_LENGTH,
-        KMType.CALLER_NONCE, KMType.PADDING, KMType.DIGEST, KMType.BLOCK_MODE,
-        KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE};
+        KMType.ORIGIN, KMType.APPLICATION_ID,
+        KMType.TRUSTED_CONFIRMATION_REQUIRED,
+        KMType.TRUSTED_USER_PRESENCE_REQUIRED, KMType.ALLOW_WHILE_ON_BODY,
+        KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE, KMType.NO_AUTH_REQUIRED,
+        KMType.ROLLBACK_RESISTANCE, KMType.RSA_PUBLIC_EXPONENT,
+        KMType.ECCURVE, KMType.PADDING, KMType.DIGEST, KMType.KEYSIZE,
+        KMType.ALGORITHM, KMType.PURPOSE};
 
     byte index = 0;
     do {
@@ -782,17 +838,17 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   private static void decrementStackPtr(short cnt) {
     stackPtr = (short) (stackPtr - cnt);
-    if (start > stackPtr) {
+    if (bufStart > stackPtr) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
   }
 
   @Override
-  public KMAttestationCert buffer(byte[] buf, short bufStart, short maxLen) {
+  public KMAttestationCert buffer(byte[] buf, short start, short maxLen) {
     stack = buf;
-    start = bufStart;
-    length = maxLen;
-    stackPtr = (short) (start + length);
+    bufStart = start;
+    bufLength = maxLen;
+    stackPtr = (short) (bufStart + bufLength);
     return this;
   }
 
@@ -802,45 +858,94 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   }
 
   @Override
-  public short getCertEnd() {
-    return (short) (start + length - 1);
+  public short getCertLength() {
+    return certLength;
   }
 
   @Override
-  public short getCertLength() {
-    return (short) (getCertEnd() - getCertStart() + 1);
+  public void build(byte[] attBuf, short attStart, short attLength, boolean rsaSign, boolean fakeCert) {
+    stackPtr = (short)(bufStart + bufLength);
+    short last = stackPtr;
+    short sigLen = 0;
+    if(fakeCert){
+      rsaSign = true;
+      pushByte((byte)0);
+      sigLen = 1;
+    }
+    // Push placeholder signature Bit string header
+    // This will potentially change at the end
+    else if (rsaSign) {
+      decrementStackPtr(RSA_SIG_LEN);
+    } else {
+      decrementStackPtr(ECDSA_MAX_SIG_LEN);
+    }
+    short signatureOffset = stackPtr;
+    pushBitStringHeader((byte) 0, (short) (last - stackPtr));
+    if (rsaSign) {
+      pushAlgorithmId(X509RsaSignAlgIdentifier);
+    } else {
+      pushAlgorithmId(X509EcdsaSignAlgIdentifier);
+    }
+    tbsLength = stackPtr;
+    pushTbsCert(rsaCert, rsaSign);
+    tbsStart = stackPtr;
+    tbsLength = (short) (tbsLength - tbsStart);
+    KMJCardSimulator provider = KMJCardSimulator.getInstance();
+    if(attBuf != null){
+      // Sign with the attestation key
+      // The pubKey is the modulus.
+      if (rsaSign) {
+        sigLen = provider
+            .rsaSign256Pkcs1(
+                attBuf,
+                attStart,
+                attLength,
+                KMByteBlob.cast(pubKey).getBuffer(),
+                KMByteBlob.cast(pubKey).getStartOff(),
+                KMByteBlob.cast(pubKey).length(),
+                stack,
+                tbsStart,
+                tbsLength,
+                stack,
+                signatureOffset);
+        if(sigLen > RSA_SIG_LEN) KMException.throwIt(KMError.UNKNOWN_ERROR);
+      } else {
+        sigLen = provider
+            .ecSign256(
+                attBuf,
+                attStart,
+                attLength,
+                stack,
+                tbsStart,
+                tbsLength,
+                stack,
+                signatureOffset);
+        if (sigLen > ECDSA_MAX_SIG_LEN) KMException.throwIt(KMError.UNKNOWN_ERROR);
+      }
+      // Adjust signature length
+      stackPtr = signatureOffset;
+      pushBitStringHeader((byte) 0, sigLen);
+    }else if(!fakeCert){ // no attestation key provisioned in the factory
+        KMException.throwIt(KMError.ATTESTATION_KEYS_NOT_PROVISIONED);
+    }
+    last = (short)(signatureOffset+sigLen);
+    // Add certificate sequence header
+    stackPtr = tbsStart;
+    pushSequenceHeader((short) (last - stackPtr));
+    certStart = stackPtr;
+    certLength = (short)(last - certStart);
+    print(stack, getCertStart(), getCertLength());
   }
+
 
   @Override
   public void build() {
-    short last = stackPtr;
-    decrementStackPtr((short) ECDSA_MAX_SIG_LEN);
-    signatureOffset = stackPtr;
-    pushBitStringHeader((byte) 0, (short) (last - stackPtr));
-    pushAlgorithmId(X509SignAlgIdentifier);
-    tbsLength = stackPtr;
-    pushTbsCert(rsaCert);
-    tbsOffset = stackPtr;
-    tbsLength = (short) (tbsLength - tbsOffset);
-    pushSequenceHeader((short) (last - stackPtr));
-    certStart = stackPtr;
-    KMJCardSimulator provider = KMJCardSimulator.getInstance();
-    short sigLen = provider
-        .ecSign256(
-            provider.getAttestationKey(),
-            stack,
-            tbsOffset,
-            tbsLength,
-            stack,
-            signatureOffset);
-    if (sigLen != ECDSA_MAX_SIG_LEN) {
-      // Update the lengths appropriately.
-      stackPtr = (short) (signatureOffset - 1);
-      pushLength((short) (sigLen + 1));
-      stackPtr = tbsOffset;
-      last -= (short) (ECDSA_MAX_SIG_LEN - sigLen);
-      pushLength((short) (last - stackPtr));
-      length -= (short) (ECDSA_MAX_SIG_LEN - sigLen);
+    if(certMode == KMType.FAKE_CERT) {
+      build(null, (short) 0, (short) 0, true, true);
+    }else {
+      build(KMByteBlob.cast(certAttestKey).getBuffer(),
+          KMByteBlob.cast(certAttestKey).getStartOff(),
+          KMByteBlob.cast(certAttestKey).length(), certRsaSign, false);
     }
   }
 
@@ -886,5 +991,51 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     return uniqueId(timeOffset);
+  }
+
+  @Override
+  public boolean serialNumber(short number){
+    short length = KMByteBlob.cast(number).length();
+    if(length > SERIAL_NUM_MAX_LEN){
+      return false;
+    }
+    byte msb = KMByteBlob.cast(number).get((short)0);
+    if(msb < 0 && length > (SERIAL_NUM_MAX_LEN -1)){
+      return false;
+    }
+    serialNum = number;
+    return true;
+  }
+
+  @Override
+  public boolean subjectName(short sub){
+    /*
+    short length = KMByteBlob.cast(sub).length();
+    if(length > SUBJECT_NAME_MAX_LEN){
+      return false;
+    }
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(sub).getBuffer(), KMByteBlob.cast(sub).getStartOff(),
+        subjectName,(short)0,length);
+    subjectLen = length;
+     */
+    if(sub == KMType.INVALID_VALUE || KMByteBlob.cast(sub).length() == 0) return false;
+    subjectName = sub;
+    return true;
+  }
+
+  @Override
+  public KMAttestationCert attestKey(short attestKey, boolean rsaSign, byte mode){
+    certMode = mode;
+    certAttestKey = attestKey;
+    certRsaSign = rsaSign;
+    return this;
+  }
+
+  private void print(byte[] buf, short start, short length){
+    StringBuilder sb = new StringBuilder(length * 2);
+    for(short i = start; i < (start+length); i ++){
+      sb.append(String.format("%02x", buf[i]));
+    }
+      System.out.println( sb.toString());
   }
 }

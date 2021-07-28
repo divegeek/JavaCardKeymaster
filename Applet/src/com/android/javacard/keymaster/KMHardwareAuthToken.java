@@ -57,7 +57,7 @@ public class KMHardwareAuthToken extends KMType {
     if (prototype == null) {
       prototype = new KMHardwareAuthToken();
     }
-    instanceTable[KM_HARDWARE_AUTH_TOKEN_OFFSET] = ptr;
+    KMType.instanceTable[KM_HARDWARE_AUTH_TOKEN_OFFSET] = ptr;
     return prototype;
   }
 
@@ -95,7 +95,7 @@ public class KMHardwareAuthToken extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instanceTable[KM_HARDWARE_AUTH_TOKEN_OFFSET] + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (KMType.instanceTable[KM_HARDWARE_AUTH_TOKEN_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {

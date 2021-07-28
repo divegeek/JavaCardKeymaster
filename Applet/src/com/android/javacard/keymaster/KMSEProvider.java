@@ -15,8 +15,6 @@
  */
 package com.android.javacard.keymaster;
 
-import org.globalplatform.upgrade.Element;
-
 /**
  * KMSEProvider is facade to use SE specific methods. The main intention of this interface is to
  * abstract the cipher, signature and backup and restore related functions. The instance of this
@@ -223,7 +221,7 @@ public interface KMSEProvider extends KMUpgradable {
    * This is a oneshot operation that performs key derivation function using cmac kdf (CKDF) as
    * defined in android keymaster hal definition.
    *
-   * @param instance of pre-shared key.
+   * @param hmacKey of pre-shared key.
    * @param label is the label to be used for ckdf.
    * @param labelStart is the start of label.
    * @param labelLen is the length of the label.
@@ -272,7 +270,7 @@ public interface KMSEProvider extends KMUpgradable {
    * This is a oneshot operation that signs the data using hmac algorithm. This is used to derive
    * the key, which is used to encrypt the keyblob.
    *
-   * @param instance of masterkey.
+   * @param masterkey of masterkey.
    * @param data is the buffer containing data to be signed.
    * @param dataStart is the start of the data.
    * @param dataLength is the length of the data.
@@ -347,7 +345,7 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that signs the data using EC private key.
    *
-   * @param instance of KMAttestationKey.
+   * @param ecPrivKey of KMAttestationKey.
    * @param inputDataBuf is the buffer of the input data.
    * @param inputDataStart is the start of the input data buffer.
    * @param inputDataLength is the length of the inpur data buffer in bytes.
@@ -357,6 +355,23 @@ public interface KMSEProvider extends KMUpgradable {
    */
   short ecSign256(
       KMAttestationKey ecPrivKey,
+      byte[] inputDataBuf,
+      short inputDataStart,
+      short inputDataLength,
+      byte[] outputDataBuf,
+      short outputDataStart);
+
+  short ecSign256(byte[] secret, short secretStart, short secretLength,
+      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+      byte[] outputDataBuf, short outputDataStart);
+
+  short rsaSign256Pkcs1(
+      byte[] secret,
+      short secretStart,
+      short secretLength,
+      byte[] modBuf,
+      short modStart,
+      short modLength,
       byte[] inputDataBuf,
       short inputDataStart,
       short inputDataLength,
@@ -445,59 +460,6 @@ public interface KMSEProvider extends KMUpgradable {
   KMAttestationCert getAttestationCert(boolean rsaCert);
 
   /**
-   * This operation persists the certificate chain in the persistent memory in multiple requests.
-   *
-   * @param buf buffer containing certificate chain.
-   * @param offset is the start of the buffer.
-   * @param len is the length of the buffer.
-   * @param totalLen is the total length of cert chain.
-   */
-  void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen);
-
-  /**
-   * This operation clears the certificate chain from persistent memory.
-   */
-  void clearCertificateChain();
-
-  /**
-   * The operation reads the certificate chain from persistent memory.
-   *
-   * @param buf is the start of data buffer.
-   * @param offset is the start of the data.
-   * @return the length of the data buffer in bytes.
-   */
-  short readCertificateChain(byte[] buf, short offset);
-
-  /**
-   * This function returns the cert chain length.
-   *
-   * @return length of the certificate chain.
-   */
-  short getCertificateChainLength();
-
-  /**
-   * This function tells if boot signal event is supported or not.
-   *
-   * @return true if supported, false otherwise.
-   */
-  boolean isBootSignalEventSupported();
-
-  /**
-   * This function tells if the device is booted or not.
-   *
-   * @return true if device booted, false otherwise.
-   */
-  boolean isDeviceRebooted();
-
-  /**
-   * This function is supposed to be used to reset the device booted stated after set boot param is
-   * handled
-   *
-   * @param resetBootFlag is false if event has been handled
-   */
-  void clearDeviceBooted(boolean resetBootFlag);
-
-  /**
    * This function tells if applet is upgrading or not.
    *
    * @return true if upgrading, otherwise false.
@@ -515,30 +477,6 @@ public interface KMSEProvider extends KMUpgradable {
   KMMasterKey createMasterKey(short keySizeBits);
 
   /**
-   * This function creates an ECKey and initializes the ECPrivateKey with the provided input key
-   * data. The initialized Key is maintained by the SEProvider. This function should be called only
-   * while provisioning the attestation key.
-   *
-   * @param keyData buffer containing the ec private key.
-   * @param offset start of the buffer.
-   * @param length length of the buffer.
-   * @return An instance of KMAttestationKey.
-   */
-  KMAttestationKey createAttestationKey(byte[] keyData, short offset, short length);
-
-  /**
-   * This function creates an HMACKey and initializes the key with the provided input key data. This
-   * created key is maintained by the SEProvider. This function should be called only while
-   * provisioing the pre-shared secret.
-   *
-   * @param keyData buffer containing the key data.
-   * @param offset start of the buffer.
-   * @param length length of the buffer.
-   * @return An instance of KMPreSharedKey.
-   */
-  KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length);
-
-  /**
    * Returns the master key.
    *
    * @return Instance of the KMMasterKey
@@ -546,11 +484,15 @@ public interface KMSEProvider extends KMUpgradable {
   KMMasterKey getMasterKey();
 
   /**
-   * Returns the attestation key.
-   *
-   * @return Instance of the  KMAttestationKey.
+   * Returns true if factory provisioned attestation key is supported.
    */
-  KMAttestationKey getAttestationKey();
+  boolean isAttestationKeyProvisioned();
+
+  /**
+   * Returns algorithm type of the attestation key. It can be KMType.EC or KMType.RSA if the
+   * attestation key is provisioned in the factory.
+   */
+  short getAttestationKeyAlgorithm();
 
   /**
    * Returns the preshared key.
@@ -560,9 +502,42 @@ public interface KMSEProvider extends KMUpgradable {
   KMPreSharedKey getPresharedKey();
 
   /**
-   * Releases all the instance back to pool.
-   * Generally this is used when card is reset.
+   * Returns the value of the attestation id.
+   * @param tag - attestation id tag key as defined KMType.
+   * @param buffer - memorey buffer in which value of the id must be copied
+   * @param start - start offset in the buffer
+   * @return length - length of the returned attestation id value.
    */
-  void releaseAllOperations();
+  short getAttestationId(short tag, byte[] buffer, short start);
+
+  /**
+   * Delete the attestation ids permanently.
+   */
+  void deleteAttestationIds();
+
+  /**
+   * Get Verified Boot hash. Part of RoT. Part of data sent by the aosp bootloader.
+   */
+  short getVerifiedBootHash(byte[] buffer, short start);
+
+  /**
+   * Get Boot Key. Part of RoT. Part of data sent by the aosp bootloader.
+   */
+  short getBootKey(byte[] buffer, short start);
+
+  /**
+   * Get Boot state. Part of RoT. Part of data sent by the aosp bootloader.
+   */
+  short getBootState();
+
+  /**
+   * Returns true if device bootloader is locked. Part of RoT. Part of data sent by the aosp bootloader.
+   */
+  boolean isDeviceBootLocked();
+
+  /**
+   * Get Boot patch level. Part of data sent by the aosp bootloader.
+   */
+  short getBootPatchLevel(byte[] buffer, short start);
 
 }

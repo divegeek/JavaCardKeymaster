@@ -48,7 +48,7 @@ public class KMHmacSharingParameters extends KMType {
     if (prototype == null) {
       prototype = new KMHmacSharingParameters();
     }
-    instanceTable[KM_HMAC_SHARING_PARAMETERS_OFFSET] = ptr;
+    KMType.instanceTable[KM_HMAC_SHARING_PARAMETERS_OFFSET] = ptr;
     return prototype;
   }
 
@@ -78,7 +78,7 @@ public class KMHmacSharingParameters extends KMType {
   }
 
   public short getVals() {
-    return Util.getShort(heap, (short) (instanceTable[KM_HMAC_SHARING_PARAMETERS_OFFSET] + TLV_HEADER_SIZE));
+    return Util.getShort(heap, (short) (KMType.instanceTable[KM_HMAC_SHARING_PARAMETERS_OFFSET] + TLV_HEADER_SIZE));
   }
 
   public short length() {

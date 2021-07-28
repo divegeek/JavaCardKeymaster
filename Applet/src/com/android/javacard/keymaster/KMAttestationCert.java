@@ -60,7 +60,7 @@ public interface KMAttestationCert {
    * @param attestAppIdOff Start offset of the attestAppId buffer.
    * @param attestAppIdLen Length of the attestAppId buffer.
    * @param resetSinceIdRotation This holds the information of RESET_SINCE_ID_ROTATION.
-   * @param instance of the master key.
+   * @param masterKey
    * @return instance of KMAttestationCert.
    */
   KMAttestationCert makeUniqueId(byte[] scratchpad, short scratchPadOff, byte[] creationTime,
@@ -76,7 +76,7 @@ public interface KMAttestationCert {
    * @param scratchpad Buffer to store intermediate results.
    * @return instance of KMAttestationCert.
    */
-  KMAttestationCert notBefore(short obj, byte[] scratchpad);
+  KMAttestationCert notBefore(short obj, boolean derEncoded, byte[] scratchpad);
 
 
   /**
@@ -84,14 +84,11 @@ public interface KMAttestationCert {
    * certificate's valid period.
    *
    * @param usageExpiryTimeObj This is a KMByteBlob containing expiry time.
-   * @param certExpirtyTimeObj This is a KMByteblob containing expirty time extracted from
    * certificate.
-   * @param scratchpad Buffer to store intermediate results.
-   * @param offset Variable used to store intermediate results.
+   * @param scratchPad Buffer to store intermediate results.
    * @return instance of KMAttestationCert
    */
-  KMAttestationCert notAfter(short usageExpiryTimeObj,
-      short certExpirtyTimeObj, byte[] scratchPad, short offset);
+  KMAttestationCert notAfter(short usageExpiryTimeObj, boolean derEncoded, byte[] scratchPad);
 
   /**
    * Set device lock status received during booting time or due to device lock command.
@@ -154,13 +151,6 @@ public interface KMAttestationCert {
   short getCertStart();
 
   /**
-   * Get the end of the certificate
-   *
-   * @return end of the attestation cert.
-   */
-  short getCertEnd();
-
-  /**
    * Get the length of the certificate
    *
    * @return length of the attestation cert.
@@ -168,7 +158,44 @@ public interface KMAttestationCert {
   short getCertLength();
 
   /**
-   * Build the certificate. After this method the certificate is ready.
+   * Build the certificate. After this method the certificate is ready and signed by the
+   * attestation key passed in the parameter. If attBuf is null then factory set attestation key is
+   * used to sign the cert. If there is no factory provisioned attestation key then signature is
+   * left zero.
+   *
+   * @param attBuf the buffer that has attestation key
+   * @param start the start offset of the attestation key in the buffer
+   * @param length the length of the attestation key in the buffer
+   * @param rsa the flag which states that the attestation key is rsa, if true or ec key otherwise.
+   *  Accordingly the certificate is signed with using rsa signature algorithm or the ecdsa
+   *  signature algorithm.
+   */
+  void build(byte[] attBuf, short start, short length, boolean rsa, boolean fakeCert);
+
+  /**
+   * Build a fake signed certificate. After this method executes the certificate is ready with the
+   * signature equal to 1 byte which is 0 and with rsa signature algorithm.
    */
   void build();
+
+  /**
+   * Set the Serial number in the certificate. If no serial number is set then serial  number is 1.
+   *
+   * @param serialNumber
+   */
+  boolean serialNumber(short serialNumber);
+
+  /**
+   * Set the Subject Name in the certificate.
+   *
+   * @param subject
+   */
+  boolean subjectName(short subject);
+
+  /**
+   * Set attestation key and mode.
+   * @param attestKey KMByteBlob of the key
+   * @param mode
+   */
+  KMAttestationCert attestKey(short attestKey, boolean rsaSign, byte mode);
 }

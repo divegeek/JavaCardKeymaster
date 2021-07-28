@@ -26,7 +26,7 @@ import javacard.framework.Util;
  * BYTE_BLOB_TYPE; short length; sequence of bytes}
  */
 public class KMByteBlob extends KMType {
-
+  private static short OFFSET_SIZE = 2;
   private static KMByteBlob prototype;
 
   private KMByteBlob() {
@@ -36,7 +36,7 @@ public class KMByteBlob extends KMType {
     if (prototype == null) {
       prototype = new KMByteBlob();
     }
-    instanceTable[KM_BYTE_BLOB_OFFSET] = ptr;
+    KMType.instanceTable[KM_BYTE_BLOB_OFFSET] = ptr;
     return prototype;
   }
 
@@ -47,13 +47,16 @@ public class KMByteBlob extends KMType {
 
   // return an empty byte blob instance
   public static short instance(short length) {
-    return KMType.instance(BYTE_BLOB_TYPE, length);
+    short ptr = KMType.instance(BYTE_BLOB_TYPE, (short)(length+2));
+    Util.setShort(heap, (short)(ptr+TLV_HEADER_SIZE), (short)(ptr+TLV_HEADER_SIZE+OFFSET_SIZE));
+    Util.setShort(heap, (short)(ptr + 1), length);
+    return ptr;
   }
 
   // byte blob from existing buf
   public static short instance(byte[] buf, short startOff, short length) {
     short ptr = instance(length);
-    Util.arrayCopyNonAtomic(buf, startOff, heap, (short) (ptr + TLV_HEADER_SIZE), length);
+    Util.arrayCopyNonAtomic(buf, startOff, heap, (short)(ptr+TLV_HEADER_SIZE+OFFSET_SIZE), length);
     return ptr;
   }
 
@@ -74,7 +77,7 @@ public class KMByteBlob extends KMType {
     if (index >= len) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    heap[(short) (instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE + index)] = val;
+    heap[(short) (getStartOff() + index)] = val;
   }
 
   // Get the byte
@@ -83,17 +86,17 @@ public class KMByteBlob extends KMType {
     if (index >= len) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    return heap[(short) (instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE + index)];
+    return heap[(short) (getStartOff() + index)];
   }
 
   // Get the start of blob
   public short getStartOff() {
-    return (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE);
+    return Util.getShort(heap, (short)(KMType.instanceTable[KM_BYTE_BLOB_OFFSET] + TLV_HEADER_SIZE));
   }
 
   // Get the length of the blob
   public short length() {
-    return Util.getShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1));
+    return Util.getShort(heap, (short) (KMType.instanceTable[KM_BYTE_BLOB_OFFSET] + 1));
   }
 
   // Get the buffer pointer in which blob is contained.
@@ -112,10 +115,11 @@ public class KMByteBlob extends KMType {
   }
 
   public void setValue(byte[] srcBuf, short srcStart, short srcLength) {
-    if (length() > srcLength) {
+    if (length() < srcLength) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), length());
+    Util.arrayCopyNonAtomic(srcBuf, srcStart, heap, getStartOff(), srcLength);
+    setLength(srcLength);
   }
 
   public boolean isValid() {
@@ -125,9 +129,11 @@ public class KMByteBlob extends KMType {
     return true;
   }
 
-  public void decrementLength(short len) {
-    short length = Util.getShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1));
-    length = (short) (length - len);
-    Util.setShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1), length);
+  public void setStartOff(short offset){
+    Util.setShort(heap, (short)(KMType.instanceTable[KM_BYTE_BLOB_OFFSET]+TLV_HEADER_SIZE), offset);
+  }
+
+  public void setLength(short len){
+    Util.setShort(heap, (short)(KMType.instanceTable[KM_BYTE_BLOB_OFFSET]+1), len);
   }
 }
