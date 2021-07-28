@@ -1344,10 +1344,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short len = seProvider.getVerifiedBootHash(scratchPad,(short)0);
     if(len != VERIFIED_BOOT_KEY_SIZE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
     return KMByteBlob.instance(scratchPad,(short)0, VERIFIED_BOOT_KEY_SIZE);
   }
-
+  
+  private boolean isEmpty(byte[] buf, short offset, short len) {
+    boolean empty = true;
+    short index = 0;
+    while (index < len) {
+      if (buf[(short) (index + offset)] != 0) {
+        empty = false;
+        break;
+      }
+      index++;
+  }
+      
   protected short getVerifiedBootHash(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_HASH_SIZE, (byte)0);
     short len = seProvider.getVerifiedBootHash(scratchPad,(short)0);
