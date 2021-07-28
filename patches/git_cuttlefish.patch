@@ -1,0 +1,69 @@
+diff --git a/shared/device.mk b/shared/device.mk
+index 1ae572408..240e8de5f 100644
+--- a/shared/device.mk
++++ b/shared/device.mk
+@@ -514,6 +514,11 @@ endif
+  PRODUCT_PACKAGES += \
+     $(LOCAL_KEYMINT_PRODUCT_PACKAGE)
+ 
++PRODUCT_PACKAGES += \
++    android.hardware.security.keymint-service.strongbox \
++
++
++
+ # Keymint configuration
+ PRODUCT_COPY_FILES += \
+     frameworks/native/data/etc/android.software.device_id_attestation.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.software.device_id_attestation.xml
+@@ -623,6 +628,7 @@ PRODUCT_PACKAGES += setup_wifi
+ PRODUCT_VENDOR_PROPERTIES += ro.vendor.wifi_impl=virt_wifi
+ endif
+ 
++
+ # Host packages to install
+ PRODUCT_HOST_PACKAGES += socket_vsock_proxy
+ 
+diff --git a/shared/sepolicy/vendor/file_contexts b/shared/sepolicy/vendor/file_contexts
+index 76983557c..17f61a3b6 100644
+--- a/shared/sepolicy/vendor/file_contexts
++++ b/shared/sepolicy/vendor/file_contexts
+@@ -95,6 +95,7 @@
+ /vendor/bin/hw/android\.hardware\.input\.classifier@1\.0-service.default  u:object_r:hal_input_classifier_default_exec:s0
+ /vendor/bin/hw/android\.hardware\.thermal@2\.0-service\.mock  u:object_r:hal_thermal_default_exec:s0
+ /vendor/bin/hw/android\.hardware\.security\.keymint-service\.remote  u:object_r:hal_keymint_remote_exec:s0
++/vendor/bin/hw/android\.hardware\.security\.keymint-service\.strongbox  u:object_r:hal_keymint_strongbox_exec:s0
+ /vendor/bin/hw/android\.hardware\.keymaster@4\.1-service.remote  u:object_r:hal_keymaster_remote_exec:s0
+ /vendor/bin/hw/android\.hardware\.gatekeeper@1\.0-service.remote  u:object_r:hal_gatekeeper_remote_exec:s0
+ /vendor/bin/hw/android\.hardware\.oemlock-service.example u:object_r:hal_oemlock_default_exec:s0
+diff --git a/shared/sepolicy/vendor/hal_keymint_strongbox.te b/shared/sepolicy/vendor/hal_keymint_strongbox.te
+new file mode 100644
+index 000000000..839fd1a6b
+--- /dev/null
++++ b/shared/sepolicy/vendor/hal_keymint_strongbox.te
+@@ -0,0 +1,14 @@
++type hal_keymint_strongbox, domain;
++hal_server_domain(hal_keymint_strongbox, hal_keymint)
++
++type hal_keymint_strongbox_exec, exec_type, vendor_file_type, file_type;
++init_daemon_domain(hal_keymint_strongbox)
++
++vndbinder_use(hal_keymint_strongbox)
++get_prop(hal_keymint_strongbox, vendor_security_patch_level_prop);
++
++# Allow access to sockets
++allow hal_keymint_strongbox self:tcp_socket { connect create write read getattr getopt setopt };
++allow hal_keymint_strongbox port_type:tcp_socket name_connect;
++allow hal_keymint_strongbox port:tcp_socket { name_connect };
++allow hal_keymint_strongbox vendor_data_file:file { open read getattr };
+diff --git a/shared/sepolicy/vendor/service_contexts b/shared/sepolicy/vendor/service_contexts
+index d20d026cf..dfdacecfb 100644
+--- a/shared/sepolicy/vendor/service_contexts
++++ b/shared/sepolicy/vendor/service_contexts
+@@ -4,6 +4,7 @@ android.hardware.neuralnetworks.IDevice/nnapi-sample_float_slow u:object_r:hal_n
+ android.hardware.neuralnetworks.IDevice/nnapi-sample_minimal    u:object_r:hal_neuralnetworks_service:s0
+ android.hardware.neuralnetworks.IDevice/nnapi-sample_quant    u:object_r:hal_neuralnetworks_service:s0
+ android.hardware.neuralnetworks.IDevice/nnapi-sample_sl_shim  u:object_r:hal_neuralnetworks_service:s0
+-
++android.hardware.security.keymint.IKeyMintDevice/strongbox      u:object_r:hal_keymint_service:s0
++android.hardware.security.sharedsecret.ISharedSecret/strongbox  u:object_r:hal_sharedsecret_service:s0
+ # Binder service mappings
+ gce                                       u:object_r:gce_service:s0
