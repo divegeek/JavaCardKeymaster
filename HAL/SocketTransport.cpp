@@ -60,6 +60,7 @@ bool SocketTransport::openConnection() {
 bool SocketTransport::sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) {
     uint8_t buffer[MAX_RECV_BUFFER_SIZE];
     int count = 1;
+    closeConnection();
     while (!socketStatus && count++ < 5) {
         sleep(1);
         LOG(ERROR) << "Trying to open socket connection... count: " << count;
