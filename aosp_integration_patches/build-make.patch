@@ -1,0 +1,20 @@
+commit ef71f76d787eab8e5332a467a2e08e186acfdaa5
+Author: Manish Dwivedi <manishdwivedi@google.com>
+Date:   Tue Jun 29 01:42:20 2021 +0000
+
+    aosp_master
+    
+    Change-Id: I82cb82e483f55608b9441f08c0a550bc6401822a
+
+diff --git a/target/product/gsi/current.txt b/target/product/gsi/current.txt
+index c753e6c3be..765ca558c9 100644
+--- a/target/product/gsi/current.txt
++++ b/target/product/gsi/current.txt
+@@ -113,6 +113,7 @@ VNDK-core: libgatekeeper.so
+ VNDK-core: libgui.so
+ VNDK-core: libhardware_legacy.so
+ VNDK-core: libhidlallocatorutils.so
++VNDK-core: libjc_transport.so
+ VNDK-core: libjpeg.so
+ VNDK-core: libldacBT_abr.so
+ VNDK-core: libldacBT_enc.so

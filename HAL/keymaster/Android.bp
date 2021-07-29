@@ -15,11 +15,11 @@
 
 
 cc_binary {
-    name: "android.hardware.keymaster@4.1-javacard.service",
+    name: "android.hardware.keymaster@4.1-strongbox.service",
     relative_install_path: "hw",
     vendor: true,
-    init_rc: ["4.1/android.hardware.keymaster@4.1-javacard.service.rc"],
-    vintf_fragments: ["4.1/android.hardware.keymaster@4.1-javacard.service.xml"],
+    init_rc: ["4.1/android.hardware.keymaster@4.1-strongbox.service.rc"],
+    vintf_fragments: ["4.1/android.hardware.keymaster@4.1-strongbox.service.xml"],
     srcs: [
         "4.1/service.cpp",
         "4.1/JavacardKeymaster4Device.cpp",
@@ -38,23 +38,19 @@ cc_binary {
         "libhardware",
         "libhidlbase",
         "libsoftkeymasterdevice",
+	"libsoft_attestation_cert",
         "libkeymaster_messages",
         "libkeymaster_portable",
-        "libcppbor",
+        "libcppbor_external",
         "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
         "libjc_transport",
         "libjc_common",
         "libcrypto",
     ],
-    arch: {
-        x86_64: {
-            cflags: ["-DVTS_EMULATOR"],
-        },
-        x86: {
-            cflags: ["-DVTS_EMULATOR"],
-        },
-    },
+    required: [
+        "android.hardware.strongbox_keystore.xml",
+    ],
 }
 
 cc_library {
@@ -77,14 +73,15 @@ cc_library {
         "libutils",
         "libhardware",
         "libhidlbase",
-	    "libsoftkeymasterdevice",
+        "libsoftkeymasterdevice",
+	"libsoft_attestation_cert",
         "libkeymaster_messages",
-	    "libkeymaster_portable",
-        "libcppbor",
+        "libkeymaster_portable",
+        "libcppbor_external",
         "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
         "libjc_transport",
-	    "libcrypto",
+	"libcrypto",
     ],
 }
 
@@ -131,12 +128,20 @@ cc_library {
         "libutils",
         "libhardware",
         "libhidlbase",
-	    "libsoftkeymasterdevice",
+	"libsoftkeymasterdevice",
+	"libsoft_attestation_cert",
         "libkeymaster_messages",
-	    "libkeymaster_portable",
-        "libcppbor",
+	"libkeymaster_portable",
+        "libcppbor_external",
         "android.hardware.keymaster@4.1",
         "android.hardware.keymaster@4.0",
-	    "libcrypto",
+	"libcrypto",
     ],
+}
+
+prebuilt_etc {
+    name: "android.hardware.strongbox_keystore.xml",
+    sub_dir: "permissions",
+    vendor: true,
+    src: "4.1/android.hardware.strongbox_keystore.xml",
 }

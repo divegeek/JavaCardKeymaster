@@ -1,0 +1,45 @@
+commit a205fd77b33093e31a0e1b8d8e9fed453e6dea20
+Author: Manish Dwivedi <manishdwivedi@google.com>
+Date:   Tue Jun 29 01:39:31 2021 +0000
+
+    aosp upmerge
+    
+    Change-Id: I6e5ef5ffcfa0d34c5a5bf65cbc73604270a3222c
+
+diff --git a/shared/BoardConfig.mk b/shared/BoardConfig.mk
+index aec8869f2..a8185aacd 100644
+--- a/shared/BoardConfig.mk
++++ b/shared/BoardConfig.mk
+@@ -207,6 +207,8 @@ BOARD_RAMDISK_USE_LZ4 := true
+ # To see full logs from init, disable ratelimiting.
+ # The default is 5 messages per second amortized, with a burst of up to 10.
+ BOARD_KERNEL_CMDLINE += printk.devkmsg=on
++BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive
++
+ BOARD_KERNEL_CMDLINE += firmware_class.path=/vendor/etc/
+ 
+ BOARD_KERNEL_CMDLINE += init=/init
+diff --git a/shared/device.mk b/shared/device.mk
+index 290b61f97..6ccae3bae 100644
+--- a/shared/device.mk
++++ b/shared/device.mk
+@@ -502,6 +502,11 @@ endif
+  PRODUCT_PACKAGES += \
+     $(LOCAL_KEYMINT_PRODUCT_PACKAGE)
+ 
++PRODUCT_PACKAGES += \
++    android.hardware.keymaster@4.1-strongbox.service \
++
++
++
+ # Keymint configuration
+ PRODUCT_COPY_FILES += \
+     frameworks/native/data/etc/android.software.device_id_attestation.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.software.device_id_attestation.xml
+@@ -611,6 +616,7 @@ PRODUCT_PACKAGES += setup_wifi
+ PRODUCT_VENDOR_PROPERTIES += ro.vendor.wifi_impl=virt_wifi
+ endif
+ 
++
+ # Host packages to install
+ PRODUCT_HOST_PACKAGES += socket_vsock_proxy
+ 
