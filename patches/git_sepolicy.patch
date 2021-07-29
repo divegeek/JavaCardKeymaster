@@ -1,0 +1,12 @@
+diff --git a/public/hal_neverallows.te b/public/hal_neverallows.te
+index faec07420..e73a47849 100644
+--- a/public/hal_neverallows.te
++++ b/public/hal_neverallows.te
+@@ -39,6 +39,7 @@ neverallow {
+   -hal_wifi_supplicant_server
+   -hal_telephony_server
+   -hal_uwb_server
++  -hal_keymint_server
+ } {
+   domain
+   userdebug_or_eng(`-su')
