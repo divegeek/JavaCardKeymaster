@@ -17,6 +17,17 @@
 #ifndef __SE_TRANSPORT__
 #define __SE_TRANSPORT__
 
+#include <aidl/android/system/omapi/BnSecureElementListener.h>
+#include <aidl/android/system/omapi/ISecureElementChannel.h>
+#include <aidl/android/system/omapi/ISecureElementListener.h>
+#include <aidl/android/system/omapi/ISecureElementReader.h>
+#include <aidl/android/system/omapi/ISecureElementService.h>
+#include <aidl/android/system/omapi/ISecureElementSession.h>
+#include <aidl/android/system/omapi/SecureElementErrorCode.h>
+#include <android/binder_manager.h>
+
+#include <map>
+
 namespace se_transport {
 
 /**
@@ -75,6 +86,19 @@ public:
      */
     bool isConnected() override;
 
+private:
+    std::shared_ptr<aidl::android::system::omapi::ISecureElementService> omapiSeService = nullptr;
+    std::shared_ptr<aidl::android::system::omapi::ISecureElementReader> eSEReader = nullptr;
+    std::map<std::string, std::shared_ptr<aidl::android::system::omapi::ISecureElementReader>>
+            mVSReaders = {};
+    std::string const ESE_READER_PREFIX = "eSE";
+    constexpr static const char omapiServiceName[] =
+            "android.system.omapi.ISecureElementService/default";
+
+    bool initialize();
+    bool internalTransmitApdu(
+            std::shared_ptr<aidl::android::system::omapi::ISecureElementReader> reader,
+            std::vector<uint8_t> apdu, std::vector<uint8_t>& transmitResponse);
 };
 
 class SocketTransport : public ITransport {
