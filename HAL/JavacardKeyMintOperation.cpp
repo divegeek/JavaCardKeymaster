@@ -15,14 +15,15 @@
  */
 
 #define LOG_TAG "javacard.strongbox.keymint.operation-impl"
-#include <log/log.h>
 
 #include "JavacardKeyMintOperation.h"
 #include <KeyMintUtils.h>
 #include <aidl/android/hardware/security/keymint/ErrorCode.h>
 #include <aidl/android/hardware/security/secureclock/ISecureClock.h>
+#include <android-base/logging.h>
 
 namespace aidl::android::hardware::security::keymint {
+using namespace ::keymint::javacard;
 using secureclock::TimeStampToken;
 
 JavacardKeyMintOperation::~JavacardKeyMintOperation() {
@@ -39,7 +40,7 @@ ScopedAStatus JavacardKeyMintOperation::updateAad(const vector<uint8_t>& input,
     request.add(Bstr(input));
     cbor_.addHardwareAuthToken(request, authToken.value_or(HardwareAuthToken()));
     cbor_.addTimeStampToken(request, timestampToken.value_or(TimeStampToken()));
-    auto [item, err] = device_->sendRequest(Instruction::INS_UPDATE_AAD_OPERATION_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_UPDATE_AAD_OPERATION_CMD, request);
     if (err != KM_ERROR_OK) {
         opHandle_ = 0;
         return km_utils::kmError2ScopedAStatus(err);
@@ -98,7 +99,7 @@ ScopedAStatus JavacardKeyMintOperation::finish(
 ScopedAStatus JavacardKeyMintOperation::abort() {
     Array request;
     request.add(Uint(opHandle_));
-    auto [item, err] = device_->sendRequest(Instruction::INS_ABORT_OPERATION_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_ABORT_OPERATION_CMD, request);
     opHandle_ = 0;
     buffer_.clear();
     return km_utils::kmError2ScopedAStatus(err);
@@ -214,7 +215,7 @@ keymaster_error_t JavacardKeyMintOperation::sendUpdate(const vector<uint8_t>& in
     request.add(Bstr(input));
     cbor_.addHardwareAuthToken(request, authToken);
     cbor_.addTimeStampToken(request, timestampToken);
-    auto [item, error] = device_->sendRequest(Instruction::INS_UPDATE_OPERATION_CMD, request);
+    auto [item, error] = card_->sendRequest(Instruction::INS_UPDATE_OPERATION_CMD, request);
     if (error != KM_ERROR_OK) {
         opHandle_ = 0;
         return error;
@@ -238,7 +239,7 @@ keymaster_error_t JavacardKeyMintOperation::sendFinish(const vector<uint8_t>& da
     request.add(Bstr(sign));
     cbor_.addHardwareAuthToken(request, authToken);
     cbor_.addTimeStampToken(request, timestampToken);
-    auto [item, err] = device_->sendRequest(Instruction::INS_FINISH_OPERATION_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_FINISH_OPERATION_CMD, request);
     opHandle_ = 0;
     if (err != KM_ERROR_OK) {
         return err;

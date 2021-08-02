@@ -15,19 +15,18 @@
  */
 
 #define LOG_TAG "javacard.keymint.device.strongbox-impl"
-#include <android-base/logging.h>
 #include "JavacardKeyMintDevice.h"
 #include "JavacardKeyMintOperation.h"
 #include "JavacardSharedSecret.h"
-#include <ITransport.h>
 #include <KeyMintUtils.h>
 #include <algorithm>
+#include <android-base/logging.h>
+#include <android-base/properties.h>
+#include <hardware/hw_auth_token.h>
 #include <iostream>
 #include <iterator>
 #include <keymaster/android_keymaster_messages.h>
 #include <keymaster/wrapped_key.h>
-#include <android-base/properties.h>
-#include <hardware/hw_auth_token.h>
 #include <memory>
 #include <regex.h>
 #include <string>
@@ -36,106 +35,6 @@
 namespace aidl::android::hardware::security::keymint {
 using namespace ::keymaster;
 using namespace ::keymint::javacard;
-
-keymaster_error_t JavacardKeyMintDevice::initializeJavacard() {
-    if (javacardInitialized_) return KM_ERROR_OK;
-    Array request;
-    request.add(Uint(osVersion_));
-    request.add(Uint(osPatchLevel_));
-    request.add(Uint(vendorPatchLevel_));
-    auto [item, err] = sendRequest(Instruction::INS_SET_BOOT_PARAMS_CMD, request);
-    if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in initializeJavacard.";
-        javacardInitialized_ = false;
-        return err;
-    }
-    javacardInitialized_ = true;
-    return KM_ERROR_OK;
-}
-
-keymaster_error_t JavacardKeyMintDevice::constructApduMessage(Instruction& ins,
-                                                              std::vector<uint8_t>& inputData,
-                                                              std::vector<uint8_t>& apduOut) {
-    apduOut.push_back(static_cast<uint8_t>(APDU_CLS));  // CLS
-    apduOut.push_back(static_cast<uint8_t>(ins));       // INS
-    apduOut.push_back(static_cast<uint8_t>(APDU_P1));   // P1
-    apduOut.push_back(static_cast<uint8_t>(APDU_P2));   // P2
-
-    if (USHRT_MAX >= inputData.size()) {
-        // Send extended length APDU always as response size is not known to HAL.
-        // Case 1: Lc > 0  CLS | INS | P1 | P2 | 00 | 2 bytes of Lc | CommandData | 2 bytes of Le
-        // all set to 00. Case 2: Lc = 0  CLS | INS | P1 | P2 | 3 bytes of Le all set to 00.
-        // Extended length 3 bytes, starts with 0x00
-        apduOut.push_back(static_cast<uint8_t>(0x00));
-        if (inputData.size() > 0) {
-            apduOut.push_back(static_cast<uint8_t>(inputData.size() >> 8));
-            apduOut.push_back(static_cast<uint8_t>(inputData.size() & 0xFF));
-            // Data
-            apduOut.insert(apduOut.end(), inputData.begin(), inputData.end());
-        }
-        // Expected length of output.
-        // Accepting complete length of output every time.
-        apduOut.push_back(static_cast<uint8_t>(0x00));
-        apduOut.push_back(static_cast<uint8_t>(0x00));
-    } else {    
-    	LOG(ERROR) << "Error in constructApduMessage.";
-        return (KM_ERROR_INVALID_INPUT_LENGTH);
-    }
-    return (KM_ERROR_OK);  // success
-}
-
-keymaster_error_t JavacardKeyMintDevice::sendData(Instruction ins, std::vector<uint8_t>& inData,
-                                                  std::vector<uint8_t>& response) {
-    keymaster_error_t ret = KM_ERROR_UNKNOWN_ERROR;
-    std::vector<uint8_t> apdu;
-
-    ret = constructApduMessage(ins, inData, apdu);
-    
-    if (ret != KM_ERROR_OK) {
-    	return ret;
-    }
-
-    if (!transport_->sendData(apdu, response)) {
-    	LOG(ERROR) << "Error in sending data in sendData.";
-        return (KM_ERROR_SECURE_HW_COMMUNICATION_FAILED);
-    }
-
-    // Response size should be greater than 2. Cbor output data followed by two bytes of APDU
-    // status.
-    if ((response.size() <= 2) || (getApduStatus(response) != APDU_RESP_STATUS_OK)) {
-    	LOG(ERROR) << "Response of the sendData is wrong: response size = "<<response.size()<<" apdu status = "<<getApduStatus(response);
-        return (KM_ERROR_UNKNOWN_ERROR);
-    }
-    // remove the status bytes
-    response.pop_back();
-    response.pop_back();
-    return (KM_ERROR_OK);  // success
-}
-
-std::tuple<std::unique_ptr<Item>, keymaster_error_t>
-JavacardKeyMintDevice::sendRequest(Instruction ins, Array& request) {
-    vector<uint8_t> response;
-    // encode request
-    std::vector<uint8_t> command = request.encode();
-    auto sendError = sendData(ins, command, response);
-    if (sendError != KM_ERROR_OK) {
-        return {unique_ptr<Item>(nullptr), sendError};
-    }
-    // decode the response and send that back
-    return cbor_.decodeData(response);
-}
-
-std::tuple<std::unique_ptr<Item>, keymaster_error_t>
-JavacardKeyMintDevice::sendRequest(Instruction ins) {
-    vector<uint8_t> response;
-    vector<uint8_t> emptyRequest;
-    auto sendError = sendData(ins, emptyRequest, response);
-    if (sendError != KM_ERROR_OK) {
-        return {unique_ptr<Item>(nullptr), sendError};
-    }
-    // decode the response and send that back
-    return cbor_.decodeData(response);
-}
 
 ScopedAStatus JavacardKeyMintDevice::defaultHwInfo(KeyMintHardwareInfo* info) {
     info->versionNumber = 1;
@@ -154,22 +53,9 @@ static inline bool findTag(const vector<KeyParameter>& params, Tag tag) {
     return false;
 }
 
-JavacardKeyMintDevice::JavacardKeyMintDevice(shared_ptr<ITransport> transport, uint32_t osVersion,
-                                             uint32_t osPatchLevel, uint32_t vednorPatchLevel)
-    : securitylevel_(SecurityLevel::STRONGBOX), transport_(transport), cbor_(CborConverter()),
-      osVersion_(osVersion), osPatchLevel_(osPatchLevel), vendorPatchLevel_(vednorPatchLevel),
-      javacardInitialized_(false) {
-    transport_->openConnection();
-    initializeJavacard();
-}
-
-JavacardKeyMintDevice::~JavacardKeyMintDevice() {
-    transport_->closeConnection();
-}
-
 ScopedAStatus JavacardKeyMintDevice::getHardwareInfo(KeyMintHardwareInfo* info) {
     uint64_t tsRequired = 1;
-    auto [item, err] = sendRequest(Instruction::INS_GET_HW_INFO_CMD);
+    auto [item, err] = card_->sendRequest(Instruction::INS_GET_HW_INFO_CMD);
     uint32_t secLevel;
     uint32_t version;
     if (err != KM_ERROR_OK || !cbor_.getUint64<uint32_t>(item, 1, version) ||
@@ -182,7 +68,7 @@ ScopedAStatus JavacardKeyMintDevice::getHardwareInfo(KeyMintHardwareInfo* info) 
         LOG(INFO) << "Returning defaultHwInfo in getHardwareInfo.";
         return defaultHwInfo(info);
     }
-    initializeJavacard();
+    card_->initializeJavacard();
     info->timestampTokenRequired = (tsRequired == 1);
     info->securityLevel = static_cast<SecurityLevel>(secLevel);
     info->versionNumber = static_cast<int32_t>(version);
@@ -197,7 +83,7 @@ ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& key
     cbor_.addKeyparameters(array, keyParams);
     // add attestation key if any
     cbor_.addAttestationKey(array, attestationKey);
-    auto [item, err] = sendRequest(Instruction::INS_GENERATE_KEY_CMD, array);
+    auto [item, err] = card_->sendRequest(Instruction::INS_GENERATE_KEY_CMD, array);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in sending generateKey.";
         return km_utils::kmError2ScopedAStatus(err);
@@ -215,9 +101,9 @@ ScopedAStatus JavacardKeyMintDevice::addRngEntropy(const vector<uint8_t>& data) 
     cppbor::Array request;
     // add key data
     request.add(Bstr(data));
-    auto [item, err] = sendRequest(Instruction::INS_ADD_RNG_ENTROPY_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_ADD_RNG_ENTROPY_CMD, request);
     if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in sending addRngEntropy.";
+        LOG(ERROR) << "Error in sending addRngEntropy.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     return ScopedAStatus::ok();
@@ -245,9 +131,9 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
     // add attestation key if any
     cbor_.addAttestationKey(request, attestationKey);
 
-    auto [item, err] = sendRequest(Instruction::INS_IMPORT_KEY_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_IMPORT_KEY_CMD, request);
     if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in sending data in importKey.";
+        LOG(ERROR) << "Error in sending data in importKey.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
@@ -282,7 +168,7 @@ ScopedAStatus JavacardKeyMintDevice::importWrappedKey(const vector<uint8_t>& wra
     keymaster_error_t errorCode = parseWrappedKey(wrappedKeyData, iv, transitKey, secureKey, tag,
                                                   authList, keyFormat, wrappedKeyDescription);
     if (errorCode != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in parse wrapped key in importWrappedKey.";
+        LOG(ERROR) << "Error in parse wrapped key in importWrappedKey.";
         return km_utils::kmError2ScopedAStatus(errorCode);
     }
 
@@ -290,14 +176,14 @@ ScopedAStatus JavacardKeyMintDevice::importWrappedKey(const vector<uint8_t>& wra
     std::tie(item, errorCode) =
         sendBeginImportWrappedKeyCmd(transitKey, wrappingKeyBlob, maskingKey, unwrappingParams);
     if (errorCode != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in send begin import wrapped key in importWrappedKey.";    
+        LOG(ERROR) << "Error in send begin import wrapped key in importWrappedKey.";
         return km_utils::kmError2ScopedAStatus(errorCode);
     }
     // Finish the import
     std::tie(item, errorCode) = sendFinishImportWrappedKeyCmd(
         authList, keyFormat, secureKey, tag, iv, wrappedKeyDescription, passwordSid, biometricSid);
     if (errorCode != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in send finish import wrapped key in importWrappedKey.";    
+        LOG(ERROR) << "Error in send finish import wrapped key in importWrappedKey.";
         return km_utils::kmError2ScopedAStatus(errorCode);
     }
     if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
@@ -319,7 +205,7 @@ JavacardKeyMintDevice::sendBeginImportWrappedKeyCmd(const std::vector<uint8_t>& 
     request.add(std::vector<uint8_t>(wrappingKeyBlob));
     request.add(std::vector<uint8_t>(maskingKey));
     cbor_.addKeyparameters(request, unwrappingParams);
-    return sendRequest(Instruction::INS_BEGIN_IMPORT_WRAPPED_KEY_CMD, request);
+    return card_->sendRequest(Instruction::INS_BEGIN_IMPORT_WRAPPED_KEY_CMD, request);
 }
 
 std::tuple<std::unique_ptr<Item>, keymaster_error_t>
@@ -337,7 +223,7 @@ JavacardKeyMintDevice::sendFinishImportWrappedKeyCmd(
     request.add(std::vector<uint8_t>(wrappedKeyDescription));
     request.add(Uint(passwordSid));
     request.add(Uint(biometricSid));
-    return sendRequest(Instruction::INS_FINISH_IMPORT_WRAPPED_KEY_CMD, request);
+    return card_->sendRequest(Instruction::INS_FINISH_IMPORT_WRAPPED_KEY_CMD, request);
 }
 
 ScopedAStatus JavacardKeyMintDevice::upgradeKey(const vector<uint8_t>& keyBlobToUpgrade,
@@ -348,13 +234,13 @@ ScopedAStatus JavacardKeyMintDevice::upgradeKey(const vector<uint8_t>& keyBlobTo
     request.add(Bstr(keyBlobToUpgrade));
     // add key params
     cbor_.addKeyparameters(request, upgradeParams);
-    auto [item, err] = sendRequest(Instruction::INS_UPGRADE_KEY_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_UPGRADE_KEY_CMD, request);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in sending in upgradeKey.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     if (!cbor_.getBinaryArray(item, 1, *keyBlob)) {
-    	LOG(ERROR) << "Error in decoding the response in upgradeKey.";
+        LOG(ERROR) << "Error in decoding the response in upgradeKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
     return ScopedAStatus::ok();
@@ -363,27 +249,27 @@ ScopedAStatus JavacardKeyMintDevice::upgradeKey(const vector<uint8_t>& keyBlobTo
 ScopedAStatus JavacardKeyMintDevice::deleteKey(const vector<uint8_t>& keyBlob) {
     Array request;
     request.add(Bstr(keyBlob));
-    auto [item, err] = sendRequest(Instruction::INS_DELETE_KEY_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_DELETE_KEY_CMD, request);
     if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in sending in deleteKey.";
+        LOG(ERROR) << "Error in sending in deleteKey.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus JavacardKeyMintDevice::deleteAllKeys() {
-    auto [item, err] = sendRequest(Instruction::INS_DELETE_ALL_KEYS_CMD);
+    auto [item, err] = card_->sendRequest(Instruction::INS_DELETE_ALL_KEYS_CMD);
     if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in sending in deleteAllKeys.";
+        LOG(ERROR) << "Error in sending in deleteAllKeys.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus JavacardKeyMintDevice::destroyAttestationIds() {
-    auto [item, err] = sendRequest(Instruction::INS_DESTROY_ATT_IDS_CMD);
+    auto [item, err] = card_->sendRequest(Instruction::INS_DESTROY_ATT_IDS_CMD);
     if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in sending in destroyAttestationIds.";
+        LOG(ERROR) << "Error in sending in destroyAttestationIds.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     return ScopedAStatus::ok();
@@ -402,9 +288,9 @@ ScopedAStatus JavacardKeyMintDevice::begin(KeyPurpose purpose, const std::vector
     cbor_.addKeyparameters(array, params);
     HardwareAuthToken token = authToken.value_or(HardwareAuthToken());
     cbor_.addHardwareAuthToken(array, token);
-    auto [item, err] = sendRequest(Instruction::INS_BEGIN_OPERATION_CMD, array);
+    auto [item, err] = card_->sendRequest(Instruction::INS_BEGIN_OPERATION_CMD, array);
     if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in sending in begin.";
+        LOG(ERROR) << "Error in sending in begin.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     // return the result
@@ -419,7 +305,7 @@ ScopedAStatus JavacardKeyMintDevice::begin(KeyPurpose purpose, const std::vector
     result->challenge = opHandle;
     result->operation = ndk::SharedRefBase::make<JavacardKeyMintOperation>(
         static_cast<keymaster_operation_handle_t>(opHandle), static_cast<BufferingMode>(bufMode),
-        shared_ptr<JavacardKeyMintDevice>(this));
+        card_);
     return ScopedAStatus::ok();
 }
 
@@ -434,7 +320,7 @@ JavacardKeyMintDevice::deviceLocked(bool passwordOnly,
     }
     request.add(Uint(password));
     cbor_.addTimeStampToken(request, timestampToken.value_or(TimeStampToken()));
-    auto [item, err] = sendRequest(Instruction::INS_DEVICE_LOCKED_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_DEVICE_LOCKED_CMD, request);
     if (err != KM_ERROR_OK) {
         return km_utils::kmError2ScopedAStatus(err);
     }
@@ -442,38 +328,9 @@ JavacardKeyMintDevice::deviceLocked(bool passwordOnly,
 }
 
 ScopedAStatus JavacardKeyMintDevice::earlyBootEnded() {
-    auto [item, err] = sendRequest(Instruction::INS_EARLY_BOOT_ENDED_CMD);
+    auto [item, err] = card_->sendRequest(Instruction::INS_EARLY_BOOT_ENDED_CMD);
     if (err != KM_ERROR_OK) {
         return km_utils::kmError2ScopedAStatus(err);
-    }
-    return ScopedAStatus::ok();
-}
-
-ScopedAStatus JavacardKeyMintDevice::getSharedSecretParameters(SharedSecretParameters* params) {
-    initializeJavacard();
-    auto [item, err] = sendRequest(Instruction::INS_GET_SHARED_SECRET_PARAM_CMD);
-    if (err != KM_ERROR_OK || !cbor_.getSharedSecretParameters(item, 1, *params)) {
-    	LOG(ERROR) << "Error in sending in getSharedSecretParameters.";
-        return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
-    }
-    return ScopedAStatus::ok();
-}
-
-ScopedAStatus
-JavacardKeyMintDevice::computeSharedSecret(const std::vector<SharedSecretParameters>& params,
-                                           std::vector<uint8_t>* secret) {
-
-    initializeJavacard();
-    cppbor::Array request;
-    cbor_.addSharedSecretParameters(request, params);
-    auto [item, err] = sendRequest(Instruction::INS_COMPUTE_SHARED_SECRET_CMD, request);
-    if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in sending in computeSharedSecret.";
-        return km_utils::kmError2ScopedAStatus(err);
-    }
-    if (!cbor_.getBinaryArray(item, 1, *secret)) {
-    	LOG(ERROR) << "Error in decoding the response in computeSharedSecret.";
-        return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
     return ScopedAStatus::ok();
 }
@@ -485,13 +342,13 @@ ScopedAStatus JavacardKeyMintDevice::getKeyCharacteristics(
     request.add(vector<uint8_t>(keyBlob));
     request.add(vector<uint8_t>(appId));
     request.add(vector<uint8_t>(appData));
-    auto [item, err] = sendRequest(Instruction::INS_GET_KEY_CHARACTERISTICS_CMD, request);
+    auto [item, err] = card_->sendRequest(Instruction::INS_GET_KEY_CHARACTERISTICS_CMD, request);
     if (err != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error in sending in getKeyCharacteristics.";
+        LOG(ERROR) << "Error in sending in getKeyCharacteristics.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     if (!cbor_.getKeyCharacteristics(item, 1, *result)) {
-    	LOG(ERROR) << "Error in sending in upgradeKey.";
+        LOG(ERROR) << "Error in sending in upgradeKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
     return ScopedAStatus::ok();
@@ -518,7 +375,7 @@ JavacardKeyMintDevice::parseWrappedKey(const vector<uint8_t>& wrappedKeyData,
         parse_wrapped_key(KeymasterKeyBlob(keyMaterial), &kmIv, &kmTransitKey, &kmSecureKey, &kmTag,
                           &authSet, &kmKeyFormat, &kmWrappedKeyDescription);
     if (error != KM_ERROR_OK) {
-    	LOG(ERROR) << "Error parsing wrapped key.";
+        LOG(ERROR) << "Error parsing wrapped key.";
         return error;
     }
     iv = km_utils::kmBlob2vector(kmIv);
@@ -536,5 +393,4 @@ ScopedAStatus JavacardKeyMintDevice::convertStorageKeyToEphemeral(
     std::vector<uint8_t>* /* ephemeralKeyBlob */) {
     return km_utils::kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED);
 }
-
 }  // namespace aidl::android::hardware::security::keymint
