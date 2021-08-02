@@ -59,7 +59,6 @@ public class KMRepository implements KMUpgradable {
   public static final short DEVICE_LOCK_FLAG_SIZE = 1;
 
   // Class Attributes
- // private Object[] operationStateTable;
   private byte[] heap;
   private short heapIndex;
   private byte[] dataTable;
@@ -288,48 +287,6 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-/*
-  public void deleteAttIds() {
-    clearDataEntry(ATT_ID_BRAND);
-    clearDataEntry(ATT_ID_MEID);
-    clearDataEntry(ATT_ID_DEVICE);
-    clearDataEntry(ATT_ID_IMEI);
-    clearDataEntry(ATT_ID_MODEL);
-    clearDataEntry(ATT_ID_PRODUCT);
-    clearDataEntry(ATT_ID_SERIAL);
-    clearDataEntry(ATT_ID_MANUFACTURER);
-  }
-
-
-  public short getBootPatchLevel() {
-    short blob = readData(BOOT_PATCH_LEVEL);
-    if (blob != 0) {
-      return KMInteger.uint_32(
-          KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
-    } else {
-      return KMInteger.uint_32(zero, (short) 0);
-    }
-  }
-
-  public short getVerifiedBootKey() {
-    return readData(BOOT_VERIFIED_BOOT_KEY);
-  }
-
-  public short getVerifiedBootHash() {
-    return readData(BOOT_VERIFIED_BOOT_HASH);
-  }
-
-  public boolean getBootLoaderLock() {
-    short blob = readData(BOOT_DEVICE_LOCKED_STATUS);
-    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()] & 0xFE) != 0;
-  }
-
-  public byte getBootState() {
-    short blob = readData(BOOT_VERIFIED_BOOT_STATE);
-    return (getHeap())[KMByteBlob.cast(blob).getStartOff()];
-  }
-*/
-
   public boolean getDeviceLock() {
     short blob = readData(DEVICE_LOCKED);
     return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()] & 0xFE) != 0;
@@ -401,46 +358,6 @@ public class KMRepository implements KMUpgradable {
     }
     writeDataEntry(BOOT_OS_PATCH, buf, start, len);
   }
-/*
-
-  public void setBootPatchLevel(byte[] buf, short start, short len) {
-    if (len != BOOT_PATCH_SIZE) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    writeDataEntry(BOOT_PATCH_LEVEL, buf, start, len);
-  }
-
-  public void setBootloaderLocked(boolean flag) {
-    short start = alloc(DEVICE_LOCK_FLAG_SIZE);
-    if (flag) {
-      (getHeap())[start] = (byte) ((getHeap())[start] | 0x01);
-    } else {
-      (getHeap())[start] = (byte) ((getHeap())[start] & 0xFE);
-    }
-    writeDataEntry(BOOT_DEVICE_LOCKED_STATUS, getHeap(), start, DEVICE_LOCK_FLAG_SIZE);
-  }
-
-  public void setVerifiedBootKey(byte[] buf, short start, short len) {
-    if (len > BOOT_KEY_MAX_SIZE) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    writeDataEntry(BOOT_VERIFIED_BOOT_KEY, buf, start, len);
-  }
-
-
-  public void setVerifiedBootHash(byte[] buf, short start, short len) {
-    if (len > BOOT_HASH_MAX_SIZE) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    writeDataEntry(BOOT_VERIFIED_BOOT_HASH, buf, start, len);
-  }
-
-  public void setBootState(byte state) {
-    short start = alloc(BOOT_STATE_SIZE);
-    (getHeap())[start] = state;
-    writeDataEntry(BOOT_VERIFIED_BOOT_STATE, getHeap(), start, BOOT_STATE_SIZE);
-  }
-*/
   @Override
   public void onSave(Element ele) {
     ele.write(dataIndex);

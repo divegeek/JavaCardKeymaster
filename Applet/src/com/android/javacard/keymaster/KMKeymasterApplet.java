@@ -691,8 +691,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short seed = KMByteBlob.instance((short) 0);
     KMHmacSharingParameters.cast(params).setNonce(nonce);
     KMHmacSharingParameters.cast(params).setSeed(seed);
-    print(KMByteBlob.cast(nonce).getBuffer(), KMByteBlob.cast(nonce).getStartOff(),
-        KMByteBlob.cast(nonce).length());
+    //print(KMByteBlob.cast(nonce).getBuffer(), KMByteBlob.cast(nonce).getStartOff(),
+    //    KMByteBlob.cast(nonce).length());
     // prepare the response
     short resp = KMArray.instance((short) 2);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
@@ -771,9 +771,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short found = 0;
     //tmpVariables[9]
     short nonce = repository.getHmacNonce();
-    print(KMByteBlob.cast(nonce).getBuffer(),
-        KMByteBlob.cast(nonce).getStartOff(),
-        KMByteBlob.cast(nonce).length());
+    //print(KMByteBlob.cast(nonce).getBuffer(),
+    //    KMByteBlob.cast(nonce).getStartOff(),
+    //    KMByteBlob.cast(nonce).length());
 
     while (paramIndex < paramsLen) {
       // read HmacSharingParam
@@ -816,11 +816,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       // Check if the nonce generated here is present in the hmacSharingParameters array.
       // Otherwise throw INVALID_ARGUMENT error.
       if (found == 1) {
-        print(repository.getHeap(),
-            (short) (concateBuffer + bufferIndex),nonceLen);
-        print(KMByteBlob.cast(nonce).getBuffer(),
-            KMByteBlob.cast(nonce).getStartOff(),
-            nonceLen);
+        //print(repository.getHeap(),
+        //    (short) (concateBuffer + bufferIndex),nonceLen);
+        //print(KMByteBlob.cast(nonce).getBuffer(),
+        //    KMByteBlob.cast(nonce).getStartOff(),
+        //    nonceLen);
         if (0
             == Util.arrayCompare(
             repository.getHeap(),
@@ -1344,20 +1344,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short len = seProvider.getVerifiedBootHash(scratchPad,(short)0);
     if(len != VERIFIED_BOOT_KEY_SIZE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
     return KMByteBlob.instance(scratchPad,(short)0, VERIFIED_BOOT_KEY_SIZE);
   }
-  
-  private boolean isEmpty(byte[] buf, short offset, short len) {
-    boolean empty = true;
-    short index = 0;
-    while (index < len) {
-      if (buf[(short) (index + offset)] != 0) {
-        empty = false;
-        break;
-      }
-      index++;
-  }
-      
+
   protected short getVerifiedBootHash(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_HASH_SIZE, (byte)0);
     short len = seProvider.getVerifiedBootHash(scratchPad,(short)0);
@@ -3023,6 +3013,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     setOsVersion(osVersion);
     setOsPatchLevel(osPatchLevel);
     setVendorPatchLevel(vendorPatchLevel);
+    System.out.println("============ OS Version et al ==========");
+   // print(KMInteger.cast(osVersion).getBuffer(),
+   //     KMInteger.cast(osVersion).getStartOff(),
+   //     KMInteger.cast(osVersion).length());
+
+   // print(KMInteger.cast(osPatchLevel).getBuffer(),
+   //     KMInteger.cast(osPatchLevel).getStartOff(),
+   //     KMInteger.cast(osPatchLevel).length());
+
+   // print(KMInteger.cast(vendorPatchLevel).getBuffer(),
+   //     KMInteger.cast(vendorPatchLevel).getStartOff(),
+   //     KMInteger.cast(vendorPatchLevel).length());
   }
 
   public void reboot(){
@@ -3052,14 +3054,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMInteger.cast(version).length());
   }
 
-  protected void setVendorPatchLevel(short patch){
+  protected void setOsPatchLevel(short patch){
     repository.setOsPatch(
         KMInteger.cast(patch).getBuffer(),
         KMInteger.cast(patch).getStartOff(),
         KMInteger.cast(patch).length());
   }
 
-  protected void setOsPatchLevel(short patch){
+  protected void setVendorPatchLevel(short patch){
     repository.setVendorPatchLevel(
         KMInteger.cast(patch).getBuffer(),
         KMInteger.cast(patch).getStartOff(),
@@ -3129,7 +3131,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(resp).add((short) 3, data[CERTIFICATE]);
     sendOutgoing(apdu, resp);
   }
-
+/*
   private static void print(byte[] buf, short start, short length){
     StringBuilder sb = new StringBuilder(length * 2);
     for(short i = start; i < (start+length); i ++){
@@ -3137,7 +3139,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     System.out.println( sb.toString());
   }
-
+*/
   private  void generateAttestation(byte[] scratchPad){
     KMAttestationCert cert = makeCert(scratchPad);
     if(cert == null) {// No certificate
@@ -3155,9 +3157,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMByteBlob.cast(certData).setStartOff(cert.getCertStart());
     KMByteBlob.cast(certData).setLength(cert.getCertLength());
 
-    print(KMByteBlob.cast(certData).getBuffer(),
-        KMByteBlob.cast(certData).getStartOff(),
-        KMByteBlob.cast(certData).length());
+    //print(KMByteBlob.cast(certData).getBuffer(),
+    //    KMByteBlob.cast(certData).getStartOff(),
+    //    KMByteBlob.cast(certData).length());
     // Initialize the certificate as array of blob
     data[CERTIFICATE] = KMArray.instance((short)1);
     KMArray.cast(data[CERTIFICATE]).add((short)0, certData);
