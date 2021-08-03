@@ -17,7 +17,8 @@
 #pragma once
 
 #include "CborConverter.h"
-#include "JavacardKeyMintDevice.h"
+#include "JavacardSecureElement.h"
+
 #include <aidl/android/hardware/security/keymint/BnKeyMintOperation.h>
 #include <aidl/android/hardware/security/secureclock/ISecureClock.h>
 #include <hardware/keymaster_defs.h>
@@ -27,8 +28,8 @@
 #define RSA_BUFFER_SIZE 256
 #define EC_BUFFER_SIZE 32
 #define MAX_CHUNK_SIZE 256
-
 namespace aidl::android::hardware::security::keymint {
+using namespace ::keymint::javacard;
 using ::ndk::ScopedAStatus;
 using secureclock::TimeStampToken;
 using std::optional;
@@ -39,9 +40,9 @@ using std::vector;
 // Bufferig modes for update
 enum class BufferingMode : int32_t {
     NONE = 0,           // Send everything to javacard - most of the assymteric operations
-    RSA_NO_DIGEST = 1,  // Buffer everything in update upto 256 bytes and send in finish. If input
-                        // data is greater then 256 bytes then it is an error. Javacard will further
-                        // check according to exact key size and crypto provider.
+    RSA_NO_DIGEST = 1,  // Buffer everything in update upto 256 bytes and send in finish. If
+                        // input data is greater then 256 bytes then it is an error. Javacard
+                        // will further check according to exact key size and crypto provider.
     EC_NO_DIGEST = 2,   // Buffer upto 65 bytes and then truncate. Javacard will further truncate
                         // upto exact keysize.
     BLOCK_ALIGNED = 3,  // Buffer the atlest 16 bytes and reminder to make input data block aligned.
@@ -60,9 +61,9 @@ class JavacardKeyMintOperation : public BnKeyMintOperation {
   public:
     explicit JavacardKeyMintOperation(keymaster_operation_handle_t opHandle,
                                       BufferingMode bufferingMode,
-                                      shared_ptr<JavacardKeyMintDevice> device)
-        : buffer_(vector<uint8_t>()), opHandle_(opHandle), bufferingMode_(bufferingMode),
-          device_(device), cbor_(CborConverter()) {}
+                                      shared_ptr<JavacardSecureElement> card)
+        : buffer_(vector<uint8_t>()), bufferingMode_(bufferingMode), card_(card),
+          opHandle_(opHandle) {}
     virtual ~JavacardKeyMintOperation();
 
     ScopedAStatus updateAad(const vector<uint8_t>& input,
@@ -111,9 +112,9 @@ class JavacardKeyMintOperation : public BnKeyMintOperation {
     void blockAlign(DataView& data, short blockSize);
 
     vector<uint8_t> buffer_;
-    keymaster_operation_handle_t opHandle_;
     BufferingMode bufferingMode_;
-    shared_ptr<JavacardKeyMintDevice> device_;
+    const shared_ptr<JavacardSecureElement> card_;
+    keymaster_operation_handle_t opHandle_;
     CborConverter cbor_;
 };
 
