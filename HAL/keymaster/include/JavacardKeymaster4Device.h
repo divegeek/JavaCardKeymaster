@@ -54,6 +54,14 @@ using ::android::hardware::keymaster::V4_0::Tag;
 
 using V41ErrorCode = ::android::hardware::keymaster::V4_1::ErrorCode;
 
+enum class OperationType {
+    /* Public operations are processed inside softkeymaster */
+    PUBLIC_OPERATION = 0,
+    /* Private operations are processed inside strongbox */
+    PRIVATE_OPERATION = 1,
+};
+
+
 class JavacardKeymaster4Device : public IKeymasterDevice {
   public:
   
@@ -87,8 +95,31 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
 
 protected:
     CborConverter cborConverter_;
-	
+
 private:
+    ErrorCode handlePublicKeyOperation(KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob,
+                                       const hidl_vec<KeyParameter>& inParams,
+                                       hidl_vec<KeyParameter>* outParams,
+                                       uint64_t* operationHandle);
+
+    ErrorCode handlePrivateKeyOperation(KeyPurpose purpose,
+                                        const hidl_vec<uint8_t>& keyBlob,
+                                        const hidl_vec<KeyParameter>& inParams,
+                                        const HardwareAuthToken& authToken,
+                                        hidl_vec<KeyParameter>* outParams,
+                                        uint64_t* operationHandle);
+
+    ErrorCode handleBeginOperation(KeyPurpose purpose,
+                                   const hidl_vec<uint8_t>& keyBlob,
+                                   const hidl_vec<KeyParameter>& inParams,
+                                   const HardwareAuthToken& authToken,
+                                   hidl_vec<KeyParameter>* outParams,
+                                   uint64_t* operationHandle,
+                                   OperationType operType,
+                                   uint32_t retryCount = 0);
+
+    ErrorCode abortOperation(uint64_t operationHandle, bool isPublicOperation);
+
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
     std::unique_ptr<OperationContext> oprCtx_;
     bool isEachSystemPropertySet;
