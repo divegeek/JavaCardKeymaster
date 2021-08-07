@@ -1132,7 +1132,7 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(KeyPurpose purpose,
     if (ErrorCode::OK == errorCode) {
         if (operationHandleExists(*operationHandle)) {
             LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD operationHandle already exits. Aborting the operation"
-                       "and starting the begin operation again.";
+                       "and starting a new begin operation.";
             // abort this operation.
             abortOperation(*operationHandle, (operType == OperationType::PRIVATE_OPERATION));
             // recursive call.

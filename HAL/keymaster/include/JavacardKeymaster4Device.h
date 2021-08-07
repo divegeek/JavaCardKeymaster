@@ -118,7 +118,7 @@ private:
                                    OperationType operType,
                                    uint32_t retryCount = 0);
 
-    ErrorCode abortOperation(uint64_t operationHandle, bool isPublicOperation);
+    ErrorCode abortOperation(uint64_t operationHandle, bool privateOperation);
 
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
     std::unique_ptr<OperationContext> oprCtx_;
