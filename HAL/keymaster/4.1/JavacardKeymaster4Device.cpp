@@ -994,8 +994,8 @@ ErrorCode
 JavacardKeymaster4Device::handlePublicKeyOperation(KeyPurpose purpose,
                                                    const hidl_vec<uint8_t>& keyBlob,
                                                    const hidl_vec<KeyParameter>& inParams,
-                                                   hidl_vec<KeyParameter>* outParams,
-                                                   uint64_t* operationHandle) {
+                                                   hidl_vec<KeyParameter>& outParams,
+                                                   uint64_t& operationHandle) {
     if (KeyPurpose::DECRYPT == purpose || KeyPurpose::SIGN == purpose) {
         return ErrorCode::INCOMPATIBLE_ALGORITHM;
     }
@@ -1010,8 +1010,8 @@ JavacardKeymaster4Device::handlePublicKeyOperation(KeyPurpose purpose,
     ErrorCode errorCode = legacy_enum_conversion(response.error);
     LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD softkm BeginOperation status: " << (int32_t) errorCode;
     if (ErrorCode::OK == errorCode) {
-        *outParams = kmParamSet2Hidl(response.output_params);
-        *operationHandle = response.op_handle;
+        outParams = kmParamSet2Hidl(response.output_params);
+        operationHandle = response.op_handle;
     } else {
         LOG(ERROR) << "INS_BEGIN_OPERATION_CMD error in softkm BeginOperation status: " << (int32_t) errorCode;
     }
@@ -1023,8 +1023,8 @@ JavacardKeymaster4Device::handlePrivateKeyOperation(KeyPurpose purpose,
                                                    const hidl_vec<uint8_t>& keyBlob,
                                                    const hidl_vec<KeyParameter>& inParams,
                                                    const HardwareAuthToken& authToken,
-                                                   hidl_vec<KeyParameter>* outParams,
-                                                   uint64_t* operationHandle) {
+                                                   hidl_vec<KeyParameter>& outParams,
+                                                   uint64_t& operationHandle) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     cppbor::Array array;
     std::vector<uint8_t> cborOutData;
@@ -1068,15 +1068,15 @@ JavacardKeymaster4Device::handlePrivateKeyOperation(KeyPurpose purpose,
                 std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                                                        true, oprCtx_);
                 if (item != nullptr) {
-                    if(!cborConverter_.getKeyParameters(item, 1, *outParams) ||
-                       !cborConverter_.getUint64(item, 2, *operationHandle)) {
+                    if(!cborConverter_.getKeyParameters(item, 1, outParams) ||
+                       !cborConverter_.getUint64(item, 2, operationHandle)) {
                         errorCode = ErrorCode::UNKNOWN_ERROR;
-                        outParams->setToExternal(nullptr, 0);
-                        *operationHandle = 0;
+                        outParams.setToExternal(nullptr, 0);
+                        operationHandle = 0;
                         LOG(ERROR) << "INS_BEGIN_OPERATION_CMD: error in converting cbor data, status: " << (int32_t) errorCode;
                     } else {
                         /* Store the operationInfo */
-                        oprCtx_->setOperationInfo(*operationHandle, purpose, param.f.algorithm, inParams);
+                        oprCtx_->setOperationInfo(operationHandle, purpose, param.f.algorithm, inParams);
                     }
                 }
             }
@@ -1093,8 +1093,8 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(KeyPurpose purpose,
                                                          const hidl_vec<uint8_t>& keyBlob,
                                                          const hidl_vec<KeyParameter>& inParams,
                                                          const HardwareAuthToken& authToken,
-                                                         hidl_vec<KeyParameter>* outParams,
-                                                         uint64_t* operationHandle,
+                                                         hidl_vec<KeyParameter>& outParams,
+                                                         uint64_t& operationHandle,
                                                          OperationType operType,
                                                          uint32_t retryCount) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
@@ -1130,16 +1130,16 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(KeyPurpose purpose,
     }
 
     if (ErrorCode::OK == errorCode) {
-        if (operationHandleExists(*operationHandle)) {
+        if (operationHandleExists(operationHandle)) {
             LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD operationHandle already exits. Aborting the operation"
                        "and starting a new begin operation.";
             // abort this operation.
-            abortOperation(*operationHandle, (operType == OperationType::PRIVATE_OPERATION));
+            abortOperation(operationHandle, (operType == OperationType::PRIVATE_OPERATION));
             // recursive call.
             return handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams, operationHandle,
                                         operType, retryCount);
         }
-        errorCode = createOprHandleEntry(*operationHandle, operType);
+        errorCode = createOprHandleEntry(operationHandle, operType);
     }
     return errorCode;
 }
@@ -1168,8 +1168,8 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose,
     }
 
     errorCode =
-        handleBeginOperation(purpose, keyBlob, inParams, authToken, &outParams,
-                             &operationHandle, operType);
+        handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
+                             operationHandle, operType);
    _hidl_cb(errorCode, outParams, operationHandle);
     return Void();
 }
