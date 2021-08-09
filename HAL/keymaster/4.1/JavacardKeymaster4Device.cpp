@@ -200,31 +200,20 @@ static T translateExtendedErrorsToHalErrors(T& errorCode) {
 }
 
 /* Returns true if operation handle exists, otherwise false */
-static bool operationHandleExists(uint64_t opHandle) {
+static inline bool operationHandleExists(uint64_t opHandle) {
     if (operationTable.end() == operationTable.find(opHandle)) {
         return false;
     }
     return true;
 }
 
-/* Create a new operation handle entry into the operation table.*/
-static ErrorCode createOprHandleEntry(uint64_t oprHandle, OperationType operType) {
-    operationTable[oprHandle] = operType;
-    return ErrorCode::OK;
-}
-
 /* Tells if the operation handle belongs to strongbox keymaster. */
-static bool isPrivateKeyOperation(uint64_t operationHandle) {
+static inline bool isPrivateKeyOperation(uint64_t operationHandle) {
     auto it = operationTable.find(operationHandle);
     if (it == operationTable.end()) {
         return false;
     }
     return (OperationType::PRIVATE_OPERATION == it->second);
-}
-
-/* Delete the operation handle entry from operation table. */
-static void deleteOprHandleEntry(uint64_t operationHandle) {
-    operationTable.erase(operationHandle);
 }
 
 /* Clears all the strongbox operation handle entries from operation table */
@@ -1139,7 +1128,9 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(KeyPurpose purpose,
             return handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams, operationHandle,
                                         operType, retryCount);
         }
-        errorCode = createOprHandleEntry(operationHandle, operType);
+        // Create an entry inside the operation table for the new operation
+        // handle.
+        operationTable[operationHandle] = operType;
     }
     return errorCode;
 }
@@ -1282,7 +1273,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
     if(ErrorCode::OK != errorCode) {
         /* Delete the entry from operation table. */
         LOG(ERROR) << "Delete entry from operation table, status: " << (int32_t) errorCode;
-        deleteOprHandleEntry(operationHandle);
+        operationTable.erase(operationHandle);
     }
 
     _hidl_cb(errorCode, inputConsumed, outParams, output);
@@ -1416,7 +1407,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
         }
     }
     /* Delete the entry from operation table. */
-    deleteOprHandleEntry(operationHandle);
+    operationTable.erase(operationHandle);
     oprCtx_->clearOperationData(operationHandle);
     LOG(DEBUG) << "finish operation, status: " << (int32_t) errorCode;
     _hidl_cb(errorCode, outParams, output);
@@ -1464,7 +1455,7 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
     errorCode = abortOperation(operationHandle, isPrivateKeyOperation(operationHandle));
     /* Delete the entry on this operationHandle */
     oprCtx_->clearOperationData(operationHandle);
-    deleteOprHandleEntry(operationHandle);
+    operationTable.erase(operationHandle);
     return errorCode;
 }
 
