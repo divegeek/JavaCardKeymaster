@@ -980,14 +980,11 @@ Return<ErrorCode> JavacardKeymaster4Device::destroyAttestationIds() {
 }
 
 ErrorCode
-JavacardKeymaster4Device::handlePublicKeyOperation(KeyPurpose purpose,
+JavacardKeymaster4Device::handleBeginPublicKeyOperation(KeyPurpose purpose,
                                                    const hidl_vec<uint8_t>& keyBlob,
                                                    const hidl_vec<KeyParameter>& inParams,
                                                    hidl_vec<KeyParameter>& outParams,
                                                    uint64_t& operationHandle) {
-    if (KeyPurpose::DECRYPT == purpose || KeyPurpose::SIGN == purpose) {
-        return ErrorCode::INCOMPATIBLE_ALGORITHM;
-    }
     BeginOperationRequest request(softKm_->message_version());
     request.purpose = legacy_enum_conversion(purpose);
     request.SetKeyMaterial(keyBlob.data(), keyBlob.size());
@@ -1008,7 +1005,7 @@ JavacardKeymaster4Device::handlePublicKeyOperation(KeyPurpose purpose,
 }
 
 ErrorCode
-JavacardKeymaster4Device::handlePrivateKeyOperation(KeyPurpose purpose,
+JavacardKeymaster4Device::handleBeginPrivateKeyOperation(KeyPurpose purpose,
                                                    const hidl_vec<uint8_t>& keyBlob,
                                                    const hidl_vec<KeyParameter>& inParams,
                                                    const HardwareAuthToken& authToken,
@@ -1098,9 +1095,9 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(KeyPurpose purpose,
 
     switch(operType) {
         case OperationType::PUBLIC_OPERATION:
-            errorCode = handlePublicKeyOperation(purpose, keyBlob, inParams, outParams,
+            errorCode = handleBeginPublicKeyOperation(purpose, keyBlob, inParams, outParams,
                                                  operationHandle);
-            // For Symmetric operations handlePublicKeyOperation function
+            // For Symmetric operations handleBeginPublicKeyOperation function
             // returns INCOMPATIBLE_ALGORITHM error. Based on this error
             // condition it fallbacks to private key operation.
             if (errorCode != ErrorCode::INCOMPATIBLE_ALGORITHM) {
@@ -1111,7 +1108,7 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(KeyPurpose purpose,
             [[fallthrough]]; //Added to avoid compilation error.
         case OperationType::PRIVATE_OPERATION:
             errorCode =
-                    handlePrivateKeyOperation(purpose, keyBlob, inParams, authToken, outParams,
+                    handleBeginPrivateKeyOperation(purpose, keyBlob, inParams, authToken, outParams,
                                               operationHandle);
             break;
         default:
