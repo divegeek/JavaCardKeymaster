@@ -96,18 +96,17 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
 protected:
     CborConverter cborConverter_;
 
-private:
-    ErrorCode handleBeginPublicKeyOperation(KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob,
-                                       const hidl_vec<KeyParameter>& inParams,
-                                       hidl_vec<KeyParameter>& outParams,
-                                       uint64_t& operationHandle);
+ private:
+    ErrorCode handleBeginPublicKeyOperation(
+            KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob,
+            const hidl_vec<KeyParameter>& inParams, hidl_vec<KeyParameter>& outParams,
+            uint64_t& operationHandle);
 
-    ErrorCode handleBeginPrivateKeyOperation(KeyPurpose purpose,
-                                        const hidl_vec<uint8_t>& keyBlob,
-                                        const hidl_vec<KeyParameter>& inParams,
-                                        const HardwareAuthToken& authToken,
-                                        hidl_vec<KeyParameter>& outParams,
-                                        uint64_t& operationHandle);
+    ErrorCode handleBeginPrivateKeyOperation(
+            KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob,
+            const hidl_vec<KeyParameter>& inParams,
+            const HardwareAuthToken& authToken, hidl_vec<KeyParameter>& outParams,
+            uint64_t& operationHandle);
 
     ErrorCode handleBeginOperation(KeyPurpose purpose,
                                    const hidl_vec<uint8_t>& keyBlob,
@@ -115,10 +114,13 @@ private:
                                    const HardwareAuthToken& authToken,
                                    hidl_vec<KeyParameter>& outParams,
                                    uint64_t& operationHandle,
-                                   OperationType operType,
-                                   uint32_t retryCount = 0);
+                                   OperationType operType);
 
     ErrorCode abortOperation(uint64_t operationHandle, bool privateOperation);
+
+    ErrorCode abortPublicKeyOperation(uint64_t operationHandle);
+
+    ErrorCode abortPrivateKeyOperation(uint64_t operationHandle);
 
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
     std::unique_ptr<OperationContext> oprCtx_;
