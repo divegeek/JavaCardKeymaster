@@ -1117,7 +1117,7 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(
 
         if (operationHandleExists(operationHandle)) {
             LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD operationHandle already"
-                       "exits. Aborting the operatio and starting a new"
+                       "exits. Aborting the operation and starting a new"
                        "begin operation.";
             // abort this operation.
             abortOperation(operationHandle,
