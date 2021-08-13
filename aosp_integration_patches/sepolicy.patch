@@ -1,0 +1,61 @@
+commit ad5c9bf6cc9c806717ced142cc44b19b0b46d334
+Author: Manish Dwivedi <manishdwivedi@google.com>
+Date:   Tue Jun 29 01:36:44 2021 +0000
+
+    aosp upmerge
+    
+    Change-Id: I99cde570325f6d56103fbbf318a5afdf0cbd1831
+
+diff --git a/public/hal_neverallows.te b/public/hal_neverallows.te
+index faec07420..020ee16bd 100644
+--- a/public/hal_neverallows.te
++++ b/public/hal_neverallows.te
+@@ -2,6 +2,7 @@
+ # network capabilities
+ neverallow {
+   halserverdomain
++  -hal_keymaster_server
+   -hal_bluetooth_server
+   -hal_can_controller_server
+   -hal_wifi_server
+@@ -19,6 +20,7 @@ neverallow {
+ # will result in CTS failure.
+ neverallow {
+   halserverdomain
++  -hal_keymaster_server
+   -hal_automotive_socket_exemption
+   -hal_can_controller_server
+   -hal_tetheroffload_server
+@@ -31,6 +33,7 @@ neverallow {
+ 
+ neverallow {
+   halserverdomain
++  -hal_keymaster_server
+   -hal_automotive_socket_exemption
+   -hal_can_controller_server
+   -hal_tetheroffload_server
+diff --git a/vendor/file_contexts b/vendor/file_contexts
+index 12e5d9f97..a6d7bd72f 100644
+--- a/vendor/file_contexts
++++ b/vendor/file_contexts
+@@ -71,6 +71,7 @@
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.sensors@[0-9]\.[0-9]-service(\.multihal)?  u:object_r:hal_sensors_default_exec:s0
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.secure_element@1\.0-service u:object_r:hal_secure_element_default_exec:s0
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.security\.keymint-service   u:object_r:hal_keymint_default_exec:s0
++/(vendor|system/vendor)/bin/hw/android\.hardware\.keymaster@4\.1-strongbox\.service               u:object_r:hal_keymaster_default_exec:s0
+ /(vendor|system/vendor)/bin/hw/rild                                           u:object_r:rild_exec:s0
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.thermal@1\.[01]-service        u:object_r:hal_thermal_default_exec:s0
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.tv\.cec@1\.[01]-service        u:object_r:hal_tv_cec_default_exec:s0
+diff --git a/vendor/hal_keymaster_default.te b/vendor/hal_keymaster_default.te
+index 6f0d82aa7..2bbcff6a7 100644
+--- a/vendor/hal_keymaster_default.te
++++ b/vendor/hal_keymaster_default.te
+@@ -5,3 +5,8 @@ type hal_keymaster_default_exec, exec_type, vendor_file_type, file_type;
+ init_daemon_domain(hal_keymaster_default)
+ 
+ get_prop(hal_keymaster_default, vendor_security_patch_level_prop);
++allow hal_keymaster_default self:tcp_socket { connect create write read getattr getopt setopt };
++allow hal_keymaster_default port_type:tcp_socket name_connect;
++allow hal_keymaster_default port:tcp_socket { name_connect };
++allow hal_keymaster_default vendor_data_file:file { open read getattr };
++

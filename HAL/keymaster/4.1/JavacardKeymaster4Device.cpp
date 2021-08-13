@@ -24,7 +24,7 @@
 #include <keymaster/key_blob_utils/software_keyblobs.h>
 #include <keymaster/android_keymaster_utils.h>
 #include <keymaster/wrapped_key.h>
-#include <keymaster/attestation_record.h>
+#include <keymaster/km_openssl/attestation_record.h>
 #include <keymaster/km_openssl/openssl_err.h>
 #include <keymaster/km_openssl/openssl_utils.h>
 #include <openssl/aes.h>
@@ -40,6 +40,10 @@
 
 #define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v1.0"
 #define JAVACARD_KEYMASTER_AUTHOR    "Android Open Source Project"
+#define PROP_BUILD_QEMU              "ro.kernel.qemu"
+#define PROP_BUILD_FINGERPRINT       "ro.build.fingerprint"
+// Cuttlefish build fingerprint substring.
+#define CUTTLEFISH_FINGERPRINT_SS    "aosp_cf_"
 
 #define APDU_CLS 0x80
 #define APDU_P1  0x40
@@ -125,9 +129,20 @@ enum ExtendedErrors {
 };
 
 static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFactoryInstance() {
+    bool isEmulator = false;
     if(pTransportFactory == nullptr) {
+        // Check if the current build is for emulator or device.
+        isEmulator = android::base::GetBoolProperty(PROP_BUILD_QEMU, false);
+        if (!isEmulator) {
+            std::string fingerprint = android::base::GetProperty(PROP_BUILD_FINGERPRINT, "");
+            if (!fingerprint.empty()) {
+                if (fingerprint.find(CUTTLEFISH_FINGERPRINT_SS, 0)) {
+                    isEmulator = true;
+                }
+            }
+        }
         pTransportFactory = std::unique_ptr<se_transport::TransportFactory>(new se_transport::TransportFactory(
-                    android::base::GetBoolProperty("ro.kernel.qemu", false)));
+                    isEmulator));
         pTransportFactory->openConnection();
     }
     return pTransportFactory;
@@ -480,11 +495,14 @@ JavacardKeymaster4Device::JavacardKeymaster4Device(): softKm_(new ::keymaster::A
             context->SetSystemVersion(GetOsVersion(), GetOsPatchlevel());
             return context;
             }(),
-            kOperationTableSize)), oprCtx_(new OperationContext()), isEachSystemPropertySet(false) {
+            kOperationTableSize, keymaster::MessageVersion(keymaster::KmVersion::KEYMASTER_4_1,
+                                0 /* km_date */) )), oprCtx_(new OperationContext()), isEachSystemPropertySet(false) {
     // Send Android system properties like os_version, os_patchlevel and vendor_patchlevel
     // to the Applet. Incase if setting system properties fails here, again try setting
     // it from computeSharedHmac.
+
     if (ErrorCode::OK == setAndroidSystemProperties(cborConverter_, oprCtx_)) {
+        LOG(ERROR) << "javacard strongbox : setAndroidSystemProperties from constructor - successful";
         isEachSystemPropertySet = true;
     }
 
@@ -522,7 +540,7 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
     } else {
         // It should not come here, but incase if for any reason SB keymaster fails to getHardwareInfo
         // return proper values from HAL.
-        LOG(ERROR) << "Failed to fetch getHardwareInfo from javacard";
+        LOG(ERROR) << "Failed to fetch getHardwareInfo from javacard returning fixed values from HAL itself";
         _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
         return Void();
     }
@@ -541,28 +559,12 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
                 true, oprCtx_);
         if (item != nullptr) {
             if(!cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters)) {
-                LOG(ERROR) << "Failed to convert cbor data of INS_GET_HMAC_SHARING_PARAM_CMD";
+                LOG(ERROR) << "javacard strongbox : Failed to convert cbor data of INS_GET_HMAC_SHARING_PARAM_CMD";
                 errorCode = ErrorCode::UNKNOWN_ERROR;
             }
         }
+        LOG(ERROR) << "javacard strongbox : received getHmacSharingParameter from Javacard - successful";
     }
-#ifdef VTS_EMULATOR
-    /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
-     * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to getHmacSharing
-     * parameters.
-     */
-    else {
-        auto response = softKm_->GetHmacSharingParameters();
-        LOG(DEBUG) << "INS_GET_HMAC_SHARING_PARAM_CMD not succeded with javacard";
-        LOG(DEBUG) << "Setting software keymaster hmac sharing parameters";
-        hmacSharingParameters.seed.setToExternal(const_cast<uint8_t*>(response.params.seed.data),
-                response.params.seed.data_length);
-        static_assert(sizeof(response.params.nonce) == hmacSharingParameters.nonce.size(), "Nonce sizes don't match");
-        memcpy(hmacSharingParameters.nonce.data(), response.params.nonce, hmacSharingParameters.nonce.size());
-        errorCode = legacy_enum_conversion(response.error);
-        LOG(DEBUG) << "INS_GET_HMAC_SHARING_PARAM_CMD softkm status: " << (int32_t) errorCode;
-    }
-#endif
     _hidl_cb(errorCode, hmacSharingParameters);
     return Void();
 }
@@ -575,21 +577,22 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> tempVec;
     cppbor::Array outerArray;
-#ifndef VTS_EMULATOR
     // The Android system properties like OS_VERSION, OS_PATCHLEVEL and VENDOR_PATCHLEVEL are to 
     // be delivered to the Applet when the HAL is first loaded. Incase if settting system properties
     // failed at construction time then this is one of the ideal places to send this information
     // to the Applet as computeSharedHmac is called everytime when Android device boots.
     if (!isEachSystemPropertySet) {
-        errorCode = setAndroidSystemProperties(cborConverter_);
+        errorCode = setAndroidSystemProperties(cborConverter_, oprCtx_);
         if (ErrorCode::OK != errorCode) {
             LOG(ERROR) << " Failed to set os_version, os_patchlevel and vendor_patchlevel err: " << (int32_t)errorCode;
             _hidl_cb(errorCode, sharingCheck);
             return Void();
         }
+
+        LOG(ERROR) << "javacard strongbox : setAndroidSystemProperties from ComputeSharedHmac - successful ";
+
         isEachSystemPropertySet = true;
     }
-#endif
 
     for(size_t i = 0; i < params.size(); ++i) {
         cppbor::Array innerArray;
@@ -606,6 +609,7 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
 
     errorCode = sendData(Instruction::INS_COMPUTE_SHARED_HMAC_CMD, cborData, cborOutData);
     if (ErrorCode::OK == errorCode) {
+        LOG(ERROR) << "javacard strongbox : received ComputeSharedHmac data from javacard";
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true, oprCtx_);
@@ -619,34 +623,12 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
             }
         }
     }
-#ifdef VTS_EMULATOR
-    /* TODO temporary fix: vold daemon calls performHmacKeyAgreement. At that time when vold calls this API there is no
-     * network connectivity and socket cannot be connected. So as a hack we are calling softkeymaster to
-     * computeSharedHmac.
-     */
-    else {
-        ComputeSharedHmacRequest request;
-        request.params_array.params_array = new keymaster::HmacSharingParameters[params.size()];
-        request.params_array.num_params = params.size();
-        for (size_t i = 0; i < params.size(); ++i) {
-            request.params_array.params_array[i].seed = {params[i].seed.data(), params[i].seed.size()};
-            static_assert(sizeof(request.params_array.params_array[i].nonce) ==
-                    decltype(params[i].nonce)::size(),
-                    "Nonce sizes don't match");
-            memcpy(request.params_array.params_array[i].nonce, params[i].nonce.data(),
-                    params[i].nonce.size());
-        }
 
-        LOG(DEBUG) << "INS_COMPUTE_SHARED_HMAC_CMD failed, computing shared check data using soft-key-master" << (int32_t) errorCode;
-        auto response = softKm_->ComputeSharedHmac(request);
-        if (response.error == KM_ERROR_OK) sharingCheck = kmBlob2hidlVec(response.sharing_check);
-        errorCode = legacy_enum_conversion(response.error);
-        LOG(DEBUG) << "INS_COMPUTE_SHARED_HMAC_CMD softkm status: " << (int32_t) errorCode;
-    }
-#endif
+    LOG(ERROR) << "javacard strongbox : computeSharedHmac - sending sharingCheckToKeystore";
+
     _hidl_cb(errorCode, sharingCheck);
     return Void();
- }
+}
 
 Return<void> JavacardKeymaster4Device::verifyAuthorization(uint64_t , const hidl_vec<KeyParameter>& , const HardwareAuthToken& , verifyAuthorization_cb _hidl_cb) {
     VerificationToken verificationToken;
@@ -869,11 +851,11 @@ Return<void> JavacardKeymaster4Device::exportKey(KeyFormat exportFormat, const h
         return Void();
     }
 
-    ExportKeyRequest request;
+    ExportKeyRequest request(softKm_->message_version());
     request.key_format = legacy_enum_conversion(exportFormat);
     request.SetKeyMaterial(keyBlob.data(), keyBlob.size());
 
-    ExportKeyResponse response;
+    ExportKeyResponse response(softKm_->message_version());
     softKm_->ExportKey(request, &response);
 
     if(response.error == KM_ERROR_INCOMPATIBLE_ALGORITHM) {
@@ -1043,12 +1025,12 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
      */
     LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD purpose: " << (int32_t)purpose;
     if (KeyPurpose::ENCRYPT == purpose || KeyPurpose::VERIFY == purpose) {
-        BeginOperationRequest request;
+        BeginOperationRequest request(softKm_->message_version());
         request.purpose = legacy_enum_conversion(purpose);
         request.SetKeyMaterial(keyBlob.data(), keyBlob.size());
         request.additional_params.Reinitialize(KmParamSet(inParams));
 
-        BeginOperationResponse response;
+        BeginOperationResponse response(softKm_->message_version());
         /* For Symmetric key operation, the BeginOperation returns KM_ERROR_INCOMPATIBLE_ALGORITHM error. */
         softKm_->BeginOperation(request, &response);
         errorCode = legacy_enum_conversion(response.error);
@@ -1152,7 +1134,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t halGeneratedOprHandle, co
     hidl_vec<KeyParameter> outParams;
     hidl_vec<uint8_t> output;
     uint64_t operationHandle;
-    UpdateOperationResponse response;
+    UpdateOperationResponse response(softKm_->message_version());
     if (ErrorCode::OK != (errorCode = getOrigOperationHandle(halGeneratedOprHandle, operationHandle))) {
         LOG(ERROR) << " Operation handle is invalid. This could happen if invalid operation handle is passed or if"
             << " secure element reset occurred.";
@@ -1163,7 +1145,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t halGeneratedOprHandle, co
     if (!isStrongboxOperation(halGeneratedOprHandle)) {
         /* SW keymaster (Public key operation) */
         LOG(DEBUG) << "INS_UPDATE_OPERATION_CMD - swkm operation ";
-        UpdateOperationRequest request;
+        UpdateOperationRequest request(softKm_->message_version());
         request.op_handle = operationHandle;
         request.input.Reinitialize(input.data(), input.size());
         request.additional_params.Reinitialize(KmParamSet(inParams));
@@ -1267,7 +1249,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t halGeneratedOprHandle, co
     uint64_t operationHandle;
     hidl_vec<KeyParameter> outParams;
     hidl_vec<uint8_t> output;
-    FinishOperationResponse response;
+    FinishOperationResponse response(softKm_->message_version());
 
     if (ErrorCode::OK != (errorCode = getOrigOperationHandle(halGeneratedOprHandle, operationHandle))) {
         LOG(ERROR) << " Operation handle is invalid. This could happen if invalid operation handle is passed or if"
@@ -1279,7 +1261,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t halGeneratedOprHandle, co
     if (!isStrongboxOperation(halGeneratedOprHandle)) {
         /* SW keymaster (Public key operation) */
         LOG(DEBUG) << "FINISH - swkm operation ";
-        FinishOperationRequest request;
+        FinishOperationRequest request(softKm_->message_version());
         request.op_handle = operationHandle;
         request.input.Reinitialize(input.data(), input.size());
         request.signature.Reinitialize(signature.data(), signature.size());
@@ -1405,10 +1387,10 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t halGeneratedOprHandle
             << " secure element reset occurred.";
         return errorCode;
     }
-    AbortOperationRequest request;
+    AbortOperationRequest request(softKm_->message_version());
     request.op_handle = operationHandle;
 
-    AbortOperationResponse response;
+    AbortOperationResponse response(softKm_->message_version());
     softKm_->AbortOperation(request, &response);
 
     errorCode = legacy_enum_conversion(response.error);
