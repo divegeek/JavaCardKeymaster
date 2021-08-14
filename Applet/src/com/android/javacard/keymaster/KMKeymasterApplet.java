@@ -39,6 +39,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short MAX_LENGTH = (short) 0x2000;
   private static final byte CLA_ISO7816_NO_SM_NO_CHAN = (byte) 0x80;
   private static final short KM_HAL_VERSION = (short) 0x4000;
+  private static final short KM_HAL_CHAIN_VERSION = (short) 0x4080;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
@@ -115,6 +116,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private static final byte INS_END_KM_CMD = 0x7F;
 
+  private static final byte INS_GET_RESPONSE_CMD = (byte)0xC0;
+  private static final short SHORT_APDU_DATA_LEN = 255;
+  private static final short SHORT_RESPONSE_DATA_LEN = 256;
+
   // Provision reporting status
   private static final byte NOT_PROVISIONED = 0x00;
   private static final byte PROVISION_STATUS_ATTESTATION_KEY = 0x01;
@@ -189,6 +194,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static short[] tmpVariables;
   protected static short[] data;
   protected static byte provisionStatus = NOT_PROVISIONED;
+
+  protected static boolean responseChainingEnabled = false;
+  protected static boolean cmdChainingEnabled = false;
 
   /**
    * Registers this applet.
@@ -298,7 +306,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
 
     // Validate P1P2.
-    if (P1P2 != KMKeymasterApplet.KM_HAL_VERSION) {
+    if (P1P2 != KMKeymasterApplet.KM_HAL_VERSION
+          && P1P2 != KMKeymasterApplet.KM_HAL_CHAIN_VERSION) {
       ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
     }
   }
@@ -336,7 +345,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       byte apduIns = apduBuffer[ISO7816.OFFSET_INS];
 
       // Validate whether INS can be supported
-      if (!(apduIns > INS_BEGIN_KM_CMD && apduIns < INS_END_KM_CMD)) {
+      if (!(apduIns > INS_BEGIN_KM_CMD && apduIns < INS_END_KM_CMD)
+      && (apduIns != INS_GET_RESPONSE_CMD)) {
         ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
       bufferRef[0] = repository.getHeap();
@@ -410,6 +420,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           || ((keymasterState == KMKeymasterApplet.IN_PROVISION_STATE)
           && isProvisioningComplete())) {
         switch (apduIns) {
+          case INS_GET_RESPONSE_CMD:
+            processGetResponseCmd(apdu);
+            break;
           case INS_GENERATE_KEY_CMD:
             processGenerateKey(apdu);
             break;
@@ -490,6 +503,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       sendError(apdu, KMException.getReason());
       exception.clear();
     } catch (ISOException exp) {
+      if (exp.getReason() == ISO7816.SW_BYTES_REMAINING_00) {
+        ISOException.throwIt(ISO7816.SW_BYTES_REMAINING_00);
+      } else if (exp.getReason() == ISO7816.SW_LAST_COMMAND_EXPECTED) {
+        return;
+      }
       sendError(apdu, mapISOErrorToKMError(exp.getReason()));
       freeOperations();
     } catch (CryptoException e) {
@@ -499,8 +517,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       freeOperations();
       sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
     } finally {
-      resetData();
-      repository.clean();
+      if (!responseChainingEnabled && !cmdChainingEnabled) {
+        resetData();
+        repository.clean();
+
+      }
     }
   }
 
@@ -585,8 +606,99 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // Send data
     apdu.setOutgoing();
-    apdu.setOutgoingLength(bufferProp[BUF_LEN_OFFSET]);
-    apdu.sendBytesLong((byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET], bufferProp[BUF_LEN_OFFSET]);
+
+    if (bufferProp[BUF_LEN_OFFSET] > SHORT_RESPONSE_DATA_LEN) {
+      // If response data length is more than 256 then split the response
+      // in to multiple chunk of responses of each 256 bytes length
+      apdu.setOutgoingLength(SHORT_RESPONSE_DATA_LEN);
+      apdu.sendBytesLong((byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET],
+          SHORT_RESPONSE_DATA_LEN);
+
+      // Update response data offset and remaining length to be sent
+      bufferProp[BUF_START_OFFSET] = (short)(bufferProp[BUF_START_OFFSET] +
+          SHORT_RESPONSE_DATA_LEN);
+      bufferProp[BUF_LEN_OFFSET] = (short)(bufferProp[BUF_LEN_OFFSET] - SHORT_RESPONSE_DATA_LEN);
+
+      // Enable response chaining to send remaining response data
+      responseChainingEnabled = true;
+
+      // Throw an exception to indicate more response data exist for this command (sw1sw2=0x6100)
+      ISOException.throwIt(ISO7816.SW_BYTES_REMAINING_00);
+    } else {
+      // send last part of command response or the only chunk of response data
+      apdu.setOutgoingLength(bufferProp[BUF_LEN_OFFSET]);
+      apdu.sendBytesLong((byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET],
+          bufferProp[BUF_LEN_OFFSET]);
+      responseChainingEnabled = false;
+    }
+  }
+
+  /**
+   * Handles Command chaining, if 8th bit of P2 is set then it indicates command chaining.
+   * This method keeps track of total length of command data and first chunk offset
+   * After receiving last part of the command chain it prepares final data to be processed.
+   * @param apdu
+   * @param startOffset
+   * @param lengthTillNow
+   */
+  public static void handleCommandChaining(APDU apdu, short startOffset, short lengthTillNow) {
+    byte[] srcBuffer = apdu.getBuffer();
+    // 8th bit of P2 will be set for command chaining.
+    short P1P2 = Util.getShort(srcBuffer, ISO7816.OFFSET_P1);
+    boolean cmdChainingApdu = (P1P2 == KMKeymasterApplet.KM_HAL_CHAIN_VERSION);
+
+    // If already command chaining started
+    if (cmdChainingEnabled) {
+      // If this APDU is not marked with command chaining bit in P2
+      // then it will be last part of the command, so prepare the final command data
+      // from chunks of data received in this command chain.
+      if (!cmdChainingApdu) {
+        // this will be the last APDU of this cmd chain
+        // Rearrange the command data received
+        short lastChunkOffset = bufferProp[BUF_START_OFFSET];
+        short lastChunkLen = bufferProp[BUF_LEN_OFFSET];
+
+        // Copy all chunks of data in order in contiguous bytes of memory.
+        // chucks of command data are stored on heap and heap grows backwards.
+        // reordering of these chunks is required to make it contiguous bytes of data to process.
+        // Allocate for total command-data to be used by the command
+        short totalLength = (short) (lengthTillNow + bufferProp[BUF_LEN_OFFSET]);
+        bufferProp[BUF_START_OFFSET] = repository.allocReclaimableMemory(totalLength);
+        bufferProp[BUF_LEN_OFFSET] = totalLength;
+
+        // Copy chunk by chunk in the received order to contiguous allocated memory
+        short index = bufferProp[BUF_START_OFFSET];
+        short length = SHORT_APDU_DATA_LEN;
+        while (startOffset > lastChunkOffset) {
+          Util.arrayCopyNonAtomic((byte[]) bufferRef[0], startOffset, (byte[]) bufferRef[0],
+              index, length);
+          index += length;
+          startOffset -= length;
+        }
+        // Handle last chunk of data which can be less than SHORT_APDU_DATA_LEN bytes.
+        if ((short) (index - bufferProp[BUF_START_OFFSET]) < bufferProp[BUF_LEN_OFFSET]) {
+          Util.arrayCopyNonAtomic((byte[]) bufferRef[0], lastChunkOffset, (byte[]) bufferRef[0],
+              index, lastChunkLen);
+        }
+      } else {
+        // This apdu is not the last part of this command chain,
+        // store first chunk offset and total length of bytes received till now
+        bufferProp[BUF_LEN_OFFSET] = (short) (lengthTillNow + bufferProp[BUF_LEN_OFFSET]);
+        bufferProp[BUF_START_OFFSET] = startOffset;
+      }
+    }
+
+    // Enable command chaining, if 8th bit of P2 is set
+    if (cmdChainingApdu) {
+      // if this command APDU is marked with command chaining (P1P2=0x4080),
+      // then enable to collect data from subsequent commands in this chain
+      cmdChainingEnabled = true;
+
+      // Throw an exception to indicate next chunk of command data is required.
+      ISOException.throwIt(ISO7816.SW_LAST_COMMAND_EXPECTED);
+    } else {
+      cmdChainingEnabled = false;
+    }
   }
 
   /**
@@ -596,15 +708,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     byte[] srcBuffer = apdu.getBuffer();
     short recvLen = apdu.setIncomingAndReceive();
     short srcOffset = apdu.getOffsetCdata();
+
+    // For command chaining use case to track total length of data received and
+    // its first chunk offset
+    short lengthTillNow = bufferProp[BUF_LEN_OFFSET];
+    short startOffset = bufferProp[BUF_START_OFFSET];
+
+    // Get chunk of data from current APDU and allocate for it.
     bufferProp[BUF_LEN_OFFSET] = apdu.getIncomingLength();
     bufferProp[BUF_START_OFFSET] = repository.allocReclaimableMemory(bufferProp[BUF_LEN_OFFSET]);
-    short index = bufferProp[BUF_START_OFFSET];
 
+    // Receive the chunk of command data from current APDU on to allocated memory.
+    short index = bufferProp[BUF_START_OFFSET];
     while (recvLen > 0 && ((short) (index - bufferProp[BUF_START_OFFSET]) < bufferProp[BUF_LEN_OFFSET])) {
       Util.arrayCopyNonAtomic(srcBuffer, srcOffset, (byte[]) bufferRef[0], index, recvLen);
       index += recvLen;
       recvLen = apdu.receiveBytes(srcOffset);
     }
+
+    handleCommandChaining(apdu, startOffset, lengthTillNow);
   }
 
   private void processGetHwInfoCmd(APDU apdu) {
@@ -3300,6 +3422,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Hmac is cleared, so generate a new Hmac nonce.
     seProvider.newRandomNumber(scratchPad, (short) 0, KMRepository.HMAC_SEED_NONCE_SIZE);
     repository.initHmacNonce(scratchPad, (short) 0, KMRepository.HMAC_SEED_NONCE_SIZE);
+  }
+
+  private static void processGetResponseCmd(APDU apdu) {
+    sendOutgoing(apdu);
   }
 
   private static void processGenerateKey(APDU apdu) {
