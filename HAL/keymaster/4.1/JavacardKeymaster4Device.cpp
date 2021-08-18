@@ -1117,11 +1117,17 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(
 
         if (operationHandleExists(operationHandle)) {
             LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD operationHandle already"
-                       "exits. Aborting the operation and starting a new"
-                       "begin operation.";
+                          "exits. Aborting the operation and starting a new"
+                          "begin operation.";
             // abort this operation.
-            abortOperation(operationHandle,
-                           (operType == OperationType::PRIVATE_OPERATION));
+            errorCode = abortOperation(
+                operationHandle, (operType == OperationType::PRIVATE_OPERATION));
+            // if abort fails, break the loop and return the error.
+            if (ErrorCode::OK != errorCode) {
+                LOG(ERROR) << "Failed to abort the operation.";
+                break;
+            }
+            // retry begin to get a new operation handle.
             continue;
         }
         // Create an entry inside the operation table for the new operation
