@@ -62,6 +62,66 @@ bool SocketTransport::openConnection() {
     return true;
 }
 
+std::vector<uint8_t> SocketTransport::getGetResponseCmdApdu() {
+    std::vector<uint8_t> apduOut;
+    apduOut.push_back(static_cast<uint8_t>(0x80)); //CLS
+    apduOut.push_back(static_cast<uint8_t>(0xC0)); //INS
+    apduOut.push_back(static_cast<uint8_t>(0x40)); //P1
+    apduOut.push_back(static_cast<uint8_t>(0x00)); //P2
+    apduOut.push_back(static_cast<uint8_t>(0x00));
+
+    return apduOut;
+}
+
+bool SocketTransport::handleChainGetResponse(std::vector<uint8_t>& output) {
+    if (output.size() < 2) {
+        return false;
+    }
+
+    uint16_t apduStatus = (output.at(output.size()-2) << 8) | (output.at(output.size()-1));
+    if (apduStatus != 0x6100) {
+        return false;
+    }
+
+    uint8_t buffer[MAX_RECV_BUFFER_SIZE];
+
+    // Holds complete reponse data, as and when new data is received, it get
+    // appended to this container
+    std::vector<uint8_t> responseChain;
+
+    std::vector<uint8_t> getResponseApdu = getGetResponseCmdApdu();
+
+    // more response data is pending to receive
+    while (apduStatus == 0x6100) {
+        responseChain.insert(std::end(responseChain), std::begin(output), std::end(output)-2);
+
+        if (send(mSocket, getResponseApdu.data(), getResponseApdu.size() , MSG_NOSIGNAL)< 0) {
+            LOG(ERROR) << "Failed to send data over socket err: " << errno;
+            return false;
+        }
+
+        size_t valRead = read( mSocket , buffer, MAX_RECV_BUFFER_SIZE);
+        if(0 > valRead) {
+            LOG(ERROR) << "Failed to read data from socket - getResponse.";
+        }
+        output.clear();
+        for(size_t i = 0; i < valRead; i++) {
+            output.push_back(buffer[i]);
+        }
+
+        apduStatus = (output.at(output.size()-2) << 8) | (output.at(output.size()-1));
+        // Last response chunk
+        if (apduStatus != 0x6100) {
+            responseChain.insert(std::end(responseChain), std::begin(output), std::end(output));
+            output.clear();
+            // Set the output with total data received till now for this command.
+            output.insert(std::end(output), std::begin(responseChain), std::end(responseChain));
+            return true;
+        }
+    }
+    return false;
+}
+
 bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) {
     uint8_t buffer[MAX_RECV_BUFFER_SIZE];
     int count = 1;
@@ -78,7 +138,7 @@ bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::v
         return false;
     }
 
-    if (send(mSocket, inData, inLen , 0)< 0) {
+    if (send(mSocket, inData, inLen , MSG_NOSIGNAL)< 0) {
         static int connectionResetCnt = 0; /* To avoid loop */
         if (ECONNRESET == errno && connectionResetCnt == 0) {
             //Connection reset. Try open socket and then sendData.
@@ -98,6 +158,12 @@ bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::v
     for(size_t i = 0; i < valRead; i++) {
         output.push_back(buffer[i]);
     }
+
+    uint16_t apduStatus = (output.at(output.size()-2) << 8) | (output.at(output.size()-1));
+    if (apduStatus == 0x6100) {
+        return handleChainGetResponse(output);
+    }
+
     return true;
 }
 
