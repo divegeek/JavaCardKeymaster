@@ -1091,58 +1091,30 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(
     KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob,
     const hidl_vec<KeyParameter>& inParams, const HardwareAuthToken& authToken,
     hidl_vec<KeyParameter>& outParams, uint64_t& operationHandle,
-    OperationType operType) {
+    OperationType& operType, bool retry) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    int retryCount = 0;
-
-    for (;retryCount < MAX_RETRIES; ++retryCount) {
-        if (operType == OperationType::PUBLIC_OPERATION) {
-            errorCode = handleBeginPublicKeyOperation(purpose, keyBlob, inParams,
-                                                      outParams, operationHandle);
-
-            // For Symmetric operations handleBeginPublicKeyOperation function
-            // returns INCOMPATIBLE_ALGORITHM error. Based on this error
-            // condition it fallbacks to private key operation.
-            if (errorCode == ErrorCode::INCOMPATIBLE_ALGORITHM) {
-                operType = OperationType::PRIVATE_OPERATION;
-            }
-        }
-
-        if (operType == OperationType::PRIVATE_OPERATION) {
-            errorCode = handleBeginPrivateKeyOperation(
-                    purpose, keyBlob, inParams, authToken, outParams, operationHandle);
-        }
-
-        if (ErrorCode::OK != errorCode) break;
-
-        if (operationHandleExists(operationHandle)) {
-            LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD operationHandle already"
-                          "exits. Aborting the operation and starting a new"
-                          "begin operation.";
-            // abort this operation.
-            errorCode = abortOperation(
-                operationHandle, (operType == OperationType::PRIVATE_OPERATION));
-            // if abort fails, break the loop and return the error.
-            if (ErrorCode::OK != errorCode) {
-                LOG(ERROR) << "Failed to abort the operation.";
-                break;
-            }
-            // retry begin to get a new operation handle.
-            continue;
-        }
-        // Create an entry inside the operation table for the new operation
-        // handle.
-        operationTable[operationHandle] = operType;
-        break;
+    if (retry) {
+        // abort the operation.
+        errorCode = abortOperation(
+            operationHandle, (operType == OperationType::PRIVATE_OPERATION));
+        if (ErrorCode::OK != errorCode) return errorCode;
     }
 
-    if (retryCount >= MAX_RETRIES) {
-        errorCode = ErrorCode::UNKNOWN_ERROR;
-        LOG(ERROR)
-                << "INS_BEGIN_OPERATION_CMD: the repetitive calls to beginOperation"
-                "reached the maximum limit. So beginOperation is exiting with "
-                "error: "
-                << (int32_t)errorCode;
+    if (operType == OperationType::PUBLIC_OPERATION) {
+        errorCode = handleBeginPublicKeyOperation(purpose, keyBlob, inParams,
+                                                  outParams, operationHandle);
+
+        // For Symmetric operations handleBeginPublicKeyOperation function
+        // returns INCOMPATIBLE_ALGORITHM error. Based on this error
+        // condition it fallbacks to private key operation.
+        if (errorCode == ErrorCode::INCOMPATIBLE_ALGORITHM) {
+            operType = OperationType::PRIVATE_OPERATION;
+        }
+    }
+
+    if (operType == OperationType::PRIVATE_OPERATION) {
+        errorCode = handleBeginPrivateKeyOperation(
+            purpose, keyBlob, inParams, authToken, outParams, operationHandle);
     }
     return errorCode;
 }
@@ -1172,7 +1144,34 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose,
     errorCode =
         handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
                              operationHandle, operType);
-   _hidl_cb(errorCode, outParams, operationHandle);
+    // Check if the operation handle conflicts.
+    if (ErrorCode::OK == errorCode  && operationHandleExists(operationHandle)) {
+        LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD operationHandle already"
+                      "exits. Aborting the operation and starting a new"
+                      "begin operation.";
+        // retry begin to get an another operation handle.
+        errorCode =
+            handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
+                                      operationHandle, operType, true /* retry */);
+
+        // Check if operation handle still conflicts
+        if (ErrorCode::OK == errorCode  && operationHandleExists(operationHandle)) {
+            errorCode = ErrorCode::UNKNOWN_ERROR;
+            LOG(ERROR)
+                << "INS_BEGIN_OPERATION_CMD: operationHandle conflict detected"
+                   "again. aborting this operation."
+                << (int32_t)errorCode;
+            // abort this operation.
+            abortOperation(
+                operationHandle, (operType == OperationType::PRIVATE_OPERATION));
+        }
+    }
+    // Create an entry inside the operation table for the new operation
+    // handle.
+    if (ErrorCode::OK == errorCode)
+        operationTable[operationHandle] = operType;
+
+    _hidl_cb(errorCode, outParams, operationHandle);
     return Void();
 }
 
