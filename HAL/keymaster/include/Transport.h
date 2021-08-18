@@ -101,6 +101,9 @@ public:
      */
     bool isConnected() override;
 private:
+
+    std::vector<uint8_t> getGetResponseCmdApdu();
+    bool handleChainGetResponse(std::vector<uint8_t>& output);
     /**
      * Socket instance.
      */

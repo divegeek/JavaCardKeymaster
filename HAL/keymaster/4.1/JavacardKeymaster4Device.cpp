@@ -21,6 +21,11 @@
 #include <cppbor_parse.h>
 #include <CborConverter.h>
 #include <Transport.h>
+
+#include <sstream>
+#include <iomanip>
+#include <stdio.h>
+
 #include <keymaster/key_blob_utils/software_keyblobs.h>
 #include <keymaster/android_keymaster_utils.h>
 #include <keymaster/wrapped_key.h>
@@ -44,6 +49,11 @@
 #define PROP_BUILD_FINGERPRINT       "ro.build.fingerprint"
 // Cuttlefish build fingerprint substring.
 #define CUTTLEFISH_FINGERPRINT_SS    "aosp_cf_"
+
+#define CMD_CHAINING_APDU_CLS 0x80
+#define CMD_CHAINING_APDU_P1  0x40
+#define CMD_CHAINING_APDU_P2  0x80
+#define APDU_SHORT_LENGTH 255
 
 #define APDU_CLS 0x80
 #define APDU_P1  0x40
@@ -136,7 +146,7 @@ static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFacto
         if (!isEmulator) {
             std::string fingerprint = android::base::GetProperty(PROP_BUILD_FINGERPRINT, "");
             if (!fingerprint.empty()) {
-                if (fingerprint.find(CUTTLEFISH_FINGERPRINT_SS, 0)) {
+                if (fingerprint.find(CUTTLEFISH_FINGERPRINT_SS, 0) != std::string::npos) {
                     isEmulator = true;
                 }
             }
@@ -403,6 +413,57 @@ keyFormat, std::vector<uint8_t>& wrappedKeyDescription) {
     return ErrorCode::OK;
 }
 
+/**
+ * Construct the command chaining for extended length (command data > APDU_SHORT_LENGTH) APDU
+ */
+ErrorCode constructAPDUCmdChain(Instruction& ins, std::vector<uint8_t>& inputData,
+                                   std::vector<std::vector<uint8_t>>& apduChain) {
+    if(inputData.size() >= USHRT_MAX) {
+        return (ErrorCode::INSUFFICIENT_BUFFER_SPACE);
+    }
+
+    uint8_t* cmdData = inputData.data();
+    size_t cmdDataLen = inputData.size();
+    size_t index = 0;
+
+    // Construct command chaining only if command data is of large length > APDU_SHORT_LENGTH
+    // otherwise signle short format APDU is created.
+    while((cmdDataLen - index) > APDU_SHORT_LENGTH) {
+        std::vector<uint8_t> apduOut;
+        apduOut.push_back(static_cast<uint8_t>(CMD_CHAINING_APDU_CLS)); //CLS
+        apduOut.push_back(static_cast<uint8_t>(ins)); //INS
+        apduOut.push_back(static_cast<uint8_t>(CMD_CHAINING_APDU_P1)); //P1
+        apduOut.push_back(static_cast<uint8_t>(CMD_CHAINING_APDU_P2)); //P2
+
+        apduOut.push_back(static_cast<uint8_t>(0xFF)); //Lc
+
+        std::vector<uint8_t> data((cmdData + index), (cmdData + index + APDU_SHORT_LENGTH));
+        apduOut.insert(apduOut.end(), std::begin(data), std::end(data));
+
+        apduChain.push_back(apduOut);
+
+        index += APDU_SHORT_LENGTH;
+    }
+
+    // Construct last APDU or the only APDU of the command
+    std::vector<uint8_t> apduOut;
+    apduOut.push_back(static_cast<uint8_t>(APDU_CLS)); //CLS
+    apduOut.push_back(static_cast<uint8_t>(ins)); //INS
+    apduOut.push_back(static_cast<uint8_t>(APDU_P1)); //P1
+    apduOut.push_back(static_cast<uint8_t>(APDU_P2)); //P2
+
+    if ((cmdDataLen - index) > 0) {
+        //apduOut.push_back(static_cast<uint8_t>(0x00)); //Lc
+        apduOut.push_back(static_cast<uint8_t>((cmdDataLen - index) & 0xFF));
+        std::vector<uint8_t> data((cmdData + index), (cmdData + cmdDataLen));
+        apduOut.insert(apduOut.end(), std::begin(data), std::end(data));
+    }
+    apduOut.push_back(static_cast<uint8_t>(0x00)); //Le
+
+    apduChain.push_back(apduOut);
+    return (ErrorCode::OK);//success
+}
+
 ErrorCode constructApduMessage(Instruction& ins, std::vector<uint8_t>& inputData, std::vector<uint8_t>& apduOut) {
     apduOut.push_back(static_cast<uint8_t>(APDU_CLS)); //CLS
     apduOut.push_back(static_cast<uint8_t>(ins)); //INS
@@ -437,6 +498,8 @@ uint16_t getStatus(std::vector<uint8_t>& inputData) {
     return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
 }
 
+/*
+//TODO this method is kept just for reference to support extended length format
 ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response) {
     ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> apdu;
@@ -457,6 +520,40 @@ ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<ui
     if((response.size() <= 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
         LOG(ERROR) << "error in sendData cmd: " << (int32_t)ins << " status: " << getStatus(response);
         return (ErrorCode::UNKNOWN_ERROR);
+    }
+    LOG(DEBUG) << "sendData cmd: " << (int32_t)ins << " status: " << (int32_t)ErrorCode::OK;
+    return (ErrorCode::OK);//success
+}*/
+
+ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response) {
+    ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
+    std::vector<std::vector<uint8_t>> apduChain;
+
+    // Constructs short length format APDUs based on the size of command data
+    ret = constructAPDUCmdChain(ins, inData, apduChain);
+    if(ret != ErrorCode::OK) {
+        LOG(ERROR) << "error in constructApduMessage cmd: " << (int32_t)ins << " status: " << (int32_t)ret;
+        return ret;
+    }
+
+    // Send all APDUs in the command chain and get its response.
+    auto it = apduChain.begin();
+    while (it != apduChain.end()) {
+        std::vector<uint8_t> apdu = *it;
+        response.clear();
+
+        if(!getTransportFactoryInstance()->sendData(apdu.data(), apdu.size(), response)) {
+            LOG(ERROR) << "error in sendData cmd: " << (int32_t)ins << " status: "
+                       << (int32_t)ErrorCode::SECURE_HW_COMMUNICATION_FAILED;
+            return (ErrorCode::SECURE_HW_COMMUNICATION_FAILED);
+        }
+
+        // Response size should be greater than 2. Cbor output data followed by two bytes of APDU status.
+        if((response.size() < 2) || (getStatus(response) != APDU_RESP_STATUS_OK)) {
+            LOG(ERROR) << "error in sendData cmd: " << (int32_t)ins << " status: " << getStatus(response);
+            return (ErrorCode::UNKNOWN_ERROR);
+        }
+        ++it;
     }
     LOG(DEBUG) << "sendData cmd: " << (int32_t)ins << " status: " << (int32_t)ErrorCode::OK;
     return (ErrorCode::OK);//success
