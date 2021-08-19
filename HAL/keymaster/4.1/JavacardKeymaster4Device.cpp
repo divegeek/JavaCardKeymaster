@@ -44,7 +44,6 @@
 #define PROP_BUILD_FINGERPRINT       "ro.build.fingerprint"
 // Cuttlefish build fingerprint substring.
 #define CUTTLEFISH_FINGERPRINT_SS    "aosp_cf_"
-#define MAX_RETRIES 4
 
 #define APDU_CLS 0x80
 #define APDU_P1  0x40
