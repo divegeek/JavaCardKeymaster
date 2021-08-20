@@ -199,7 +199,7 @@ static T translateExtendedErrorsToHalErrors(T& errorCode) {
 }
 
 /* Returns true if operation handle exists, otherwise false */
-static inline bool operationHandleExists(uint64_t opHandle) {
+static inline bool isOperationHandleExists(uint64_t opHandle) {
     if (operationTable.end() == operationTable.find(opHandle)) {
         return false;
     }
@@ -1090,15 +1090,8 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(
     KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob,
     const hidl_vec<KeyParameter>& inParams, const HardwareAuthToken& authToken,
     hidl_vec<KeyParameter>& outParams, uint64_t& operationHandle,
-    OperationType& operType, bool retry) {
+    OperationType& operType) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    if (retry) {
-        // abort the operation.
-        errorCode = abortOperation(
-            operationHandle, (operType == OperationType::PRIVATE_OPERATION));
-        if (ErrorCode::OK != errorCode) return errorCode;
-    }
-
     if (operType == OperationType::PUBLIC_OPERATION) {
         errorCode = handleBeginPublicKeyOperation(purpose, keyBlob, inParams,
                                                   outParams, operationHandle);
@@ -1114,6 +1107,15 @@ ErrorCode JavacardKeymaster4Device::handleBeginOperation(
     if (operType == OperationType::PRIVATE_OPERATION) {
         errorCode = handleBeginPrivateKeyOperation(
             purpose, keyBlob, inParams, authToken, outParams, operationHandle);
+    }
+
+    // check if operation handle exists.
+    if (ErrorCode::OK == errorCode && isOperationHandleExists(operationHandle)) {
+        LOG(DEBUG) << "Operation handle " << operationHandle << "already exists"
+            "in the opertion table. so aborting this opertaion.";
+        // abort the operation.
+        errorCode = abortOperation(
+            operationHandle, (operType == OperationType::PRIVATE_OPERATION));
     }
     return errorCode;
 }
@@ -1139,31 +1141,20 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose,
     if (KeyPurpose::ENCRYPT == purpose || KeyPurpose::VERIFY == purpose) {
         operType = OperationType::PUBLIC_OPERATION;
     }
+    int retryCount = 0;
+    int maxRetries = 2;
+    for(; retryCount < maxRetries; retryCount++) {
+        errorCode = handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
+                                         operationHandle, operType);
+        if (errorCode != ErrorCode::OK || !isOperationHandleExists(operationHandle)) break;
+    }
 
-    errorCode =
-        handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
-                             operationHandle, operType);
-    // Check if the operation handle conflicts.
-    if (ErrorCode::OK == errorCode  && operationHandleExists(operationHandle)) {
-        LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD operationHandle already"
-                      "exits. Aborting the operation and starting a new"
-                      "begin operation.";
-        // retry begin to get an another operation handle.
-        errorCode =
-            handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
-                                      operationHandle, operType, true /* retry */);
-
-        // Check if operation handle still conflicts
-        if (ErrorCode::OK == errorCode  && operationHandleExists(operationHandle)) {
-            errorCode = ErrorCode::UNKNOWN_ERROR;
+    if (retryCount >= maxRetries) {
+        errorCode = ErrorCode::UNKNOWN_ERROR;
             LOG(ERROR)
-                << "INS_BEGIN_OPERATION_CMD: operationHandle conflict detected"
-                   "again. aborting this operation."
+                << "INS_BEGIN_OPERATION_CMD: Maximum retires reached and the Operation handle"
+                "exists in the operation table. error: "
                 << (int32_t)errorCode;
-            // abort this operation.
-            abortOperation(
-                operationHandle, (operType == OperationType::PRIVATE_OPERATION));
-        }
     }
     // Create an entry inside the operation table for the new operation
     // handle.
@@ -1180,7 +1171,7 @@ Return<void> JavacardKeymaster4Device::update(uint64_t operationHandle, const hi
     hidl_vec<KeyParameter> outParams;
     hidl_vec<uint8_t> output;
     UpdateOperationResponse response(softKm_->message_version());
-    if (!operationHandleExists(operationHandle)) {
+    if (!isOperationHandleExists(operationHandle)) {
         LOG(ERROR) << " Operation handle is invalid. This could happen if invalid operation handle is passed or if"
             << " secure element reset occurred.";
         _hidl_cb(ErrorCode::INVALID_OPERATION_HANDLE, inputConsumed, outParams, output);
@@ -1295,7 +1286,7 @@ Return<void> JavacardKeymaster4Device::finish(uint64_t operationHandle, const hi
     hidl_vec<uint8_t> output;
     FinishOperationResponse response(softKm_->message_version());
 
-    if (!operationHandleExists(operationHandle)) {
+    if (!isOperationHandleExists(operationHandle)) {
         LOG(ERROR) << " Operation handle is invalid. This could happen if invalid operation handle is passed or if"
             << " secure element reset occurred.";
         _hidl_cb(ErrorCode::INVALID_OPERATION_HANDLE, outParams, output);
@@ -1471,7 +1462,7 @@ ErrorCode JavacardKeymaster4Device::abortOperation(uint64_t operationHandle,
 
 Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
   ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-  if (!operationHandleExists(operationHandle)) {
+  if (!isOperationHandleExists(operationHandle)) {
     LOG(ERROR) << " Operation handle is invalid. This could happen if invalid "
                   "operation handle is passed or if"
                << " secure element reset occurred.";

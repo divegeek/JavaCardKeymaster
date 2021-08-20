@@ -114,8 +114,7 @@ protected:
                                    const HardwareAuthToken& authToken,
                                    hidl_vec<KeyParameter>& outParams,
                                    uint64_t& operationHandle,
-                                   OperationType& operType,
-                                   bool retry = false);
+                                   OperationType& operType);
  
     ErrorCode abortOperation(uint64_t operationHandle, bool privateOperation);
 
