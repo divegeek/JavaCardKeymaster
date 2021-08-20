@@ -1471,9 +1471,11 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
 
   errorCode =
       abortOperation(operationHandle, isPrivateKeyOperation(operationHandle));
-  /* Delete the entry on this operationHandle */
-  oprCtx_->clearOperationData(operationHandle);
-  operationTable.erase(operationHandle);
+  if (errorCode == ErrorCode::OK) {
+      /* Delete the entry on this operationHandle */
+      oprCtx_->clearOperationData(operationHandle);
+      operationTable.erase(operationHandle);
+  }
   return errorCode;
 }
 
