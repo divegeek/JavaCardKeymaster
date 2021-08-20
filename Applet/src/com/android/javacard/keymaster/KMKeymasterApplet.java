@@ -37,7 +37,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte[] F4 = {0x01, 0x00, 0x01};
   public static final byte AES_BLOCK_SIZE = 16;
   public static final byte DES_BLOCK_SIZE = 8;
-  public static final short MAX_LENGTH = 10000;
+  public static final short MAX_LENGTH = 15000;
   public static final short MASTER_KEY_SIZE = 128;
   public static final short WRAPPING_KEY_SIZE = 32;
   public static final short MAX_OPERATIONS_COUNT = 4;
@@ -1167,100 +1167,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     importKey(apdu, keyFmt, scratchPad);
   }
 
-  /**
-   * 1) If attestation key is present and attestation challenge is absent then it is an error.
-   * 2) If attestation key is absent and attestation challenge is present then it is an error as
-   * factory provisioned attestation key is not supported.
-   * 3) If both are present and issuer is absent or attest key purpose is not ATTEST_KEY then it is an error.
-   * 4) If the generated/imported keys are RSA or EC then validity period must be specified.
-   * Device Unique Attestation is not supported.
-   */
-  private KMAttestationCert makeCert(byte[] scratchPad) {
-    byte mode = KMType.FAKE_CERT;
-    boolean rsaCert = true;
-    short attestationKey = KMType.INVALID_VALUE;
-    boolean rsaAttest = true;
-    // No attestation required for symmetric keys
+  private KMAttestationCert makeCommonCert(byte[] scratchPad) {
     short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, data[KEY_PARAMETERS]);
-    if(KMEnumTag.cast(alg).getValue() != KMType.RSA &&
-        KMEnumTag.cast(alg).getValue() != KMType.EC){
-        return null;
-    }
+    boolean rsaCert = KMEnumTag.cast(alg).getValue() == KMType.RSA;
     // Device unique attestation not supported
-    short deviceUniqueAttest = KMKeyParameters.findTag(KMType.BOOL_TAG,
-        KMType.DEVICE_UNIQUE_ATTESTATION, data[KEY_PARAMETERS]);
-    if(deviceUniqueAttest != KMType.INVALID_VALUE){
-      KMException.throwIt(KMError.CANNOT_ATTEST_IDS);
-    }
-    if(KMEnumTag.cast(alg).getValue() == KMType.EC) {
-      rsaCert = false;
-      rsaAttest = false;
-    }
+    KMTag.assertAbsence(data[KEY_PARAMETERS],KMType.BOOL_TAG,KMType.DEVICE_UNIQUE_ATTESTATION,KMError.CANNOT_ATTEST_IDS);
+
     KMAttestationCert cert = seProvider.getAttestationCert(rsaCert);
-    // Read attestation challenge if present
-    short attChallenge =
-        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.ATTESTATION_CHALLENGE, data[KEY_PARAMETERS]);
-    if(attChallenge != KMType.INVALID_VALUE){
-      attChallenge = KMByteTag.cast(attChallenge).getValue();
-    }
+
     short subject = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.CERTIFICATE_SUBJECT_NAME, data[KEY_PARAMETERS]);
+
     // If no subject name is specified then use the default subject name.
     if(subject == KMType.INVALID_VALUE || KMByteTag.cast(subject).length() == 0){
       subject = KMByteBlob.instance(defaultSubject, (short) 0, (short) defaultSubject.length);
     }else{
       subject = KMByteTag.cast(subject).getValue();
     }
-    // If attestation key is given by the caller
-    if(data[ATTEST_KEY_BLOB] != KMType.INVALID_VALUE &&
-        KMByteBlob.cast(data[ATTEST_KEY_BLOB]).length() > 0) {
-      // If no attestation challenge present then it is an error
-      if (attChallenge == KMType.INVALID_VALUE || KMByteBlob.cast(attChallenge).length() <= 0) {
-        KMException.throwIt(KMError.INVALID_ARGUMENT);
-      }
-      mode = KMType.ATTESTATION_CERT;
-      attestationKey = data[ATTEST_KEY_BLOB];
-      alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, data[ATTEST_KEY_PARAMS]);
-      if(KMEnumTag.cast(alg).getValue() == KMType.EC){
-        rsaAttest = false;
-      }
-      // If issuer is not present then it is an error
-      if (KMByteBlob.cast(data[ATTEST_KEY_ISSUER]).length() <= 0) {
-        KMException.throwIt(KMError.MISSING_ISSUER_SUBJECT_NAME);
-      }
-      // TODO KeyMint should parse issuer subject name to validate that it is valid der encoded
-      //  string.
-      //  Currently not done as X509 parsing not yet supported.
-
-      short attKeyPurpose =
-          KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, data[ATTEST_KEY_PARAMS]);
-      // If the attest key's purpose is not "attest key" then error.
-      if (!KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY)) {
-        KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
-      }
-    }else if (attChallenge != KMType.INVALID_VALUE && KMByteBlob.cast(attChallenge).length() > 0) {
-      // If the challenge is present and attest key is absent then it is an error.
-      // Note: The keymint applet does not support factory provisioned attestation keys.
-      KMException.throwIt(KMError.ATTESTATION_KEYS_NOT_PROVISIONED);
-    }else {
-      // Both attestation key and challenge are are absent.
-      short purpose = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, data[KEY_PARAMETERS]);
-      if(purpose != KMType.INVALID_VALUE && KMEnumArrayTag.cast(purpose).contains(KMType.SIGN)) {
-        // If the generated/imported key can sign then mode is self signed
-        mode = KMType.SELF_SIGNED_CERT;
-        attestationKey = data[SECRET];
-        data[ATTEST_KEY_ISSUER] = subject;
-      }else{
-        // else a fake cert i.e. certificated without signature must be generated
-        mode = KMType.FAKE_CERT;
-        attestationKey = KMType.INVALID_VALUE;
-        data[ATTEST_KEY_ISSUER] = subject;
-      }
-    }
-    cert.attestKey(attestationKey, rsaAttest,mode);
-    cert.attestationChallenge(attChallenge);
-    cert.issuer(data[ATTEST_KEY_ISSUER]);
     cert.subjectName(subject);
-
     // Validity period must be specified
     short notBefore = KMKeyParameters.findTag(KMType.DATE_TAG, KMType.CERTIFICATE_NOT_BEFORE, data[KEY_PARAMETERS]);
     if(notBefore == KMType.INVALID_VALUE){
@@ -1299,10 +1222,62 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMByteBlob.cast(serialNum).add((short)0, (byte)1);
     }
     cert.serialNumber(serialNum);
+    return cert;
+  }
 
-    //Extension
-    if(mode == KMType.ATTESTATION_CERT){
-      // Save attestation application id - must be present.
+//TODO remove hwParameters when this is refactored.
+  private KMAttestationCert makeAttestationCert(short attKeyBlob, short attKeyParam,
+      short attChallenge, short issuer, short hwParameters, short swParameters,  byte[] scratchPad) {
+    KMAttestationCert cert = makeCommonCert(scratchPad);
+
+    // App Id and App Data,
+    short appId = KMType.INVALID_VALUE;
+    short appData = KMType.INVALID_VALUE;
+    if(attKeyParam != KMType.INVALID_VALUE) {
+      appId =
+          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, attKeyParam);
+      if (appId != KMTag.INVALID_VALUE) {
+        appId = KMByteTag.cast(appId).getValue();
+      }
+      appData =
+          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, attKeyParam);
+      if (appData != KMTag.INVALID_VALUE) {
+        appData = KMByteTag.cast(appData).getValue();
+      }
+    }
+    //TODO remove following line
+    short origBlob = data[KEY_BLOB];
+    short pubKey = data[PUB_KEY];
+    short keyBlob = parseEncryptedKeyBlob(attKeyBlob, appId, appData, scratchPad);
+    short attestationKeySecret = KMArray.cast(keyBlob).get(KEY_BLOB_SECRET);
+    short attestParam = KMArray.cast(keyBlob).get(KEY_BLOB_PARAMS);
+    attestParam = KMKeyCharacteristics.cast(attestParam).getStrongboxEnforced();
+      // If issuer is not present then it is an error
+      if (KMByteBlob.cast(issuer).length() <= 0) {
+        KMException.throwIt(KMError.MISSING_ISSUER_SUBJECT_NAME);
+      }
+
+      short attKeyPurpose =
+          KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, attestParam);
+      // If the attest key's purpose is not "attest key" then error.
+      if (!KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY)) {
+        KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+      }
+    short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, attestParam);
+
+    if(KMEnumTag.cast(alg).getValue() == KMType.RSA) {
+      short attestationKeyPublic = KMArray.cast(keyBlob).get(KEY_BLOB_PUB_KEY);
+      cert.rsaAttestKey(attestationKeySecret, attestationKeyPublic, KMType.ATTESTATION_CERT);
+    }else{
+      cert.ecAttestKey(attestationKeySecret, KMType.ATTESTATION_CERT);
+    }
+    cert.attestationChallenge(attChallenge);
+    cert.issuer(issuer);
+    //TODO remove following line
+    data[PUB_KEY] =pubKey;
+    cert.publicKey(data[PUB_KEY]);
+
+    // Save attestation application id - must be present.
       short attAppId =
           KMKeyParameters.findTag( KMType.BYTES_TAG, KMType.ATTESTATION_APPLICATION_ID, data[KEY_PARAMETERS]);
       if (attAppId == KMType.INVALID_VALUE) {
@@ -1313,21 +1288,254 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       setUniqueId(cert, scratchPad);
       // Add Attestation Ids if present
       addAttestationIds(cert, scratchPad);
-      // Add Tags
-      addTags(data[HW_PARAMETERS], true, cert);
-      addTags(data[SW_PARAMETERS], false, cert);
+
+        // Add Tags
+      addTags(hwParameters, true, cert);
+      addTags(swParameters, false, cert);
       // Add Device Boot locked status
       cert.deviceLocked(seProvider.isDeviceBootLocked());
       // VB data
       cert.verifiedBootHash(getVerifiedBootHash(scratchPad));
       cert.verifiedBootKey(getBootKey(scratchPad));
       cert.verifiedBootState((byte)seProvider.getBootState());
-    }
 
-    // Public key
-    cert.publicKey(data[PUB_KEY]);
+    //TODO remove the following line
+    makeKeyCharacteristics(scratchPad);
+    data[KEY_BLOB] = origBlob;
+
     return cert;
   }
+
+  private KMAttestationCert makeSelfSignedCert(short attPrivKey, short attPubKey, byte[] scratchPad) {
+    KMAttestationCert cert = makeCommonCert(scratchPad);
+    short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, data[KEY_PARAMETERS]);
+    byte mode = KMType.FAKE_CERT;
+    if(attPrivKey != KMType.INVALID_VALUE){
+      mode = KMType.SELF_SIGNED_CERT;
+    }
+    short subject = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.CERTIFICATE_SUBJECT_NAME, data[KEY_PARAMETERS]);
+    // If no subject name is specified then use the default subject name.
+    if(subject == KMType.INVALID_VALUE || KMByteTag.cast(subject).length() == 0){
+      subject = KMByteBlob.instance(defaultSubject, (short) 0, (short) defaultSubject.length);
+    }else{
+      subject = KMByteTag.cast(subject).getValue();
+    }
+
+    if(KMEnumTag.cast(alg).getValue() == KMType.RSA) {
+      cert.rsaAttestKey(attPrivKey, attPubKey, mode);
+    }else{
+      cert.ecAttestKey(attPrivKey, mode);
+    }
+//      cert.attestKey(attPrivKey, rsaAttest, KMType.SELF_SIGNED_CERT);
+//      cert.attestKey(KMType.INVALID_VALUE, rsaAttest, KMType.FAKE_CERT);
+    cert.issuer(subject);
+    cert.subjectName(subject);
+    cert.publicKey(attPubKey);
+    return cert;
+  }
+
+  // private KMAttestationCert makeFakeCert(byte[] scratchPad) {
+  //   KMAttestationCert cert = makeCommonCert(scratchPad);
+  //   short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, data[KEY_PARAMETERS]);
+  //   boolean rsaAttest = KMEnumTag.cast(alg).getValue() == KMType.RSA;
+  //
+  //   // If the generated/imported key can sign then mode is self signed
+  //   short subject = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.CERTIFICATE_SUBJECT_NAME, data[KEY_PARAMETERS]);
+  //   // If no subject name is specified then use the default subject name.
+  //   if(subject == KMType.INVALID_VALUE || KMByteTag.cast(subject).length() == 0){
+  //     subject = KMByteBlob.instance(defaultSubject, (short) 0, (short) defaultSubject.length);
+  //   }else{
+  //     subject = KMByteTag.cast(subject).getValue();
+  //   }
+  //   cert.attestKey(KMType.INVALID_VALUE, rsaAttest,KMType.FAKE_CERT);
+  //   cert.issuer(subject);
+  //   cert.subjectName(subject);
+  //   cert.publicKey(data[PUB_KEY]);
+  //   return cert;
+  // }
+
+  /**
+   * 1) If attestation key is present and attestation challenge is absent then it is an error.
+   * 2) If attestation key is absent and attestation challenge is present then it is an error as
+   * factory provisioned attestation key is not supported.
+   * 3) If both are present and issuer is absent or attest key purpose is not ATTEST_KEY then it is an error.
+   * 4) If the generated/imported keys are RSA or EC then validity period must be specified.
+   * Device Unique Attestation is not supported.
+   */
+  // private KMAttestationCert makeCert(short attKeyBlob, short attKeyParam, byte[] scratchPad) {
+  //   short appId = KMType.INVALID_VALUE;
+  //   short appData = KMType.INVALID_VALUE;
+  //   if(attKeyParam != KMType.INVALID_VALUE) {
+  //     appId =
+  //         KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, attKeyParam);
+  //     if (appId != KMTag.INVALID_VALUE) {
+  //       appId = KMByteTag.cast(appId).getValue();
+  //     }
+  //     appData =
+  //         KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, attKeyParam);
+  //     if (appData != KMTag.INVALID_VALUE) {
+  //       appData = KMByteTag.cast(appData).getValue();
+  //     }
+  //   }
+  //   byte mode = KMType.FAKE_CERT;
+  //   boolean rsaCert = true;
+  //   short attestationKey = KMType.INVALID_VALUE;
+  //   short attestParam = KMType.INVALID_VALUE;
+  //   boolean rsaAttest = true;
+  //   // No attestation required for symmetric keys
+  //   short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, data[KEY_PARAMETERS]);
+  //   if(KMEnumTag.cast(alg).getValue() != KMType.RSA &&
+  //       KMEnumTag.cast(alg).getValue() != KMType.EC){
+  //     return null;
+  //   }
+  //   // Device unique attestation not supported
+  //   short deviceUniqueAttest = KMKeyParameters.findTag(KMType.BOOL_TAG,
+  //       KMType.DEVICE_UNIQUE_ATTESTATION, data[KEY_PARAMETERS]);
+  //   if(deviceUniqueAttest != KMType.INVALID_VALUE){
+  //     KMException.throwIt(KMError.CANNOT_ATTEST_IDS);
+  //   }
+  //   if(KMEnumTag.cast(alg).getValue() == KMType.EC) {
+  //     rsaCert = false;
+  //     rsaAttest = false;
+  //   }
+  //   KMAttestationCert cert = seProvider.getAttestationCert(rsaCert);
+  //   // Read attestation challenge if present
+  //   short attChallenge =
+  //       KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.ATTESTATION_CHALLENGE, data[KEY_PARAMETERS]);
+  //   if(attChallenge != KMType.INVALID_VALUE){
+  //     attChallenge = KMByteTag.cast(attChallenge).getValue();
+  //   }
+  //   short subject = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.CERTIFICATE_SUBJECT_NAME, data[KEY_PARAMETERS]);
+  //   // If no subject name is specified then use the default subject name.
+  //   if(subject == KMType.INVALID_VALUE || KMByteTag.cast(subject).length() == 0){
+  //     subject = KMByteBlob.instance(defaultSubject, (short) 0, (short) defaultSubject.length);
+  //   }else{
+  //     subject = KMByteTag.cast(subject).getValue();
+  //   }
+  //   // If attestation key is given by the caller
+  //   if(attKeyBlob != KMType.INVALID_VALUE && KMByteBlob.cast(attKeyBlob).length() > 0) {
+  //     short keyBlob = KMType.INVALID_VALUE;
+  //     keyBlob = parseEncryptedKeyBlob(attKeyBlob, appId, appData, scratchPad);
+  //
+  //     // If no attestation challenge present then it is an error
+  //     if (attChallenge == KMType.INVALID_VALUE || KMByteBlob.cast(attChallenge).length() <= 0) {
+  //       KMException.throwIt(KMError.INVALID_ARGUMENT);
+  //     }
+  //     mode = KMType.ATTESTATION_CERT;
+  //     attestationKey = KMArray.cast(keyBlob).get(KEY_BLOB_SECRET);
+  //     attestParam = KMArray.cast(keyBlob).get(KEY_BLOB_PARAMS);
+  //     attestParam = KMKeyCharacteristics.cast(attestParam).getStrongboxEnforced();
+  //     alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, attestParam);
+  //     if(KMEnumTag.cast(alg).getValue() == KMType.EC){
+  //       rsaAttest = false;
+  //     }
+  //     // If issuer is not present then it is an error
+  //     if (KMByteBlob.cast(data[ATTEST_KEY_ISSUER]).length() <= 0) {
+  //       KMException.throwIt(KMError.MISSING_ISSUER_SUBJECT_NAME);
+  //     }
+  //     // TODO KeyMint should parse issuer subject name to validate that it is valid der encoded
+  //     //  string.
+  //     //  Currently not done as X509 parsing not yet supported.
+  //
+  //     short attKeyPurpose =
+  //         KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, attestParam);
+  //     // If the attest key's purpose is not "attest key" then error.
+  //     if (!KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY)) {
+  //       KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+  //     }
+  //   }else if (attChallenge != KMType.INVALID_VALUE && KMByteBlob.cast(attChallenge).length() > 0) {
+  //     // If the challenge is present and attest key is absent then it is an error.
+  //     // Note: The keymint applet does not support factory provisioned attestation keys.
+  //     KMException.throwIt(KMError.ATTESTATION_KEYS_NOT_PROVISIONED);
+  //   }else {
+  //     // Both attestation key and challenge are are absent.
+  //     short purpose = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, data[KEY_PARAMETERS]);
+  //     if(purpose != KMType.INVALID_VALUE && KMEnumArrayTag.cast(purpose).contains(KMType.SIGN)) {
+  //       // If the generated/imported key can sign then mode is self signed
+  //       mode = KMType.SELF_SIGNED_CERT;
+  //       attestationKey = data[SECRET];
+  //       attestParam = data[KEY_PARAMETERS];
+  //       data[ATTEST_KEY_ISSUER] = subject;
+  //     }else{
+  //       // else a fake cert i.e. certificated without signature must be generated
+  //       mode = KMType.FAKE_CERT;
+  //       attestationKey = KMType.INVALID_VALUE;
+  //       data[ATTEST_KEY_ISSUER] = subject;
+  //     }
+  //   }
+  //   cert.attestKey(attestationKey, rsaAttest,mode);
+  //   cert.attestationChallenge(attChallenge);
+  //   cert.issuer(data[ATTEST_KEY_ISSUER]);
+  //   cert.subjectName(subject);
+  //
+  //   // Validity period must be specified
+  //   short notBefore = KMKeyParameters.findTag(KMType.DATE_TAG, KMType.CERTIFICATE_NOT_BEFORE, data[KEY_PARAMETERS]);
+  //   if(notBefore == KMType.INVALID_VALUE){
+  //     KMException.throwIt(KMError.MISSING_NOT_BEFORE);
+  //   }
+  //   notBefore = KMIntegerTag.cast(notBefore).getValue();
+  //   short notAfter = KMKeyParameters.findTag(KMType.DATE_TAG, KMType.CERTIFICATE_NOT_AFTER, data[KEY_PARAMETERS]);
+  //   if(notAfter == KMType.INVALID_VALUE ){
+  //     KMException.throwIt(KMError.MISSING_NOT_AFTER);
+  //   }
+  //
+  //   notAfter = KMIntegerTag.cast(notAfter).getValue();
+  //   // VTS sends notBefore == Epoch.
+  //   Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 8, (byte) 0);
+  //   short epoch = KMInteger.instance(scratchPad, (short)0, (short)8);
+  //   short end = KMInteger.instance(dec319999Ms, (short)0, (short)dec319999Ms.length);
+  //   if(KMInteger.compare(notBefore, epoch) == 0){
+  //     cert.notBefore(KMByteBlob.instance(jan01970, (short)0, (short)jan01970.length),
+  //         true, scratchPad);
+  //   }else {
+  //     cert.notBefore(notBefore, false, scratchPad);
+  //   }
+  //   // VTS sends notAfter == Dec 31st 9999
+  //   if(KMInteger.compare(notAfter, end) == 0){
+  //     cert.notAfter(KMByteBlob.instance(dec319999, (short)0, (short)dec319999.length),
+  //         true, scratchPad);
+  //   }else {
+  //     cert.notAfter(notAfter, false, scratchPad);
+  //   }
+  //   // Serial number
+  //   short serialNum =
+  //       KMKeyParameters.findTag(KMType.BIGNUM_TAG, KMType.CERTIFICATE_SERIAL_NUM, data[KEY_PARAMETERS]);
+  //   if (serialNum != KMType.INVALID_VALUE) {
+  //     serialNum = KMBignumTag.cast(serialNum).getValue();
+  //   }else{
+  //     serialNum= KMByteBlob.instance((short)1);
+  //     KMByteBlob.cast(serialNum).add((short)0, (byte)1);
+  //   }
+  //   cert.serialNumber(serialNum);
+  //
+  //   //Extension
+  //   if(mode == KMType.ATTESTATION_CERT){
+  //     // Save attestation application id - must be present.
+  //     short attAppId =
+  //         KMKeyParameters.findTag( KMType.BYTES_TAG, KMType.ATTESTATION_APPLICATION_ID, data[KEY_PARAMETERS]);
+  //     if (attAppId == KMType.INVALID_VALUE) {
+  //       KMException.throwIt(KMError.ATTESTATION_APPLICATION_ID_MISSING);
+  //     }
+  //     cert.extensionTag(attAppId, false);
+  //     // unique id byte blob - uses application id and temporal month count of creation time.
+  //     setUniqueId(cert, scratchPad);
+  //     // Add Attestation Ids if present
+  //     addAttestationIds(cert, scratchPad);
+  //     // Add Tags
+  //     addTags(data[HW_PARAMETERS], true, cert);
+  //     addTags(data[SW_PARAMETERS], false, cert);
+  //     // Add Device Boot locked status
+  //     cert.deviceLocked(seProvider.isDeviceBootLocked());
+  //     // VB data
+  //     cert.verifiedBootHash(getVerifiedBootHash(scratchPad));
+  //     cert.verifiedBootKey(getBootKey(scratchPad));
+  //     cert.verifiedBootState((byte)seProvider.getBootState());
+  //   }
+  //
+  //   // Public key
+  //   cert.publicKey(data[PUB_KEY]);
+  //   return cert;
+  // }
 
   protected short getBootKey(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_KEY_SIZE, (byte)0);
@@ -1360,10 +1568,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMType.ATTESTATION_ID_SERIAL
         };
     byte index = 0;
-    //short attIdTag;
     while (index < (short) attTags.length) {
       //attIdTag = repository.getAttId(mapToAttId(attTags[index]));
       if(KMKeyParameters.findTag(KMType.BYTES_TAG,attTags[index],data[KEY_PARAMETERS]) == KMType.INVALID_VALUE){
+        index++;
         continue;
       }
       short attIdTagLen = seProvider.getAttestationId(attTags[index],scratchPad, (short)0);
@@ -2695,8 +2903,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
         break;
     }
-    makeKeyCharacteristics(scratchPad);
-    generateAttestation(scratchPad);
+    makeKeyCharacteristics( scratchPad);
+    generateAttestation(data[ATTEST_KEY_BLOB], data[ATTEST_KEY_PARAMS],scratchPad);
     createEncryptedKeyBlob(scratchPad);
     // prepare the response
     short resp = KMArray.instance((short) 4);
@@ -3100,7 +3308,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // create key blob and associated attestation.
     data[ORIGIN] = KMType.GENERATED;
     makeKeyCharacteristics(scratchPad);
-    generateAttestation(scratchPad);
+    generateAttestation(data[ATTEST_KEY_BLOB], data[ATTEST_KEY_PARAMS],scratchPad);
     createEncryptedKeyBlob(scratchPad);
     // prepare the response
     short resp = KMArray.instance((short) 4);
@@ -3111,8 +3319,99 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu, resp);
   }
 
-  private  void generateAttestation(byte[] scratchPad){
-    KMAttestationCert cert = makeCert(scratchPad);
+  private short getAttestationMode(short attKeyBlob, short attChallenge){
+    short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, data[KEY_PARAMETERS]);
+    short mode = KMType.NO_CERT;
+    if(KMEnumTag.cast(alg).getValue() != KMType.RSA &&
+        KMEnumTag.cast(alg).getValue() != KMType.EC){
+      return mode;
+    }
+    // If attestation keyblob preset
+    if (attKeyBlob != KMType.INVALID_VALUE && KMByteBlob.cast(attKeyBlob).length() > 0) {
+      // No attestation challenge present then it is an error
+      if (attChallenge == KMType.INVALID_VALUE || KMByteBlob.cast(attChallenge).length() <= 0) {
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      } else {
+        mode = KMType.ATTESTATION_CERT;
+      }
+    }else{ // no attestation key blob
+      // Attestation challenge present then it is an error because no factory provisioned attest key
+      if (attChallenge != KMType.INVALID_VALUE && KMByteBlob.cast(attChallenge).length() > 0) {
+        KMException.throwIt(KMError.ATTESTATION_KEYS_NOT_PROVISIONED);
+      } else if(KMEnumArrayTag.contains(KMType.PURPOSE, KMType.SIGN, data[KEY_PARAMETERS])) {
+        mode = KMType.SELF_SIGNED_CERT;
+      }else{
+        mode = KMType.FAKE_CERT;
+      }
+    }
+    return mode;
+  }
+
+  private  void generateAttestation(short attKeyBlob, short attKeyParam, byte[] scratchPad){
+    // Read attestation challenge if present
+    short attChallenge =
+        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.ATTESTATION_CHALLENGE, data[KEY_PARAMETERS]);
+    if(attChallenge != KMType.INVALID_VALUE){
+      attChallenge = KMByteTag.cast(attChallenge).getValue();
+    }
+    // No attestation required for symmetric keys
+    short mode = getAttestationMode(attKeyBlob, attChallenge);
+    KMAttestationCert cert = null;
+
+    switch (mode){
+      case KMType.ATTESTATION_CERT:
+        cert = makeAttestationCert(attKeyBlob,attKeyParam, attChallenge, data[ATTEST_KEY_ISSUER],data[SB_PARAMETERS],
+            data[SW_PARAMETERS], scratchPad);
+        break;
+      case KMType.SELF_SIGNED_CERT:
+        //cert = makeCert(attKeyBlob, attKeyParam, scratchPad);
+        cert = makeSelfSignedCert(data[SECRET], data[PUB_KEY],scratchPad);
+        break;
+      case KMType.FAKE_CERT:
+        //cert = makeCert(attKeyBlob, attKeyParam, scratchPad);
+        cert = makeSelfSignedCert(KMType.INVALID_VALUE, data[PUB_KEY], scratchPad);
+        break;
+      default:
+        data[CERTIFICATE] = KMArray.instance((short)0);
+        return;
+    }
+    // Allocate memory
+    short certData = KMByteBlob.instance(MAX_CERT_SIZE);
+
+    cert.buffer(KMByteBlob.cast(certData).getBuffer(),
+        KMByteBlob.cast(certData).getStartOff(),
+        KMByteBlob.cast(certData).length());
+
+    // Build the certificate - this will sign the cert
+    cert.build();
+    // Adjust the start and length of the certificate in the blob
+    KMByteBlob.cast(certData).setStartOff(cert.getCertStart());
+    KMByteBlob.cast(certData).setLength(cert.getCertLength());
+    print(KMByteBlob.cast(certData).getBuffer(),
+        KMByteBlob.cast(certData).getStartOff(),
+        KMByteBlob.cast(certData).length());
+    // Initialize the certificate as array of blob
+    data[CERTIFICATE] = KMArray.instance((short)1);
+    KMArray.cast(data[CERTIFICATE]).add((short)0, certData);
+
+/*
+    boolean rsaCert = KMEnumTag.cast(alg).getValue() == KMType.EC;
+    short appId = KMType.INVALID_VALUE;
+    short appData = KMType.INVALID_VALUE;
+    if(attKeyParam != KMType.INVALID_VALUE) {
+      appId =
+          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, attKeyParam);
+      if (appId != KMTag.INVALID_VALUE) {
+        appId = KMByteTag.cast(appId).getValue();
+      }
+      appData =
+          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, attKeyParam);
+      if (appData != KMTag.INVALID_VALUE) {
+        appData = KMByteTag.cast(appData).getValue();
+      }
+    }
+
+    KMAttestationCert cert = makeCert(attKeyBlob, appId, appData, scratchPad);
     if(cert == null) {// No certificate
       data[CERTIFICATE] = KMArray.instance((short)0);
       return;
@@ -3132,6 +3431,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Initialize the certificate as array of blob
     data[CERTIFICATE] = KMArray.instance((short)1);
     KMArray.cast(data[CERTIFICATE]).add((short)0, certData);
+    */
   }
 
   /**
@@ -3366,26 +3666,38 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_SECRET, data[SECRET]);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_AUTH_TAG, data[AUTH_TAG]);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_NONCE, data[NONCE]);
-    KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_PARAMS, data[KEY_CHARACTERISTICS]);
+
+    //TODO remove the following temporary creation of keyblob.
+    short tempChar = KMKeyCharacteristics.instance();
+    short emptyParam = KMArray.instance((short) 0);
+    emptyParam = KMKeyParameters.instance(emptyParam);
+    KMKeyCharacteristics.cast(tempChar).setStrongboxEnforced(data[SB_PARAMETERS]);
+    KMKeyCharacteristics.cast(tempChar).setKeystoreEnforced(emptyParam);
+    KMKeyCharacteristics.cast(tempChar).setTeeEnforced(data[TEE_PARAMETERS]);
+    KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_PARAMS, tempChar);
+    //KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_PARAMS, data[KEY_CHARACTERISTICS]);
+
     // allocate reclaimable memory.
     short buffer = repository.alloc((short) 1024);
     short keyBlob = encoder.encode(data[KEY_BLOB], repository.getHeap(), buffer);
     data[KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), buffer, keyBlob);
   }
 
-  private void parseEncryptedKeyBlob(short keyBlob, short appId, short appData, byte[] scratchPad) {
+  private short parseEncryptedKeyBlob(short keyBlob, short appId, short appData, byte[] scratchPad) {
+    short parsedBlob = KMType.INVALID_VALUE;
     short rot = readROT(scratchPad);
     if (rot == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     try {
-      short parsedBlob = decoder.decodeArray(keyBlob(),
+      parsedBlob = decoder.decodeArray(keyBlob(),
               KMByteBlob.cast(keyBlob).getBuffer(),
               KMByteBlob.cast(keyBlob).getStartOff(),
               KMByteBlob.cast(keyBlob).length());
       if (KMArray.cast(parsedBlob).length() < 4) {
         KMException.throwIt(KMError.INVALID_KEY_BLOB);
       }
+
       // initialize data
       data[SECRET] = KMArray.cast(parsedBlob).get(KEY_BLOB_SECRET);
       data[NONCE]= KMArray.cast(parsedBlob).get(KEY_BLOB_NONCE);
@@ -3395,18 +3707,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       if (KMArray.cast(parsedBlob).length() == 5) {
         data[PUB_KEY] = KMArray.cast(parsedBlob).get(KEY_BLOB_PUB_KEY);
       }
+
       data[TEE_PARAMETERS] = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
       data[SB_PARAMETERS] = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getStrongboxEnforced();
+      data[SW_PARAMETERS] = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getKeystoreEnforced();
       data[HW_PARAMETERS] = KMKeyParameters.makeHwEnforced(data[SB_PARAMETERS], data[TEE_PARAMETERS]);
+
       data[HIDDEN_PARAMETERS] = KMKeyParameters.makeHidden(appId, appData, rot, scratchPad);
       data[KEY_BLOB] = parsedBlob;
       // make auth data
       makeAuthData(scratchPad);
       // Decrypt Secret and verify auth tag
       decryptSecret(scratchPad);
+      KMArray.cast(parsedBlob).add(KEY_BLOB_SECRET, data[SECRET]);
     } catch (Exception e) {
       KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
+    return parsedBlob;
   }
 
   // Read RoT
@@ -3621,6 +3938,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   public void powerReset() {
-    //TODO handle power reset signal.
+    //handle power reset signal.
+  }
+
+  private void print(byte[] buf, short start, short length){
+    StringBuilder sb = new StringBuilder(length * 2);
+    for(short i = start; i < (start+length); i ++){
+      sb.append(String.format("%02x", buf[i]));
+    }
+    System.out.println( sb.toString());
   }
 }

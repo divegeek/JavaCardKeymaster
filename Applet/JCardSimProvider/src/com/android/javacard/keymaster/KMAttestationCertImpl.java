@@ -100,7 +100,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte keyUsageCertSign = (byte) 0x04; // 5th- bit
 
   private static final byte KEYMASTER_VERSION = 100;
-  private static final byte ATTESTATION_VERSION = 3;
+  private static final byte ATTESTATION_VERSION = 100;
   private static final byte[] pubExponent = {0x01, 0x00, 0x01};
   private static final byte SERIAL_NUM = (byte) 0x01;
   private static final byte X509_VERSION = (byte) 0x02;
@@ -138,7 +138,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static short serialNum;
 
   private static byte   certMode;
-  private static short certAttestKey ;
+  private static short certAttestKeySecret;
+  private static short certAttestKeyRsaPubModulus;
   private static boolean certRsaSign;
   private static final byte SERIAL_NUM_MAX_LEN = 20;
   private static final byte SUBJECT_NAME_MAX_LEN = 32;
@@ -186,7 +187,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     deviceLocked = 0;
     signPriv = 0;
     certMode = KMType.NO_CERT;
-    certAttestKey = KMType.INVALID_VALUE;
+    certAttestKeySecret = KMType.INVALID_VALUE;
     certRsaSign = true;
     issuer = KMType.INVALID_VALUE;
     subjectName = KMType.INVALID_VALUE;
@@ -862,8 +863,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     return certLength;
   }
 
-  @Override
-  public void build(byte[] attBuf, short attStart, short attLength, boolean rsaSign, boolean fakeCert) {
+
+  public void build(short attSecret, short attMod, boolean rsaSign, boolean fakeCert) {
     stackPtr = (short)(bufStart + bufLength);
     short last = stackPtr;
     short sigLen = 0;
@@ -891,18 +892,18 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     tbsStart = stackPtr;
     tbsLength = (short) (tbsLength - tbsStart);
     KMJCardSimulator provider = KMJCardSimulator.getInstance();
-    if(attBuf != null){
+    if(attSecret != KMType.INVALID_VALUE){
       // Sign with the attestation key
       // The pubKey is the modulus.
       if (rsaSign) {
         sigLen = provider
             .rsaSign256Pkcs1(
-                attBuf,
-                attStart,
-                attLength,
-                KMByteBlob.cast(pubKey).getBuffer(),
-                KMByteBlob.cast(pubKey).getStartOff(),
-                KMByteBlob.cast(pubKey).length(),
+                KMByteBlob.cast(attSecret).getBuffer(),
+                KMByteBlob.cast(attSecret).getStartOff(),
+                KMByteBlob.cast(attSecret).length(),
+                KMByteBlob.cast(attMod).getBuffer(),
+                KMByteBlob.cast(attMod).getStartOff(),
+                KMByteBlob.cast(attMod).length(),
                 stack,
                 tbsStart,
                 tbsLength,
@@ -912,9 +913,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       } else {
         sigLen = provider
             .ecSign256(
-                attBuf,
-                attStart,
-                attLength,
+                KMByteBlob.cast(attSecret).getBuffer(),
+                KMByteBlob.cast(attSecret).getStartOff(),
+                KMByteBlob.cast(attSecret).length(),
                 stack,
                 tbsStart,
                 tbsLength,
@@ -941,11 +942,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   @Override
   public void build() {
     if(certMode == KMType.FAKE_CERT) {
-      build(null, (short) 0, (short) 0, true, true);
+      build(KMType.INVALID_VALUE, KMType.INVALID_VALUE, true, true);
     }else {
-      build(KMByteBlob.cast(certAttestKey).getBuffer(),
-          KMByteBlob.cast(certAttestKey).getStartOff(),
-          KMByteBlob.cast(certAttestKey).length(), certRsaSign, false);
+      build(certAttestKeySecret, certAttestKeyRsaPubModulus, certRsaSign, false);
     }
   }
 
@@ -1024,10 +1023,20 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   }
 
   @Override
-  public KMAttestationCert attestKey(short attestKey, boolean rsaSign, byte mode){
+  public KMAttestationCert ecAttestKey(short attestKey, byte mode){
     certMode = mode;
-    certAttestKey = attestKey;
-    certRsaSign = rsaSign;
+    certAttestKeySecret = attestKey;
+    certAttestKeyRsaPubModulus = KMType.INVALID_VALUE;
+    certRsaSign = false;
+    return this;
+  }
+
+  @Override
+  public KMAttestationCert rsaAttestKey(short attestPrivExp, short attestMod, byte mode){
+    certMode = mode;
+    certAttestKeySecret = attestPrivExp;
+    certAttestKeyRsaPubModulus = attestMod;
+    certRsaSign = true;
     return this;
   }
 

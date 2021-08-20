@@ -148,7 +148,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
         (short) bootBlob.length);
     short verifiedHash = KMByteBlob.instance(bootBlob, (short) 0,
         (short) bootBlob.length);
-    short bootState = KMType.VERIFIED_BOOT;
+    short bootState = KMType.UNVERIFIED_BOOT;
 
     ((KMJCardSimulator)seProvider).setBootPatchLevel(
         KMInteger.cast(bootPatchLevel).getBuffer(),
