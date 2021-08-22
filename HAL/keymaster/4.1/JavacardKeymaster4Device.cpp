@@ -1141,20 +1141,21 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose,
     if (KeyPurpose::ENCRYPT == purpose || KeyPurpose::VERIFY == purpose) {
         operType = OperationType::PUBLIC_OPERATION;
     }
-    int retryCount = 0;
-    int maxRetries = 2;
-    for(; retryCount < maxRetries; retryCount++) {
-        errorCode = handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
-                                         operationHandle, operType);
-        if (errorCode != ErrorCode::OK || !isOperationHandleExists(operationHandle)) break;
-    }
-
-    if (retryCount >= maxRetries) {
-        errorCode = ErrorCode::UNKNOWN_ERROR;
+    errorCode = handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
+                                     operationHandle, operType);
+    if (errorCode == ErrorCode::OK && isOperationHandleExists(operationHandle)) {
+        LOG(DEBUG) << "INS_BEGIN_OPERATION_CMD retry begin to get new operation handle.";
+        // retry begin to get an another operation handle.
+        errorCode =
+            handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
+                                      operationHandle, operType);
+        if (errorCode == ErrorCode::OK && isOperationHandleExists(operationHandle)) {
+            errorCode = ErrorCode::UNKNOWN_ERROR;
             LOG(ERROR)
-                << "INS_BEGIN_OPERATION_CMD: Maximum retires reached and the Operation handle"
-                "exists in the operation table. error: "
+                << "INS_BEGIN_OPERATION_CMD: Failed in begin operation as the"
+                "operation handle already exists in the operation table."
                 << (int32_t)errorCode;
+        }
     }
     // Create an entry inside the operation table for the new operation
     // handle.
