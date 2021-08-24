@@ -100,6 +100,29 @@ public class KMArray extends KMType {
     }
     return Util.getShort(
         heap, (short) (getStartOff() + (short) (index * 2)));
+}
+
+  public void swap(short index1, short index2) {
+    short len = length();
+    if (index1 >= len || index2 >= len) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
+    short indexPtr1 =
+        Util.getShort(
+            heap,
+            (short) (instanceTable[KM_ARRAY_OFFSET] + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short) (index1 * 2)));
+    short indexPtr2 =
+        Util.getShort(
+            heap,
+            (short) (instanceTable[KM_ARRAY_OFFSET] + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short) (index2 * 2)));
+    Util.setShort(
+        heap,
+        (short) (instanceTable[KM_ARRAY_OFFSET] + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short) (index1 * 2)),
+        indexPtr2);
+    Util.setShort(
+        heap,
+        (short) (instanceTable[KM_ARRAY_OFFSET] + TLV_HEADER_SIZE + ARRAY_HEADER_SIZE + (short) (index2 * 2)),
+        indexPtr1);
   }
 
   public short containedType() {

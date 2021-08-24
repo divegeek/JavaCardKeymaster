@@ -30,7 +30,7 @@ public class KMInteger extends KMType {
   public static final short UINT_64 = 8;
   private static KMInteger prototype;
 
-  private KMInteger() {
+  protected KMInteger() {
   }
 
   private static KMInteger proto(short ptr) {
@@ -114,7 +114,7 @@ public class KMInteger extends KMType {
 
   // Get the length of the integer
   public short length() {
-    return Util.getShort(heap, (short) (KMType.instanceTable[KM_INTEGER_OFFSET] + 1));
+    return Util.getShort(heap, (short) (getBaseOffset() + 1));
   }
 
   // Get the buffer pointer in which blob is contained.
@@ -124,7 +124,7 @@ public class KMInteger extends KMType {
 
   // Get the start of value
   public short getStartOff() {
-    return (short) (KMType.instanceTable[KM_INTEGER_OFFSET] + TLV_HEADER_SIZE);
+    return (short) (getBaseOffset() + TLV_HEADER_SIZE);
   }
 
   public void getValue(byte[] dest, short destOff, short length) {
@@ -199,5 +199,9 @@ public class KMInteger extends KMType {
       }
     }
     return 0;
+  }
+
+  protected short getBaseOffset() {
+    return instanceTable[KM_INTEGER_OFFSET];
   }
 }

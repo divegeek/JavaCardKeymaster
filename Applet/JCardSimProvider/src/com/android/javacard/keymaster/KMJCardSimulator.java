@@ -40,6 +40,8 @@ import javacard.security.Key;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
 import javacard.security.RSAPrivateKey;
+import javacard.security.KeyAgreement;
+import javacard.security.RSAPublicKey;
 import javacard.security.RandomData;
 import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
@@ -68,6 +70,8 @@ public class KMJCardSimulator implements KMSEProvider {
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   private static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
+  private static final short ADDITIONAL_CERT_CHAIN_MAX_SIZE = 1024;//First 2 bytes for length.
+  private static final short BCC_MAX_SIZE = 512;
   private static final short RSA_KEY_SIZE = 256;
   public static final byte POWER_RESET_FALSE = (byte)0xAA;
   public static final byte POWER_RESET_TRUE = (byte)0x00;
@@ -76,6 +80,7 @@ public class KMJCardSimulator implements KMSEProvider {
   public static boolean jcardSim = false;
   private static Signature kdf;
   private static Signature hmacSignature;
+  private static KeyAgreement keyAgreement;
 
   private static byte[] rngCounter;
   private static AESKey aesRngKey;
@@ -83,8 +88,12 @@ public class KMJCardSimulator implements KMSEProvider {
   private static byte[] entropyPool;
   private static byte[] rndNum;
   private byte[] certificateChain;
+  private byte[] additionalCertChain;
+  private byte[] bcc;
   private KMAESKey masterKey;
   private KMECPrivateKey attestationKey;
+  private KMECDeviceUniqueKey testKey;
+  private KMECDeviceUniqueKey deviceUniqueKey;
   private KMHmacKey preSharedKey;
   private boolean deviceReboot;
 
@@ -104,6 +113,7 @@ public class KMJCardSimulator implements KMSEProvider {
   private byte[] bootPatchLevel;
   private boolean deviceBootLocked;
   private short bootState;
+  private boolean isProvisionLocked;
 
 
   private static KMJCardSimulator jCardSimulator = null;
@@ -117,6 +127,7 @@ public class KMJCardSimulator implements KMSEProvider {
     // Various Keys
     kdf = Signature.getInstance(Signature.ALG_AES_CMAC_128, false);
     hmacSignature = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
+    keyAgreement = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH_PLAIN, false);
     // RNG
     rndNum = JCSystem.makeTransientByteArray(MAX_RND_NUM_SIZE, JCSystem.CLEAR_ON_RESET);
     entropyPool = JCSystem.makeTransientByteArray(ENTROPY_POOL_SIZE, JCSystem.CLEAR_ON_RESET);
@@ -131,6 +142,8 @@ public class KMJCardSimulator implements KMSEProvider {
     // various ciphers
     //Allocate buffer for certificate chain.
     certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
+    additionalCertChain = new byte[ADDITIONAL_CERT_CHAIN_MAX_SIZE];
+    bcc = new byte[BCC_MAX_SIZE];
     jCardSimulator = this;
     resetFlag = new byte[1];
     resetFlag[0] = (byte) POWER_RESET_FALSE;
@@ -573,6 +586,61 @@ public class KMJCardSimulator implements KMSEProvider {
     aesKey.getKey(keyData, (short) 0);
     return hmacSign(keyData, (short) 0, keyLen, data, dataStart, dataLength,
         signature, signatureStart);
+  }
+
+  @Override
+  public short hkdf(byte[] ikm, short ikmOff, short ikmLen, byte[] salt, short saltOff, short saltLen,
+                    byte[] info, short infoOff, short infoLen, byte[] out, short outOff, short outLen) {
+    // HMAC_extract
+    byte[] prk = new byte[32];
+    hkdfExtract(ikm, ikmOff, ikmLen, salt, saltOff, saltLen, prk, (short) 0);
+    //HMAC_expand
+    return hkdfExpand(prk, (short) 0, (short) 32, info, infoOff, infoLen, out, outOff, outLen);
+  }
+
+  private short hkdfExtract(byte[] ikm, short ikmOff, short ikmLen, byte[] salt, short saltOff, short saltLen,
+                            byte[] out, short off) {
+    // https://tools.ietf.org/html/rfc5869#section-2.2
+    HMACKey hmacKey = createHMACKey(salt, saltOff, saltLen);
+    hmacSignature.init(hmacKey, Signature.MODE_SIGN);
+    return hmacSignature.sign(ikm, ikmOff, ikmLen, out, off);
+  }
+
+  private short hkdfExpand(byte[] prk, short prkOff, short prkLen, byte[] info, short infoOff, short infoLen,
+                           byte[] out, short outOff, short outLen) {
+    // https://tools.ietf.org/html/rfc5869#section-2.3
+    short digestLen = (short) 32; // SHA256 digest length.
+    // Calculate no of iterations N.
+    short n = (short) ((outLen + digestLen - 1) / digestLen);
+    if (n > 255) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    HMACKey hmacKey = createHMACKey(prk, prkOff, prkLen);
+    byte[] previousOutput = new byte[32]; // Length of output 32.
+    byte[] cnt = {(byte) 0};
+    short bytesCopied = 0;
+    short len = 0;
+    for (short i = 0; i < n; i++) {
+      cnt[0]++;
+      hmacSignature.init(hmacKey, Signature.MODE_SIGN);
+      if (i != 0)
+        hmacSignature.update(previousOutput, (short) 0, (short) 32);
+      hmacSignature.update(info, infoOff, infoLen);
+      len = hmacSignature.sign(cnt, (short) 0, (short) 1, previousOutput, (short) 0);
+      if ((short) (bytesCopied + len) > outLen) {
+        len = (short) (outLen - bytesCopied);
+      }
+      Util.arrayCopyNonAtomic(previousOutput, (short) 0, out, (short) (outOff + bytesCopied), len);
+      bytesCopied += len;
+    }
+    return outLen;
+  }
+
+  @Override
+  public short ecdhKeyAgreement(byte[] privKey, short privKeyOff, short privKeyLen, byte[] publicKey, short publicKeyOff,
+                                short publicKeyLen, byte[] secret, short secretOff) {
+    keyAgreement.init(createEcKey(privKey, privKeyOff, privKeyLen));
+    return keyAgreement.generateSecret(publicKey, publicKeyOff, publicKeyLen, secret, secretOff);
   }
 
   @Override
@@ -1204,13 +1272,118 @@ public class KMJCardSimulator implements KMSEProvider {
     return KMType.INVALID_VALUE;
   }
 
-  /**
-   * This function returns the cert chain length.
-   *
-   * @return length of the certificate chain.
-   */
-  public short getCertificateChainLength() {
-    return Util.getShort(certificateChain, (short) 0);
+  @Override
+  public short getAdditionalCertChainLength() {
+    return Util.getShort(additionalCertChain, (short) 0);
+  }
+
+  @Override
+  public byte[] getAdditionalCertChain() {
+    return additionalCertChain;
+    // short length = Util.getShort(additionalCertChain, (short) 0);
+    // Util.arrayCopyNonAtomic(additionalCertChain, (short) 2, buffer, start, length);
+    // return length;
+  }
+
+  @Override
+  public short generateBcc(boolean testMode, byte[] scratchPad) {
+    if (!testMode && isProvisionLocked) {
+      KMException.throwIt(KMError.STATUS_FAILED);
+    }
+    KMDeviceUniqueKey deviceUniqueKey = getDeviceUniqueKey(testMode);
+    short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
+    short coseKey =
+        KMCose.constructCoseKey(
+            KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
+            KMType.INVALID_VALUE,
+            KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
+            KMInteger.uint_8(KMCose.COSE_KEY_OP_VERIFY),
+            KMInteger.uint_8(KMCose.COSE_ECCURVE_256),
+            scratchPad,
+            (short) 0,
+            temp,
+            KMType.INVALID_VALUE,
+            false
+        );
+    temp = KMKeymasterApplet.encodeToApduBuffer(coseKey, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+    // Construct payload.
+    short payload =
+        KMCose.constructCoseCertPayload(
+            KMCosePairTextStringTag.instance(KMInteger.uint_8(KMCose.ISSUER),
+                KMTextString.instance(KMCose.TEST_ISSUER_NAME, (short) 0,
+                    (short) KMCose.TEST_ISSUER_NAME.length)),
+            KMCosePairTextStringTag.instance(KMInteger.uint_8(KMCose.SUBJECT),
+                KMTextString.instance(KMCose.TEST_SUBJECT_NAME, (short) 0,
+                    (short) KMCose.TEST_SUBJECT_NAME.length)),
+            KMCosePairByteBlobTag.instance(KMNInteger.uint_32(KMCose.SUBJECT_PUBLIC_KEY, (short) 0),
+                KMByteBlob.instance(scratchPad, (short) 0, temp)),
+            KMCosePairByteBlobTag.instance(KMNInteger.uint_32(KMCose.KEY_USAGE, (short) 0),
+                KMByteBlob.instance(KMCose.KEY_USAGE_SIGN, (short) 0,
+                    (short) KMCose.KEY_USAGE_SIGN.length))
+        );
+    // temp temporarily holds the length of encoded cert payload.
+    temp = KMKeymasterApplet.encodeToApduBuffer(payload, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+    payload = KMByteBlob.instance(scratchPad, (short) 0, temp);
+
+    // protected header
+    short protectedHeader =
+        KMCose.constructHeaders(KMNInteger.uint_8(KMCose.COSE_ALG_ES256), KMType.INVALID_VALUE,
+            KMType.INVALID_VALUE, KMType.INVALID_VALUE);
+    // temp temporarily holds the length of encoded headers.
+    temp = KMKeymasterApplet.encodeToApduBuffer(protectedHeader, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+    protectedHeader = KMByteBlob.instance(scratchPad, (short) 0, temp);
+
+    //unprotected headers.
+    short arr = KMArray.instance((short) 0);
+    short unprotectedHeader = KMCoseHeaders.instance(arr);
+
+    // construct cose sign structure.
+    short coseSignStructure =
+        KMCose.constructCoseSignStructure(protectedHeader, KMByteBlob.instance((short) 0), payload);
+    // temp temporarily holds the length of encoded sign structure.
+    // Encode cose Sign_Structure.
+    temp = KMKeymasterApplet.encodeToApduBuffer(coseSignStructure, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+    // do sign
+    short len =
+        ecSign256(
+            deviceUniqueKey,
+            scratchPad,
+            (short) 0,
+            temp,
+            scratchPad,
+            temp
+        );
+    coseSignStructure = KMByteBlob.instance(scratchPad, temp, len);
+
+    // construct cose_sign1
+    short coseSign1 =
+        KMCose.constructCoseSign1(protectedHeader, unprotectedHeader, payload, coseSignStructure);
+
+    // [Cose_Key, Cose_Sign1]
+    short bcc = KMArray.instance((short) 2);
+    KMArray.cast(bcc).add((short) 0, coseKey);
+    KMArray.cast(bcc).add((short) 1, coseSign1);
+    return bcc;
+  }
+
+  public void persistBootCertificateChain(byte[] buf, short offset, short len) {
+    if ((short) (len + 2) > BCC_MAX_SIZE) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    JCSystem.beginTransaction();
+    Util.setShort(bcc, (short) 0, (short) len);
+    Util.arrayCopyNonAtomic(buf, offset, bcc,
+        (short) 2, len);
+    JCSystem.commitTransaction();
+  }
+
+  @Override
+  public byte[] getBootCertificateChain() {
+    return bcc;
   }
 
   @Override
@@ -1254,12 +1427,53 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
 
-  /**
-   * This operation clears the certificate chain from persistent memory.
-   */
-  public void clearCertificateChain() {
+  @Override
+  public short ecSign256(KMDeviceUniqueKey deviceUniqueKey, byte[] inputDataBuf, short inputDataStart,
+                         short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
+    ECPrivateKey key = ((KMECDeviceUniqueKey) deviceUniqueKey).getPrivateKey();
+    Signature signer = Signature
+        .getInstance(Signature.ALG_ECDSA_SHA_256, false);
+    signer.init(key, Signature.MODE_SIGN);
+    return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
+        outputDataBuf, outputDataStart);
+  }
+
+  @Override
+  public boolean ecVerify256(byte[] pubKey, short pubKeyOffset, short pubKeyLen, byte[] inputDataBuf,
+                             short inputDataStart, short inputDataLength, byte[] signatureDataBuf,
+                             short signatureDataStart, short signatureDataLen) {
+
+    KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+    ECPublicKey ecPublicKey = (ECPublicKey) ecKeyPair.getPublic();
+    ecPublicKey.setW(pubKey, pubKeyOffset, pubKeyLen);
+
+    Signature signer = Signature
+        .getInstance(Signature.ALG_ECDSA_SHA_256, false);
+    signer.init(ecPublicKey, Signature.MODE_VERIFY);
+    return signer.verify(inputDataBuf, inputDataStart, inputDataLength,
+        signatureDataBuf, signatureDataStart, signatureDataLen);
+  }
+
+
+  @Override
+  public void persistAdditionalCertChain(byte[] buf, short offset, short len) {
+    // Input buffer contains encoded additional certificate chain as shown below.
+    //    AdditionalDKSignatures = {
+    //      + SignerName => DKCertChain
+    //    }
+    //    SignerName = tstr
+    //    DKCertChain = [
+    //      2* Certificate // Root -> Leaf. Root is the vendo r
+    //            // self-signed cert, leaf contains DK_pu b
+    //    ]
+    //    Certificate = COSE_Sign1 of a public key
+    if (len > ADDITIONAL_CERT_CHAIN_MAX_SIZE) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
     JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(certificateChain, (short) 0, CERT_CHAIN_MAX_SIZE, (byte) 0);
+    Util.setShort(additionalCertChain, (short) 0, (short) len);
+    Util.arrayCopyNonAtomic(buf, offset, additionalCertChain,
+        (short) 2, len);
     JCSystem.commitTransaction();
   }
 
@@ -1353,6 +1567,40 @@ public class KMJCardSimulator implements KMSEProvider {
     }
     attestationKey.setS(keyData, offset, length);
     return (KMAttestationKey) attestationKey;
+  }
+
+  private KMDeviceUniqueKey createDeviceUniqueKey(KMECDeviceUniqueKey key,
+                                                  byte[] pubKey, short pubKeyOff, short pubKeyLen, byte[] privKey,
+                                                  short privKeyOff, short privKeyLen) {
+    if (key == null) {
+      KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+      key = new KMECDeviceUniqueKey(ecKeyPair);
+    }
+    key.setS(privKey, privKeyOff, privKeyLen);
+    key.setW(pubKey, pubKeyOff, pubKeyLen);
+    return (KMDeviceUniqueKey) key;
+  }
+
+  @Override
+  public KMDeviceUniqueKey createDeviceUniqueKey(boolean testMode,
+                                                 byte[] pubKey, short pubKeyOff, short pubKeyLen, byte[] privKey,
+                                                 short privKeyOff, short privKeyLen) {
+    KMDeviceUniqueKey key;
+    if (testMode) {
+      key = createDeviceUniqueKey(testKey, pubKey, pubKeyOff,
+          pubKeyLen, privKey, privKeyOff, privKeyLen);
+      if (testKey == null) testKey = (KMECDeviceUniqueKey) key;
+    } else {
+      key = createDeviceUniqueKey(deviceUniqueKey, pubKey, pubKeyOff,
+          pubKeyLen, privKey, privKeyOff, privKeyLen);
+      if (deviceUniqueKey == null) deviceUniqueKey = (KMECDeviceUniqueKey) key;
+    }
+    return key;
+  }
+
+  @Override
+  public KMDeviceUniqueKey getDeviceUniqueKey(boolean testMode) {
+    return ((KMDeviceUniqueKey) (testMode ? testKey : deviceUniqueKey));
   }
 
   /**
@@ -1568,6 +1816,14 @@ public class KMJCardSimulator implements KMSEProvider {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     Util.arrayCopyNonAtomic(buffer, start, bootPatchLevel, (short)0, (short) 4);
+  }
+
+  public void setProvisionLocked(boolean locked) {
+    isProvisionLocked = locked;
+  }
+
+  public boolean isProvisionLocked() {
+    return isProvisionLocked;
   }
 
 }

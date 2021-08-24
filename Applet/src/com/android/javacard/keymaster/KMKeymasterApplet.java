@@ -16,6 +16,7 @@
 
 package com.android.javacard.keymaster;
 
+import com.android.javacard.rkp.RemotelyProvisionedComponentDevice;
 import javacard.framework.APDU;
 import javacard.framework.Applet;
 import javacard.framework.AppletEvent;
@@ -94,7 +95,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   };
 
 
-
+  public static final short MAX_COSE_BUF_SIZE = (short) 512;
   // Top 32 commands are reserved for provisioning.
   private static final byte KEYMINT_CMD_APDU_START = 0x20;
 
@@ -120,11 +121,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_DEVICE_LOCKED_CMD = KEYMINT_CMD_APDU_START + 20;//0x34
   private static final byte INS_EARLY_BOOT_ENDED_CMD = KEYMINT_CMD_APDU_START + 21; //0x35
   private static final byte INS_GET_CERT_CHAIN_CMD = KEYMINT_CMD_APDU_START + 22; //0x36
-  private static final byte INS_UPDATE_AAD_OPERATION_CMD = KEYMINT_CMD_APDU_START + 23;
-  private static final byte INS_BEGIN_IMPORT_WRAPPED_KEY_CMD = KEYMINT_CMD_APDU_START + 24;
-  private static final byte INS_FINISH_IMPORT_WRAPPED_KEY_CMD = KEYMINT_CMD_APDU_START + 25;
-  private static final byte INS_INIT_STRONGBOX_CMD = KEYMINT_CMD_APDU_START + 26;
-  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 27;
+  private static final byte INS_UPDATE_AAD_OPERATION_CMD = KEYMINT_CMD_APDU_START + 23; //0x37
+  private static final byte INS_BEGIN_IMPORT_WRAPPED_KEY_CMD = KEYMINT_CMD_APDU_START + 24; //0x38
+  private static final byte INS_FINISH_IMPORT_WRAPPED_KEY_CMD = KEYMINT_CMD_APDU_START + 25; //0x39
+  private static final byte INS_INIT_STRONGBOX_CMD = KEYMINT_CMD_APDU_START + 26; //0x3A
+  // RKP
+  public static final byte INS_GET_RKP_HARDWARE_INFO = KEYMINT_CMD_APDU_START + 27; //0x3B
+  public static final byte INS_GENERATE_RKP_KEY_CMD = KEYMINT_CMD_APDU_START + 28; //0x3C
+  public static final byte INS_BEGIN_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 29; //0x3D
+  public static final byte INS_UPDATE_KEY_CMD = KEYMINT_CMD_APDU_START + 30; //0x3E
+  public static final byte INS_UPDATE_EEK_CHAIN_CMD = KEYMINT_CMD_APDU_START + 31; //0x3F
+  public static final byte INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 32; //0x40
+  public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
+  public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34; //0x42
+  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 35; //0x43
 
   private static final byte INS_END_KM_CMD = 0x7F;
 
@@ -180,12 +190,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte KEY_BLOB_PARAMS = 3;
   public static final byte KEY_BLOB_PUB_KEY = 4;
   // AES GCM constants
-  private static final byte AES_GCM_AUTH_TAG_LENGTH = 16;
-  private static final byte AES_GCM_NONCE_LENGTH = 12;
+  public static final byte AES_GCM_AUTH_TAG_LENGTH = 16;
+  public static final byte AES_GCM_NONCE_LENGTH = 12;
   // ComputeHMAC constants
   private static final short HMAC_SHARED_PARAM_MAX_SIZE = 64;
   protected static final short MAX_CERT_SIZE = 2048;
 
+  protected static RemotelyProvisionedComponentDevice rkp;
   protected static KMEncoder encoder;
   protected static KMDecoder decoder;
   protected static KMRepository repository;
@@ -224,6 +235,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // initialize default values
     initHmacNonceAndSeed();
     initSystemBootParams((short)0,(short)0,(short)0,(short)0);
+    rkp = new RemotelyProvisionedComponentDevice(encoder, decoder, repository, seProvider);
   }
 
   protected void initHmacNonceAndSeed(){
@@ -382,86 +394,94 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       // Validate APDU Header.
       short apduIns = validateApduHeader(apdu);
-        switch (apduIns) {
-          case INS_INIT_STRONGBOX_CMD:
-            processInitStrongBoxCmd(apdu);
-            sendError(apdu, KMError.OK);
-            return;
-          case INS_GENERATE_KEY_CMD:
-            processGenerateKey(apdu);
-            break;
-          case INS_IMPORT_KEY_CMD:
-            processImportKeyCmd(apdu);
-            break;
-          case INS_BEGIN_IMPORT_WRAPPED_KEY_CMD:
-            processBeginImportWrappedKeyCmd(apdu);
-            break;
-          case INS_FINISH_IMPORT_WRAPPED_KEY_CMD:
-            processFinishImportWrappedKeyCmd(apdu);
-            break;
-          case INS_EXPORT_KEY_CMD:
-            processExportKeyCmd(apdu);
-            break;
-          case INS_UPGRADE_KEY_CMD:
-            processUpgradeKeyCmd(apdu);
-            break;
-          case INS_DELETE_KEY_CMD:
-            processDeleteKeyCmd(apdu);
-            break;
-          case INS_DELETE_ALL_KEYS_CMD:
-            processDeleteAllKeysCmd(apdu);
-            break;
-          case INS_ADD_RNG_ENTROPY_CMD:
-            processAddRngEntropyCmd(apdu);
-            break;
-          case INS_COMPUTE_SHARED_HMAC_CMD:
-            processComputeSharedHmacCmd(apdu);
-            break;
-          case INS_DESTROY_ATT_IDS_CMD:
-            processDestroyAttIdsCmd(apdu);
-            break;
-          case INS_VERIFY_AUTHORIZATION_CMD:
-            processVerifyAuthorizationCmd(apdu);
-            break;
-          case INS_GET_HMAC_SHARING_PARAM_CMD:
-            processGetHmacSharingParamCmd(apdu);
-            break;
-          case INS_GET_KEY_CHARACTERISTICS_CMD:
-            processGetKeyCharacteristicsCmd(apdu);
-            break;
-          case INS_GET_HW_INFO_CMD:
-            processGetHwInfoCmd(apdu);
-            break;
-          case INS_BEGIN_OPERATION_CMD:
-            processBeginOperationCmd(apdu);
-            break;
-          case INS_UPDATE_OPERATION_CMD:
-            processUpdateOperationCmd(apdu);
-            break;
-          case INS_FINISH_OPERATION_CMD:
-            processFinishOperationCmd(apdu);
-            break;
-          case INS_ABORT_OPERATION_CMD:
-            processAbortOperationCmd(apdu);
-            break;
-          case INS_DEVICE_LOCKED_CMD:
-            processDeviceLockedCmd(apdu);
-            break;
-          case INS_EARLY_BOOT_ENDED_CMD:
-            processEarlyBootEndedCmd(apdu);
-            break;
-          case INS_UPDATE_AAD_OPERATION_CMD:
-            processUpdateAadOperationCmd(apdu);
-            break;
-          default:
-            ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
-        }
+      switch (apduIns) {
+        case INS_INIT_STRONGBOX_CMD:
+          processInitStrongBoxCmd(apdu);
+          sendError(apdu, KMError.OK);
+          return;
+        case INS_GENERATE_KEY_CMD:
+          processGenerateKey(apdu);
+          break;
+        case INS_IMPORT_KEY_CMD:
+          processImportKeyCmd(apdu);
+          break;
+        case INS_BEGIN_IMPORT_WRAPPED_KEY_CMD:
+          processBeginImportWrappedKeyCmd(apdu);
+          break;
+        case INS_FINISH_IMPORT_WRAPPED_KEY_CMD:
+          processFinishImportWrappedKeyCmd(apdu);
+          break;
+        case INS_EXPORT_KEY_CMD:
+          processExportKeyCmd(apdu);
+          break;
+        case INS_UPGRADE_KEY_CMD:
+          processUpgradeKeyCmd(apdu);
+          break;
+        case INS_DELETE_KEY_CMD:
+          processDeleteKeyCmd(apdu);
+          break;
+        case INS_DELETE_ALL_KEYS_CMD:
+          processDeleteAllKeysCmd(apdu);
+          break;
+        case INS_ADD_RNG_ENTROPY_CMD:
+          processAddRngEntropyCmd(apdu);
+          break;
+        case INS_COMPUTE_SHARED_HMAC_CMD:
+          processComputeSharedHmacCmd(apdu);
+          break;
+        case INS_DESTROY_ATT_IDS_CMD:
+          processDestroyAttIdsCmd(apdu);
+          break;
+        case INS_VERIFY_AUTHORIZATION_CMD:
+          processVerifyAuthorizationCmd(apdu);
+          break;
+        case INS_GET_HMAC_SHARING_PARAM_CMD:
+          processGetHmacSharingParamCmd(apdu);
+          break;
+        case INS_GET_KEY_CHARACTERISTICS_CMD:
+          processGetKeyCharacteristicsCmd(apdu);
+          break;
+        case INS_GET_HW_INFO_CMD:
+          processGetHwInfoCmd(apdu);
+          break;
+        case INS_BEGIN_OPERATION_CMD:
+          processBeginOperationCmd(apdu);
+          break;
+        case INS_UPDATE_OPERATION_CMD:
+          processUpdateOperationCmd(apdu);
+          break;
+        case INS_FINISH_OPERATION_CMD:
+          processFinishOperationCmd(apdu);
+          break;
+        case INS_ABORT_OPERATION_CMD:
+          processAbortOperationCmd(apdu);
+          break;
+        case INS_DEVICE_LOCKED_CMD:
+          processDeviceLockedCmd(apdu);
+          break;
+        case INS_EARLY_BOOT_ENDED_CMD:
+          processEarlyBootEndedCmd(apdu);
+          break;
+        case INS_UPDATE_AAD_OPERATION_CMD:
+          processUpdateAadOperationCmd(apdu);
+          break;
+        case INS_GENERATE_RKP_KEY_CMD:
+        case INS_BEGIN_SEND_DATA_CMD:
+        case INS_UPDATE_CHALLENGE_CMD:
+        case INS_UPDATE_EEK_CHAIN_CMD:
+        case INS_UPDATE_KEY_CMD:
+        case INS_FINISH_SEND_DATA_CMD:
+        case INS_GET_RESPONSE_CMD:
+          rkp.process(apduIns, apdu);
+        default:
+          ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
+      }
     } catch (KMException exception) {
       freeOperations();
       resetWrappingKey();
       sendError(apdu, KMException.reason());
     } catch (ISOException exp) {
-  //    sendError(apdu, mapISOErrorToKMError(exp.getReason()));
+      //    sendError(apdu, mapISOErrorToKMError(exp.getReason()));
       freeOperations();
       resetWrappingKey();
       sendError(apdu, mapISOErrorToKMError(exp.getReason()));
@@ -550,7 +570,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return KMByteBlob.instance(wrappingKey,(short)1,WRAPPING_KEY_SIZE);
   }
 
-  private void resetData() {
+  protected void resetData() {
     short index = 0;
     while (index < data.length) {
       data[index] = KMType.INVALID_VALUE;
@@ -600,7 +620,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       index += recvLen;
       recvLen = apdu.receiveBytes(srcOffset);
     }
-    short req = decoder.decode(reqExp,buffer, bufferStartOffset, bufferLength);
+    short req = decoder.decode(reqExp, buffer, bufferStartOffset, bufferLength);
     repository.reclaimMemory(bufferLength);
     return req;
   }
@@ -3349,7 +3369,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setTeeEnforced(data[TEE_PARAMETERS]);
   }
 
-  private void createEncryptedKeyBlob(byte[] scratchPad) {
+  private static void createEncryptedKeyBlob(byte[] scratchPad) {
     // make root of trust blob
     data[ROT] = readROT(scratchPad);
     if (data[ROT] == KMType.INVALID_VALUE) {
@@ -3410,7 +3430,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   // Read RoT
-  public short readROT(byte[] scratchPad) {
+  public static short readROT(byte[] scratchPad) {
     Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256,(byte)0);
     short len = seProvider.getBootKey(scratchPad, (short)0);
     len += seProvider.getVerifiedBootHash(scratchPad, (short)len);
@@ -3451,7 +3471,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.instance(scratchPad, (short) 0, KMByteBlob.cast(data[SECRET]).length());
   }
 
-  private void encryptSecret(byte[] scratchPad) {
+  private static void encryptSecret(byte[] scratchPad) {
     // make nonce
     data[NONCE] = KMByteBlob.instance((short) AES_GCM_NONCE_LENGTH);
     data[AUTH_TAG] = KMByteBlob.instance(AES_GCM_AUTH_TAG_LENGTH);
@@ -3577,7 +3597,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return signLen;
   }
 
-  protected static void sendError(APDU apdu, short err) {
+  public static void sendError(APDU apdu, short err) {
     short resp = KMArray.instance((short)1);
     err = KMError.translate(err);
     short error = KMInteger.uint_16(err);
@@ -3623,4 +3643,132 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public void powerReset() {
     //TODO handle power reset signal.
   }
+
+  public static void generateRkpKey(byte[] scratchPad, short keyParams) {
+    data[KEY_PARAMETERS] = keyParams;
+    generateECKeys(scratchPad);
+    // create key blob
+    data[ORIGIN] = KMType.GENERATED;
+    createEncryptedKeyBlob(scratchPad);
+  }
+  public static short getPubKey() {
+    return data[PUB_KEY];
+  }
+
+  public static short getPivateKey() {
+    return data[KEY_BLOB];
+  }
+
+  /**
+   * Encodes the object to the provided apdu buffer.
+   *
+   * @param object  Object to be encoded.
+   * @param apduBuf Buffer on which the encoded data is copied.
+   * @param apduOff Start offset of the buffer.
+   * @param maxLen  Max value of the expected out length.
+   * @return length of the encoded buffer.
+   */
+  public static short encodeToApduBuffer(short object, byte[] apduBuf, short apduOff,
+      short maxLen) {
+    short offset = repository.allocReclaimableMemory(maxLen);
+    short len = encoder.encode(object, repository.getHeap(), offset);
+    Util.arrayCopyNonAtomic(repository.getHeap(), offset, apduBuf, apduOff, len);
+    //release memory
+    repository.reclaimMemory(maxLen);
+    return len;
+  }
+
+  public static short validateCertChain(boolean validateEekRoot, byte expCertAlg,
+      byte expLeafCertAlg, short certChainArr, byte[] scratchPad, Object[] authorizedEekRoots) {
+    short len = KMArray.cast(certChainArr).length();
+    short coseHeadersExp = KMCoseHeaders.exp();
+    //prepare exp for coseky
+    short coseKeyExp = KMCoseKey.exp();
+    short ptr1;
+    short ptr2;
+    short signStructure;
+    short encodedLen;
+    short prevCoseKey = 0;
+    short keySize;
+    short alg = expCertAlg;
+    short index;
+    for (index = 0; index < len; index++) {
+      ptr1 = KMArray.cast(certChainArr).get(index);
+
+      // validate protected Headers
+      ptr2 = KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PROTECTED_PARAMS_OFFSET);
+      ptr2 = decoder.decode(coseHeadersExp, KMByteBlob.cast(ptr2).getBuffer(),
+          KMByteBlob.cast(ptr2).getStartOff(), KMByteBlob.cast(ptr2).length());
+      if (!KMCoseHeaders.cast(ptr2).isDataValid(alg, KMType.INVALID_VALUE)) {
+        KMException.throwIt(KMError.STATUS_FAILED);
+      }
+
+      // parse and get the public key from payload.
+      ptr2 = KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PAYLOAD_OFFSET);
+      ptr2 = decoder.decode(coseKeyExp, KMByteBlob.cast(ptr2).getBuffer(),
+          KMByteBlob.cast(ptr2).getStartOff(), KMByteBlob.cast(ptr2).length());
+      if (index == (short) (len - 1)) {
+        alg = expLeafCertAlg;
+      }
+      if (!KMCoseKey.cast(ptr2).isDataValid(KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE, alg,
+          KMType.INVALID_VALUE, KMCose.COSE_ECCURVE_256)) {
+        KMException.throwIt(KMError.STATUS_FAILED);
+      }
+      if (prevCoseKey == 0) {
+        prevCoseKey = ptr2;
+      }
+      // Get the public key.
+      keySize = KMCoseKey.cast(prevCoseKey).getEcdsa256PublicKey(scratchPad, (short) 0);
+      if (keySize != 65) {
+        KMException.throwIt(KMError.STATUS_FAILED);
+      }
+      if (validateEekRoot && (index == 0)) {
+        boolean found = false;
+        // In prod mode the first pubkey should match a well-known Google public key.
+        for (short i = 0; i < (short) authorizedEekRoots.length; i++) {
+          if (0 == Util.arrayCompare(scratchPad, (short) 0, (byte[]) authorizedEekRoots[i],
+              (short) 0, (short) ((byte[]) authorizedEekRoots[i]).length)) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          KMException.throwIt(KMError.STATUS_FAILED);
+        }
+      }
+      // Validate signature.
+      signStructure =
+          KMCose.constructCoseSignStructure(
+              KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PROTECTED_PARAMS_OFFSET),
+              KMByteBlob.instance((short) 0),
+              KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PAYLOAD_OFFSET));
+      encodedLen = KMKeymasterApplet.encodeToApduBuffer(signStructure, scratchPad,
+          keySize, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+
+      System.out.println("Signature Input:");
+      print(scratchPad, keySize, encodedLen);
+      System.out.println("Signature:");
+      print(KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getBuffer(),
+          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getStartOff(),
+          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).length());
+
+      if (!seProvider.ecVerify256(scratchPad, (short) 0, keySize, scratchPad, keySize, encodedLen,
+          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getBuffer(),
+          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getStartOff(),
+          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).length())) {
+        KMException.throwIt(KMError.STATUS_FAILED);
+      }
+      prevCoseKey = ptr2;
+    }
+    return prevCoseKey;
+  }
+
+  static void print(byte[] buf, short start, short length) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = start; i < (start + length); i++) {
+      sb.append(String.format(" 0x%02X", buf[i]));
+    }
+    System.out.println(sb.toString());
+  }
+
 }

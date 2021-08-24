@@ -100,6 +100,13 @@ public class KMError {
   //Generic Unknown error.
   public static final short GENERIC_UNKNOWN_ERROR = 10013;
 
+  // Remote key provisioning error codes.
+  public static final short STATUS_FAILED = 32000;
+  public static final short STATUS_INVALID_MAC = 32001;
+  public static final short STATUS_PRODUCTION_KEY_IN_TEST_REQUEST = 32002;
+  public static final short STATUS_TEST_KEY_IN_PRODUCTION_REQUEST = 32003;
+  public static final short STATUS_INVALID_EEK = 32004;
+  public static final short INVALID_STATE = 32005;
 
   public static short translate(short err) {
     switch(err) {
