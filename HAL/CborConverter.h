@@ -82,6 +82,13 @@ class CborConverter {
                              vector<vector<uint8_t>>& data);
 
     bool addTimeStampToken(Array& array, const TimeStampToken& token);
+
+    bool getMapItem(const std::unique_ptr<Item>& item, const uint32_t pos,
+                             Map& map);
+    
+    bool getArrayItem(const std::unique_ptr<Item>& item, const uint32_t pos,
+                             Array& array);
+
     inline bool getErrorCode(const std::unique_ptr<Item>& item, const uint32_t pos,
                              keymaster_error_t& errorCode) {
         uint64_t errorVal;

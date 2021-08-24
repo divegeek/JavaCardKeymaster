@@ -26,7 +26,7 @@
 #include "JavacardSecureElement.h"
 #include "JavacardSharedSecret.h"
 #include "keymint_utils.h"
-//#include "JavacardRemotelyProvisionedComponentDevice.h"
+#include "JavacardRemotelyProvisionedComponentDevice.h"
 #include <SocketTransport.h>
 
 using aidl::android::hardware::security::keymint::JavacardKeyMintDevice;
@@ -55,7 +55,7 @@ int main() {
     // Add Shared Secret Service
     addService<JavacardSharedSecret>(card);
     // Add Remotely Provisioned Component Service
-    //  addService<JavacardRemotelyProvisionedComponentDevice>(keyMint);
+    addService<JavacardRemotelyProvisionedComponentDevice>(card);
 
     ABinderProcess_joinThreadPool();
     return EXIT_FAILURE;  // should not reach

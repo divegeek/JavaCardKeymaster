@@ -3,4 +3,8 @@
         <name>android.hardware.security.keymint</name>
         <fqname>IKeyMintDevice/strongbox</fqname>
     </hal>
+   <hal format="aidl">
+        <name>android.hardware.security.keymint</name>
+        <fqname>IRemotelyProvisionedComponent/strongbox</fqname>
+    </hal>
 </manifest>
