@@ -59,6 +59,7 @@ enum class OperationType {
     PUBLIC_OPERATION = 0,
     /* Private operations are processed inside strongbox */
     PRIVATE_OPERATION = 1,
+    UNKNOWN = 2,
 };
 
 
@@ -116,7 +117,7 @@ protected:
                                    uint64_t& operationHandle,
                                    OperationType& operType);
  
-    ErrorCode abortOperation(uint64_t operationHandle, bool privateOperation);
+    ErrorCode abortOperation(uint64_t operationHandle, OperationType operType);
 
     ErrorCode abortPublicKeyOperation(uint64_t operationHandle);
 
