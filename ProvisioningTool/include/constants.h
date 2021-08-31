@@ -25,12 +25,10 @@
 
 #define SUCCESS 0
 #define FAILURE 1
-#define KEYMASTER_VERSION 4.1
-#define KEYMINT_VERSION 5
 #define P1_40 0x40
 #define P1_50 0x50
 #define APDU_CLS 0x80
-#define APDU_P1  KEYMINT_VERSION
+#define APDU_P1  0x50
 #define APDU_P2  0x00
 #define INS_BEGIN_KM_CMD 0x00
 #define APDU_RESP_STATUS_OK 0x9000

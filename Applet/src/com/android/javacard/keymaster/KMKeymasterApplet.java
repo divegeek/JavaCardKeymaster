@@ -473,6 +473,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_FINISH_SEND_DATA_CMD:
         case INS_GET_RESPONSE_CMD:
           rkp.process(apduIns, apdu);
+          break;
         default:
           ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
@@ -3344,7 +3345,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
     }
   }
-  protected short getBootPatchLevel(byte[] scratchPad){
+  protected static short getBootPatchLevel(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad,(short)0, BOOT_PATCH_LVL_SIZE, (byte)0);
     short len = seProvider.getBootPatchLevel(scratchPad,(short)0);
     if(len != BOOT_PATCH_LVL_SIZE){
@@ -3353,7 +3354,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return KMInteger.uint_32(scratchPad, (short)0);
   }
 
-  private void makeKeyCharacteristics(byte[] scratchPad) {
+  private static void makeKeyCharacteristics(byte[] scratchPad) {
     short osVersion = repository.getOsVersion();
     short osPatch = repository.getOsPatch();
     short vendorPatch = repository.getVendorPatchLevel();
@@ -3649,6 +3650,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     generateECKeys(scratchPad);
     // create key blob
     data[ORIGIN] = KMType.GENERATED;
+    makeKeyCharacteristics(scratchPad);
     createEncryptedKeyBlob(scratchPad);
   }
   public static short getPubKey() {

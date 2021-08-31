@@ -283,6 +283,10 @@ public class RemotelyProvisionedComponentDevice {
     try {
       // The prior state can be BEGIN or UPDATE
       validateState((byte) (BEGIN | UPDATE));
+      if (data[getEntry(TOTAL_KEYS_TO_SIGN)] <= data[getEntry(KEYS_TO_SIGN_COUNT)]) {
+        // Mismatch in the number of keys sent.
+        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      }
       short headers = KMCoseHeaders.exp();
       short arrInst = KMArray.instance((short) 4);
       KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
@@ -364,7 +368,9 @@ public class RemotelyProvisionedComponentDevice {
     try {
       // The prior state can be BEGIN or UPDATE
       validateState((byte) (BEGIN | UPDATE));
-      short challenge = KMKeymasterApplet.receiveIncoming(apdu, KMByteBlob.exp());
+      short arr = KMArray.instance((short) 1);
+      KMArray.cast(arr).add((short) 0, KMByteBlob.exp());
+      short challenge = KMKeymasterApplet.receiveIncoming(apdu, arr);
       // Store the challenge in the data table.
       short dataEntryIndex = createEntry(CHALLENGE, KMByteBlob.cast(challenge).length());
       Util.arrayCopyNonAtomic(

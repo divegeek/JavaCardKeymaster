@@ -94,10 +94,7 @@ JavacardRemotelyProvisionedComponentDevice::generateEcdsaP256KeyPair(bool testMo
 ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::beginSendData(
     bool testMode, const std::vector<MacedPublicKey>& keysToSign) {
-    uint32_t totalEncodedSize;
-    if (0 == (totalEncodedSize = coseKeyEncodedSize(keysToSign))) {
-        return km_utils::kmError2ScopedAStatus(kStatusFailed);
-    }
+    uint32_t totalEncodedSize = coseKeyEncodedSize(keysToSign);
     cppbor::Array array;
     array.add(keysToSign.size());
     array.add(totalEncodedSize);
