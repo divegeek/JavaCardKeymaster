@@ -26,7 +26,32 @@ namespace aidl::android::hardware::security::keymint {
 using namespace cppcose;
 using namespace keymaster;
 using namespace cppbor;
+// RKP error codes defined in keymint applet.
+constexpr keymaster_error_t kStatusFailed = static_cast<keymaster_error_t>(32000);
+constexpr keymaster_error_t kStatusInvalidMac = static_cast<keymaster_error_t>(32001);
+constexpr keymaster_error_t kStatusProductionKeyInTestRequest = static_cast<keymaster_error_t>(32002);
+constexpr keymaster_error_t kStatusTestKeyInProductionRequest = static_cast<keymaster_error_t>(32003);
+constexpr keymaster_error_t kStatusInvalidEek = static_cast<keymaster_error_t>(32004);
+constexpr keymaster_error_t kStatusInvalidState = static_cast<keymaster_error_t>(32005);
+
 namespace {
+
+keymaster_error_t translateRkpErrorCode(keymaster_error_t error) {
+    switch(static_cast<int32_t>(-error)) {
+        case kStatusFailed:
+        case kStatusInvalidState:
+            return static_cast<keymaster_error_t>(BnRemotelyProvisionedComponent::STATUS_FAILED);
+        case kStatusInvalidMac:
+            return static_cast<keymaster_error_t>(BnRemotelyProvisionedComponent::STATUS_INVALID_MAC);
+        case kStatusProductionKeyInTestRequest:
+            return static_cast<keymaster_error_t>(BnRemotelyProvisionedComponent::STATUS_PRODUCTION_KEY_IN_TEST_REQUEST);
+        case kStatusTestKeyInProductionRequest:
+            return static_cast<keymaster_error_t>(BnRemotelyProvisionedComponent::STATUS_TEST_KEY_IN_PRODUCTION_REQUEST);
+        case kStatusInvalidEek:
+            return static_cast<keymaster_error_t>(BnRemotelyProvisionedComponent::STATUS_INVALID_EEK);
+    }
+    return error;
+}
 
 ScopedAStatus defaultHwInfo(RpcHardwareInfo* info) {
     info->versionNumber = 1;
@@ -72,7 +97,7 @@ JavacardRemotelyProvisionedComponentDevice::getHardwareInfo(RpcHardwareInfo* inf
     return ScopedAStatus::ok();
 }
 
-ScopedAStatus 
+ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::generateEcdsaP256KeyPair(bool testMode,
                                                 MacedPublicKey* macedPublicKey,
                                                 std::vector<uint8_t>* privateKeyHandle) {
@@ -81,7 +106,7 @@ JavacardRemotelyProvisionedComponentDevice::generateEcdsaP256KeyPair(bool testMo
     auto [item, err] = card_->sendRequest(Instruction::INS_GENERATE_RKP_KEY_CMD, array);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in sending generateEcdsaP256KeyPair.";
-        return km_utils::kmError2ScopedAStatus(err);
+        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
     if (!cbor_.getBinaryArray(item, 1, macedPublicKey->macedKey) ||
         !cbor_.getBinaryArray(item, 2, *privateKeyHandle)) {
@@ -102,7 +127,7 @@ JavacardRemotelyProvisionedComponentDevice::beginSendData(
     auto [_, err] = card_->sendRequest(Instruction::INS_BEGIN_SEND_DATA_CMD, array);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in beginSendData.";
-        return km_utils::kmError2ScopedAStatus(err);
+        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
     return ScopedAStatus::ok();
 }
@@ -116,7 +141,7 @@ JavacardRemotelyProvisionedComponentDevice::updateMacedKey(
         auto [_, err] = card_->sendRequest(Instruction::INS_UPDATE_KEY_CMD, array);
         if (err != KM_ERROR_OK) {
             LOG(ERROR) << "Error in updateMacedKey.";
-            return km_utils::kmError2ScopedAStatus(err);
+            return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
         }
     }
     return ScopedAStatus::ok();
@@ -130,7 +155,7 @@ JavacardRemotelyProvisionedComponentDevice::updateChallenge(
     auto [_, err] = card_->sendRequest(Instruction::INS_UPDATE_CHALLENGE_CMD, array);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in updateChallenge.";
-        return km_utils::kmError2ScopedAStatus(err);
+        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
     return ScopedAStatus::ok();
 }
@@ -142,7 +167,7 @@ JavacardRemotelyProvisionedComponentDevice::updateEEK(
     auto [_, err] = card_->sendRequest(Instruction::INS_UPDATE_EEK_CHAIN_CMD, eekChain);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in updateEEK.";
-        return km_utils::kmError2ScopedAStatus(err);
+        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
     return ScopedAStatus::ok();
 }
@@ -152,13 +177,16 @@ JavacardRemotelyProvisionedComponentDevice::finishSendData(
     std::vector<uint8_t>* keysToSignMac, DeviceInfo* deviceInfo,
     std::vector<uint8_t>& coseEncryptProtectedHeader, cppbor::Map& coseEncryptUnProtectedHeader,
     std::vector<uint8_t>& partialCipheredData, uint32_t& respFlag) {
+
+    std::vector<uint8_t> decodedKeysToSignMac;
+    std::vector<uint8_t> decodedDeviceInfo;
     auto [item, err] = card_->sendRequest(Instruction::INS_FINISH_SEND_DATA_CMD);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in finishSendData.";
-        return km_utils::kmError2ScopedAStatus(err);
+        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
-    if (!cbor_.getBinaryArray(item, 1, *keysToSignMac) ||
-        !cbor_.getBinaryArray(item, 2, deviceInfo->deviceInfo) ||
+    if (!cbor_.getBinaryArray(item, 1, decodedKeysToSignMac) ||
+        !cbor_.getBinaryArray(item, 2, decodedDeviceInfo) ||
         !cbor_.getBinaryArray(item, 3, coseEncryptProtectedHeader) ||
         !cbor_.getMapItem(item, 4, coseEncryptUnProtectedHeader) ||
         !cbor_.getBinaryArray(item, 5, partialCipheredData) ||
@@ -166,6 +194,8 @@ JavacardRemotelyProvisionedComponentDevice::finishSendData(
          LOG(ERROR) << "Error in decoding og response in finishSendData.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    *keysToSignMac = decodedKeysToSignMac;
+    deviceInfo->deviceInfo = decodedDeviceInfo;
     return ScopedAStatus::ok();
 }
 
@@ -173,10 +203,10 @@ ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::getResponse(
     std::vector<uint8_t>& partialCipheredData, cppbor::Array& recepientStructure,
     uint32_t& respFlag) {
-    auto [item, err] = card_->sendRequest(Instruction::INS_FINISH_SEND_DATA_CMD);
+    auto [item, err] = card_->sendRequest(Instruction::INS_GET_RESPONSE_CMD);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in getResponse.";
-        return km_utils::kmError2ScopedAStatus(err);
+        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
     if (!cbor_.getBinaryArray(item, 1, partialCipheredData) ||
         !cbor_.getArrayItem(item, 2, recepientStructure) ||
