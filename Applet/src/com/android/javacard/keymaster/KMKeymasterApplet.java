@@ -95,7 +95,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   };
 
 
-  public static final short MAX_COSE_BUF_SIZE = (short) 512;
+  public static final short MAX_COSE_BUF_SIZE = (short) 1024;
   // Top 32 commands are reserved for provisioning.
   private static final byte KEYMINT_CMD_APDU_START = 0x20;
 
@@ -472,6 +472,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_UPDATE_KEY_CMD:
         case INS_FINISH_SEND_DATA_CMD:
         case INS_GET_RESPONSE_CMD:
+        case INS_GET_RKP_HARDWARE_INFO:
           rkp.process(apduIns, apdu);
           break;
         default:
@@ -3747,13 +3748,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       encodedLen = KMKeymasterApplet.encodeToApduBuffer(signStructure, scratchPad,
           keySize, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
 
-      System.out.println("Signature Input:");
-      print(scratchPad, keySize, encodedLen);
-      System.out.println("Signature:");
-      print(KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getBuffer(),
-          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getStartOff(),
-          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).length());
-
       if (!seProvider.ecVerify256(scratchPad, (short) 0, keySize, scratchPad, keySize, encodedLen,
           KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getBuffer(),
           KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getStartOff(),
@@ -3764,13 +3758,4 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     return prevCoseKey;
   }
-
-  static void print(byte[] buf, short start, short length) {
-    StringBuilder sb = new StringBuilder();
-    for (int i = start; i < (start + length); i++) {
-      sb.append(String.format(" 0x%02X", buf[i]));
-    }
-    System.out.println(sb.toString());
-  }
-
 }

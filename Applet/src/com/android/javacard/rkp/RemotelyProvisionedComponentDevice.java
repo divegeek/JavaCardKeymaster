@@ -283,17 +283,16 @@ public class RemotelyProvisionedComponentDevice {
     try {
       // The prior state can be BEGIN or UPDATE
       validateState((byte) (BEGIN | UPDATE));
-      if (data[getEntry(TOTAL_KEYS_TO_SIGN)] <= data[getEntry(KEYS_TO_SIGN_COUNT)]) {
-        // Mismatch in the number of keys sent.
-        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-      }
+      validateKeysToSignCount();
       short headers = KMCoseHeaders.exp();
       short arrInst = KMArray.instance((short) 4);
       KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
       KMArray.cast(arrInst).add((short) 1, headers);
       KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
       KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
-      arrInst = KMKeymasterApplet.receiveIncoming(apdu, arrInst);
+      short arr = KMArray.exp(arrInst);
+      arr = KMKeymasterApplet.receiveIncoming(apdu, arr);
+      arrInst = KMArray.cast(arr).get((short) 0);
       // Re-purpose the apdu buffer as scratch pad.
       byte[] scratchPad = apdu.getBuffer();
 
@@ -335,7 +334,7 @@ public class RemotelyProvisionedComponentDevice {
       KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
       KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
       short arrSignPtr = KMArray.exp(arrInst);
-      arrInst = KMKeymasterApplet.receiveIncoming(apdu, arrInst);
+      arrInst = KMKeymasterApplet.receiveIncoming(apdu, arrSignPtr);
       // Re-purpose the apdu buffer as scratch pad.
       byte[] scratchPad = apdu.getBuffer();
       // Validate eek chain.
@@ -370,8 +369,9 @@ public class RemotelyProvisionedComponentDevice {
       validateState((byte) (BEGIN | UPDATE));
       short arr = KMArray.instance((short) 1);
       KMArray.cast(arr).add((short) 0, KMByteBlob.exp());
-      short challenge = KMKeymasterApplet.receiveIncoming(apdu, arr);
+      arr = KMKeymasterApplet.receiveIncoming(apdu, arr);
       // Store the challenge in the data table.
+      short challenge = KMArray.cast(arr).get((short) 0);
       short dataEntryIndex = createEntry(CHALLENGE, KMByteBlob.cast(challenge).length());
       Util.arrayCopyNonAtomic(
           KMByteBlob.cast(challenge).getBuffer(),
@@ -423,11 +423,14 @@ public class RemotelyProvisionedComponentDevice {
       short partialCipherText = KMByteBlob.instance(scratchPad, (short) 0, partialPayloadLen);
       short coseEncryptProtectedHeader = getCoseEncryptProtectedHeader(scratchPad);
       short coseEncryptUnProtectedHeader = getCoseEncryptUnprotectedHeader(scratchPad, nonce);
+      len = KMKeymasterApplet.encodeToApduBuffer(deviceInfo, scratchPad,
+              (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+      short encodedDeviceInfo =  KMByteBlob.instance(scratchPad, (short) 0, len);
       updateState(FINISH);
       short arr = KMArray.instance((short) 7);
       KMArray.cast(arr).add((short) 0, KMInteger.uint_16(KMError.OK));
       KMArray.cast(arr).add((short) 1, pubKeysToSignMac);
-      KMArray.cast(arr).add((short) 2, deviceInfo);
+      KMArray.cast(arr).add((short) 2, encodedDeviceInfo);
       KMArray.cast(arr).add((short) 3, coseEncryptProtectedHeader);
       KMArray.cast(arr).add((short) 4, coseEncryptUnProtectedHeader);
       KMArray.cast(arr).add((short) 5, partialCipherText);
@@ -453,20 +456,23 @@ public class RemotelyProvisionedComponentDevice {
         case START_PROCESSING:
         case PROCESSING_BCC_IN_PROGRESS:
           len = processBcc(scratchPad);
+          updateState(GET_RESPONSE);
           break;
         case PROCESSING_BCC_COMPLETE:
         case PROCESSING_ACC_IN_PROGRESS:
           len = processAdditionalCertificateChain(scratchPad);
+          updateState(GET_RESPONSE);
           break;
         case PROCESSING_ACC_COMPLETE:
           recipientStructure = processRecipientStructure(scratchPad);
           len = processFinalData(scratchPad);
           moreData = NO_DATA;
+          releaseOperation();
+          clearDataTable();
           break;
         default:
           KMException.throwIt(KMError.INVALID_STATE);
       }
-      updateState(GET_RESPONSE);
       short data = KMByteBlob.instance(scratchPad, (short) 0, len);
       short arr = KMArray.instance((short) 4);
       KMArray.cast(arr).add((short) 0, KMInteger.uint_16(KMError.OK));
@@ -522,7 +528,6 @@ public class RemotelyProvisionedComponentDevice {
     byte[] empty = {};
     short len =
         ((KMOperation) operation[0]).finish(empty, (short) 0, (short) 0, scratchPad, (short) 0);
-    releaseOperation();
     return len;
   }
 
@@ -663,6 +668,18 @@ public class RemotelyProvisionedComponentDevice {
       KMException.throwIt(KMError.STATUS_INVALID_EEK);
     }
     return leafPubKey;
+  }
+
+  private void validateKeysToSignCount() {
+    short index = getEntry(KEYS_TO_SIGN_COUNT);
+    short keysToSignCount = 0;
+    if (index != 0) {
+      keysToSignCount = Util.getShort(data, index);
+    }
+    if (Util.getShort(data, getEntry(TOTAL_KEYS_TO_SIGN)) <= keysToSignCount) {
+      // Mismatch in the number of keys sent.
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
   }
 
   private void validateState(byte expectedState) {
