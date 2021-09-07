@@ -31,43 +31,19 @@ index 0b779eee4..33bd0d97d 100644
      <hal format="hidl" optional="true">
          <name>android.hardware.sensors</name>
          <version>1.0</version>
-diff --git a/security/keymint/aidl/vts/functional/Android.bp b/security/keymint/aidl/vts/functional/Android.bp
-index ff6a6f807..91439538f 100644
---- a/security/keymint/aidl/vts/functional/Android.bp
-+++ b/security/keymint/aidl/vts/functional/Android.bp
-@@ -51,8 +51,8 @@ cc_test {
-         "keymint_vts_defaults",
-     ],
-     srcs: [
--        "AttestKeyTest.cpp",
--        "DeviceUniqueAttestationTest.cpp",
-+        //"AttestKeyTest.cpp",
-+        //"DeviceUniqueAttestationTest.cpp",
-         "KeyMintTest.cpp",
-     ],
-     static_libs: [
 diff --git a/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp b/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
-index 38f358686..f8a41405e 100644
+index 38f358686..fe6045e66 100644
 --- a/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
 +++ b/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
-@@ -18,6 +18,7 @@
- 
- #include <AndroidRemotelyProvisionedComponentDevice.h>
- #include <aidl/android/hardware/security/keymint/IRemotelyProvisionedComponent.h>
-+#include <aidl/android/hardware/security/keymint/RpcHardwareInfo.h>
- #include <aidl/android/hardware/security/keymint/SecurityLevel.h>
- #include <android/binder_manager.h>
- #include <cppbor_parse.h>
-@@ -164,6 +165,8 @@ class VtsRemotelyProvisionedComponentTests : public testing::TestWithParam<std::
+@@ -164,6 +164,7 @@ class VtsRemotelyProvisionedComponentTests : public testing::TestWithParam<std::
              provisionable_ = IRemotelyProvisionedComponent::fromBinder(binder);
          }
          ASSERT_NE(provisionable_, nullptr);
-+        auto status = provisionable_->getHardwareInfo(&rpcHardwareInfo);
-+        ASSERT_TRUE(status.isOk());
++        ASSERT_TRUE(provisionable_->getHardwareInfo(&rpcHardwareInfo).isOk());
      }
  
      static vector<string> build_params() {
-@@ -173,6 +176,7 @@ class VtsRemotelyProvisionedComponentTests : public testing::TestWithParam<std::
+@@ -173,6 +174,7 @@ class VtsRemotelyProvisionedComponentTests : public testing::TestWithParam<std::
  
    protected:
      std::shared_ptr<IRemotelyProvisionedComponent> provisionable_;
@@ -75,7 +51,11 @@ index 38f358686..f8a41405e 100644
  };
  
  using GenerateKeyTests = VtsRemotelyProvisionedComponentTests;
-@@ -277,7 +281,7 @@ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+@@ -273,11 +275,10 @@ TEST_P(GenerateKeyTests, generateEcdsaP256Key_testMode) {
+ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+   protected:
+     CertificateRequestTest() : eekId_(string_to_bytevec("eekid")), challenge_(randomBytes(32)) {
+-        generateTestEekChain(3);
      }
  
      void generateTestEekChain(size_t eekLength) {
@@ -84,16 +64,85 @@ index 38f358686..f8a41405e 100644
          EXPECT_TRUE(chain) << chain.message();
          if (chain) testEekChain_ = chain.moveValue();
          testEekLength_ = eekLength;
+@@ -298,6 +299,17 @@ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+         }
+     }
+ 
++    ErrMsgOr<bytevec> getSessionKey(ErrMsgOr<std::pair<bytevec, bytevec>>& senderPubkey) {
++        if (rpcHardwareInfo.supportedEekCurve == RpcHardwareInfo::CURVE_25519 ||
++            rpcHardwareInfo.supportedEekCurve == RpcHardwareInfo::CURVE_NONE) {
++            return x25519_HKDF_DeriveKey(testEekChain_.last_pubkey, testEekChain_.last_privkey,
++                                         senderPubkey->first, false /* senderIsA */);
++        } else {
++            return ECDH_HKDF_DeriveKey(testEekChain_.last_pubkey, testEekChain_.last_privkey,
++                                       senderPubkey->first, false /* senderIsA */);
++        }
++    }
++
+     void checkProtectedData(const DeviceInfo& deviceInfo, const cppbor::Array& keysToSign,
+                             const bytevec& keysToSignMac, const ProtectedData& protectedData,
+                             std::vector<BccEntryData>* bccOutput = nullptr) {
+@@ -310,9 +322,7 @@ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+         ASSERT_TRUE(senderPubkey) << senderPubkey.message();
+         EXPECT_EQ(senderPubkey->second, eekId_);
+ 
+-        auto sessionKey =
+-                x25519_HKDF_DeriveKey(testEekChain_.last_pubkey, testEekChain_.last_privkey,
+-                                      senderPubkey->first, false /* senderIsA */);
++        auto sessionKey = getSessionKey(senderPubkey);
+         ASSERT_TRUE(sessionKey) << sessionKey.message();
+ 
+         auto protectedDataPayload =
+@@ -322,7 +332,7 @@ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+         auto [parsedPayload, __, payloadErrMsg] = cppbor::parse(*protectedDataPayload);
+         ASSERT_TRUE(parsedPayload) << "Failed to parse payload: " << payloadErrMsg;
+         ASSERT_TRUE(parsedPayload->asArray());
+-        EXPECT_EQ(parsedPayload->asArray()->size(), 2U);
++        EXPECT_LE(parsedPayload->asArray()->size(), 3U);
+ 
+         auto& signedMac = parsedPayload->asArray()->get(0);
+         auto& bcc = parsedPayload->asArray()->get(1);
+@@ -406,6 +416,7 @@ TEST_P(CertificateRequestTest, NewKeyPerCallInTestMode) {
+     bytevec keysToSignMac;
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
++    generateTestEekChain(3);
+     auto status = provisionable_->generateCertificateRequest(
+             testMode, {} /* keysToSign */, testEekChain_.chain, challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+@@ -502,6 +513,7 @@ TEST_P(CertificateRequestTest, NonEmptyRequestCorruptMac_testMode) {
+     bytevec keysToSignMac;
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
++    generateTestEekChain(3);
+     auto status = provisionable_->generateCertificateRequest(
+             testMode, {keyWithCorruptMac}, testEekChain_.chain, challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+@@ -594,6 +606,7 @@ TEST_P(CertificateRequestTest, NonEmptyRequest_prodKeyInTestCert) {
+     bytevec keysToSignMac;
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
++    generateTestEekChain(3);
+     auto status = provisionable_->generateCertificateRequest(
+             true /* testMode */, keysToSign_, testEekChain_.chain, challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+@@ -612,6 +625,7 @@ TEST_P(CertificateRequestTest, NonEmptyRequest_testKeyInProdCert) {
+     bytevec keysToSignMac;
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
++    generateTestEekChain(3);
+     auto status = provisionable_->generateCertificateRequest(
+             false /* testMode */, keysToSign_, testEekChain_.chain, challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
 diff --git a/security/keymint/support/Android.bp b/security/keymint/support/Android.bp
-index bdb4cdfea..1c61f560f 100644
+index bdb4cdfea..e1ca68809 100644
 --- a/security/keymint/support/Android.bp
 +++ b/security/keymint/support/Android.bp
-@@ -62,6 +62,8 @@ cc_library {
+@@ -62,6 +62,7 @@ cc_library {
          "libcppcose_rkp",
          "libcrypto",
          "libjsoncpp",
 +	"android.hardware.security.keymint-V1-ndk",
-+	"libkeymaster_portable",
      ],
  }
  
@@ -111,10 +160,10 @@ index 406b7a9b7..2249e6573 100644
  /**
   * Returns the CBOR-encoded, production Google Endpoint Encryption Key chain.
 diff --git a/security/keymint/support/remote_prov_utils.cpp b/security/keymint/support/remote_prov_utils.cpp
-index 0cbee5104..d232a20a3 100644
+index 0cbee5104..ff977f1c5 100644
 --- a/security/keymint/support/remote_prov_utils.cpp
 +++ b/security/keymint/support/remote_prov_utils.cpp
-@@ -17,15 +17,199 @@
+@@ -17,15 +17,195 @@
  #include <iterator>
  #include <tuple>
  
@@ -138,10 +187,6 @@ index 0cbee5104..d232a20a3 100644
 +using EC_KEY_Ptr = bssl::UniquePtr<EC_KEY>;
 +using EVP_PKEY_Ptr = bssl::UniquePtr<EVP_PKEY>;
 +using EVP_PKEY_CTX_Ptr = bssl::UniquePtr<EVP_PKEY_CTX>;
-+using EC_GROUP_Ptr = bssl::UniquePtr<EC_GROUP>;
-+using EC_POINT_Ptr = bssl::UniquePtr<EC_POINT>;
-+using BIGNUM_Ptr = bssl::UniquePtr<BIGNUM>;
-+using BN_CTX_Ptr = bssl::UniquePtr<BN_CTX>;
 +
 +ErrMsgOr<bytevec> ecKeyGetPrivateKey(const EC_KEY* ecKey) {
 +    // Extract private key.
@@ -314,7 +359,7 @@ index 0cbee5104..d232a20a3 100644
  bytevec kTestMacKey(32 /* count */, 0 /* byte value */);
  
  bytevec randomBytes(size_t numBytes) {
-@@ -34,7 +218,17 @@ bytevec randomBytes(size_t numBytes) {
+@@ -34,7 +214,17 @@ bytevec randomBytes(size_t numBytes) {
      return retval;
  }
  
@@ -333,7 +378,7 @@ index 0cbee5104..d232a20a3 100644
      if (length < 2) {
          return "EEK chain must contain at least 2 certs.";
      }
-@@ -43,42 +237,31 @@ ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId) {
+@@ -43,42 +233,31 @@ ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId) {
  
      bytevec prev_priv_key;
      for (size_t i = 0; i < length - 1; ++i) {
@@ -389,6 +434,58 @@ index 0cbee5104..d232a20a3 100644
                                          {} /* AAD */);
      if (!coseSign1) return coseSign1.moveMessage();
      eekChain.add(coseSign1.moveValue());
+@@ -122,7 +301,8 @@ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
+     }
+ 
+     auto& algorithm = parsedProtParams->asMap()->get(ALGORITHM);
+-    if (!algorithm || !algorithm->asInt() || algorithm->asInt()->value() != EDDSA) {
++    if (!algorithm || !algorithm->asInt() || (algorithm->asInt()->value() != EDDSA &&
++        algorithm->asInt()->value() != ES256)) {
+         return "Unsupported signature algorithm";
+     }
+ 
+@@ -136,16 +316,35 @@ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
+     if (!serializedKey || !serializedKey->asBstr()) return "Could not find key entry";
+ 
+     bool selfSigned = signingCoseKey.empty();
+-    auto key =
++    bytevec key;
++    if (algorithm->asInt()->value() == EDDSA) {
++        auto key =
+             CoseKey::parseEd25519(selfSigned ? serializedKey->asBstr()->value() : signingCoseKey);
+-    if (!key) return "Bad signing key: " + key.moveMessage();
++        if (!key) return "Bad signing key: " + key.moveMessage();
+ 
+-    bytevec signatureInput =
++        bytevec signatureInput =
+             cppbor::Array().add("Signature1").add(*protectedParams).add(aad).add(*payload).encode();
+ 
+-    if (!ED25519_verify(signatureInput.data(), signatureInput.size(), signature->value().data(),
+-                        key->getBstrValue(CoseKey::PUBKEY_X)->data())) {
+-        return "Signature verification failed";
++        if (!ED25519_verify(signatureInput.data(), signatureInput.size(), signature->value().data(),
++                            key->getBstrValue(CoseKey::PUBKEY_X)->data())) {
++            return "Signature verification failed";
++        }
++    } else { // P256
++        auto key =
++            CoseKey::parseP256(selfSigned ? serializedKey->asBstr()->value() : signingCoseKey);
++        if (!key || key->getBstrValue(CoseKey::PUBKEY_X)->empty() ||
++            key->getBstrValue(CoseKey::PUBKEY_Y)->empty()) {
++            return "Bad signing key: " + key.moveMessage();
++        }
++        auto publicKey = key->getEcPublicKey();
++        if (!publicKey) return publicKey.moveMessage();
++
++        bytevec signatureInput =
++            cppbor::Array().add("Signature1").add(*protectedParams).add(aad).add(*payload).encode();
++
++        if (!verifyEcdsaDigest(publicKey.moveValue(), sha256(signatureInput), signature->value())) {
++            return "Signature verification failed";
++        }
+     }
+ 
+     return serializedKey->asBstr()->value();
 diff --git a/security/keymint/support/remote_prov_utils_test.cpp b/security/keymint/support/remote_prov_utils_test.cpp
 index 8697c5190..0009bf713 100644
 --- a/security/keymint/support/remote_prov_utils_test.cpp
