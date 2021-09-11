@@ -155,12 +155,12 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     super.setOsPatchLevel(osPatchLevel);
     super.setVendorPatchLevel(vendorPatchLevel);
 
-    byte[] bootBlob = "00011122233344455566677788899900".getBytes();
+    byte[] bootBlob = new byte[32];
     short bootKey = KMByteBlob.instance(bootBlob, (short) 0,
         (short) bootBlob.length);
     short verifiedHash = KMByteBlob.instance(bootBlob, (short) 0,
         (short) bootBlob.length);
-    short bootState = KMType.VERIFIED_BOOT;
+    short bootState = KMType.UNVERIFIED_BOOT;
 
     ((KMJCardSimulator)seProvider).setBootPatchLevel(
         KMInteger.cast(bootPatchLevel).getBuffer(),
@@ -178,7 +178,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
         KMByteBlob.cast(verifiedHash).length());
 
     ((KMJCardSimulator)seProvider).setBootState((byte)bootState);
-    ((KMJCardSimulator)seProvider).setDeviceLocked(false);
+    ((KMJCardSimulator)seProvider).setDeviceLocked(true);
     super.reboot();
   }
 

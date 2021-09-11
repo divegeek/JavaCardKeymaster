@@ -137,11 +137,4 @@ public class KMByteBlob extends KMType {
   public void setLength(short len){
     Util.setShort(heap, (short)(getBaseOffset() + 1), len);
   }
-
-  public void decrementLength(short len) {
-    short length = Util.getShort(heap, (short) (getBaseOffset() + 1));
-    length = (short) (length - len);
-    Util.setShort(heap, (short) (getBaseOffset() + 1), length);
-  }
-
 }

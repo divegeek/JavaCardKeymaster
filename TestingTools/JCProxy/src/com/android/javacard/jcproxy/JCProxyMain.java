@@ -35,7 +35,7 @@ public class JCProxyMain {
       while (true) {
         try {
           Socket socket = serverSocket.accept();
-          System.out.println("\n\n\n\n\n");
+          System.out.println("\n");
           System.out.println("------------------------New client connected on "
                   + socket.getPort() + "--------------------");
           OutputStream output = null;

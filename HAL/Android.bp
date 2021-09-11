@@ -96,7 +96,7 @@ cc_binary {
         "service.cpp",
     ],
     required: [
-//        "RemoteProvisioner",
+        "RemoteProvisioner",
         "android.hardware.strongbox_keystore.xml",
     ],
 }
