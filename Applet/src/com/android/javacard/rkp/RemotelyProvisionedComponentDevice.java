@@ -145,18 +145,20 @@ public class RemotelyProvisionedComponentDevice {
       authorizedEekRoots =
           new Object[]
               {
-                  // TODO Add proper Google root certificate.
                   new byte[]{
                       0x04,
-                      (byte) 0xAF, 0x72, (byte) 0xD9, (byte) 0xA5, 0x5B, (byte) 0xCD, (byte) 0x82,
-                      (byte) 0x94, 0x08, (byte) 0xC1, 0x1E, (byte) 0xFD, (byte) 0x99, (byte) 0xEC,
-                      (byte) 0xC3, 0x65, 0x5C, 0x65, (byte) 0xF2, 0x59, (byte) 0xD6,
-                      (byte) 0xE4, (byte) 0x9C, (byte) 0xE9, 0x4A, (byte) 0xAD, 0x0C, 0x64, 0x23,
-                      0x7C, 0x0F, (byte) 0xFE,
-                      0x07, (byte) 0xB2, 0x5C, (byte) 0xAE, 0x70, 0x57, 0x2F, 0x43, (byte) 0xF3,
-                      0x1D, (byte) 0xA8, 0x44, 0x78, 0x10, (byte) 0xA7, (byte) 0x88, (byte) 0xBF,
-                      (byte) 0xD2, (byte) 0x81, 0x1A, (byte) 0xE6, (byte) 0x95, 0x4F, (byte) 0x97,
-                      0x24, 0x22, 0x40, 0x74, (byte) 0xB0, 0x00, (byte) 0xF7, 0x69
+                      (byte)0xf7, (byte)0x14, (byte)0x8a, (byte)0xdb, (byte)0x97, (byte)0xf4,
+                      (byte)0xcc, (byte)0x53, (byte)0xef, (byte)0xd2, (byte)0x64, (byte)0x11,
+                      (byte)0xc4, (byte)0xe3, (byte)0x75, (byte)0x1f, (byte)0x66, (byte)0x1f,
+                      (byte)0xa4, (byte)0x71, (byte)0x0c, (byte)0x6c, (byte)0xcf, (byte)0xfa,
+                      (byte)0x09, (byte)0x46, (byte)0x80, (byte)0x74, (byte)0x87, (byte)0x54,
+                      (byte)0xf2, (byte)0xad,
+                      (byte)0x5e, (byte)0x7f, (byte)0x5b, (byte)0xf6, (byte)0xec, (byte)0xe4,
+                      (byte)0xf6, (byte)0x19, (byte)0xcc, (byte)0xff, (byte)0x13, (byte)0x37,
+                      (byte)0xfd, (byte)0x0f, (byte)0xa1, (byte)0xc8, (byte)0x93, (byte)0xdb,
+                      (byte)0x18, (byte)0x06, (byte)0x76, (byte)0xc4, (byte)0x5d, (byte)0xe6,
+                      (byte)0xd7, (byte)0x6a, (byte)0x77, (byte)0x86, (byte)0xc3, (byte)0x2d,
+                      (byte)0xaf, (byte)0x8f
                   },
               };
     }
@@ -339,6 +341,9 @@ public class RemotelyProvisionedComponentDevice {
       KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
       short arrSignPtr = KMArray.exp(arrInst);
       arrInst = KMKeymasterApplet.receiveIncoming(apdu, arrSignPtr);
+      if (KMArray.cast(arrInst).length() == 0) {
+        KMException.throwIt(KMError.STATUS_INVALID_EEK);
+      }
       // Re-purpose the apdu buffer as scratch pad.
       byte[] scratchPad = apdu.getBuffer();
       // Validate eek chain.
