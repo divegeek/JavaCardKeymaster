@@ -526,6 +526,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @param padding is KMType.PADDING_NONE or KMType.RSA_OAEP, KMType.RSA_PKCS1_1_5_ENCRYPT,
    * KMType.RSA_PKCS1_1_5_SIGN or KMType.RSA_PSS.
    * @param digest is KMType.DIGEST_NONE or KMType.SHA2_256.
+   * @param mgfDigest is the MGF digest.
    * @param privKeyBuf is the private key in case of EC or private key exponent is case of RSA.
    * @param privKeyStart is the start of the private key.
    * @param privKeyLength is the length of the private key.
@@ -539,6 +540,7 @@ public interface KMSEProvider extends KMUpgradable {
       byte alg,
       byte padding,
       byte digest,
+      byte mgfDigest,
       byte[] privKeyBuf,
       short privKeyStart,
       short privKeyLength,

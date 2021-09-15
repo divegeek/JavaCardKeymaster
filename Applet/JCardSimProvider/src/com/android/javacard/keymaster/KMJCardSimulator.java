@@ -663,7 +663,7 @@ public class KMJCardSimulator implements KMSEProvider {
       byte[] inputDataBuf, short inputDataStart, short inputDataLength,
       byte[] outputDataBuf, short outputDataStart) {
     KMCipher cipher = createRsaDecipher(
-        KMType.RSA_OAEP, KMType.SHA2_256, secret, secretStart, secretLength, modBuffer, modOff,
+        KMType.RSA_OAEP, KMType.SHA1, secret, secretStart, secretLength, modBuffer, modOff,
         modLength);
     return cipher.doFinal(
         inputDataBuf, inputDataStart, inputDataLength, outputDataBuf, outputDataStart);
@@ -699,7 +699,7 @@ public class KMJCardSimulator implements KMSEProvider {
 
   @Override
   public KMOperation initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest,
-      byte[] privKeyBuf, short privKeyStart, short privKeyLength,
+      byte mgfDigest, byte[] privKeyBuf, short privKeyStart, short privKeyLength,
       byte[] pubModBuf, short pubModStart, short pubModLength) {
     if (alg == KMType.RSA) {
       switch (purpose) {
@@ -718,7 +718,7 @@ public class KMJCardSimulator implements KMSEProvider {
         case KMType.DECRYPT:
           KMCipher decipher =
               createRsaDecipher(
-                  padding, digest, privKeyBuf, privKeyStart, privKeyLength, pubModBuf, pubModStart,
+                  padding, mgfDigest, privKeyBuf, privKeyStart, privKeyLength, pubModBuf, pubModStart,
                   pubModLength);
           return new KMOperationImpl(decipher);
         default:
@@ -758,7 +758,25 @@ public class KMJCardSimulator implements KMSEProvider {
     return inst;
   }
 
-  private KMCipher createRsaOAEP256Cipher(byte mode, byte digest,
+  private MGF1ParameterSpec getMGF1ParamSpec(byte mgfDigest) {
+    switch (mgfDigest) {
+      case KMType.SHA1:
+        return MGF1ParameterSpec.SHA1;
+      case KMType.SHA2_256:
+        return MGF1ParameterSpec.SHA256;
+      case KMType.SHA2_224:
+        return MGF1ParameterSpec.SHA224;
+      case KMType.SHA2_384:
+        return MGF1ParameterSpec.SHA384;
+      case KMType.SHA2_512:
+        return MGF1ParameterSpec.SHA512;
+      default:
+        KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
+    }
+    return null;
+  }
+
+  private KMCipher createRsaOAEP256Cipher(byte mode, byte mgfDigest,
       byte[] secret, short secretStart, short secretLen,
       byte[] modBuffer, short modOff, short modLength) {
     // Convert byte arrays into keys
@@ -779,14 +797,8 @@ public class KMJCardSimulator implements KMSEProvider {
     try {
       KeyFactory kf = KeyFactory.getInstance("RSA");
       // Create cipher with oaep padding
-      OAEPParameterSpec oaepSpec = null;
-      if (digest == KMType.SHA2_256) {
-        oaepSpec = new OAEPParameterSpec("SHA-256", "MGF1",
-            MGF1ParameterSpec.SHA1, PSource.PSpecified.DEFAULT);
-      } else {
-        oaepSpec = new OAEPParameterSpec("SHA1", "MGF1",
-            MGF1ParameterSpec.SHA1, PSource.PSpecified.DEFAULT);
-      }
+      OAEPParameterSpec oaepSpec = new OAEPParameterSpec("SHA-256", "MGF1",
+            getMGF1ParamSpec(mgfDigest), PSource.PSpecified.DEFAULT);
       rsaCipher = javax.crypto.Cipher.getInstance("RSA/ECB/OAEPPadding", "SunJCE");
       if (mode == KMType.ENCRYPT) {
         RSAPublicKeySpec pubSpec = new RSAPublicKeySpec(modInt, expInt);

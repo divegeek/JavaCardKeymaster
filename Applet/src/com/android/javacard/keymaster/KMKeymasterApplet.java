@@ -2433,6 +2433,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             if (mgfDigest != KMType.SHA1 && mgfDigest != KMType.SHA2_256) {
               KMException.throwIt(KMError.UNSUPPORTED_MGF_DIGEST);
             }
+            op.setMgfDigest((byte) mgfDigest);
           }
         }
         op.setPadding((byte) param);
@@ -2625,6 +2626,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                     (byte)op.getAlgorithm(),
                     (byte)op.getPadding(),
                     (byte)op.getDigest(),
+                    (byte) op.getMgfDigest(),
                     KMByteBlob.cast(data[SECRET]).getBuffer(),
                     KMByteBlob.cast(data[SECRET]).getStartOff(),
                     KMByteBlob.cast(data[SECRET]).length(),
@@ -2679,6 +2681,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                     (byte)op.getAlgorithm(),
                     (byte)op.getPadding(),
                     (byte)op.getDigest(),
+                    KMType.DIGEST_NONE, /* No MGF Digest */
                     KMByteBlob.cast(data[SECRET]).getBuffer(),
                     KMByteBlob.cast(data[SECRET]).getStartOff(),
                     KMByteBlob.cast(data[SECRET]).length(),
@@ -2701,6 +2704,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                     (byte)op.getAlgorithm(),
                     (byte)op.getPadding(),
                     (byte)op.getDigest(),
+                    KMType.DIGEST_NONE, /* No MGF Digest */
                     KMByteBlob.cast(data[SECRET]).getBuffer(),
                     KMByteBlob.cast(data[SECRET]).getStartOff(),
                     KMByteBlob.cast(data[SECRET]).length(),

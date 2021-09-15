@@ -57,6 +57,7 @@ public class KMPKCS8Decoder {
     len = header(ASN1_INTEGER);
     short modulus = KMByteBlob.instance(len);
     getBytes(modulus);
+    updateModulus(modulus);
     len = header(ASN1_INTEGER);
     short pubKey = KMByteBlob.instance(len);
     getBytes(pubKey);
@@ -67,6 +68,16 @@ public class KMPKCS8Decoder {
     KMArray.cast(resp).add((short)1, pubKey);
     KMArray.cast(resp).add((short)2, privKey);
     return resp;
+  }
+  
+  private void updateModulus(short blob) {
+	  byte[] buffer = KMByteBlob.cast(blob).getBuffer();
+	  short startOff = KMByteBlob.cast(blob).getStartOff();
+	  short len = KMByteBlob.cast(blob).length();
+	  if(0 == buffer[startOff] && len > 256) {
+		  KMByteBlob.cast(blob).setStartOff(++startOff);
+		  KMByteBlob.cast(blob).setLength(--len);
+	  }
   }
 
   // Seq [Int, Blob]
