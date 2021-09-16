@@ -1274,17 +1274,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short attestationKeySecret = KMArray.cast(keyBlob).get(KEY_BLOB_SECRET);
     short attestParam = KMArray.cast(keyBlob).get(KEY_BLOB_PARAMS);
     attestParam = KMKeyCharacteristics.cast(attestParam).getStrongboxEnforced();
-      // If issuer is not present then it is an error
-      if (KMByteBlob.cast(issuer).length() <= 0) {
-        KMException.throwIt(KMError.MISSING_ISSUER_SUBJECT_NAME);
-      }
-
-      short attKeyPurpose =
-          KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, attestParam);
-      // If the attest key's purpose is not "attest key" then error.
-      if (!KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY)) {
-        KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
-      }
+    short attKeyPurpose =
+        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, attestParam);
+    // If the attest key's purpose is not "attest key" then error.
+    if (!KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY)) {
+      KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+    }
+    // If issuer is not present then it is an error
+    if (KMByteBlob.cast(issuer).length() <= 0) {
+      KMException.throwIt(KMError.MISSING_ISSUER_SUBJECT_NAME);
+    }
     short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, attestParam);
 
     if(KMEnumTag.cast(alg).getValue() == KMType.RSA) {
@@ -1577,7 +1576,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return KMByteBlob.instance(scratchPad,(short)0, VERIFIED_BOOT_HASH_SIZE);
   }
   // --------------------------------
-  private static void addAttestationIds(KMAttestationCert cert, byte[] scratchPad) {
+  // Only add the Attestation ids which are requested in the attestation parameters.
+  // If the requested attestation ids are not provisioned or deleted then
+  // throw CANNOT_ATTEST_IDS error. If there is mismatch in the attestation
+  // id values of both the requested parameters and the provisioned parameters
+  // then throw INVALID_TAG error.
+  private void addAttestationIds(KMAttestationCert cert, byte[] scratchPad) {
     final short[] attTags =
         new short[]{
             KMType.ATTESTATION_ID_BRAND,
@@ -1590,17 +1594,28 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMType.ATTESTATION_ID_SERIAL
         };
     byte index = 0;
+    short attIdTag;
+    short attIdTagValue;
+    short storedAttIdLen;
     while (index < (short) attTags.length) {
-      //attIdTag = repository.getAttId(mapToAttId(attTags[index]));
-      if(KMKeyParameters.findTag(KMType.BYTES_TAG,attTags[index],data[KEY_PARAMETERS]) == KMType.INVALID_VALUE){
-        index++;
-        continue;
-      }
-      short attIdTagLen = seProvider.getAttestationId(attTags[index],scratchPad, (short)0);
-      if (attIdTagLen != 0) {
-        short blob = KMByteBlob.instance(scratchPad, (short)0, attIdTagLen);
-        //attIdTag = KMByteTag.instance(attTags[index], blob);
-        //cert.extensionTag(attIdTag, true);
+      attIdTag = KMKeyParameters.findTag(KMType.BYTES_TAG, attTags[index], data[KEY_PARAMETERS]);
+      if (attIdTag != KMType.INVALID_VALUE) {
+        attIdTagValue = KMByteTag.cast(attIdTag).getValue();
+        storedAttIdLen = seProvider.getAttestationId(attTags[index],scratchPad, (short)0);
+        // Return CANNOT_ATTEST_IDS if Attestation IDs are not provisioned or
+        // Attestation IDs are deleted.
+        if (storedAttIdLen == 0) {
+          KMException.throwIt(KMError.CANNOT_ATTEST_IDS);
+        }
+        // Return INVALID_TAG if Attestation IDs does not match.
+        if ((storedAttIdLen != KMByteBlob.cast(attIdTagValue).length()) ||
+            (0 != Util.arrayCompare(scratchPad, (short) 0,
+                KMByteBlob.cast(attIdTagValue).getBuffer(),
+                KMByteBlob.cast(attIdTagValue).getStartOff(),
+                storedAttIdLen))) {
+          KMException.throwIt(KMError.INVALID_TAG);
+        }
+        short blob = KMByteBlob.instance(scratchPad, (short)0, storedAttIdLen);
         cert.extensionTag(KMByteTag.instance(attTags[index], blob), true);
       }
       index++;
@@ -3414,7 +3429,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (attKeyBlob != KMType.INVALID_VALUE && KMByteBlob.cast(attKeyBlob).length() > 0) {
       // No attestation challenge present then it is an error
       if (attChallenge == KMType.INVALID_VALUE || KMByteBlob.cast(attChallenge).length() <= 0) {
-        KMException.throwIt(KMError.INVALID_ARGUMENT);
+        KMException.throwIt(KMError.ATTESTATION_CHALLENGE_MISSING);
       } else {
         mode = KMType.ATTESTATION_CERT;
       }

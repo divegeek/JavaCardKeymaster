@@ -188,15 +188,25 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   }
 
   private void setDummyAttestationIds(){
-    final byte[] dummy = {'D','U','M','M','Y'};
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_BRAND,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_IMEI,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_DEVICE,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MEID,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MODEL,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MANUFACTURER,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_PRODUCT,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_SERIAL,dummy,(short)0,(short)dummy.length);
+    final byte[] brand = {'g','e','n','e','r','i','c'};
+    final byte[] device = {'v','s','o','c','_','x','8','6','_','6','4'};//vsoc_x86_64
+    final byte[] product =  //aosp_cf_x86_64_phone
+        {'a','o','s','p','_','c','f','_','x','8','6','_','6','4','_','p','h','o','n','e'};
+    final byte[] serial = {};
+    final byte[] imei = {'0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'};
+    final byte[] meid = {'0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'};
+    final byte[] manufacturer = {'G','o','o','g','l', 'e'};
+    final byte[] model = //"Cuttlefish x86_64 phone"
+        {'C','u','t','t','l', 'e','f','i','s','h',' ','x','8','6','_','6','4',
+            ' ','p','h','o','n','e'};
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_BRAND,brand,(short)0,(short)brand.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_IMEI,imei,(short)0,(short)imei.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_DEVICE,device,(short)0,(short)device.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MEID,meid,(short)0,(short)meid.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MODEL,model,(short)0,(short)model.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MANUFACTURER,manufacturer,(short)0,(short)manufacturer.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_PRODUCT,product,(short)0,(short)product.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_SERIAL,serial,(short)0,(short)serial.length);
   }
 
   private static void processProvisionDeviceUniqueKey(APDU apdu) {
