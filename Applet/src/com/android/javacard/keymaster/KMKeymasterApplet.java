@@ -1192,9 +1192,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private KMAttestationCert makeCommonCert(byte[] scratchPad) {
     short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, data[KEY_PARAMETERS]);
     boolean rsaCert = KMEnumTag.cast(alg).getValue() == KMType.RSA;
-    // Device unique attestation not supported
-    KMTag.assertAbsence(data[KEY_PARAMETERS],KMType.BOOL_TAG,KMType.DEVICE_UNIQUE_ATTESTATION,KMError.CANNOT_ATTEST_IDS);
-
     KMAttestationCert cert = seProvider.getAttestationCert(rsaCert);
 
     short subject = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.CERTIFICATE_SUBJECT_NAME, data[KEY_PARAMETERS]);
@@ -3447,6 +3444,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private  void generateAttestation(short attKeyBlob, short attKeyParam, byte[] scratchPad){
+    // Device unique attestation not supported
+    KMTag.assertAbsence(data[KEY_PARAMETERS],KMType.BOOL_TAG,KMType.DEVICE_UNIQUE_ATTESTATION,KMError.CANNOT_ATTEST_IDS);
     // Read attestation challenge if present
     short attChallenge =
         KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.ATTESTATION_CHALLENGE, data[KEY_PARAMETERS]);
