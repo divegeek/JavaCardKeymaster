@@ -730,6 +730,10 @@ public class KMJCardSimulator implements KMSEProvider {
           Signature signer =
               createEcSigner(digest, privKeyBuf, privKeyStart, privKeyLength);
           return new KMOperationImpl(signer);
+        case KMType.AGREE_KEY:
+          KeyAgreement keyAgreement =
+              createKeyAgreement(privKeyBuf, privKeyStart, privKeyLength);
+          return new KMOperationImpl(keyAgreement);
         default:
           KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
       }
@@ -877,6 +881,17 @@ public class KMJCardSimulator implements KMSEProvider {
     return inst;
   }
 
+  public KeyAgreement createKeyAgreement(byte[] secret, short secretStart,
+      short secretLength) {
+    ECPrivateKey key = (ECPrivateKey) KeyBuilder
+        .buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
+    key.setS(secret, secretStart, secretLength);
+
+    KeyAgreement keyAgreement = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH_PLAIN,
+        false);
+    keyAgreement.init(key);
+    return keyAgreement;
+  }
 
   public Signature createEcSigner(short digest, byte[] secret, short secretStart,
       short secretLength) {

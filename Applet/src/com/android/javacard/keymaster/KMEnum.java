@@ -111,7 +111,7 @@ public class KMEnum extends KMType {
               new byte[]{SELF_SIGNED_BOOT, VERIFIED_BOOT, UNVERIFIED_BOOT, FAILED_BOOT},
               new byte[]{DEVICE_LOCKED_TRUE, DEVICE_LOCKED_FALSE},
               new byte[]{USER_AUTH_NONE, PASSWORD, FINGERPRINT, BOTH},
-              new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
+              new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY, AGREE_KEY},
               new byte[]{P_224, P_256, P_384, P_521},
               new byte[]{IGNORE_INVALID_TAGS, FAIL_ON_INVALID_TAGS}
           };

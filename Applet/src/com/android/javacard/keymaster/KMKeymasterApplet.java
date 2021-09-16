@@ -1715,6 +1715,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       case KMType.DECRYPT:
         finishDecryptOperation(op, scratchPad);
         break;
+      case KMType.AGREE_KEY:
+        finishKeyAgreementOperation(op, scratchPad);
+        break;
     }
     if (data[OUTPUT_DATA] == KMType.INVALID_VALUE) {
       data[OUTPUT_DATA] = KMByteBlob.instance((short) 0);
@@ -1804,6 +1807,29 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                 KMByteBlob.cast(outData).getStartOff());
     KMByteBlob.cast(outData).setLength(len);
     data[OUTPUT_DATA] = outData;
+  }
+
+  private void finishKeyAgreementOperation(KMOperationState op, byte[] scratchPad) {
+    try {
+      KMPKCS8Decoder pkcs8 = KMPKCS8Decoder.instance();
+      short blob = pkcs8.decodeEcSubjectPublicKeyInfo(data[INPUT_DATA]);
+      short len = op.getOperation().finish(
+          KMByteBlob.cast(blob).getBuffer(),
+          KMByteBlob.cast(blob).getStartOff(),
+          KMByteBlob.cast(blob).length(),
+          scratchPad,
+          (short) 0
+      );
+      data[OUTPUT_DATA] = KMByteBlob.instance((short) 32);
+      Util.arrayCopyNonAtomic(
+          scratchPad,
+          (short) 0,
+          KMByteBlob.cast(data[OUTPUT_DATA]).getBuffer(),
+          KMByteBlob.cast(data[OUTPUT_DATA]).getStartOff(),
+          len);
+    } catch (CryptoException e) {
+      KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
   }
 
   private void finishSigningVerifyingOperation(KMOperationState op, byte[] scratchPad) {
@@ -2260,6 +2286,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       case KMType.DECRYPT:
         beginCipherOperation(op);
         break;
+      case KMType.AGREE_KEY:
+        beginKeyAgreementOperation(op);
+        break;
       default:
         KMException.throwIt(KMError.UNIMPLEMENTED);
         break;
@@ -2310,15 +2339,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     switch (op.getAlgorithm()) {
       case KMType.AES:
       case KMType.DES:
-        if (op.getPurpose() == KMType.SIGN || op.getPurpose() == KMType.VERIFY) {
+        if (op.getPurpose() == KMType.SIGN || op.getPurpose() == KMType.VERIFY ||
+            op.getPurpose() == KMType.AGREE_KEY) {
           KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
         }
         break;
       case KMType.EC:
-      case KMType.HMAC:
         if (op.getPurpose() == KMType.ENCRYPT || op.getPurpose() == KMType.DECRYPT) {
           KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
         }
+        break;
+      case KMType.HMAC:
+        if (op.getPurpose() == KMType.ENCRYPT || op.getPurpose() == KMType.DECRYPT ||
+            op.getPurpose() == KMType.AGREE_KEY) {
+          KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
+        }
+        break;
+      case KMType.RSA:
+        if (op.getPurpose() == KMType.AGREE_KEY)
+          KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
         break;
       default:
         break;
@@ -2364,7 +2403,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         break;
       case KMType.EC:
       case KMType.HMAC:
-        if (param == KMType.INVALID_VALUE) {
+        if (op.getPurpose() != KMType.AGREE_KEY && param == KMType.INVALID_VALUE) {
           KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
         }
         break;
@@ -2613,6 +2652,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMByteBlob.cast(data[IV]).length());
       }
     }
+  }
+
+  private void beginKeyAgreementOperation(KMOperationState op) {
+    if (op.getAlgorithm() != KMType.EC)
+      KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+
+    op.setOperation(
+        seProvider.initAsymmetricOperation(
+            (byte) op.getPurpose(),
+            (byte)op.getAlgorithm(),
+            (byte)op.getPadding(),
+            (byte)op.getDigest(),
+            KMType.DIGEST_NONE, /* No MGF1 Digest */
+            KMByteBlob.cast(data[SECRET]).getBuffer(),
+            KMByteBlob.cast(data[SECRET]).getStartOff(),
+            KMByteBlob.cast(data[SECRET]).length(),
+            null,
+            (short) 0,
+            (short) 0));
   }
 
   private void beginCipherOperation(KMOperationState op) {

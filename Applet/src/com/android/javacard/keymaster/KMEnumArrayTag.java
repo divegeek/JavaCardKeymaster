@@ -127,7 +127,7 @@ public class KMEnumArrayTag extends KMTag {
       // allowed tag values.
       enums =
           new Object[]{
-              new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY},
+              new byte[]{ENCRYPT, DECRYPT, SIGN, VERIFY, WRAP_KEY, ATTEST_KEY, AGREE_KEY},
               new byte[]{ECB, CBC, CTR, GCM},
               new byte[]{DIGEST_NONE, MD5, SHA1, SHA2_224, SHA2_256, SHA2_384, SHA2_512},
               new byte[]{

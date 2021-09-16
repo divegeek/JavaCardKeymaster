@@ -15,21 +15,31 @@
  */
 package com.android.javacard.keymaster;
 
+import javacard.security.KeyAgreement;
 import javacard.security.Signature;
 
 public class KMOperationImpl implements KMOperation {
 
   private KMCipher cipher;
   private Signature signature;
+  private KeyAgreement keyAgreement;
 
   public KMOperationImpl(KMCipher cipher) {
     this.cipher = cipher;
     this.signature = null;
+    this.keyAgreement = null;
   }
 
   public KMOperationImpl(Signature sign) {
     this.cipher = null;
     this.signature = sign;
+    this.keyAgreement = null;
+  }
+
+  public KMOperationImpl(KeyAgreement keyAgreement) {
+    this.cipher = null;
+    this.signature = null;
+    this.keyAgreement = keyAgreement;
   }
 
   @Override
@@ -48,8 +58,16 @@ public class KMOperationImpl implements KMOperation {
   @Override
   public short finish(byte[] inputDataBuf, short inputDataStart, short inputDataLength,
       byte[] outputDataBuf, short outputDataStart) {
-    return cipher
-        .doFinal(inputDataBuf, inputDataStart, inputDataLength, outputDataBuf, outputDataStart);
+    if (cipher != null) {
+      return cipher
+          .doFinal(inputDataBuf, inputDataStart, inputDataLength, outputDataBuf, outputDataStart);
+    } else if (keyAgreement != null) {
+     return keyAgreement.generateSecret(inputDataBuf, inputDataStart, inputDataLength,
+         outputDataBuf, outputDataStart);
+    } else {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    return 0;
   }
 
   @Override

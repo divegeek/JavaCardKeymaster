@@ -45,6 +45,29 @@ public class KMPKCS8Decoder {
     return decodeEcPrivateKey((short)1);
   }
 
+  public short decodeEcSubjectPublicKeyInfo(short blob) {
+    init(blob);
+    header(ASN1_SEQUENCE);
+    short len = header(ASN1_SEQUENCE);
+    short ecPublicInfo = KMByteBlob.instance(len);
+    getBytes(ecPublicInfo);
+    if(Util.arrayCompare(
+        KMByteBlob.cast(ecPublicInfo).getBuffer(),
+        KMByteBlob.cast(ecPublicInfo).getStartOff(),
+        EC_ALGORITHM,
+        (short)0,KMByteBlob.cast(ecPublicInfo).length()) !=0){
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    len = header(ASN1_BIT_STRING);
+    if(len < 1) KMException.throwIt(KMError.UNKNOWN_ERROR);
+    // TODO need to handle if unused bits are not zero
+    byte unusedBits = getByte();
+    if(unusedBits != 0) KMException.throwIt(KMError.UNIMPLEMENTED);
+    short pubKey = KMByteBlob.instance((short)(len -1));
+    getBytes(pubKey);
+    return pubKey;
+  }
+
   //Seq[Int,Int,Int,Int,<ignore rest>]
   public short decodeRsaPrivateKey(short version){
     short resp = KMArray.instance((short)3);
