@@ -96,8 +96,8 @@ constexpr char kLockProvision[] = "lock_provision";
 // TODO Modify according to keymint
 constexpr int kAttestationIdsCmd = INS_BEGIN_KM_CMD + 1;
 constexpr int kPresharedSecretCmd = INS_BEGIN_KM_CMD + 2;
-constexpr int kBootParamsCmd = INS_BEGIN_KM_CMD + 3;
-constexpr int kLockProvisionCmd = INS_BEGIN_KM_CMD + 4;
-constexpr int kGetProvisionStatusCmd = INS_BEGIN_KM_CMD + 5;
+constexpr int kLockProvisionCmd = INS_BEGIN_KM_CMD + 3;
+constexpr int kGetProvisionStatusCmd = INS_BEGIN_KM_CMD + 4;
+constexpr int kBootParamsCmd = INS_BEGIN_KM_CMD + 5;
 constexpr int kDeviceUniqueKeyCmd = INS_BEGIN_KM_CMD + 6;
 constexpr int kAdditionalCertChainCmd = INS_BEGIN_KM_CMD + 7;

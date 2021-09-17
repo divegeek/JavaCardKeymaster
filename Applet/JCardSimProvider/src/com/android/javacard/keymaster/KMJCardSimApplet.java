@@ -109,20 +109,24 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   }
 
   private void processProvisionAttestIdsCmd(APDU apdu) {
-
+    sendError(apdu, KMError.OK);
   }
 
   private void processProvisionPreSharedSecretCmd(APDU apdu) {
+    sendError(apdu, KMError.OK);
   }
 
   private void processGetProvisionStatusCmd(APDU apdu) {
+    sendError(apdu, KMError.OK);
   }
 
   private void processSetBootParamsCmd(APDU apdu) {
+    sendError(apdu, KMError.OK);
   }
 
   private void processLockProvisioningCmd(APDU apdu) {
     ((KMJCardSimulator)seProvider).setProvisionLocked(true);
+    sendError(apdu, KMError.OK);
   }
 
   private short validateApdu(APDU apdu) {

@@ -89,7 +89,7 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte PROCESSING_ACC_IN_PROGRESS = 0x08; // Additional certificate chain.
   private static final byte PROCESSING_ACC_COMPLETE = 0x0A;
   // data table
-  private static final short DATA_SIZE = 1024;
+  private static final short DATA_SIZE = 512;
   private static final short DATA_INDEX_SIZE = 11;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
