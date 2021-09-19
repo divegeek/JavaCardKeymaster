@@ -42,7 +42,6 @@ ScopedAStatus JavacardKeyMintOperation::updateAad(const vector<uint8_t>& input,
     cbor_.addTimeStampToken(request, timestampToken.value_or(TimeStampToken()));
     auto [item, err] = card_->sendRequest(Instruction::INS_UPDATE_AAD_OPERATION_CMD, request);
     if (err != KM_ERROR_OK) {
-        opHandle_ = 0;
         return km_utils::kmError2ScopedAStatus(err);
     }
     return ScopedAStatus::ok();
@@ -217,7 +216,6 @@ keymaster_error_t JavacardKeyMintOperation::sendUpdate(const vector<uint8_t>& in
     cbor_.addTimeStampToken(request, timestampToken);
     auto [item, error] = card_->sendRequest(Instruction::INS_UPDATE_OPERATION_CMD, request);
     if (error != KM_ERROR_OK) {
-        opHandle_ = 0;
         return error;
     }
     vector<uint8_t> respData;
@@ -240,7 +238,6 @@ keymaster_error_t JavacardKeyMintOperation::sendFinish(const vector<uint8_t>& da
     cbor_.addHardwareAuthToken(request, authToken);
     cbor_.addTimeStampToken(request, timestampToken);
     auto [item, err] = card_->sendRequest(Instruction::INS_FINISH_OPERATION_CMD, request);
-    opHandle_ = 0;
     if (err != KM_ERROR_OK) {
         return err;
     }
@@ -248,6 +245,7 @@ keymaster_error_t JavacardKeyMintOperation::sendFinish(const vector<uint8_t>& da
     if (!cbor_.getBinaryArray(item, 1, respData)) {
         return KM_ERROR_UNKNOWN_ERROR;
     }
+    opHandle_ = 0;
     output.insert(output.end(), respData.begin(), respData.end());
     return KM_ERROR_OK;
 }

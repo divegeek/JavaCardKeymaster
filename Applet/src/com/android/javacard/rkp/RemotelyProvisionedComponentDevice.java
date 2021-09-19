@@ -328,7 +328,6 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
-  // TODO Modify it handle key by key
   public void processUpdateEekChain(APDU apdu) {
     try {
       // The prior state can be BEGIN or UPDATE
@@ -694,7 +693,6 @@ public class RemotelyProvisionedComponentDevice {
   private void validateState(byte expectedState) {
     short dataEntryIndex = getEntry(GENERATE_CSR_PHASE);
     if (0 == (data[dataEntryIndex] & expectedState)) {
-      // TODO Handle this state in the HAL.
       KMException.throwIt(KMError.INVALID_STATE);
     }
   }
@@ -1407,84 +1405,4 @@ public class RemotelyProvisionedComponentDevice {
     KMArray.cast(arrPtr).add(tagIndex, KMBoolTag.instance(KMType.NO_AUTH_REQUIRED));
     return KMKeyParameters.instance(arrPtr);
   }
-/*
-  // BCC = [ DK_Pub, DKC]
-  public static short generateBcc(boolean testMode, byte[] scratchPad, short offset) {
-    if (!testMode && provisionStatus == PROVISION_STATUS_PROVISIONING_LOCKED) {
-      KMException.throwIt(KMError.STATUS_FAILED);
-    }
-    //KMDeviceUniqueKey deviceUniqueKey = getDeviceUniqueKey(testMode, scratchPad, offset);
-    KMDeviceUniqueKey deviceUniqueKey = seProvider.getDeviceUniqueKey(testMode);
-    short temp = deviceUniqueKey.getPublicKey(scratchPad, offset);
-    short coseKey =
-        KMCose.constructCoseKey(
-            KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
-            KMType.INVALID_VALUE,
-            KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
-            KMInteger.uint_8(KMCose.COSE_KEY_OP_VERIFY),
-            KMInteger.uint_8(KMCose.COSE_ECCURVE_256),
-            scratchPad,
-            offset,
-            temp,
-            KMType.INVALID_VALUE,
-            false
-        );
-    temp = encodeUsingApduBuffer(coseKey, scratchPad, offset, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    // Construct payload.
-    short payload =
-        KMCose.constructCoseCertPayload(
-            KMCosePairTextStringTag.instance(KMInteger.uint_8(KMCose.ISSUER),
-                KMTextString.instance(KMCose.TEST_ISSUER_NAME, (short) 0, (short) KMCose.TEST_ISSUER_NAME.length)),
-            KMCosePairTextStringTag.instance(KMInteger.uint_8(KMCose.SUBJECT),
-                KMTextString.instance(KMCose.TEST_SUBJECT_NAME, (short) 0, (short) KMCose.TEST_SUBJECT_NAME.length)),
-            KMCosePairByteBlobTag.instance(KMNInteger.uint_32(KMCose.SUBJECT_PUBLIC_KEY, (short) 0),
-                KMByteBlob.instance(scratchPad, offset, temp)),
-            KMCosePairByteBlobTag.instance(KMNInteger.uint_32(KMCose.KEY_USAGE, (short) 0),
-                KMByteBlob.instance(KMCose.KEY_USAGE_SIGN, (short) 0, (short) KMCose.KEY_USAGE_SIGN.length))
-        );
-    // temp temporarily holds the length of encoded cert payload.
-    temp = encodeUsingApduBuffer(payload, scratchPad, offset, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    payload = KMByteBlob.instance(scratchPad, offset, temp);
-
-    // protected header
-    short protectedHeader =
-        KMCose.constructHeaders(KMNInteger.uint_8(KMCose.COSE_ALG_ES256), KMType.INVALID_VALUE,
-            KMType.INVALID_VALUE, KMType.INVALID_VALUE);
-    // temp temporarily holds the length of encoded headers.
-    temp = encodeUsingApduBuffer(protectedHeader, scratchPad, offset, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    protectedHeader = KMByteBlob.instance(scratchPad, offset, temp);
-
-    //unprotected headers.
-    short arr = KMArray.instance((short) 0);
-    short unprotectedHeader = KMCoseHeaders.instance(arr);
-
-    // construct cose sign structure.
-    short coseSignStructure =
-        KMCose.constructCoseSignStructure(protectedHeader, KMByteBlob.instance((short) 0), payload);
-    // temp temporarily holds the length of encoded sign structure.
-    // Encode cose Sign_Structure.
-    temp = encodeUsingApduBuffer(coseSignStructure, scratchPad, offset, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    // do sign
-    short len =
-        seProvider.ecSign256(
-            deviceUniqueKey,
-            scratchPad,
-            offset,
-            temp,
-            scratchPad,
-            (short) (offset + temp)
-        );
-    coseSignStructure = KMByteBlob.instance(scratchPad, (short) (offset + temp), len);
-
-    // construct cose_sign1
-    short coseSign1 =
-        KMCose.constructCoseSign1(protectedHeader, unprotectedHeader, payload, coseSignStructure);
-
-    // [Cose_Key, Cose_Sign1]
-    short bcc = KMArray.instance((short) 2);
-    KMArray.cast(bcc).add((short) 0, coseKey);
-    KMArray.cast(bcc).add((short) 1, coseSign1);
-    return bcc;
-  }
- */
 }
