@@ -21,22 +21,23 @@ import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
- * This class represents either a Cose_key or Cose headers as defined in https://datatracker.ietf.org/doc/html/rfc8152
- * This is basically a map containing key value pairs. The label for the key can be (uint / int / tstr) and
- * the value can be of any type. But this class is confined to support only key and value types which are
- * required for remote key provisioning. So keys of type (int / uint) and values of type (int / uint / simple / bstr)
- * only are supported. KMCoseHeaders and KMCoseKey implements this class.
+ * This class represents either a Cose_key or Cose headers as defined in
+ * https://datatracker.ietf.org/doc/html/rfc8152 This is basically a map containing key value pairs.
+ * The label for the key can be (uint / int / tstr) and the value can be of any type. But this class
+ * is confined to support only key and value types which are required for remote key provisioning.
+ * So keys of type (int / uint) and values of type (int / uint / simple / bstr) only are supported.
+ * KMCoseHeaders and KMCoseKey implements this class.
  */
 public abstract class KMCoseMap extends KMType {
 
   public static byte[] scratchpad;
 
   /**
-   * This function creates an instance of either KMCoseHeaders or KMCoseKey based on the type information
-   * provided.
+   * This function creates an instance of either KMCoseHeaders or KMCoseKey based on the type
+   * information provided.
    *
    * @param typePtr type information of the underlying KMType.
-   * @param arrPtr  instance of KMArray.
+   * @param arrPtr instance of KMArray.
    * @return instance type of either KMCoseHeaders or KMCoseKey.
    */
   public static short createInstanceFromType(short typePtr, short arrPtr) {
@@ -97,69 +98,67 @@ public abstract class KMCoseMap extends KMType {
   }
 
   private static void createScratchBuffer() {
-    if (scratchpad == null)
+    if (scratchpad == null) {
       scratchpad = JCSystem.makeTransientByteArray((short) 120, JCSystem.CLEAR_ON_RESET);
-  }
-
-  // Bubble sort.
-  public static void canonicalizeCborMap(short map) {
-    short index = 0;
-    short innerIndex;
-    short length = KMMap.cast(map).length();
-    short firstKey;
-    short secondKey;
-    short firstKeyLen;
-    short secondKeyLen;
-    createScratchBuffer();
-    boolean flag = false;
-    while (index < length) {
-      innerIndex = 0;
-      while (innerIndex < (short) (length - index - 1)) {
-        firstKey = KMMap.cast(map).getKey(innerIndex);
-        firstKeyLen = KMKeymasterApplet.encoder.encode(firstKey, scratchpad, (short) 0);
-        secondKey = KMMap.cast(map).getKey((short) (innerIndex + 1));
-        secondKeyLen = KMKeymasterApplet.encoder.encode(secondKey, scratchpad, firstKeyLen);
-        if ((firstKeyLen > secondKeyLen) ||
-          ((firstKeyLen == secondKeyLen) &&
-            (0 < Util.arrayCompare(scratchpad, (short) 0, scratchpad, firstKeyLen, firstKeyLen)))) {
-          KMMap.cast(map).swap(innerIndex, (short) (innerIndex + 1));
-          flag = true;
-        }
-        innerIndex++;
-      }
-      if (!flag)
-        break;
-      index++;
     }
   }
-  // Bubble sort
+
   protected static void canonicalize(short arr) {
-    short index = 0;
-    short innerIndex;
-    short length = KMArray.cast(arr).length();
+    canonicalize(arr, KMArray.cast(arr).length());
+  }
+
+  private static void swap(short ptr, short firstIndex, short secondIndex) {
+    if (KMType.getType(ptr) == KMType.ARRAY_TYPE) {
+      KMArray.cast(ptr).swap(firstIndex, secondIndex);
+    } else {
+      KMMap.cast(ptr).swap(firstIndex, secondIndex);
+    }
+  }
+
+  private static boolean compareAndSwap(short ptr, short index) {
     short firstKey;
     short secondKey;
     short firstKeyLen;
     short secondKeyLen;
+    if (KMType.getType(ptr) == KMType.ARRAY_TYPE) {
+      firstKey = getKey(KMArray.cast(ptr).get(index));
+      secondKey = getKey(KMArray.cast(ptr).get((short) (index + 1)));
+    } else { // Map
+      firstKey = KMMap.cast(ptr).getKey(index);
+      secondKey = KMMap.cast(ptr).getKey((short) (index + 1));
+    }
+    firstKeyLen = KMKeymasterApplet.encoder.encode(firstKey, scratchpad, (short) 0);
+    secondKeyLen = KMKeymasterApplet.encoder.encode(secondKey, scratchpad, firstKeyLen);
+    if ((firstKeyLen > secondKeyLen) ||
+        ((firstKeyLen == secondKeyLen) &&
+            (0 < Util.arrayCompare(scratchpad, (short) 0, scratchpad, firstKeyLen, firstKeyLen)))) {
+      swap(ptr, index, (short) (index + 1));
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Canonicalizes using bubble sort.
+   *
+   * @param ptr instance pointer of either array or map.
+   * @param length length of the array or map instance.
+   */
+  public static void canonicalize(short ptr, short length) {
+    short index = 0;
+    short innerIndex = 0;
     createScratchBuffer();
-    boolean flag = false;
+    boolean swapped;
     while (index < length) {
+      swapped = false;
       innerIndex = 0;
       while (innerIndex < (short) (length - index - 1)) {
-        firstKey = getKey(KMArray.cast(arr).get(innerIndex));
-        firstKeyLen = KMKeymasterApplet.encoder.encode(firstKey, scratchpad, (short) 0);
-        secondKey = getKey(KMArray.cast(arr).get((short) (innerIndex + 1)));
-        secondKeyLen = KMKeymasterApplet.encoder.encode(secondKey, scratchpad, firstKeyLen);
-        if ((firstKeyLen > secondKeyLen) ||
-            ((firstKeyLen == secondKeyLen) &&
-                (0 < Util.arrayCompare(scratchpad, (short) 0, scratchpad, firstKeyLen, firstKeyLen)))) {
-          KMArray.cast(arr).swap(innerIndex, (short) (innerIndex + 1));
-          flag = true;
-        }
+        swapped |= compareAndSwap(ptr, innerIndex);
         innerIndex++;
       }
-      if (!flag)
+      if (!swapped) {
         break;
+      }
       index++;
     }
   }

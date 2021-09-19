@@ -132,7 +132,7 @@ public class KMMap extends KMType {
   }
 
   public void canonicalize() {
-    KMCoseMap.canonicalizeCborMap(instanceTable[KM_MAP_OFFSET]);
+    KMCoseMap.canonicalize(instanceTable[KM_MAP_OFFSET], length());
   }
 
   public short containedType() {
