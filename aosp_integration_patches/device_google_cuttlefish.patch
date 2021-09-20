@@ -1,39 +1,29 @@
 diff --git a/shared/device.mk b/shared/device.mk
-index 6cebe8ac9..a92183296 100644
+index c86840539..e61e5276b 100644
 --- a/shared/device.mk
 +++ b/shared/device.mk
-@@ -530,6 +530,11 @@ endif
+@@ -558,6 +558,9 @@ endif
   PRODUCT_PACKAGES += \
      $(LOCAL_KEYMINT_PRODUCT_PACKAGE)
  
 +PRODUCT_PACKAGES += \
 +    android.hardware.security.keymint-service.strongbox \
 +
-+
-+
  # Keymint configuration
+ ifneq ($(LOCAL_PREFER_VENDOR_APEX),true)
  PRODUCT_COPY_FILES += \
-     frameworks/native/data/etc/android.software.device_id_attestation.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.software.device_id_attestation.xml
-@@ -631,6 +636,7 @@ PRODUCT_PACKAGES += setup_wifi
- PRODUCT_VENDOR_PROPERTIES += ro.vendor.wifi_impl=virt_wifi
- endif
- 
-+
- # Host packages to install
- PRODUCT_HOST_PACKAGES += socket_vsock_proxy
- 
 diff --git a/shared/sepolicy/vendor/file_contexts b/shared/sepolicy/vendor/file_contexts
-index 72362dc1f..62e3ef768 100644
+index cebac258e..42d3ad6f9 100644
 --- a/shared/sepolicy/vendor/file_contexts
 +++ b/shared/sepolicy/vendor/file_contexts
-@@ -89,6 +89,7 @@
+@@ -93,6 +93,7 @@
  /vendor/bin/hw/android\.hardware\.input\.classifier@1\.0-service.default  u:object_r:hal_input_classifier_default_exec:s0
  /vendor/bin/hw/android\.hardware\.thermal@2\.0-service\.mock  u:object_r:hal_thermal_default_exec:s0
  /vendor/bin/hw/android\.hardware\.security\.keymint-service\.remote  u:object_r:hal_keymint_remote_exec:s0
 +/vendor/bin/hw/android\.hardware\.security\.keymint-service\.strongbox  u:object_r:hal_keymint_strongbox_exec:s0
  /vendor/bin/hw/android\.hardware\.keymaster@4\.1-service.remote  u:object_r:hal_keymaster_remote_exec:s0
  /vendor/bin/hw/android\.hardware\.gatekeeper@1\.0-service.remote  u:object_r:hal_gatekeeper_remote_exec:s0
- /vendor/bin/hw/android\.hardware\.oemlock-service.example u:object_r:hal_oemlock_default_exec:s0
+ /vendor/bin/hw/android\.hardware\.confirmationui@1\.0-service.cuttlefish  u:object_r:hal_confirmationui_cuttlefish_exec:s0
 diff --git a/shared/sepolicy/vendor/hal_keymint_strongbox.te b/shared/sepolicy/vendor/hal_keymint_strongbox.te
 new file mode 100644
 index 000000000..839fd1a6b
@@ -55,16 +45,16 @@ index 000000000..839fd1a6b
 +allow hal_keymint_strongbox port:tcp_socket { name_connect };
 +allow hal_keymint_strongbox vendor_data_file:file { open read getattr };
 diff --git a/shared/sepolicy/vendor/service_contexts b/shared/sepolicy/vendor/service_contexts
-index d20d026cf..8531d9e55 100644
+index d20d026cf..b8f0155ab 100644
 --- a/shared/sepolicy/vendor/service_contexts
 +++ b/shared/sepolicy/vendor/service_contexts
-@@ -4,6 +4,8 @@ android.hardware.neuralnetworks.IDevice/nnapi-sample_float_slow u:object_r:hal_n
+@@ -4,6 +4,9 @@ android.hardware.neuralnetworks.IDevice/nnapi-sample_float_slow u:object_r:hal_n
  android.hardware.neuralnetworks.IDevice/nnapi-sample_minimal    u:object_r:hal_neuralnetworks_service:s0
  android.hardware.neuralnetworks.IDevice/nnapi-sample_quant    u:object_r:hal_neuralnetworks_service:s0
  android.hardware.neuralnetworks.IDevice/nnapi-sample_sl_shim  u:object_r:hal_neuralnetworks_service:s0
--
 +android.hardware.security.keymint.IKeyMintDevice/strongbox      u:object_r:hal_keymint_service:s0
 +android.hardware.security.sharedsecret.ISharedSecret/strongbox  u:object_r:hal_sharedsecret_service:s0
 +android.hardware.security.keymint.IRemotelyProvisionedComponent/strongbox u:object_r:hal_keymint_service:s0
+ 
  # Binder service mappings
  gce                                       u:object_r:gce_service:s0
