@@ -364,18 +364,18 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * Implementation of HKDF as per RFC5869 https://datatracker.ietf.org/doc/html/rfc5869#section-2
    *
-   * @param ikm     is the buffer containing input key material.
-   * @param ikmOff  is the start of the input key.
-   * @param ikmLen  is the length of the input key.
-   * @param salt    is the buffer containing the salt.
+   * @param ikm is the buffer containing input key material.
+   * @param ikmOff is the start of the input key.
+   * @param ikmLen is the length of the input key.
+   * @param salt is the buffer containing the salt.
    * @param saltOff is the start of the salt buffer.
    * @param saltLen is the length of the salt buffer.
-   * @param info    is the buffer containing the application specific information
+   * @param info is the buffer containing the application specific information
    * @param infoOff is the start of the info buffer.
    * @param infoLen is the length of the info buffer.
-   * @param out     is the output buffer.
-   * @param outOff  is the start of the output buffer.
-   * @param outLen  is the length of the expected out buffer.
+   * @param out is the output buffer.
+   * @param outOff is the start of the output buffer.
+   * @param outLen is the length of the expected out buffer.
    * @return Length of the out buffer which is outLen.
    */
   short hkdf(
@@ -395,14 +395,14 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This function performs ECDH key agreement and generates a secret.
    *
-   * @param privKey      is the buffer containing the private key from first party.
-   * @param privKeyOff   is the offset of the private key buffer.
-   * @param privKeyLen   is the length of the private key buffer.
-   * @param publicKey    is the buffer containing the public key from second party.
+   * @param privKey is the buffer containing the private key from first party.
+   * @param privKeyOff is the offset of the private key buffer.
+   * @param privKeyLen is the length of the private key buffer.
+   * @param publicKey is the buffer containing the public key from second party.
    * @param publicKeyOff is the offset of the public key buffer.
    * @param publicKeyLen is the length of the public key buffer.
-   * @param secret       is the output buffer.
-   * @param secretOff    is the offset of the output buffer.
+   * @param secret is the output buffer.
+   * @param secretOff is the offset of the output buffer.
    * @return The length of the secret.
    */
   short ecdhKeyAgreement(
@@ -418,15 +418,15 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshort operation that verifies the data using EC public key
    *
-   * @param pubKey             is the public key buffer.
-   * @param pubKeyOffset       is the start of the public key buffer.
-   * @param pubKeyLen          is the length of the public key.
-   * @param inputDataBuf       is the buffer of the input data.
-   * @param inputDataStart     is the start of the input data buffer.
-   * @param inputDataLength    is the length of the input data buffer in bytes.
-   * @param signatureDataBuf   is the buffer the signature input data.
+   * @param pubKey is the public key buffer.
+   * @param pubKeyOffset is the start of the public key buffer.
+   * @param pubKeyLen is the length of the public key.
+   * @param inputDataBuf is the buffer of the input data.
+   * @param inputDataStart is the start of the input data buffer.
+   * @param inputDataLength is the length of the input data buffer in bytes.
+   * @param signatureDataBuf is the buffer the signature input data.
    * @param signatureDataStart is the start of the signature input data.
-   * @param signatureDataLen   is the length of the signature input data.
+   * @param signatureDataLen is the length of the signature input data.
    * @return true if verification is successful, otherwise false.
    */
   boolean ecVerify256(
@@ -443,11 +443,11 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that signs the data using device unique key.
    *
-   * @param ecPrivKey       instance of KMECDeviceUniqueKey to sign the input data.
-   * @param inputDataBuf    is the buffer of the input data.
-   * @param inputDataStart  is the start of the input data buffer.
+   * @param ecPrivKey instance of KMECDeviceUniqueKey to sign the input data.
+   * @param inputDataBuf is the buffer of the input data.
+   * @param inputDataStart is the start of the input data buffer.
    * @param inputDataLength is the length of the input data buffer in bytes.
-   * @param outputDataBuf   is the output buffer that contains the signature.
+   * @param outputDataBuf is the output buffer that contains the signature.
    * @param outputDataStart is the start of the output data buffer.
    * @return length of the decrypted data.
    */
@@ -603,6 +603,7 @@ public interface KMSEProvider extends KMUpgradable {
 
   /**
    * Returns the value of the attestation id.
+   *
    * @param tag - attestation id tag key as defined KMType.
    * @param buffer - memorey buffer in which value of the id must be copied
    * @param start - start offset in the buffer
@@ -631,7 +632,8 @@ public interface KMSEProvider extends KMUpgradable {
   short getBootState();
 
   /**
-   * Returns true if device bootloader is locked. Part of RoT. Part of data sent by the aosp bootloader.
+   * Returns true if device bootloader is locked. Part of RoT. Part of data sent by the aosp
+   * bootloader.
    */
   boolean isDeviceBootLocked();
 
@@ -643,11 +645,11 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * Creates an ECKey instance and sets the public and private keys to it.
    *
-   * @param testMode   to indicate if current execution is for test or production.
-   * @param pubKey     buffer containing the public key.
-   * @param pubKeyOff  public key buffer start offset.
-   * @param pubKeyLen  public key buffer length.
-   * @param privKey    buffer containing the private key.
+   * @param testMode to indicate if current execution is for test or production.
+   * @param pubKey buffer containing the public key.
+   * @param pubKeyOff public key buffer start offset.
+   * @param pubKeyLen public key buffer length.
+   * @param privKey buffer containing the private key.
    * @param privKeyOff private key buffer start offset.
    * @param privKeyLen private key buffer length.
    * @return instance of KMDeviceUniqueKey.
@@ -667,34 +669,40 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * Persists the additional certificate chain in persistent memory.
    *
-   * @param buf    buffer containing the cbor encoded additional certificate chain.
+   * @param buf buffer containing the cbor encoded additional certificate chain.
    * @param offset start offset of the buffer.
-   * @param len    length of the buffer.
+   * @param len length of the buffer.
    */
   void persistAdditionalCertChain(byte[] buf, short offset, short len);
 
   /**
    * Returns the additional certificate chain length.
+   *
    * @return length of the encoded additional certificate chain.
    */
   short getAdditionalCertChainLength();
 
   /**
-   * Reads the additional certificate chain into the buffer.
-   * @param buffer out buffer in which the chain is copied.
-   * @param start start offset of the buffer
-   * @return length of the additional cert chain.
+   * Returns the additional certificate chain.
+   *
+   * @return additional cert chain.
    */
   byte[] getAdditionalCertChain();
 
   /**
    * Generate boot certificate chain.
+   *
    * @param testMode to indicate if current execution is for test or production.
    * @param scratchPad buffer to store temporary results.
    * @return instance of the boot certificate chin.
    */
   short generateBcc(boolean testMode, byte[] scratchPad);
 
+  /**
+   * Returns the boot certificate chain.
+   *
+   * @return boot certificate chain.
+   */
   byte[] getBootCertificateChain();
 
 
