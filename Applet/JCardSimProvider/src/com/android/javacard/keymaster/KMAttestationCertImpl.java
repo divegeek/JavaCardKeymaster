@@ -235,7 +235,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       if (usageExpiryTimeObj != KMType.INVALID_VALUE) {
         // compare if the expiry time is greater then 2051 then use generalized
         // time format else use utc time format.
-        usageExpiryTimeObj = KMIntegerTag.cast(usageExpiryTimeObj).getValue();
         short tmpVar = KMInteger.uint_64(KMUtils.firstJan2051, (short) 0);
         if (KMInteger.compare(usageExpiryTimeObj, tmpVar) >= 0) {
           usageExpiryTimeObj = KMUtils.convertToDate(usageExpiryTimeObj, scratchPad,
