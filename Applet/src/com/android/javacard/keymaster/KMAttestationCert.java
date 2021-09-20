@@ -157,20 +157,6 @@ public interface KMAttestationCert {
    */
   short getCertLength();
 
-  /**
-   * Build the certificate. After this method the certificate is ready and signed by the
-   * attestation key passed in the parameter. If attBuf is null then factory set attestation key is
-   * used to sign the cert. If there is no factory provisioned attestation key then signature is
-   * left zero.
-   *
-   * @param attBuf the buffer that has attestation key
-   * @param start the start offset of the attestation key in the buffer
-   * @param length the length of the attestation key in the buffer
-   * @param rsa the flag which states that the attestation key is rsa, if true or ec key otherwise.
-   *  Accordingly the certificate is signed with using rsa signature algorithm or the ecdsa
-   *  signature algorithm.
-   */
-  void build(byte[] attBuf, short start, short length, boolean rsa, boolean fakeCert);
 
   /**
    * Build a fake signed certificate. After this method executes the certificate is ready with the
@@ -197,5 +183,12 @@ public interface KMAttestationCert {
    * @param attestKey KMByteBlob of the key
    * @param mode
    */
-  KMAttestationCert attestKey(short attestKey, boolean rsaSign, byte mode);
+  KMAttestationCert ecAttestKey(short attestKey, byte mode);
+  /**
+   * Set attestation key and mode.
+   * @param attestKey KMByteBlob of the key
+   * @param mode
+   */
+  KMAttestationCert rsaAttestKey(short attestPrivExp, short attestMod, byte mode);
+
 }

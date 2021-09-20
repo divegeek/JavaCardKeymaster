@@ -22,6 +22,7 @@ cc_library {
     	"CborConverter.cpp",
         "JavacardKeyMintDevice.cpp",
         "JavacardKeyMintOperation.cpp",
+	"JavacardRemotelyProvisionedComponentDevice.cpp",
         "JavacardSecureElement.cpp",
         "JavacardSharedSecret.cpp",
         "keymint_utils.cpp",
@@ -95,7 +96,7 @@ cc_binary {
         "service.cpp",
     ],
     required: [
-//        "RemoteProvisioner",
+        "RemoteProvisioner",
         "android.hardware.strongbox_keystore.xml",
     ],
 }

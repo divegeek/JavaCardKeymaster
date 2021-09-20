@@ -40,8 +40,9 @@ public class KMOperationState {
   private static final byte FLAGS = 5;
   private static final byte KEY_SIZE = 6;
   private static final byte MAC_LENGTH = 7 ;
+  private static final byte MGF_DIGEST = 8;
   public static final byte OPERATION_HANDLE_SIZE = 8;
-  public static final byte DATA_SIZE = 8;
+  public static final byte DATA_SIZE = 9;
   public static final byte AUTH_TIME_SIZE = 8;
 
   // short type
@@ -142,6 +143,10 @@ public class KMOperationState {
     }
     Util.arrayFillNonAtomic(opHandle, (short) 0, OPERATION_HANDLE_SIZE, (byte) 0);
     Util.arrayFillNonAtomic(authTime, (short) 0, AUTH_TIME_SIZE, (byte) 0);
+    
+    if(null != operation[0])
+    	((KMOperation)operation[0]).abort();
+    
     operation[0] = null;
     /*
     dFlag = false;
@@ -290,9 +295,17 @@ public class KMOperationState {
     return data[DIGEST];
   }
 
+  public short getMgfDigest() {
+    return data[MGF_DIGEST];
+  }
+
   public void setDigest(byte digest) {
     data[DIGEST] = digest;
    // dataUpdated();
+  }
+
+  public void setMgfDigest(byte mgfDigest) {
+    data[MGF_DIGEST] = mgfDigest;
   }
 
   public boolean isAesGcmUpdateAllowed() {

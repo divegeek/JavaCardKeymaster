@@ -29,7 +29,7 @@ public interface KMOperation {
   // Used for signature operations
   short update(byte[] inputDataBuf, short inputDataStart, short inputDataLength);
 
-  // Used for finishing cipher operations.
+  // Used for finishing cipher operations or ecdh keyAgreement.
   short finish(byte[] inputDataBuf, short inputDataStart, short inputDataLength,
       byte[] outputDataBuf, short outputDataStart);
 

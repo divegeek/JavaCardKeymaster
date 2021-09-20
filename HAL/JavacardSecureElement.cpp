@@ -115,6 +115,17 @@ JavacardSecureElement::sendRequest(Instruction ins, Array& request) {
 }
 
 std::tuple<std::unique_ptr<Item>, keymaster_error_t>
+JavacardSecureElement::sendRequest(Instruction ins, std::vector<uint8_t>& command) {
+    vector<uint8_t> response;
+    auto sendError = sendData(ins, command, response);
+    if (sendError != KM_ERROR_OK) {
+        return {unique_ptr<Item>(nullptr), sendError};
+    }
+    // decode the response and send that back
+    return cbor_.decodeData(response);
+}
+
+std::tuple<std::unique_ptr<Item>, keymaster_error_t>
 JavacardSecureElement::sendRequest(Instruction ins) {
     vector<uint8_t> response;
     vector<uint8_t> emptyRequest;

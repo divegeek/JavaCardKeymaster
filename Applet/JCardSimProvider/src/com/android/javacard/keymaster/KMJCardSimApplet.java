@@ -27,13 +27,14 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private static final byte INS_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 4;
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5;
+  private static final byte INS_PROVISION_DEVICE_UNIQUE_KEY_CMD =
+      INS_KEYMINT_PROVIDER_APDU_START + 6;
+  private static final byte INS_PROVISION_ADDITIONAL_CERT_CHAIN_CMD =
+      INS_KEYMINT_PROVIDER_APDU_START + 7;
   private static final byte INS_KEYMINT_PROVIDER_APDU_END = 0x1F;
-
-  private boolean locked;
 
   KMJCardSimApplet() {
     super(new KMJCardSimulator());
-    locked = false;
     setDummyBootParams();
     setDummyPresharedKey();
     setDummyAttestationIds();
@@ -52,65 +53,80 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
 
   @Override
   public void process(APDU apdu) {
-    // If this is select applet apdu which is selecting this applet then return
-    if (apdu.isISOInterindustryCLA()) {
-      if (selectingApplet()) {
+    try {
+      // If this is select applet apdu which is selecting this applet then return
+      if (apdu.isISOInterindustryCLA()) {
+        if (selectingApplet()) {
+          return;
+        }
+      }
+      short apduIns = validateApdu(apdu);
+      if (((KMJCardSimulator) seProvider).isPowerReset()) {
+        super.powerReset();
+      }
+      if (((KMJCardSimulator) seProvider).isProvisionLocked()) {
+        switch (apduIns) {
+          case INS_SET_BOOT_PARAMS_CMD:
+            processSetBootParamsCmd(apdu);
+            break;
+          default:
+            super.process(apdu);
+            break;
+        }
         return;
       }
-    }
-    short apduIns = validateApdu(apdu);
-    if(((KMJCardSimulator)seProvider).isPowerReset()){
-      super.powerReset();
-    }
-    if (locked) {
+      if (apduIns == KMType.INVALID_VALUE)
+        return;
       switch (apduIns) {
+        case INS_PROVISION_ATTEST_IDS_CMD:
+          processProvisionAttestIdsCmd(apdu);
+          break;
+        case INS_PROVISION_PRESHARED_SECRET_CMD:
+          processProvisionPreSharedSecretCmd(apdu);
+          break;
+        case INS_GET_PROVISION_STATUS_CMD:
+          processGetProvisionStatusCmd(apdu);
+          break;
+        case INS_LOCK_PROVISIONING_CMD:
+          processLockProvisioningCmd(apdu);
+          break;
         case INS_SET_BOOT_PARAMS_CMD:
           processSetBootParamsCmd(apdu);
+          break;
+        case INS_PROVISION_DEVICE_UNIQUE_KEY_CMD:
+          processProvisionDeviceUniqueKey(apdu);
+          break;
+        case INS_PROVISION_ADDITIONAL_CERT_CHAIN_CMD:
+          processProvisionAdditionalCertChain(apdu);
           break;
         default:
           super.process(apdu);
           break;
       }
-      return;
-    }
-    if(apduIns == KMType.INVALID_VALUE) return;
-    switch (apduIns) {
-      case INS_PROVISION_ATTEST_IDS_CMD:
-        processProvisionAttestIdsCmd(apdu);
-        break;
-      case INS_PROVISION_PRESHARED_SECRET_CMD:
-        processProvisionPreSharedSecretCmd(apdu);
-        break;
-      case INS_GET_PROVISION_STATUS_CMD:
-        processGetProvisionStatusCmd(apdu);
-        break;
-      case INS_LOCK_PROVISIONING_CMD:
-        processLockProvisioningCmd(apdu);
-        break;
-      case INS_SET_BOOT_PARAMS_CMD:
-        processSetBootParamsCmd(apdu);
-        break;
-      default:
-        super.process(apdu);
-        break;
+    } finally {
+      repository.clean();
     }
   }
 
   private void processProvisionAttestIdsCmd(APDU apdu) {
-
+    sendError(apdu, KMError.OK);
   }
 
   private void processProvisionPreSharedSecretCmd(APDU apdu) {
+    sendError(apdu, KMError.OK);
   }
 
   private void processGetProvisionStatusCmd(APDU apdu) {
+    sendError(apdu, KMError.OK);
   }
 
   private void processSetBootParamsCmd(APDU apdu) {
+    sendError(apdu, KMError.OK);
   }
 
   private void processLockProvisioningCmd(APDU apdu) {
-    locked = true;
+    ((KMJCardSimulator)seProvider).setProvisionLocked(true);
+    sendError(apdu, KMError.OK);
   }
 
   private short validateApdu(APDU apdu) {
@@ -143,12 +159,12 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     super.setOsPatchLevel(osPatchLevel);
     super.setVendorPatchLevel(vendorPatchLevel);
 
-    byte[] bootBlob = "00011122233344455566677788899900".getBytes();
+    byte[] bootBlob = new byte[32];
     short bootKey = KMByteBlob.instance(bootBlob, (short) 0,
         (short) bootBlob.length);
     short verifiedHash = KMByteBlob.instance(bootBlob, (short) 0,
         (short) bootBlob.length);
-    short bootState = KMType.VERIFIED_BOOT;
+    short bootState = KMType.UNVERIFIED_BOOT;
 
     ((KMJCardSimulator)seProvider).setBootPatchLevel(
         KMInteger.cast(bootPatchLevel).getBuffer(),
@@ -166,7 +182,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
         KMByteBlob.cast(verifiedHash).length());
 
     ((KMJCardSimulator)seProvider).setBootState((byte)bootState);
-    ((KMJCardSimulator)seProvider).setDeviceLocked(false);
+    ((KMJCardSimulator)seProvider).setDeviceLocked(true);
     super.reboot();
   }
 
@@ -176,15 +192,95 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   }
 
   private void setDummyAttestationIds(){
-    final byte[] dummy = {'D','U','M','M','Y'};
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_BRAND,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_IMEI,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_DEVICE,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MEID,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MODEL,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MANUFACTURER,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_PRODUCT,dummy,(short)0,(short)dummy.length);
-    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_SERIAL,dummy,(short)0,(short)dummy.length);
+    final byte[] brand = {'g','e','n','e','r','i','c'};
+    final byte[] device = {'v','s','o','c','_','x','8','6','_','6','4'};//vsoc_x86_64
+    final byte[] product =  //aosp_cf_x86_64_phone
+        {'a','o','s','p','_','c','f','_','x','8','6','_','6','4','_','p','h','o','n','e'};
+    final byte[] serial = {};
+    final byte[] imei = {'0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'};
+    final byte[] meid = {'0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'};
+    final byte[] manufacturer = {'G','o','o','g','l', 'e'};
+    final byte[] model = //"Cuttlefish x86_64 phone"
+        {'C','u','t','t','l', 'e','f','i','s','h',' ','x','8','6','_','6','4',
+            ' ','p','h','o','n','e'};
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_BRAND,brand,(short)0,(short)brand.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_IMEI,imei,(short)0,(short)imei.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_DEVICE,device,(short)0,(short)device.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MEID,meid,(short)0,(short)meid.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MODEL,model,(short)0,(short)model.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_MANUFACTURER,manufacturer,(short)0,(short)manufacturer.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_PRODUCT,product,(short)0,(short)product.length);
+    ((KMJCardSimulator)seProvider).setAttestationId(KMType.ATTESTATION_ID_SERIAL,serial,(short)0,(short)serial.length);
+  }
+
+  private static void processProvisionDeviceUniqueKey(APDU apdu) {
+    // Re-purpose the apdu buffer as scratch pad.
+    byte[] scratchPad = apdu.getBuffer();
+    short arr = KMArray.instance((short) 1);
+    short coseKeyExp = KMCoseKey.exp();
+    KMArray.cast(arr).add((short) 0, coseKeyExp); //[ CoseKey ]
+    arr = receiveIncoming(apdu, arr);
+    // Get cose key.
+    short coseKey = KMArray.cast(arr).get((short) 0);
+    short pubKeyLen = KMCoseKey.cast(coseKey).getEcdsa256PublicKey(scratchPad, (short) 0);
+    short privKeyLen = KMCoseKey.cast(coseKey).getPrivateKey(scratchPad, pubKeyLen);
+    //Store the Device unique Key.
+    seProvider.createDeviceUniqueKey(false, scratchPad, (short) 0, pubKeyLen, scratchPad,
+        pubKeyLen, privKeyLen);
+    // Newly added code 30/07/2021
+    short bcc = ((KMJCardSimulator) seProvider).generateBcc(false, scratchPad);
+    short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
+        MAX_COSE_BUF_SIZE);
+    ((KMJCardSimulator) seProvider).persistBootCertificateChain(scratchPad, (short) 0, len);
+    sendError(apdu, KMError.OK);
+  }
+
+  private static void processProvisionAdditionalCertChain(APDU apdu) {
+    // Prepare the expression to decode
+    short headers = KMCoseHeaders.exp();
+    short arrInst = KMArray.instance((short) 4);
+    KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
+    KMArray.cast(arrInst).add((short) 1, headers);
+    KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
+    KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
+    short coseSignArr = KMArray.exp(arrInst);
+    short map =  KMMap.instance((short) 1);
+    KMMap.cast(map).add((short) 0, KMTextString.exp(), coseSignArr);
+    // TODO duplicate code.
+    // receive incoming data and decode it.
+    byte[] srcBuffer = apdu.getBuffer();
+    short recvLen = apdu.setIncomingAndReceive();
+    short srcOffset = apdu.getOffsetCdata();
+    short bufferLength = apdu.getIncomingLength();
+    short bufferStartOffset = repository.allocReclaimableMemory(bufferLength);
+    short index = bufferStartOffset;
+    byte[] buffer = repository.getHeap();
+    while (recvLen > 0 && ((short) (index - bufferStartOffset) < bufferLength)) {
+      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, index, recvLen);
+      index += recvLen;
+      recvLen = apdu.receiveBytes(srcOffset);
+    }
+    // decode
+    map = decoder.decode(map, buffer, bufferStartOffset, bufferLength);
+    arrInst = KMMap.cast(map).getKeyValue((short) 0);
+    // Validate Additional certificate chain.
+    short leafCoseKey =
+        validateCertChain(false, KMCose.COSE_ALG_ES256, KMCose.COSE_ALG_ES256, arrInst,
+            srcBuffer, null);
+    // Compare the DK_Pub.
+    short pubKeyLen = KMCoseKey.cast(leafCoseKey).getEcdsa256PublicKey(srcBuffer, (short) 0);
+    KMDeviceUniqueKey uniqueKey = seProvider.getDeviceUniqueKey(false);
+    if (uniqueKey == null)
+      KMException.throwIt(KMError.STATUS_FAILED);
+    short uniqueKeyLen = uniqueKey.getPublicKey(srcBuffer, pubKeyLen);
+    if ((pubKeyLen != uniqueKeyLen) ||
+        (0 != Util.arrayCompare(srcBuffer, (short) 0, srcBuffer, pubKeyLen, pubKeyLen))) {
+      KMException.throwIt(KMError.STATUS_FAILED);
+    }
+    seProvider.persistAdditionalCertChain(buffer, bufferStartOffset, bufferLength);
+    //reclaim memory
+    repository.reclaimMemory(bufferLength);
+    sendError(apdu, KMError.OK);
   }
 
 }

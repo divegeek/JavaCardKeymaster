@@ -378,6 +378,24 @@ bool CborConverter::getTimeStampToken(const unique_ptr<Item>& item, const uint32
     return true;
 }
 
+bool CborConverter::getArrayItem(const std::unique_ptr<Item>& item, const uint32_t pos,
+                             Array& array) {
+    unique_ptr<Item> arrayItem(nullptr);
+    getItemAtPos(item, pos, arrayItem);
+    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem))) return false;
+    array = std::move(*arrayItem.get()->asArray());
+    return true;
+}
+
+bool CborConverter::getMapItem(const std::unique_ptr<Item>& item, const uint32_t pos,
+                             Map& map) {
+    unique_ptr<Item> mapItem(nullptr);
+    getItemAtPos(item, pos, mapItem);
+    if ((mapItem == nullptr) || (MajorType::MAP != getType(mapItem))) return false;
+    map = std::move(*mapItem.get()->asMap());
+    return true;
+}
+
 bool CborConverter::getKeyParameters(const unique_ptr<Item>& item, const uint32_t pos,
                                      vector<KeyParameter>& keyParams) {
     bool ret = false;

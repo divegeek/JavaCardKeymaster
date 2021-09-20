@@ -65,6 +65,7 @@ public class KMError {
   public static final short UNSUPPORTED_EC_CURVE = 61;
   public static final short KEY_REQUIRES_UPGRADE = 62;
 
+  public static final short ATTESTATION_CHALLENGE_MISSING = 63;
   public static final short ATTESTATION_APPLICATION_ID_MISSING = 65;
   public static final short CANNOT_ATTEST_IDS = 66;
   public static final short ROLLBACK_RESISTANCE_UNAVAILABLE = 67;
@@ -100,6 +101,13 @@ public class KMError {
   //Generic Unknown error.
   public static final short GENERIC_UNKNOWN_ERROR = 10013;
 
+  // Remote key provisioning error codes.
+  public static final short STATUS_FAILED = 32000;
+  public static final short STATUS_INVALID_MAC = 32001;
+  public static final short STATUS_PRODUCTION_KEY_IN_TEST_REQUEST = 32002;
+  public static final short STATUS_TEST_KEY_IN_PRODUCTION_REQUEST = 32003;
+  public static final short STATUS_INVALID_EEK = 32004;
+  public static final short INVALID_STATE = 32005;
 
   public static short translate(short err) {
     switch(err) {

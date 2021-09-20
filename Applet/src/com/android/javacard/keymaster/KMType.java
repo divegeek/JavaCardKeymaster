@@ -44,6 +44,20 @@ public abstract class KMType {
   public static final byte VERIFICATION_TOKEN_TYPE = 0x09;
   public static final byte HMAC_SHARING_PARAM_TYPE = 0x0A;
   public static final byte X509_CERT = 0x0B;
+  public static final byte NEG_INTEGER_TYPE = 0x0C;
+  public static final byte TEXT_STRING_TYPE = 0x0D;
+  public static final byte MAP_TYPE = 0x0E;
+  public static final byte COSE_KEY_TYPE = 0x0F;
+  public static final byte COSE_PAIR_TAG_TYPE = 0x10;
+  public static final byte COSE_PAIR_INT_TAG_TYPE = 0x20;
+  public static final byte COSE_PAIR_NEG_INT_TAG_TYPE = 0x30;
+  public static final byte COSE_PAIR_BYTE_BLOB_TAG_TYPE = 0x40;
+  public static final byte COSE_PAIR_COSE_KEY_TAG_TYPE = 0x60;
+  public static final byte COSE_PAIR_SIMPLE_VALUE_TAG_TYPE = 0x70;
+  public static final byte COSE_PAIR_TEXT_STR_TAG_TYPE = (byte) 0x80;
+  public static final byte SIMPLE_VALUE_TYPE = (byte) 0x90;
+  public static final byte COSE_HEADERS_TYPE = (byte) 0xA0;
+  public static final byte COSE_CERT_PAYLOAD_TYPE = (byte) 0xB0;
   // Tag Types
   public static final short INVALID_TAG = 0x0000;
   public static final short ENUM_TAG = 0x1000;
@@ -292,6 +306,8 @@ public abstract class KMType {
   public static final short LENGTH_FROM_PDU = (short) 0xFFFF;
 
   public static final byte NO_VALUE = (byte) 0xff;
+  // Support Curves for Eek Chain validation.
+  public static final byte RKP_CURVE_P256 = 1;
   // Type offsets.
   public static final byte KM_TYPE_BASE_OFFSET = 0;
   public static final byte KM_ARRAY_OFFSET = KM_TYPE_BASE_OFFSET;
@@ -309,7 +325,20 @@ public abstract class KMType {
   public static final byte KM_KEY_CHARACTERISTICS_OFFSET = KM_TYPE_BASE_OFFSET + 12;
   public static final byte KM_KEY_PARAMETERS_OFFSET = KM_TYPE_BASE_OFFSET + 13;
   public static final byte KM_VERIFICATION_TOKEN_OFFSET = KM_TYPE_BASE_OFFSET + 14;
-  public static final byte KM_BIGNUM_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 15;
+  public static final byte KM_NEG_INTEGER_OFFSET = KM_TYPE_BASE_OFFSET + 15;
+  public static final byte KM_TEXT_STRING_OFFSET = KM_TYPE_BASE_OFFSET + 16;
+  public static final byte KM_MAP_OFFSET = KM_TYPE_BASE_OFFSET + 17;
+  public static final byte KM_COSE_KEY_OFFSET = KM_TYPE_BASE_OFFSET + 18;
+  public static final byte KM_COSE_KEY_INT_VAL_OFFSET = KM_TYPE_BASE_OFFSET + 19;
+  public static final byte KM_COSE_KEY_NINT_VAL_OFFSET = KM_TYPE_BASE_OFFSET + 20;
+  public static final byte KM_COSE_KEY_BYTE_BLOB_VAL_OFFSET = KM_TYPE_BASE_OFFSET + 21;
+  public static final byte KM_COSE_KEY_COSE_KEY_VAL_OFFSET = KM_TYPE_BASE_OFFSET + 22;
+  public static final byte KM_COSE_KEY_SIMPLE_VAL_OFFSET = KM_TYPE_BASE_OFFSET + 23;
+  public static final byte KM_SIMPLE_VALUE_OFFSET = KM_TYPE_BASE_OFFSET + 24;
+  public static final byte KM_COSE_HEADERS_OFFSET = KM_TYPE_BASE_OFFSET + 25;
+  public static final byte KM_COSE_KEY_TXT_STR_VAL_OFFSET = KM_TYPE_BASE_OFFSET + 26;
+  public static final byte KM_COSE_CERT_PAYLOAD_OFFSET = KM_TYPE_BASE_OFFSET + 27;
+  public static final byte KM_BIGNUM_TAG_OFFSET = KM_TYPE_BASE_OFFSET + 28;
 
   // Attestation types
   public static final byte NO_CERT = 0;
@@ -325,7 +354,7 @@ public abstract class KMType {
   protected static KMRepository repository;
   protected static byte[] heap;
   // Instance table
-  public static final byte INSTANCE_TABLE_SIZE = 16;
+  public static final byte INSTANCE_TABLE_SIZE = 29;
   protected static short[] instanceTable;
 
   public static void initialize() {

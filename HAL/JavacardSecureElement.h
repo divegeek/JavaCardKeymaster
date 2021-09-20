@@ -60,6 +60,15 @@ enum class Instruction {
     INS_BEGIN_IMPORT_WRAPPED_KEY_CMD = KEYMINT_CMD_APDU_START + 24,
     INS_FINISH_IMPORT_WRAPPED_KEY_CMD = KEYMINT_CMD_APDU_START + 25,
     INS_SET_BOOT_PARAMS_CMD = KEYMINT_CMD_APDU_START + 26,
+    // RKP Commands
+    INS_GET_RKP_HARDWARE_INFO = KEYMINT_CMD_APDU_START + 27,
+    INS_GENERATE_RKP_KEY_CMD = KEYMINT_CMD_APDU_START + 28,
+    INS_BEGIN_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 29,
+    INS_UPDATE_KEY_CMD = KEYMINT_CMD_APDU_START + 30,
+    INS_UPDATE_EEK_CHAIN_CMD = KEYMINT_CMD_APDU_START + 31,
+    INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 32,
+    INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33,
+  INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34,
 };
 
 class JavacardSecureElement {
@@ -75,6 +84,7 @@ class JavacardSecureElement {
     std::tuple<std::unique_ptr<Item>, keymaster_error_t> sendRequest(Instruction ins,
                                                                      Array& request);
     std::tuple<std::unique_ptr<Item>, keymaster_error_t> sendRequest(Instruction ins);
+    std::tuple<std::unique_ptr<Item>, keymaster_error_t> sendRequest(Instruction ins, std::vector<uint8_t>& command);
 
     keymaster_error_t sendData(Instruction ins, std::vector<uint8_t>& inData,
                                std::vector<uint8_t>& response);
