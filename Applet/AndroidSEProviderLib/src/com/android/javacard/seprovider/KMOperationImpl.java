@@ -130,23 +130,32 @@ public class KMOperationImpl implements KMOperation {
   }
 
   @Override
-  public short finish(byte[] inputDataBuf, short inputDataStart,
-      short inputDataLen, byte[] outputDataBuf, short outputDataStart) {
-    byte[] tmpArray = KMAndroidSEProvider.getInstance().tmpArray;
-    Cipher cipher = (Cipher) operationInst[0];
-    short cipherAlg = parameters[CIPHER_ALG_OFFSET];
-    short blockMode = parameters[BLOCK_MODE_OFFSET];
-    short mode = parameters[OPER_MODE_OFFSET];
-    short macLength = parameters[MAC_LENGTH_OFFSET];
-    short padding = parameters[PADDING_OFFSET];
+  public short finish(byte[] inputDataBuf, short inputDataStart, short inputDataLen, byte[] outputDataBuf,
+      short outputDataStart) {
     short len = 0;
+    Cipher cipher = null;
+    KeyAgreement keyAgr = null;
     try {
+
+      if (parameters[OPER_MODE_OFFSET] == KMType.AGREE_KEY) {
+        keyAgr = (KeyAgreement) operationInst[0];
+        return keyAgr.generateSecret(inputDataBuf, inputDataStart, inputDataLen, outputDataBuf, outputDataStart);
+      }
+
+      byte[] tmpArray = KMAndroidSEProvider.getInstance().tmpArray;
+      cipher = (Cipher) operationInst[0];
+      short cipherAlg = parameters[CIPHER_ALG_OFFSET];
+      short blockMode = parameters[BLOCK_MODE_OFFSET];
+      short mode = parameters[OPER_MODE_OFFSET];
+      short macLength = parameters[MAC_LENGTH_OFFSET];
+      short padding = parameters[PADDING_OFFSET];
+
       if (cipherAlg == KMType.AES && blockMode == KMType.GCM) {
         if (mode == KMType.DECRYPT) {
           inputDataLen = (short) (inputDataLen - macLength);
         }
-      } else if ((cipherAlg == KMType.DES || cipherAlg == KMType.AES) &&
-          padding == KMType.PKCS7 && mode == KMType.ENCRYPT) {
+      } else if ((cipherAlg == KMType.DES || cipherAlg == KMType.AES) && padding == KMType.PKCS7
+          && mode == KMType.ENCRYPT) {
         byte blkSize = 16;
         byte paddingBytes;
         short inputlen = inputDataLen;
@@ -165,16 +174,13 @@ public class KMOperationImpl implements KMOperation {
         // fill in the padding
         Util.arrayFillNonAtomic(tmpArray, (short) 0, inputlen, paddingBytes);
         // copy the input data
-        Util.arrayCopyNonAtomic(inputDataBuf, inputDataStart, tmpArray,
-            (short) 0, inputDataLen);
+        Util.arrayCopyNonAtomic(inputDataBuf, inputDataStart, tmpArray, (short) 0, inputDataLen);
         inputDataBuf = tmpArray;
         inputDataLen = inputlen;
         inputDataStart = 0;
       }
-      len = cipher.doFinal(inputDataBuf, inputDataStart, inputDataLen,
-          outputDataBuf, outputDataStart);
-      if ((cipherAlg == KMType.AES || cipherAlg == KMType.DES) &&
-          padding == KMType.PKCS7 && mode == KMType.DECRYPT) {
+      len = cipher.doFinal(inputDataBuf, inputDataStart, inputDataLen, outputDataBuf, outputDataStart);
+      if ((cipherAlg == KMType.AES || cipherAlg == KMType.DES) && padding == KMType.PKCS7 && mode == KMType.DECRYPT) {
         byte blkSize = 16;
         if (cipherAlg == KMType.DES) {
           blkSize = 8;
@@ -196,11 +202,10 @@ public class KMOperationImpl implements KMOperation {
         }
       } else if (cipherAlg == KMType.AES && blockMode == KMType.GCM) {
         if (mode == KMType.ENCRYPT) {
-          len += ((AEADCipher) cipher).retrieveTag(outputDataBuf,
-              (short) (outputDataStart + len), macLength);
+          len += ((AEADCipher) cipher).retrieveTag(outputDataBuf, (short) (outputDataStart + len), macLength);
         } else {
-          boolean verified = ((AEADCipher) cipher).verifyTag(inputDataBuf,
-              (short) (inputDataStart + inputDataLen), macLength, macLength);
+          boolean verified = ((AEADCipher) cipher).verifyTag(inputDataBuf, (short) (inputDataStart + inputDataLen),
+              macLength, macLength);
           if (!verified) {
             KMException.throwIt(KMError.VERIFICATION_FAILED);
           }
@@ -209,7 +214,10 @@ public class KMOperationImpl implements KMOperation {
 
     } finally {
       KMAndroidSEProvider.getInstance().clean();
-      KMAndroidSEProvider.getInstance().releaseCipherInstance(cipher);
+      if (null != cipher)
+        KMAndroidSEProvider.getInstance().releaseCipherInstance(cipher);
+      if (null != keyAgr)
+        KMAndroidSEProvider.getInstance().releaseKeyAgrInstance(keyAgr);
       reset();
     }
     return len;
@@ -249,8 +257,12 @@ public class KMOperationImpl implements KMOperation {
       if (parameters[OPER_MODE_OFFSET] == KMType.ENCRYPT ||
           parameters[OPER_MODE_OFFSET] == KMType.DECRYPT) {
         KMAndroidSEProvider.getInstance().releaseCipherInstance((Cipher) operationInst[0]);
-      } else {
+      } else if(parameters[OPER_MODE_OFFSET] == (short) KMType.SIGN ||
+    	        parameters[OPER_MODE_OFFSET] == (short) KMType.VERIFY) {
         KMAndroidSEProvider.getInstance().releaseSignatureInstance((Signature) operationInst[0]);
+      } else {
+    	  //KeyAgreement
+    	  KMAndroidSEProvider.getInstance().releaseKeyAgrInstance((KeyAgreement) operationInst[0]);  
       }
       reset();
     }

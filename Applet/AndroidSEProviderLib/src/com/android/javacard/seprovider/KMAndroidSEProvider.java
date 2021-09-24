@@ -89,6 +89,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
       KMRsa2048NoDigestSignature.ALG_RSA_PKCS1_NODIGEST,
       KMEcdsa256NoDigestSignature.ALG_ECDSA_NODIGEST};
 
+  final byte[] KEY_AGREE_ALGS = {KeyAgreement.ALG_EC_SVDP_DH_PLAIN };
+
   // AESKey
   private AESKey aesKeys[];
   // DES3Key
@@ -107,6 +109,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private Object[] cipherPool;
   // Signature pool
   private Object[] sigPool;
+	//Keyagreement pool
+	private Object[] keyAgrPool;
   // KMOperationImpl pool
   private Object[] operationPool;
 
@@ -173,11 +177,13 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // Re-usable cipher and signature instances
     cipherPool = new Object[(short) (CIPHER_ALGS.length * 4)];
     sigPool = new Object[(short) (SIG_ALGS.length * 4)];
+	keyAgrPool = new Object[(short) (KEY_AGREE_ALGS.length * 4)];
     operationPool = new Object[4];
     // Creates an instance of each cipher algorithm once.
     initializeCipherPool();
     // Creates an instance of each signature algorithm once.
     initializeSigPool();
+	initializeKeyAgrPool();
     initializeOperationPool();
     //RsaOAEP Decipher
     rsaOaepDecipher = new KMRsaOAEPEncoding(KMRsaOAEPEncoding.ALG_RSA_PKCS1_OAEP_SHA256_MGF1_SHA1);
@@ -318,6 +324,15 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return false;
   }
 
+	private boolean isKeyAgrAlgorithm(byte alg) {
+		short index = 0;
+		while (index < KEY_AGREE_ALGS.length) {
+			if (KEY_AGREE_ALGS[index++] == alg) {
+				return true;
+			}
+		}
+		return false;
+	}
   private void initializeOperationPool() {
     short index = 0;
     while (index < 4) {
@@ -339,6 +354,21 @@ public class KMAndroidSEProvider implements KMSEProvider {
       ((KMInstance) sigPool[index]).reserved = 0;
       index++;
     }
+  }
+
+  private void initializeKeyAgrPool() {
+    short index = 0;
+    while (index < KEY_AGREE_ALGS.length) {
+      keyAgrPool[index] = new KMInstance();
+      ((KMInstance) keyAgrPool[index]).instanceCount = 1;
+      ((KMInstance) keyAgrPool[index]).object = getKeyAgreementInstance(KEY_AGREE_ALGS[index]);
+      ((KMInstance) keyAgrPool[index]).reserved = 0;
+      index++;
+    }
+  }
+
+  private KeyAgreement getKeyAgreementInstance(byte alg) {
+    return KeyAgreement.getInstance(alg, false);
   }
 
   private Signature getSignatureInstance(byte alg) {
@@ -393,6 +423,13 @@ public class KMAndroidSEProvider implements KMSEProvider {
     releaseInstance(sigPool, signer);
   }
 
+	private KeyAgreement getKeyAgrInstanceFromPool(byte alg) {
+		return (KeyAgreement) getInstanceFromPool(keyAgrPool, alg);
+	}
+	
+	public void releaseKeyAgrInstance(KeyAgreement keyAgr) {
+		releaseInstance(keyAgrPool, keyAgr);
+	}
   private Cipher getCipherInstanceFromPool(byte alg) {
     return (Cipher) getInstanceFromPool(cipherPool, alg);
   }
@@ -415,6 +452,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     Object object = null;
     boolean isCipher = isCipherAlgorithm(alg);
     boolean isSigner = isSignerAlgorithm(alg);
+	boolean isKeyAgr = isKeyAgrAlgorithm(alg);
     short len = (short) pool.length;
     while (index < len) {
       if (null == pool[index]) {
@@ -425,10 +463,15 @@ public class KMAndroidSEProvider implements KMSEProvider {
           ((KMInstance) pool[index]).instanceCount = (byte) (++instanceCount);
           if (isCipher) {
             ((KMInstance) pool[index]).object = object = getCipherInstance(alg);
-          } else {
-            // Signature
-            ((KMInstance) pool[index]).object = object = getSignatureInstance(alg);
-          }
+			} else if(isSigner) {
+				// Signature
+				((KMInstance) pool[index]).object = object = getSignatureInstance(alg);
+			} else if(isKeyAgr) {
+				//KeyAgr
+				((KMInstance) pool[index]).object = object = getKeyAgreementInstance(alg);
+			} else {
+				//TODO handle error
+			}
           ((KMInstance) pool[index]).reserved = 1;
           JCSystem.commitTransaction();
           break;
@@ -439,8 +482,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
         }
       }
       object = ((KMInstance) pool[index]).object;
-      if ((isCipher && (alg == getCipherAlgorithm((Cipher) object)))
-          || ((isSigner && (alg == ((Signature) object).getAlgorithm())))) {
+			if ((isCipher && (alg == getCipherAlgorithm((Cipher) object)))
+					|| ((isSigner && (alg == ((Signature) object).getAlgorithm())))
+					|| ((isKeyAgr && (alg == ((KeyAgreement) object).getAlgorithm())))) {
         instanceCount = ((KMInstance) pool[index]).instanceCount;
         if (((KMInstance) pool[index]).reserved == 0) {
           JCSystem.beginTransaction();
@@ -448,8 +492,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
           JCSystem.commitTransaction();
           break;
         }
-      } else {
-        if (!isCipher && !isSigner) {
+			} else {
+				if (!isCipher && !isSigner && !isKeyAgr) {
           // OperationImpl
           if (((KMInstance) pool[index]).reserved == 0) {
             JCSystem.beginTransaction();
@@ -1592,7 +1636,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public void releaseAllOperations() {
     releasePool(cipherPool);
     releasePool(sigPool);
-    releasePool(operationPool);
+	releasePool(keyAgrPool);
+	releasePool(operationPool);
   }
 
   @Override
@@ -1777,11 +1822,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
     ECPrivateKey key = (ECPrivateKey) ecKeyPair.getPrivate();
     key.setS(secret, secretStart, secretLength);
 
-    KeyAgreement keyAgreement = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH_PLAIN,
-        false);
-    keyAgreement.init(key);
-    return keyAgreement;
-  }
+	KeyAgreement keyAgreement = getKeyAgrInstanceFromPool(KeyAgreement.ALG_EC_SVDP_DH_PLAIN);
+	keyAgreement.init(key);
+	return keyAgreement;
+}
 
   public void persistBootCertificateChain(byte[] buf, short offset, short len) {
     if ((short) (len + 2) > BCC_MAX_SIZE) {
