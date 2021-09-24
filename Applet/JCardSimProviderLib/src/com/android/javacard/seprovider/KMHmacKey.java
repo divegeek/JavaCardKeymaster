@@ -13,13 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
-/**
- * KMPreSharedKey is a marker interface and the SE Provider has to implement this interface.
- * Internally Preshared key is stored as a Javacard HMac key object, which will provide additional
- * security. The pre-shared key is maintained by the SEProvider.
- */
-public interface KMPreSharedKey {
+import javacard.security.HMACKey;
 
+public class KMHmacKey implements KMPreSharedKey {
+
+  private HMACKey hmacKey;
+
+  public KMHmacKey(HMACKey key) {
+    hmacKey = key;
+  }
+
+  public void setKey(byte[] keyData, short kOff, short length) {
+    hmacKey.setKey(keyData, kOff, length);
+  }
+
+  public byte getKey(byte[] keyData, short kOff) {
+    return hmacKey.getKey(keyData, kOff);
+  }
+
+  public short getKeySizeBits() {
+    return hmacKey.getSize();
+  }
 }

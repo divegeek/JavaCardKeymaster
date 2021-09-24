@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
 /**
  * The KMAttestationCert interface represents a X509 compliant attestation certificate required to

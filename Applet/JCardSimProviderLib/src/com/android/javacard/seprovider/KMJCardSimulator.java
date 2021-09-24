@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
 import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
@@ -41,7 +41,6 @@ import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
 import javacard.security.RSAPrivateKey;
 import javacard.security.KeyAgreement;
-import javacard.security.RSAPublicKey;
 import javacard.security.RandomData;
 import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
@@ -75,6 +74,7 @@ public class KMJCardSimulator implements KMSEProvider {
   private static final short RSA_KEY_SIZE = 256;
   public static final byte POWER_RESET_FALSE = (byte)0xAA;
   public static final byte POWER_RESET_TRUE = (byte)0x00;
+  public static final byte AES_BLOCK_SIZE = 16;
 
   public static byte[] resetFlag;
   public static boolean jcardSim = false;
@@ -1202,11 +1202,9 @@ public class KMJCardSimulator implements KMSEProvider {
   // 8 byte rngCounter and 16 byte block size.
   @Override
   public void newRandomNumber(byte[] num, short startOff, short length) {
-    KMRepository repository = KMRepository.instance();
-    byte[] bufPtr = repository.getHeap();
-    short countBufInd = repository.alloc(KMKeymasterApplet.AES_BLOCK_SIZE);
-    short randBufInd = repository.alloc(KMKeymasterApplet.AES_BLOCK_SIZE);
-    short len = KMKeymasterApplet.AES_BLOCK_SIZE;
+    byte[] countBuf = new byte[AES_BLOCK_SIZE];
+    byte[] randBuf = new byte[AES_BLOCK_SIZE];
+    short len = AES_BLOCK_SIZE;
     aesRngKey.setKey(entropyPool, (short) 0);
     aesRngCipher.init(aesRngKey, Cipher.MODE_ENCRYPT, aesICV, (short) 0, (short) 16);
     while (length > 0) {
@@ -1216,12 +1214,12 @@ public class KMJCardSimulator implements KMSEProvider {
       // increment rngCounter by one
       incrementCounter();
       // copy the 8 byte rngCounter into the 16 byte rngCounter buffer.
-      Util.arrayCopy(rngCounter, (short) 0, bufPtr, countBufInd, (short) rngCounter.length);
+      Util.arrayCopy(rngCounter, (short) 0, countBuf, (short) 0, (short) rngCounter.length);
       // encrypt the rngCounter buffer with existing entropy which forms the aes key.
       aesRngCipher.doFinal(
-          bufPtr, countBufInd, KMKeymasterApplet.AES_BLOCK_SIZE, bufPtr, randBufInd);
+          countBuf, (short) 0, AES_BLOCK_SIZE, randBuf, (short) 0);
       // copy the encrypted rngCounter block to buffer passed in the argument
-      Util.arrayCopy(bufPtr, randBufInd, num, startOff, len);
+      Util.arrayCopy(randBuf, (short) 0, num, startOff, len);
       length = (short) (length - len);
       startOff = (short) (startOff + len);
     }
@@ -1276,11 +1274,6 @@ public class KMJCardSimulator implements KMSEProvider {
     }
   }
 
-  @Override
-  public KMAttestationCert getAttestationCert(boolean rsaCert) {
-    return KMAttestationCertImpl.instance(rsaCert);
-  }
-
   /**
    * The operation reads the certificate chain from persistent memory.
    *
@@ -1310,91 +1303,6 @@ public class KMJCardSimulator implements KMSEProvider {
     // short length = Util.getShort(additionalCertChain, (short) 0);
     // Util.arrayCopyNonAtomic(additionalCertChain, (short) 2, buffer, start, length);
     // return length;
-  }
-
-  @Override
-  public short generateBcc(boolean testMode, byte[] scratchPad) {
-    if (!testMode && isProvisionLocked) {
-      KMException.throwIt(KMError.STATUS_FAILED);
-    }
-    KMDeviceUniqueKey deviceUniqueKey = getDeviceUniqueKey(testMode);
-    short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
-    short coseKey =
-        KMCose.constructCoseKey(
-            KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
-            KMType.INVALID_VALUE,
-            KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
-            KMInteger.uint_8(KMCose.COSE_KEY_OP_VERIFY),
-            KMInteger.uint_8(KMCose.COSE_ECCURVE_256),
-            scratchPad,
-            (short) 0,
-            temp,
-            KMType.INVALID_VALUE,
-            false
-        );
-    temp = KMKeymasterApplet.encodeToApduBuffer(coseKey, scratchPad, (short) 0,
-        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    // Construct payload.
-    short payload =
-        KMCose.constructCoseCertPayload(
-            KMCosePairTextStringTag.instance(KMInteger.uint_8(KMCose.ISSUER),
-                KMTextString.instance(KMCose.TEST_ISSUER_NAME, (short) 0,
-                    (short) KMCose.TEST_ISSUER_NAME.length)),
-            KMCosePairTextStringTag.instance(KMInteger.uint_8(KMCose.SUBJECT),
-                KMTextString.instance(KMCose.TEST_SUBJECT_NAME, (short) 0,
-                    (short) KMCose.TEST_SUBJECT_NAME.length)),
-            KMCosePairByteBlobTag.instance(KMNInteger.uint_32(KMCose.SUBJECT_PUBLIC_KEY, (short) 0),
-                KMByteBlob.instance(scratchPad, (short) 0, temp)),
-            KMCosePairByteBlobTag.instance(KMNInteger.uint_32(KMCose.KEY_USAGE, (short) 0),
-                KMByteBlob.instance(KMCose.KEY_USAGE_SIGN, (short) 0,
-                    (short) KMCose.KEY_USAGE_SIGN.length))
-        );
-    // temp temporarily holds the length of encoded cert payload.
-    temp = KMKeymasterApplet.encodeToApduBuffer(payload, scratchPad, (short) 0,
-        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    payload = KMByteBlob.instance(scratchPad, (short) 0, temp);
-
-    // protected header
-    short protectedHeader =
-        KMCose.constructHeaders(KMNInteger.uint_8(KMCose.COSE_ALG_ES256), KMType.INVALID_VALUE,
-            KMType.INVALID_VALUE, KMType.INVALID_VALUE);
-    // temp temporarily holds the length of encoded headers.
-    temp = KMKeymasterApplet.encodeToApduBuffer(protectedHeader, scratchPad, (short) 0,
-        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    protectedHeader = KMByteBlob.instance(scratchPad, (short) 0, temp);
-
-    //unprotected headers.
-    short arr = KMArray.instance((short) 0);
-    short unprotectedHeader = KMCoseHeaders.instance(arr);
-
-    // construct cose sign structure.
-    short coseSignStructure =
-        KMCose.constructCoseSignStructure(protectedHeader, KMByteBlob.instance((short) 0), payload);
-    // temp temporarily holds the length of encoded sign structure.
-    // Encode cose Sign_Structure.
-    temp = KMKeymasterApplet.encodeToApduBuffer(coseSignStructure, scratchPad, (short) 0,
-        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    // do sign
-    short len =
-        ecSign256(
-            deviceUniqueKey,
-            scratchPad,
-            (short) 0,
-            temp,
-            scratchPad,
-            temp
-        );
-    coseSignStructure = KMByteBlob.instance(scratchPad, temp, len);
-
-    // construct cose_sign1
-    short coseSign1 =
-        KMCose.constructCoseSign1(protectedHeader, unprotectedHeader, payload, coseSignStructure);
-
-    // [Cose_Key, Cose_Sign1]
-    short bcc = KMArray.instance((short) 2);
-    KMArray.cast(bcc).add((short) 0, coseKey);
-    KMArray.cast(bcc).add((short) 1, coseSign1);
-    return bcc;
   }
 
   public void persistBootCertificateChain(byte[] buf, short offset, short len) {

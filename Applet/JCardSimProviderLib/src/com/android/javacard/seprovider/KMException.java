@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
 import javacard.framework.JCSystem;
 

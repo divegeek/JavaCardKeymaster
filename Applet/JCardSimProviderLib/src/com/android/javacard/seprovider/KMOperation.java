@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
 /**
  * KMOperation represents a persistent operation started by keymaster hal's beginOperation function.

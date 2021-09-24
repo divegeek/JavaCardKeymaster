@@ -15,6 +15,12 @@
  */
 package com.android.javacard.keymaster;
 
+import com.android.javacard.seprovider.KMAESKey;
+import com.android.javacard.seprovider.KMAttestationCert;
+import com.android.javacard.seprovider.KMException;
+import com.android.javacard.seprovider.KMJCardSimulator;
+import com.android.javacard.seprovider.KMMasterKey;
+import com.android.javacard.seprovider.KMSEProvider;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
@@ -113,6 +119,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static short stackPtr;
   private static short bufStart;
   private static short bufLength;
+  private static KMSEProvider seProvider;
 
   private static short uniqueId;
   private static short attChallenge;
@@ -147,9 +154,10 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private KMAttestationCertImpl() {
   }
 
-  public static KMAttestationCert instance(boolean rsaCert) {
+  public static KMAttestationCert instance(boolean rsaCert, KMSEProvider provider) {
     if (inst == null) {
       inst = new KMAttestationCertImpl();
+      seProvider = provider;
     }
     init();
     KMAttestationCertImpl.rsaCert = rsaCert;

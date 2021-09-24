@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
 import javacard.framework.Util;
 import javacard.security.CryptoException;
@@ -130,7 +130,7 @@ public class KMRsa2048NoDigestSignature extends Signature {
       if (len > 256) {
         return false;
       } else if (len == 256) {
-        short v = KMInteger.unsignedByteArrayCompare(buf, start, rsaModulus, (short) 0, len);
+        short v = unsignedByteArrayCompare(buf, start, rsaModulus, (short) 0, len);
         if (v > 0) {
           return false;
         }
@@ -142,5 +142,25 @@ public class KMRsa2048NoDigestSignature extends Signature {
       }
     }
     return true;
+  }
+
+  private byte unsignedByteArrayCompare(byte[] a1, short offset1, byte[] a2, short offset2,
+      short length) {
+    byte count = (byte) 0;
+    short val1 = (short) 0;
+    short val2 = (short) 0;
+
+    for (; count < length; count++) {
+      val1 = (short) (a1[(short) (count + offset1)] & 0x00FF);
+      val2 = (short) (a2[(short) (count + offset2)] & 0x00FF);
+
+      if (val1 < val2) {
+        return -1;
+      }
+      if (val1 > val2) {
+        return 1;
+      }
+    }
+    return 0;
   }
 }

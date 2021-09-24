@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
 /**
  * KMSEProvider is facade to use SE specific methods. The main intention of this interface is to
@@ -549,17 +549,6 @@ public interface KMSEProvider extends KMUpgradable {
       short pubModLength);
 
   /**
-   * This operation creates the empty instance of KMAttestationCert for rsa or ec public key
-   * attestation certificate. It corresponds to attestKEy command from keymaster hal specifications.
-   * The attestation certificate implementation will comply keymaster hal specifications.
-   *
-   * @param rsaCert if true indicates that certificate will attest a rsa public key else if false it
-   * is for ec public key.
-   * @return An empty instance of KMAttestationCert implementation.
-   */
-  KMAttestationCert getAttestationCert(boolean rsaCert);
-
-  /**
    * This function tells if applet is upgrading or not.
    *
    * @return true if upgrading, otherwise false.
@@ -689,14 +678,6 @@ public interface KMSEProvider extends KMUpgradable {
    */
   byte[] getAdditionalCertChain();
 
-  /**
-   * Generate boot certificate chain.
-   *
-   * @param testMode to indicate if current execution is for test or production.
-   * @param scratchPad buffer to store temporary results.
-   * @return instance of the boot certificate chin.
-   */
-  short generateBcc(boolean testMode, byte[] scratchPad);
 
   /**
    * Returns the boot certificate chain.
@@ -705,5 +686,6 @@ public interface KMSEProvider extends KMUpgradable {
    */
   byte[] getBootCertificateChain();
 
+  public boolean isProvisionLocked();
 
 }

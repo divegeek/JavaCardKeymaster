@@ -13,27 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
-import javacard.security.AESKey;
+/**
+ * KMMasterKey is a marker interface and the SE Provider has to implement this interface. Internally
+ * Masterkey is stored as a Javacard AES key object, which will provide additional security. The
+ * master key is maintained by the SEProvider.
+ */
+public interface KMMasterKey {
 
-public class KMAESKey implements KMMasterKey {
-
-  private AESKey aesKey;
-
-  public KMAESKey(AESKey key) {
-    aesKey = key;
-  }
-
-  public void setKey(byte[] keyData, short kOff) {
-    aesKey.setKey(keyData, kOff);
-  }
-
-  public byte getKey(byte[] keyData, short kOff) {
-    return aesKey.getKey(keyData, kOff);
-  }
-
-  public short getKeySizeBits() {
-    return aesKey.getSize();
-  }
 }

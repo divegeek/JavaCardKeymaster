@@ -1,5 +1,5 @@
 /*
- * Copyright(C) 2021 The Android Open Source Project
+ * Copyright(C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,22 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
+
 import javacard.security.ECPrivateKey;
-import javacard.security.ECPublicKey;
 import javacard.security.KeyPair;
 
-public class KMECDeviceUniqueKey implements KMDeviceUniqueKey {
+public class KMECPrivateKey implements KMAttestationKey {
 
   private KeyPair ecKeyPair;
 
-  @Override
-  public short getPublicKey(byte[] buf, short offset) {
-    ECPublicKey publicKey = getPublicKey();
-    return publicKey.getW(buf, offset);
-  }
-
-  public KMECDeviceUniqueKey(KeyPair ecPair) {
+  public KMECPrivateKey(KeyPair ecPair) {
     ecKeyPair = ecPair;
   }
 
@@ -37,17 +31,8 @@ public class KMECDeviceUniqueKey implements KMDeviceUniqueKey {
     ecPriv.setS(buffer, offset, length);
   }
 
-  public void setW(byte[] buffer, short offset, short length) {
-    ECPublicKey ecPublicKey = (ECPublicKey) ecKeyPair.getPublic();
-    ecPublicKey.setW(buffer, offset, length);
-  }
-
   public ECPrivateKey getPrivateKey() {
     return (ECPrivateKey) ecKeyPair.getPrivate();
-  }
-
-  public ECPublicKey getPublicKey() {
-    return (ECPublicKey) ecKeyPair.getPublic();
   }
 
 }

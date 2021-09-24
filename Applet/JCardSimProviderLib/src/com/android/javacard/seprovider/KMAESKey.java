@@ -13,13 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
-/**
- * KMAttestationKey is a marker interface and the SE Provider has to implement this interface.
- * Internally attestation key is stored as a Javacard EC key pair object, which will provide
- * additional security. The attestation key is maintained by the SEProvider.
- */
-public interface KMAttestationKey {
+import javacard.security.AESKey;
+
+public class KMAESKey implements KMMasterKey {
+
+  private AESKey aesKey;
+
+  public KMAESKey(AESKey key) {
+    aesKey = key;
+  }
+
+  public void setKey(byte[] keyData, short kOff) {
+    aesKey.setKey(keyData, kOff);
+  }
+
+  public byte getKey(byte[] keyData, short kOff) {
+    return aesKey.getKey(keyData, kOff);
+  }
+
+  public short getKeySizeBits() {
+    return aesKey.getSize();
+  }
 }
-

@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.rkp;
+package com.android.javacard.keymaster;
 
-import com.android.javacard.keymaster.*;
+import com.android.javacard.seprovider.KMDeviceUniqueKey;
+import com.android.javacard.seprovider.KMException;
+import com.android.javacard.seprovider.KMOperation;
+import com.android.javacard.seprovider.KMSEProvider;
 import javacard.framework.*;
 
 /*
@@ -1220,7 +1223,7 @@ public class RemotelyProvisionedComponentDevice {
     boolean testMode = (TRUE == data[getEntry(TEST_MODE)]) ? true : false;
     short len;
     if (testMode) {
-      short bcc = seProvider.generateBcc(true, scratchPad);
+      short bcc = KMKeymasterApplet.generateBcc(true, scratchPad);
       len = KMKeymasterApplet
           .encodeToApduBuffer(bcc, scratchPad, (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
     } else {

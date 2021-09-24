@@ -13,18 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.javacard.keymaster;
+package com.android.javacard.seprovider;
 
-import org.globalplatform.upgrade.Element;
-
-public interface KMUpgradable {
-
-  void onSave(Element ele);
-
-  void onRestore(Element ele);
-
-  short getBackupPrimitiveByteCount();
-
-  short getBackupObjectCount();
-
+/**
+ * KMAttestationKey is a marker interface and the SE Provider has to implement this interface.
+ * Internally attestation key is stored as a Javacard EC key pair object, which will provide
+ * additional security. The attestation key is maintained by the SEProvider.
+ */
+public interface KMAttestationKey {
 }
+
