@@ -19,7 +19,12 @@ import com.android.javacard.seprovider.KMDeviceUniqueKey;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMOperation;
 import com.android.javacard.seprovider.KMSEProvider;
-import javacard.framework.*;
+
+import javacard.framework.APDU;
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
+import javacard.framework.Util;
 
 /*
  * This class handles the remote key provisioning. Generates an RKP key and generates a certificate signing
@@ -69,6 +74,8 @@ public class RemotelyProvisionedComponentDevice {
       {0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E};
   public static final byte[] SECURITY_LEVEL =
       {0x73, 0x65, 0x63, 0x75, 0x72, 0x69, 0x74, 0x79, 0x5F, 0x6C, 0x65, 0x76, 0x65, 0x6C};
+  public static final byte[] ATTEST_ID_STATE =
+      {0x61, 0x74, 0x74, 0x5f, 0x69, 0x64, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65};
   // Verified boot state values
   public static final byte[] VB_STATE_GREEN = {0x67, 0x72, 0x65, 0x65, 0x6E};
   public static final byte[] VB_STATE_YELLOW = {0x79, 0x65, 0x6C, 0x6C, 0x6F, 0x77};
@@ -81,6 +88,8 @@ public class RemotelyProvisionedComponentDevice {
   public static final byte DI_SCHEMA_VERSION = 1;
   public static final byte[] DI_SECURITY_LEVEL = {0x73, 0x74, 0x72, 0x6F, 0x6E, 0x67, 0x62, 0x6F,
       0x78};
+  public static final byte[] ATTEST_ID_LOCKED = {0x6c, 0x6f, 0x63, 0x6b, 0x65, 0x64};
+  public static final byte[] ATTEST_ID_OPEN = {0x6f, 0x70, 0x65, 0x6e};
   private static final short MAX_SEND_DATA = 1024;
   // more data or no data
   private static final byte MORE_DATA = 0x01; // flag to denote more data to retrieve
@@ -248,7 +257,7 @@ public class RemotelyProvisionedComponentDevice {
     KMKeymasterApplet.sendOutgoing(apdu, arr);
   }
 
-  public void processBeginSendData(APDU apdu) {
+  public void processBeginSendData(APDU apdu) throws Exception {
     try {
       initializeDataTable();
       short arr = KMArray.instance((short) 3);
@@ -288,7 +297,7 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
-  public void processUpdateKey(APDU apdu) {
+  public void processUpdateKey(APDU apdu) throws Exception {
     try {
       // The prior state can be BEGIN or UPDATE
       validateState((byte) (BEGIN | UPDATE));
@@ -331,7 +340,7 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
-  public void processUpdateEekChain(APDU apdu) {
+  public void processUpdateEekChain(APDU apdu) throws Exception {
     try {
       // The prior state can be BEGIN or UPDATE
       validateState((byte) (BEGIN | UPDATE));
@@ -374,7 +383,7 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
-  public void processUpdateChallenge(APDU apdu) {
+  public void processUpdateChallenge(APDU apdu) throws Exception {
     try {
       // The prior state can be BEGIN or UPDATE
       validateState((byte) (BEGIN | UPDATE));
@@ -403,7 +412,7 @@ public class RemotelyProvisionedComponentDevice {
 
   // This function returns pubKeysToSignMac, deviceInfo and partially constructed protected data
   // wrapped inside byte blob. The partial protected data contains Headers and encrypted signedMac.
-  public void processFinishSendData(APDU apdu) {
+  public void processFinishSendData(APDU apdu) throws Exception {
     try {
       // The prior state should be UPDATE.
       validateState(UPDATE);
@@ -413,8 +422,9 @@ public class RemotelyProvisionedComponentDevice {
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
       }
       // PubKeysToSignMac
+      byte[] empty = {};
       short len =
-          ((KMOperation) operation[0]).sign(null, (short) 0,
+          ((KMOperation) operation[0]).sign(empty, (short) 0,
               (short) 0, scratchPad, (short) 0);
       // release operation
       releaseOperation();
@@ -454,7 +464,7 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
-  public void processGetResponse(APDU apdu) {
+  public void processGetResponse(APDU apdu) throws Exception {
     try {
       // The prior state should be FINISH.
       validateState((byte) (FINISH | GET_RESPONSE));
@@ -499,7 +509,7 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
-  public void process(short ins, APDU apdu) {
+  public void process(short ins, APDU apdu) throws Exception  {
     switch (ins) {
       case KMKeymasterApplet.INS_GET_RKP_HARDWARE_INFO:
         processGetRkpHwInfoCmd(apdu);
@@ -860,18 +870,28 @@ public class RemotelyProvisionedComponentDevice {
   /**
    * DeviceInfo is a CBOR Map structure described by the following CDDL.
    * <p>
-   * DeviceInfo = { ? "brand" : tstr, ? "manufacturer" : tstr, ? "product" : tstr, ? "model" : tstr,
-   * ? "board" : tstr, ? "vb_state" : "green" / "yellow" / "orange",    // Taken from the AVB values
-   * ? "bootloader_state" : "locked" / "unlocked",    // Taken from the AVB values ?
-   * "vbmeta_digest": bstr,                         // Taken from the AVB values ? "os_version" :
-   * tstr,                    // Same as android.os.Build.VERSION.release ? "system_patch_level" :
-   * uint,                   // YYYYMMDD ? "boot_patch_level" : uint,                     //
-   * YYYYMMDD ? "vendor_patch_level" : uint,                   // YYYYMMDD "version" : 1, // The
-   * CDDL schema version. "security_level" : "tee" / "strongbox" }
+   * DeviceInfo = {
+   * ? "brand" : tstr,
+   * ? "manufacturer" : tstr,
+   * ? "product" : tstr,
+   * ? "model" : tstr,
+   * ? "board" : tstr,
+   * ? "vb_state" : "green" / "yellow" / "orange",    // Taken from the AVB values
+   * ? "bootloader_state" : "locked" / "unlocked",    // Taken from the AVB values
+   * ? "vbmeta_digest": bstr,                         // Taken from the AVB values
+   * ? "os_version" : tstr,                    // Same as android.os.Build.VERSION.release
+   * ? "system_patch_level" : uint,                   // YYYYMMDD
+   * ? "boot_patch_level" : uint,                     //YYYYMMDD
+   * ? "vendor_patch_level" : uint,                   // YYYYMMDD
+   * "version" : 1, // TheCDDL schema version
+   * "security_level" : "tee" / "strongbox"
+   * "att_id_state": "locked" / "open"
+   * }
    */
   private short createDeviceInfo(byte[] scratchpad) {
     // Device Info Key Value pairs.
     short[] deviceIds = {
+        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
         KMType.INVALID_VALUE, KMType.INVALID_VALUE,
         KMType.INVALID_VALUE, KMType.INVALID_VALUE,
         KMType.INVALID_VALUE, KMType.INVALID_VALUE,
@@ -906,6 +926,7 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(deviceIds, out, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(deviceIds, out, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
+    //TODO Add attest_id_state
     // Create device info map.
     short map = KMMap.instance(out[1]);
     short mapIndex = 0;
@@ -1227,9 +1248,7 @@ public class RemotelyProvisionedComponentDevice {
       len = KMKeymasterApplet
           .encodeToApduBuffer(bcc, scratchPad, (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
     } else {
-      //len = seProvider.getBootCertificateChainLength();
       byte[] bcc = seProvider.getBootCertificateChain();
-      //len = seProvider.readBootCertificateChain(scratchPad, (short) 0);
       len = Util.getShort(bcc, (short) 0);
       Util.arrayCopyNonAtomic(bcc, (short) 2, scratchPad, (short) 0, len);
     }
