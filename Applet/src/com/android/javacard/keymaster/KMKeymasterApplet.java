@@ -337,8 +337,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         return KMError.SW_WRONG_LENGTH;
       case ISO7816.SW_UNKNOWN:
       default:
-//        return KMError.UNKNOWN_ERROR;
-        return KMError.INVALID_NONCE;
+        return KMError.UNKNOWN_ERROR;
     }
   }
 
@@ -355,8 +354,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       case CryptoException.UNINITIALIZED_KEY:
         return KMError.CRYPTO_UNINITIALIZED_KEY;
       default:
- //       return KMError.UNKNOWN_ERROR;
-        return KMError.INVALID_NONCE;
+        return KMError.UNKNOWN_ERROR;
     }
   }
 
@@ -486,7 +484,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       resetWrappingKey();
       sendError(apdu, KMException.reason());
     } catch (ISOException exp) {
-      //    sendError(apdu, mapISOErrorToKMError(exp.getReason()));
+      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
       freeOperations();
       resetWrappingKey();
       sendError(apdu, mapISOErrorToKMError(exp.getReason()));
@@ -495,7 +493,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       resetWrappingKey();
       sendError(apdu, mapCryptoErrorToKMError(e.getReason()));
     } catch (Exception e) {
-//      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
+      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
       freeOperations();
       resetWrappingKey();
       sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
@@ -4037,6 +4035,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   public void powerReset() {
     //TODO handle power reset signal.
+    releaseAllOperations();
   }
 
   public static void generateRkpKey(byte[] scratchPad, short keyParams) {
