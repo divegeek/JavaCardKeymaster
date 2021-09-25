@@ -1,4 +1,3 @@
-package com.android.javacard.seprovider;
 /*
  * Copyright(C) 2021 The Android Open Source Project
  *
@@ -14,7 +13,7 @@ package com.android.javacard.seprovider;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+package com.android.javacard.seprovider;
 import javacard.security.KeyAgreement;
 import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
@@ -273,7 +272,9 @@ public class KMPoolManager {
       }
       if (pool[index] == null) {
         // Create one of the instance (Cipher / Signer / KeyAgreement] based on purpose.
+        JCSystem.beginTransaction();
         pool[index] = createInstance(purpose, alg);
+        JCSystem.commitTransaction();
         reserveOperation(operation, purpose, strongboxAlgType, padding, blockMode, macLength,
             pool[index]);
         break;
