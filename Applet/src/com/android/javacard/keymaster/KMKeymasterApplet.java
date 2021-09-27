@@ -3145,6 +3145,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = KMArray.instance((short) 4);
   }
 
+  private void validateAesKeySize(short keySizeBits) {
+    if (keySizeBits != 128 && keySizeBits != 256) {
+      KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+    }
+  }
+
   private void importAESKey(byte[] scratchPad) {
     // Get Key
     data[SECRET] = data[IMPORTED_KEY_BLOB];
@@ -3154,12 +3160,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short keysize =
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.KEYSIZE, data[KEY_PARAMETERS]);
     if (keysize != KMType.INVALID_VALUE) {
-      if (keysize != 128 && keysize != 256) {
-        KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
-      }
+      validateAesKeySize(keysize);
     } else {
       // add the key size to scratchPad
-      keysize = KMInteger.uint_16(KMByteBlob.cast(data[SECRET]).length());
+      keysize = (short) ( 8 * KMByteBlob.cast(data[SECRET]).length());
+      validateAesKeySize(keysize);
+      keysize = KMInteger.uint_16(keysize);
       short keysizeTag = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, keysize);
       Util.setShort(scratchPad, index, keysizeTag);
       index += 2;
@@ -4102,7 +4108,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ptr2 = KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PAYLOAD_OFFSET);
       ptr2 = decoder.decode(coseKeyExp, KMByteBlob.cast(ptr2).getBuffer(),
           KMByteBlob.cast(ptr2).getStartOff(), KMByteBlob.cast(ptr2).length());
-      if (index == (short) (len - 1)) {
+      if ((index == (short) (len - 1)) && len > 1) {
         alg = expLeafCertAlg;
       }
       if (!KMCoseKey.cast(ptr2).isDataValid(KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE, alg,
