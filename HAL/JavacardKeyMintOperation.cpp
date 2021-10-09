@@ -104,12 +104,9 @@ ScopedAStatus JavacardKeyMintOperation::abort() {
     return km_utils::kmError2ScopedAStatus(err);
 }
 
-void JavacardKeyMintOperation::blockAlign(DataView& view, short blockSize) {
+void JavacardKeyMintOperation::blockAlign(DataView& view, uint16_t blockSize) {
     appendBufferedData(view);
-    short offset = ((view.length / blockSize) - 1) * blockSize;
-    if (offset <= 0) {
-        offset = 0;
-    }
+    uint16_t offset = getDataViewOffset(view, blockSize);
     if (view.buffer.empty() && view.data.empty()) {
         offset = 0;
     } else if (view.buffer.empty()) {
@@ -127,6 +124,33 @@ void JavacardKeyMintOperation::blockAlign(DataView& view, short blockSize) {
     }
     // adjust the view length by removing the buffered data size from it.
     view.length = view.length - buffer_.size();
+}
+
+uint16_t JavacardKeyMintOperation::getDataViewOffset(DataView& view, uint16_t blockSize) {
+    uint16_t offset = 0;
+    uint16_t remaining = 0;
+    switch(bufferingMode_) {
+        case BufferingMode::AES_BLOCK_ALIGNED:
+        case BufferingMode::DES_BLOCK_ALIGNED:
+        offset = ((view.length / blockSize)) * blockSize;
+        break;
+    case BufferingMode::AES_BLOCK_ALIGNED_DECRYPT_PKCS7:
+    case BufferingMode::DES_BLOCK_ALIGNED_DECRYPT_PKCS7:
+        offset = ((view.length / blockSize)) * blockSize;
+        remaining = (view.length % blockSize);
+        if (offset >= blockSize && remaining == 0) {
+            offset -= blockSize;
+        }
+        break;
+    case BufferingMode::AES_GCM_DECRYPT_BLOCK_ALIGNED:
+        if (view.length > macLength_) {
+            offset = (view.length - macLength_);
+        }
+        break;
+    default:
+        break;
+    }
+    return offset;
 }
 
 keymaster_error_t JavacardKeyMintOperation::bufferData(DataView& view) {
@@ -152,8 +176,16 @@ keymaster_error_t JavacardKeyMintOperation::bufferData(DataView& view) {
         view.start = 0;
         view.length = 0;
         break;
-    case BufferingMode::BLOCK_ALIGNED:
-        blockAlign(view, BLOCK_SIZE);
+    case BufferingMode::AES_BLOCK_ALIGNED:
+    case BufferingMode::AES_BLOCK_ALIGNED_DECRYPT_PKCS7:
+        blockAlign(view, AES_BLOCK_SIZE);
+        break;
+    case BufferingMode::AES_GCM_DECRYPT_BLOCK_ALIGNED:
+        blockAlign(view, macLength_);
+        break;
+    case BufferingMode::DES_BLOCK_ALIGNED:
+    case BufferingMode::DES_BLOCK_ALIGNED_DECRYPT_PKCS7:
+        blockAlign(view, DES_BLOCK_SIZE);
         break;
     case BufferingMode::NONE:
         break;
