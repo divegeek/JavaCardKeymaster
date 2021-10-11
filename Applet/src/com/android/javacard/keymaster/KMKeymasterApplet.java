@@ -4037,6 +4037,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public void powerReset() {
     //TODO handle power reset signal.
     releaseAllOperations();
+    resetWrappingKey();
   }
 
   public static void generateRkpKey(byte[] scratchPad, short keyParams) {
