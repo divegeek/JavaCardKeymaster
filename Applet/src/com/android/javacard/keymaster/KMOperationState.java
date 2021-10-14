@@ -337,15 +337,33 @@ public class KMOperationState {
     short alg = getAlgorithm();
     short purpose = getPurpose();
     short digest = getDigest();
+    short padding = getPadding();
+    short blockMode = getBlockMode();
 
     if(alg == KMType.RSA && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN){
       return KMType.BUF_RSA_NO_DIGEST;
     }
+
     if(alg == KMType.EC && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN){
       return KMType.BUF_EC_NO_DIGEST;
     }
-    if(alg == KMType.AES || alg == KMType.DES){
-      return KMType.BUF_BLOCK_ALIGN;
+
+    switch(alg) {
+    case KMType.AES:
+      if (purpose == KMType.DECRYPT && padding == KMType.PKCS7) {
+        return KMType.BUF_AES_PKCS7_DECRYPT_BLOCK_ALIGN;
+      } else if (purpose == KMType.DECRYPT && blockMode == KMType.GCM) {
+        return KMType.BUF_AES_GCM_DECRYPT_BLOCK_ALIGN;
+      } else if (blockMode == KMType.CBC || blockMode == KMType.ECB) {
+        return KMType.BUF_AES_BLOCK_ALIGN;
+      }
+      break;
+    case KMType.DES:
+      if (purpose == KMType.DECRYPT && padding == KMType.PKCS7) {
+        return KMType.BUF_DES_PKCS7_DECRYPT_BLOCK_ALIGN;
+      } else {
+        return KMType.BUF_DES_BLOCK_ALIGN;
+      }
     }
     return KMType.BUF_NONE;
   }

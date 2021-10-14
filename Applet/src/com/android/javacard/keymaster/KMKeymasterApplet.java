@@ -2101,15 +2101,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       short len  = KMByteBlob.cast(data[INPUT_DATA]).length();
       short additionalExpOutLen = 0;
       if (op.getAlgorithm() == KMType.AES) {
-        if (op.getBlockMode() == KMType.GCM) {
+        if (op.getBlockMode() == KMType.GCM || op.getBlockMode() == KMType.CTR) {
           if(op.isAesGcmUpdateAllowed()){
             op.setAesGcmUpdateComplete();
-          }
-          // if input data present then it should be block aligned.
-          if (len > 0) {
-            if (len % AES_BLOCK_SIZE != 0) {
-              KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-            }
           }
           additionalExpOutLen = 16;
         } else {
@@ -2332,11 +2326,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
 
     short params = KMKeyParameters.instance(iv);
-    short resp  = KMArray.instance((short) 4);
+    short resp  = KMArray.instance((short) 5);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(resp).add((short) 1, params);
     KMArray.cast(resp).add((short) 2, data[OP_HANDLE]);
     KMArray.cast(resp).add((short) 3, KMInteger.uint_8(op.getBufferingMode()));
+    KMArray.cast(resp).add((short) 4, KMInteger.uint_16((short) (op.getMacLength() / 8)));
     sendOutgoing(apdu, resp);
   }
 
@@ -4042,6 +4037,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public void powerReset() {
     //TODO handle power reset signal.
     releaseAllOperations();
+    resetWrappingKey();
   }
 
   public static void generateRkpKey(byte[] scratchPad, short keyParams) {
