@@ -351,18 +351,18 @@ public class KMOperationState {
     switch(alg) {
     case KMType.AES:
       if (purpose == KMType.DECRYPT && padding == KMType.PKCS7) {
-        return KMType.AES_BUF_PKCS7_DECRYPT;
+        return KMType.BUF_AES_PKCS7_DECRYPT_BLOCK_ALIGN;
       } else if (purpose == KMType.DECRYPT && blockMode == KMType.GCM) {
-        return KMType.AES_GCM_DECRYPT_BLOCK_ALIGN;
+        return KMType.BUF_AES_GCM_DECRYPT_BLOCK_ALIGN;
       } else if (blockMode == KMType.CBC || blockMode == KMType.ECB) {
-        return KMType.AES_BUF_BLOCK_ALIGN;
+        return KMType.BUF_AES_BLOCK_ALIGN;
       }
       break;
     case KMType.DES:
       if (purpose == KMType.DECRYPT && padding == KMType.PKCS7) {
-        return KMType.DES_BUF_PKCS7_DECRYPT;
+        return KMType.BUF_DES_PKCS7_DECRYPT_BLOCK_ALIGN;
       } else {
-        return KMType.DES_BUF_BLOCK_ALIGN;
+        return KMType.BUF_DES_BLOCK_ALIGN;
       }
     }
     return KMType.BUF_NONE;

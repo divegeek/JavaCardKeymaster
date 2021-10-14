@@ -46,11 +46,11 @@ enum class BufferingMode : int32_t {
                         // will further check according to exact key size and crypto provider.
     EC_NO_DIGEST = 2,   // Buffer upto 65 bytes and then truncate. Javacard will further truncate
                         // upto exact keysize.
-    AES_BLOCK_ALIGNED = 3,  // Buffer 15 bytes and reminder to make input data block aligned.
-    AES_BLOCK_ALIGNED_DECRYPT_PKCS7 = 4, // Buffer 16 bytes.
-    DES_BLOCK_ALIGNED = 5, // Buffer 7 bytes and reminder to make input data block aligned.
-    DES_BLOCK_ALIGNED_DECRYPT_PKCS7 = 6, // Buffer 8 bytes.
-    AES_GCM_DECRYPT_BLOCK_ALIGNED = 7, // Buffer 16 bytes.
+    BUF_AES_BLOCK_ALIGNED = 3,  // Buffer 15 bytes and reminder to make input data block aligned.
+    BUF_AES_DECRYPT_PKCS7_BLOCK_ALIGNED = 4, // Buffer 16 bytes.
+    BUF_DES_BLOCK_ALIGNED = 5, // Buffer 7 bytes and reminder to make input data block aligned.
+    BUF_DES_DECRYPT_PKCS7_BLOCK_ALIGNED = 6, // Buffer 8 bytes.
+    BUF_AES_GCM_DECRYPT_BLOCK_ALIGNED = 7, // Buffer 16 bytes.
 
 };
 
