@@ -84,7 +84,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte keyUsageKeyEncipher = (byte) 0x20; // 2nd- bit
   private static final byte keyUsageDataEncipher = (byte) 0x10; // 3rd- bit
 
-  rivate static final byte KEYMASTER_VERSION = 40;
+  private static final byte KEYMASTER_VERSION = 40;
   private static final byte ATTESTATION_VERSION = 3;
   private static final byte[] pubExponent = {0x01, 0x00, 0x01};
   private static final byte SERIAL_NUM = (byte) 0x01;
