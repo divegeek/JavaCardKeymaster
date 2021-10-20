@@ -303,6 +303,14 @@ public class KMUtils {
     return KMInteger.unsignedByteArrayCompare(buf, lhs, buf, rhs, (short) 8);
   }
 
+  public static void shiftLeft(byte[] buf, short start, short count) {
+    short index = 0;
+    while (index < count) {
+      shiftLeft(buf, start);
+      index++;
+    }
+  }
+
   public static void shiftLeft(byte[] buf, short start) {
     byte index = 7;
     byte carry = 0;
@@ -343,7 +351,9 @@ public class KMUtils {
     byte carry = 0;
     short tmp;
     while (index >= 0) {
-      tmp = (short) (buf[(short) (op1 + index)] + buf[(short) (op2 + index)] + carry);
+      tmp =
+          (short) ((buf[(short) (op1 + index)] & 0xFF) +
+              (buf[(short) (op2 + index)] & 0xFF) + carry);
       carry = 0;
       if (tmp > 255) {
         carry = 1; // max unsigned byte value is 255
@@ -407,6 +417,22 @@ public class KMUtils {
       }
     }
     return -1;
+  }
+
+  // i * 1000 = (i << 9) + (i << 8) + (i << 7) + (i << 6) + (i << 5) + ( i << 3)
+  public static void convertToMilliseconds(byte[] buf, short inputOff, short outputOff,
+      short scratchPadOff) {
+    byte[] shiftPos = {9, 8, 7, 6, 5, 3};
+    short index = 0;
+    while (index < (short) (shiftPos.length)) {
+      Util.arrayCopyNonAtomic(buf, inputOff, buf, scratchPadOff, (short) 8);
+      shiftLeft(buf, scratchPadOff, shiftPos[index]);
+      Util.arrayCopyNonAtomic(buf, outputOff, buf, (short) (scratchPadOff + 8), (short) 8);
+      add(buf, scratchPadOff, (short) (8 + scratchPadOff), (short) (16 + scratchPadOff));
+      Util.arrayCopyNonAtomic(buf, (short) (scratchPadOff + 16), buf, outputOff, (short) 8);
+      Util.arrayFillNonAtomic(buf, scratchPadOff, (short) 24, (byte) 0);
+      index++;
+    }
   }
 
 }
