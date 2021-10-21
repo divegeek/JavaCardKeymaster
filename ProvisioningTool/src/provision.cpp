@@ -26,6 +26,7 @@
 #include <cppbor/cppbor.h>
 #include <cppbor/cppbor_parse.h>
 
+#define SE_POWER_RESET_STATUS_FLAG (1 << 30)
 enum ProvisionStatus {
     NOT_PROVISIONED = 0x00,
     PROVISION_STATUS_ATTESTATION_KEY = 0x01,
@@ -112,6 +113,17 @@ int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t &v
     return SUCCESS;
 }
 
+
+uint64_t unmaskPowerResetFlag(uint64_t errorCode) {
+    bool isSeResetOccurred = (0 != (errorCode & SE_POWER_RESET_STATUS_FLAG));
+
+    if (isSeResetOccurred) {
+        printf("\n Secure element reset happened\n");
+        errorCode &= ~SE_POWER_RESET_STATUS_FLAG;
+    }
+    return errorCode;
+}
+
 int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, std::vector<uint8_t>& response) {
     if (SUCCESS != sendData(pSocket, apdu, response)) {
         return FAILURE;
@@ -128,6 +140,7 @@ int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, s
             const Uint* uintVal = item.get()->asUint();
             err = uintVal->value();
         }
+        err = unmaskPowerResetFlag(err);
         if (err != 0) {
             printf("\n Failed with error:%ld", err);
             return FAILURE;

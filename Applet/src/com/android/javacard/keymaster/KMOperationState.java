@@ -16,6 +16,8 @@
 
 package com.android.javacard.keymaster;
 
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
@@ -27,7 +29,7 @@ import javacard.framework.Util;
  */
 public class KMOperationState {
 
-  public static final byte MAX_DATA = 20;
+  public static final byte MAX_DATA = 63;
   private static final byte OPERATION = 0;
   private static final byte TRUE = 1;
   private static final byte FALSE = 0;
@@ -38,18 +40,23 @@ public class KMOperationState {
   private static final byte BLOCKMODE = 3;
   private static final byte DIGEST = 4;
   private static final byte FLAGS = 5;
+  private static final byte AUTH_TYPE = 6;
   // short type
-  private static final byte KEY_SIZE = 6;
-  private static final byte MAC_LENGTH = 8;
+  private static final byte KEY_SIZE = 7;
+  private static final byte MAC_LENGTH = 9;
   // Handle - currently this is short
-  private static final byte OP_HANDLE = 10;
+  private static final byte OP_HANDLE = 11;
   // Auth time 64 bits
-  private static final byte AUTH_TIME = 12;
+  private static final byte AUTH_TIME = 13;
+  // Secure user ids 5 * 8 = 40 bytes ( Considering Maximum 5 SECURE USER IDs)
+  // First two bytes are reserved to store number of secure ids. SO total 42 bytes.
+  private static final byte USER_SECURE_ID = 21;
   // Flag masks
   private static final byte AUTH_PER_OP_REQD = 1;
   private static final byte SECURE_USER_ID_REQD = 2;
   private static final byte AUTH_TIMEOUT_VALIDATED = 4;
   private static final byte AES_GCM_UPDATE_ALLOWED = 8;
+  private static final byte MAX_SECURE_USER_IDS = 5;
 
   // Object References
   private byte[] data;
@@ -162,6 +169,58 @@ public class KMOperationState {
 
   public void setAuthTime(byte[] timeBuf, short start) {
     Util.arrayCopy(timeBuf, start, data, (short) AUTH_TIME, (short) 8);
+    dataUpdated();
+  }
+
+  public void setAuthType(byte authType) {
+    data[AUTH_TYPE] = authType;
+    dataUpdated();
+  }
+
+  public short getAuthType() {
+    return data[AUTH_TYPE];
+  }
+
+  public short getUserSecureId() {
+    short offset = USER_SECURE_ID;
+    short length = Util.getShort(data, USER_SECURE_ID);
+    if (length == 0) {
+      return KMType.INVALID_VALUE;
+    }
+    short arrObj = KMArray.instance(length);
+    short index = 0;
+    short obj;
+    offset = (short) (2 + USER_SECURE_ID);
+    while (index < length) {
+      obj = KMInteger.instance(data, (short) (offset + index * 8), (short) 8);
+      KMArray.cast(arrObj).add(index, obj);
+      index++;
+    }
+    return KMIntegerArrayTag.instance(KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID, arrObj);
+  }
+
+  public void setUserSecureId(short integerArrayPtr) {
+    short length = KMIntegerArrayTag.cast(integerArrayPtr).length();
+    if (length > MAX_SECURE_USER_IDS) {
+      KMException.throwIt(KMError.INVALID_KEY_BLOB);
+    }
+    Util.arrayFillNonAtomic(data, USER_SECURE_ID, (short) (MAX_SECURE_USER_IDS * 8) , (byte) 0);
+    short index = 0;
+    short obj;
+    short offset = USER_SECURE_ID;
+    Util.setShort(data, offset, length);
+    offset += 2;
+    while (index < length) {
+      obj = KMIntegerArrayTag.cast(integerArrayPtr).get(index);
+      Util.arrayCopy(
+          KMInteger.cast(obj).getBuffer(),
+          KMInteger.cast(obj).getStartOff(),
+          data,
+          (short) (8 - KMInteger.cast(obj).length() + offset + 8 * index),
+          KMInteger.cast(obj).length()
+      );
+      index++;
+    }
     dataUpdated();
   }
 
