@@ -1968,7 +1968,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       if (KMInteger.compare(data[OP_HANDLE], tmpVariables[0]) != 0) {
         KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
       }
-      authTokenMatches(op, scratchPad);
+      authTokenMatches(op.getUserSecureId(), op.getAuthType(), scratchPad);
     }
   }
 
@@ -2728,33 +2728,31 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void authorizeUserSecureIdAuthTimeout(KMOperationState op, byte[] scratchPad) {
     short authTime;
+    short authType;
     // Authorize User Secure Id and Auth timeout
-    tmpVariables[0] =
+    short userSecureIdPtr =
         KMKeyParameters.findTag(KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID, data[HW_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE) {
+    if (userSecureIdPtr != KMType.INVALID_VALUE) {
       // Authentication required.
-      tmpVariables[1] =
-          KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.NO_AUTH_REQUIRED, data[HW_PARAMETERS]);
-      if (tmpVariables[1] != KMType.INVALID_VALUE) {
+      if (KMType.INVALID_VALUE !=
+          KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.NO_AUTH_REQUIRED, data[HW_PARAMETERS])) {
         // Key has both USER_SECURE_ID and NO_AUTH_REQUIRED
         KMException.throwIt(KMError.INVALID_KEY_BLOB);
       }
-      // store user secure id
-      op.setUserSecureId(tmpVariables[0]);
       // store authenticator type
       if(KMType.INVALID_VALUE ==
-          (tmpVariables[0] = KMEnumTag.getValue(KMType.USER_AUTH_TYPE, data[HW_PARAMETERS]))) {
+          (authType = KMEnumTag.getValue(KMType.USER_AUTH_TYPE, data[HW_PARAMETERS]))) {
         // Authentication required, but no auth type found.
         KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
       }
-      op.setAuthType((byte) tmpVariables[0]);
-      tmpVariables[0] =
+      
+      short authTimeoutTagPtr =
           KMKeyParameters.findTag(KMType.UINT_TAG, KMType.AUTH_TIMEOUT, data[HW_PARAMETERS]);
-      if (tmpVariables[0] != KMType.INVALID_VALUE) {
+      if (authTimeoutTagPtr != KMType.INVALID_VALUE) {
         // authenticate user
-        authTokenMatches(op, scratchPad);
+        authTokenMatches(userSecureIdPtr, authType, scratchPad);
 
-        authTime = KMIntegerTag.cast(tmpVariables[0]).getValue();
+        authTime = KMIntegerTag.cast(authTimeoutTagPtr).getValue();
         // set the one time auth
         op.setOneTimeAuthReqd(true);
         // set the authentication time stamp in operation state
@@ -2767,6 +2765,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         op.setAuthTimeoutValidated(false);
       } else {
         // auth per operation required
+        // store user secure id and authType in OperationState.
+        op.setUserSecureId(userSecureIdPtr);
+        op.setAuthType((byte) authType);
+        // set flags
         op.setOneTimeAuthReqd(false);
         op.setAuthPerOperationReqd(true);
       }
@@ -2789,18 +2791,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return false;
   }
 
-  private void authTokenMatches(KMOperationState op, byte[] scratchPad) {
+  private void authTokenMatches(short userSecureIdsPtr, short authType, 
+      byte[] scratchPad) {
     if (!validateHwToken(data[HW_TOKEN], scratchPad)) {
       KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
     }
-    if (!isHwAuthTokenContainsMatchingSecureId(data[HW_TOKEN], op.getUserSecureId())) {
+    if (!isHwAuthTokenContainsMatchingSecureId(data[HW_TOKEN], userSecureIdsPtr)) {
       KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
     }
     // check auth type
-    tmpVariables[1] = op.getAuthType();
     tmpVariables[2] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getHwAuthenticatorType();
     tmpVariables[2] = KMEnum.cast(tmpVariables[2]).getVal();
-    if (((byte) tmpVariables[2] & (byte) tmpVariables[1]) == 0) {
+    if (((byte) tmpVariables[2] & (byte) authType) == 0) {
       KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
     }
   }
