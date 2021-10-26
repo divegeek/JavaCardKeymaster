@@ -1500,6 +1500,52 @@ Return<ErrorCode> JavacardKeymaster4Device::abort(uint64_t operationHandle) {
     return errorCode;
 }
 
+// Methods from ::android::hardware::keymaster::V4_1::IKeymasterDevice follow.
+Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device::deviceLocked(bool passwordOnly, const VerificationToken& verificationToken) {
+    cppbor::Array array;
+    std::unique_ptr<Item> item;
+    std::vector<uint8_t> cborOutData;
+    ::android::hardware::keymaster::V4_1::ErrorCode errorCode = ::android::hardware::keymaster::V4_1::ErrorCode::UNKNOWN_ERROR;
+    std::vector<uint8_t> asn1ParamsVerified;
+    ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
+
+    if(ErrorCode::OK != (ret = encodeParametersVerified(verificationToken, asn1ParamsVerified))) {
+        LOG(DEBUG) << "INS_DEVICE_LOCKED_CMD: Error in encodeParametersVerified, status: " << (int32_t) errorCode;
+        return errorCode;
+    }
+
+    /* Convert input data to cbor format */
+    array.add(passwordOnly);
+    cborConverter_.addVerificationToken(array, verificationToken, asn1ParamsVerified);
+    std::vector<uint8_t> cborData = array.encode();
+
+    ret = sendData(Instruction::INS_DEVICE_LOCKED_CMD, cborData, cborOutData);
+
+    if(ret == ErrorCode::OK) {
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = decodeData<::android::hardware::keymaster::V4_1::ErrorCode>(
+                cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true, oprCtx_);
+    }
+    return errorCode;
+}
+
+Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device::earlyBootEnded() {
+    std::unique_ptr<Item> item;
+    std::string message;
+    std::vector<uint8_t> cborOutData;
+    std::vector<uint8_t> cborInput;
+    ::android::hardware::keymaster::V4_1::ErrorCode errorCode = ::android::hardware::keymaster::V4_1::ErrorCode::UNKNOWN_ERROR;
+
+    ErrorCode ret = sendData(Instruction::INS_EARLY_BOOT_ENDED_CMD, cborInput, cborOutData);
+
+    if(ret == ErrorCode::OK) {
+        //Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = decodeData<::android::hardware::keymaster::V4_1::ErrorCode>(
+                cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true, oprCtx_);
+    }
+    return errorCode;
+}
+
 }  // javacard
 }  // namespace V4_1
 }  // namespace keymaster
