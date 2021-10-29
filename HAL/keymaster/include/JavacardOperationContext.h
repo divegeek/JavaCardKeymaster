@@ -136,14 +136,14 @@ private:
      * reamining data for update calls only. For finish calls it extracts all the buffered data combines it with
      * input data.
      */
-    ErrorCode getBlockAlignedData(uint64_t operHandle, uint8_t* input, size_t input_len, Operation opr, std::vector<uint8_t>&
-            out);
+    ErrorCode getBlockAlignedData(uint64_t operHandle, std::vector<uint8_t>& input,
+        Operation opr, std::vector<uint8_t>& out);
     /**
      * This function sends the data back to the caller using callback functions. It does some processing on input data
      * for Asymmetic operations.
      */
-    ErrorCode handleInternalUpdate(uint64_t operHandle, uint8_t* data, size_t len, Operation opr,
-        sendDataToSE_cb cb, bool finish=false);
+    ErrorCode handleInternalUpdate(uint64_t operHandle, std::vector<uint8_t>& data, Operation opr,
+        sendDataToSE_cb cb, bool finish = false);
 
 };
 

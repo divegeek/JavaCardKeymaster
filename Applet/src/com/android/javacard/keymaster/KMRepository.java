@@ -380,6 +380,9 @@ public class KMRepository implements KMUpgradable {
   }
 
   public short alloc(short length) {
+    if (length < 0) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
     if ((((short) (heapIndex[0] + length)) > heap.length) ||
         (((short) (heapIndex[0] + length)) > reclaimIndex[0])) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
@@ -389,6 +392,9 @@ public class KMRepository implements KMUpgradable {
   }
 
   private short dataAlloc(short length) {
+    if (length < 0) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
     if (((short) (dataIndex + length)) > dataTable.length) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
@@ -617,7 +623,7 @@ public class KMRepository implements KMUpgradable {
 
   public boolean getBootLoaderLock() {
     short blob = readData(BOOT_DEVICE_LOCKED_STATUS);
-    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()] & 0xFE) != 0;
+    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]) == 0x01;
   }
 
   public byte getBootState() {
@@ -677,9 +683,9 @@ public class KMRepository implements KMUpgradable {
   public void setBootloaderLocked(boolean flag) {
     short start = alloc(DEVICE_LOCK_FLAG_SIZE);
     if (flag) {
-      (getHeap())[start] = (byte) ((getHeap())[start] | 0x01);
+      (getHeap())[start] = (byte) 0x01;
     } else {
-      (getHeap())[start] = (byte) ((getHeap())[start] & 0xFE);
+      (getHeap())[start] = (byte) 0x00;
     }
     writeDataEntry(BOOT_DEVICE_LOCKED_STATUS, getHeap(), start, DEVICE_LOCK_FLAG_SIZE);
   }

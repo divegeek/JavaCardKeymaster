@@ -114,7 +114,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final short AES_GCM_NONCE_LENGTH = 12;
   public static final byte KEYSIZE_128_OFFSET = 0x00;
   public static final byte KEYSIZE_256_OFFSET = 0x01;
-  public static final short TMP_ARRAY_SIZE = 256;
+  public static final short TMP_ARRAY_SIZE = 300;
   private static final short RSA_KEY_SIZE = 256;
   public static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
 
