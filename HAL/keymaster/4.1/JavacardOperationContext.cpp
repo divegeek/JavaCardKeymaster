@@ -220,17 +220,19 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
   * buffer from buffered data and then the remaining from the input data. If the buffered data is empty then it copies
   * data to out buffer from only input and similarly if the input is empty then it copies from only buffer. Incase if
   * only a portion of the input data is consumed then the remaining portion of input data is buffered. For AES/TDES
-  * Decryption operations with PKCS7 padding and for AES GCM operations a block size of data is always buffered. This is
-  * done to make sure that there will be always a block size of data left for finish operation so that the Applet may
-  * remove the PKCS7 padding if any or get the tag data for AES GCM operation for authentication purpose. Once the data
-  * from the buffer is consumed then the buffer is cleared.
+  * Decryption operations with PKCS7 padding and for AES GCM Decryption operations a block size of data and tag length
+  * of data is always buffered respectively. This is done to make sure that there will be always a block size of data
+  * left for finish operation so that the Applet may remove the PKCS7 padding if any or get the tag data for AES GCM
+  * operation for authentication purpose. Once the data from the buffer is consumed then the buffer is cleared. No
+  * Buffering is done for AES GCM Encrypt and CTR Modes of operation.
   */
 ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, std::vector<uint8_t>& input,
         Operation opr, std::vector<uint8_t>& out) {
-    size_t dataToSELen = 0;/*Length of the data to be send to the Applet.*/
-    size_t inputConsumed = 0;/*Length of the data consumed from input */
-    size_t blockSize = 0;
     BufferedData& data = operationTable[operHandle].data;
+    int dataToSELen = 0;/*Length of the data to be send to the Applet.*/
+    int inputConsumed = 0;/*Length of the data consumed from input */
+    int bufferLengthConsumed = 0; /* Length of the data consumed from Buffer */
+    int blockSize = 0;
     int bufIndex = data.buf_len;
     if(Algorithm::AES == operationTable[operHandle].info.alg) {
         blockSize = AES_BLOCK_SIZE;
@@ -244,18 +246,27 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, std::vector
         //Copy the buffer to be send to SE.
         out.insert(out.end(), data.buf, data.buf + data.buf_len);
         dataToSELen = data.buf_len + input.size();
+        bufferLengthConsumed  = data.buf_len;
     } else {
         /*Update */
         //Calculate the block sized length on combined input of both buffered data and input data.
-        //For symmetric ciphers, decryption operation and PKCS7 padding mode or AES GCM operation save the last 16 bytes
-        //of block and send this block in finish operation. This is done to make sure that there will be always a 16
-        //bytes of data left for finish operation so that javacard Applet may remove PKCS7 padding if any or get the tag
-        //data for AES GCM operation for authentication purpose.
+        // AES/TDES, ECB and CBC Modes:
+        //     Buffer till (blockSize - 1) bytes of data is received.
+        // AES GCM(Encrypt) or CTR Modes:
+        //     No Buffering.
+        // AES/TDES, Decrypt PKCS7 Padding:
+        //     Buffer till blockSize of data is received.
+        // AES GCM Decrypt:
+        //     Buffer tag length bytes of data.
+        //For symmetric ciphers, decryption operation and PKCS7 padding mode or AES GCM operation save the last
+        // blockSize/tagSize bytes of data and send this block in finish operation. This is done to make sure
+        // that there will be always a blockSize/tagSize bytes of data left for finish operation so that javacard
+        // Applet may remove PKCS7 padding if any or get the tag data for AES GCM operation for authentication purpose.
         if (operationTable[operHandle].info.pad == PaddingMode::PKCS7 &&
             operationTable[operHandle].info.purpose == KeyPurpose::DECRYPT) {
             /* Buffer till we receive more than blockSize of data of atleast one byte*/
             dataToSELen = ((data.buf_len + input.size())/blockSize) * blockSize;
-            size_t remaining = ((data.buf_len + input.size()) % blockSize);
+            int remaining = ((data.buf_len + input.size()) % blockSize);
             if (dataToSELen >= blockSize && remaining == 0) {
                 dataToSELen -= blockSize;
             }
@@ -276,9 +287,8 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, std::vector
         }
         //Copy data to be send to SE from buffer, only if atleast a minimum block aligned size is available.
         if(dataToSELen > 0) {
-            for(size_t pos = 0; pos < std::min(dataToSELen, data.buf_len); pos++) {
-                out.push_back(data.buf[pos]);
-            }
+            bufferLengthConsumed = (dataToSELen > data.buf_len) ? data.buf_len : dataToSELen;
+            out.insert(out.end(), data.buf, data.buf + bufferLengthConsumed);
         }
     }
 
@@ -290,13 +300,15 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, std::vector
         inputConsumed = (data.buf_len > dataToSELen) ? 0 : (dataToSELen - data.buf_len);
 
         // Copy the buffer to be send to SE.
-        out.insert(out.end(), input.begin(), input.begin() + inputConsumed);
+        if (inputConsumed > 0) {
+            out.insert(out.end(), input.begin(), input.begin() + inputConsumed);
+        }
 
-        if(data.buf_len > dataToSELen) {
-            //Only blockAlignedLen data is consumed from buffer so reorder the buffer data.
-            memcpy(data.buf, (data.buf + dataToSELen), (data.buf_len - dataToSELen));
-            memset((data.buf + data.buf_len - dataToSELen), 0x00, dataToSELen);
-            data.buf_len -= dataToSELen;
+        if (bufferLengthConsumed < data.buf_len) {
+            // Only a portion of data is consumed from buffer so reorder the buffer data.
+            memmove(data.buf, (data.buf + bufferLengthConsumed), (data.buf_len - bufferLengthConsumed));
+            memset((data.buf + data.buf_len - bufferLengthConsumed), 0x00, bufferLengthConsumed);
+            data.buf_len -= bufferLengthConsumed;
             bufIndex = data.buf_len;
         } else {
             // All the data is consumed so clear buffer

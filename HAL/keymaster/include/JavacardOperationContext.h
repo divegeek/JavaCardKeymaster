@@ -49,7 +49,7 @@ enum class Operation;
  */
 struct BufferedData {
     uint8_t buf[MAX_BUF_SIZE];
-    size_t buf_len;
+    uint32_t buf_len;
 };
 
 /**
@@ -61,6 +61,7 @@ struct OperationInfo {
     Digest digest;
     PaddingMode pad;
     BlockMode mode;
+    uint32_t macLength;
 };
 
 /**
