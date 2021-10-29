@@ -117,6 +117,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final short TMP_ARRAY_SIZE = 300;
   private static final short RSA_KEY_SIZE = 256;
   public static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
+  private static final short MAX_OPERATIONS = 4;
 
   final byte[] CIPHER_ALGS = {
       Cipher.ALG_AES_BLOCK_128_CBC_NOPAD,
@@ -273,10 +274,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private void initializeOperationPool() {
     short index = 0;
     while (index < 4) {
-      operationPool[index] = new KMInstance();
-      ((KMInstance) operationPool[index]).instanceCount = 1;
-      ((KMInstance) operationPool[index]).object = new KMOperationImpl();
-      ((KMInstance) operationPool[index]).reserved = 0;
+      operationPool[index] = new KMOperationImpl();
       index++;
     }
   }
@@ -285,10 +283,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private void initializeSigPool() {
     short index = 0;
     while (index < SIG_ALGS.length) {
-      sigPool[index] = new KMInstance();
-      ((KMInstance) sigPool[index]).instanceCount = 1;
-      ((KMInstance) sigPool[index]).object = getSignatureInstance(SIG_ALGS[index]);
-      ((KMInstance) sigPool[index]).reserved = 0;
+      sigPool[index] = getSignatureInstance(SIG_ALGS[index]);
       index++;
     }
   }
@@ -312,44 +307,46 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
   }
 
-  private byte getCipherAlgorithm(Cipher c) {
-    return c.getAlgorithm();
-  }
-
   // Create a cipher instance of each algorithm once.
   private void initializeCipherPool() {
     short index = 0;
     while (index < CIPHER_ALGS.length) {
-      cipherPool[index] = new KMInstance();
-      ((KMInstance) cipherPool[index]).instanceCount = 1;
-      ((KMInstance) cipherPool[index]).object = getCipherInstance(CIPHER_ALGS[index]);
-      ((KMInstance) cipherPool[index]).reserved = 0;
+      cipherPool[index] = getCipherInstance(CIPHER_ALGS[index]);
       index++;
     }
   }
 
   private KMOperationImpl getOperationInstanceFromPool() {
-    return (KMOperationImpl) getInstanceFromPool(operationPool, (byte) 0x00);
-  }
-
-  public void releaseOperationInstance(KMOperationImpl operation) {
-    releaseInstance(operationPool, operation);
+    short index = 0;
+    KMOperationImpl impl;
+    while (index < operationPool.length) {
+      impl = (KMOperationImpl) operationPool[index];
+      // Mode is always set. so compare using mode value.
+      if (impl.getMode() == KMType.INVALID_VALUE) {
+        return impl;
+      }
+      index++;
+    }
+    return null;
   }
 
   private Signature getSignatureInstanceFromPool(byte alg) {
     return (Signature) getInstanceFromPool(sigPool, alg);
   }
 
-  public void releaseSignatureInstance(Signature signer) {
-    releaseInstance(sigPool, signer);
-  }
-
   private Cipher getCipherInstanceFromPool(byte alg) {
     return (Cipher) getInstanceFromPool(cipherPool, alg);
   }
 
-  public void releaseCipherInstance(Cipher cipher) {
-    releaseInstance(cipherPool, cipher);
+  private boolean isResourceBusy(Object obj) {
+    short index = 0;
+    while (index < MAX_OPERATIONS) {
+      if (((KMOperationImpl) operationPool[index]).isResourceMatches(obj)) {
+        return true;
+      }
+      index++;
+    }
+    return false;
   }
 
   // This pool implementation can create a maximum of total 4 instances per
@@ -363,79 +360,36 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private Object getInstanceFromPool(Object[] pool, byte alg) {
     short index = 0;
     short instanceCount = 0;
-    Object object = null;
     boolean isCipher = isCipherAlgorithm(alg);
     boolean isSigner = isSignerAlgorithm(alg);
-    short len = (short) pool.length;
-    while (index < len) {
+    while (index < (short) pool.length) {
+      if (instanceCount >= MAX_OPERATIONS) {
+        KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
+        break;
+      }
       if (null == pool[index]) {
         // No instance of cipher/signature with this algorithm is found
-        if (instanceCount < 4) {
-          pool[index] = new KMInstance();
           JCSystem.beginTransaction();
-          ((KMInstance) pool[index]).instanceCount = (byte) (++instanceCount);
-          if (isCipher) {
-            ((KMInstance) pool[index]).object = object = getCipherInstance(alg);
+          if (isCipher) { // Cipher
+            pool[index] = getCipherInstance(alg);
+          } else if (isSigner) { // Signature
+            pool[index] = getSignatureInstance(alg);
           } else {
-            // Signature
-            ((KMInstance) pool[index]).object = object = getSignatureInstance(alg);
+            KMException.throwIt(KMError.INVALID_ARGUMENT);
           }
-          ((KMInstance) pool[index]).reserved = 1;
           JCSystem.commitTransaction();
-          break;
-        } else {
-          // Cipher/Signature instance count reached its maximum limit.
-          KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
-          break;
-        }
+          return pool[index];
       }
-      object = ((KMInstance) pool[index]).object;
-      if ((isCipher && (alg == getCipherAlgorithm((Cipher) object)))
-          || ((isSigner && (alg == ((Signature) object).getAlgorithm())))) {
-        instanceCount = ((KMInstance) pool[index]).instanceCount;
-        if (((KMInstance) pool[index]).reserved == 0) {
-          JCSystem.beginTransaction();
-          ((KMInstance) pool[index]).reserved = 1;
-          JCSystem.commitTransaction();
-          break;
+      if ((isCipher && (alg == ((Cipher) pool[index]).getAlgorithm()))
+          || ((isSigner && (alg == ((Signature) pool[index]).getAlgorithm())))) {
+        if (!isResourceBusy(pool[index])) {
+          return pool[index];
         }
-      } else {
-        if (!isCipher && !isSigner) {
-          // OperationImpl
-          if (((KMInstance) pool[index]).reserved == 0) {
-            JCSystem.beginTransaction();
-            ((KMInstance) pool[index]).reserved = 1;
-            JCSystem.commitTransaction();
-            break;
-          }
-        }
-      }
-      object = null;
-      index++;
-    }
-    return object;
-  }
-
-  private void releaseInstance(Object[] pool, short index) {
-    if (((KMInstance) pool[index]).reserved != 0) {
-      JCSystem.beginTransaction();
-      ((KMInstance) pool[index]).reserved = 0;
-      JCSystem.commitTransaction();
-    }
-  }
-
-  private void releaseInstance(Object[] pool, Object object) {
-    short index = 0;
-    short len = (short) pool.length;
-    while (index < len) {
-      if (pool[index] != null) {
-        if (object == ((KMInstance) pool[index]).object) {
-          releaseInstance(pool, index);
-          break;
-        }
+        instanceCount++;
       }
       index++;
     }
+    return null;
   }
 
   public AESKey createAESKey(short keysize) {
@@ -1007,6 +961,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         Signature signerVerifier = createHmacSignerVerifier(purpose, digest,
             keyBuf, keyStart, keyLength);
         opr = getOperationInstanceFromPool();
+        opr.setMode(purpose);
         opr.setSignature(signerVerifier);
         break;
       default:
@@ -1094,6 +1049,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
           Signature signer = createEcSigner(digest, privKeyBuf, privKeyStart,
               privKeyLength);
           opr = getOperationInstanceFromPool();
+          opr.setMode(purpose);
           opr.setSignature(signer);
           break;
         default:
@@ -1279,21 +1235,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return (KMPreSharedKey) preSharedKey;
   }
 
-  private void releasePool(Object[] pool) {
-    short index = 0;
-    short len = (short) pool.length;
-    while (index < len) {
-      if (pool[index] != null) {
-        releaseInstance(pool, index);
-      }
-      index++;
-    }
-  }
-
   @Override
   public void releaseAllOperations() {
-    releasePool(cipherPool);
-    releasePool(sigPool);
-    releasePool(operationPool);
+    short index = 0;
+    while (index < operationPool.length) {
+      ((KMOperationImpl) operationPool[index]).abort();
+      index++;
+    }
   }
 }

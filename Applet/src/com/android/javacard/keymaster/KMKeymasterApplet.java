@@ -490,8 +490,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       sendError(apdu, KMException.getReason());
       exception.clear();
     } catch (ISOException exp) {
-      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
       freeOperations();
+      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
     } catch (CryptoException e) {
       freeOperations();
       sendError(apdu, mapCryptoErrorToKMError(e.getReason()));

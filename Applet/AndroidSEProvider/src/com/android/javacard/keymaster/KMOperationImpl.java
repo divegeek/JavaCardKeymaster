@@ -87,15 +87,20 @@ public class KMOperationImpl implements KMOperation {
   public void setSignature(Signature signer) {
     operationInst[0] = signer;
   }
+  
+  public boolean isResourceMatches(Object object) {
+    return operationInst[0] == object;
+  }
 
-  private void resetCipher() {
+
+  private void reset() {
     operationInst[0] = null;
-    parameters[MAC_LENGTH_OFFSET] = 0;
+    parameters[MAC_LENGTH_OFFSET] = KMType.INVALID_VALUE;
     parameters[AES_GCM_UPDATE_LEN_OFFSET] = 0;
-    parameters[BLOCK_MODE_OFFSET] = 0;
-    parameters[OPER_MODE_OFFSET] = 0;
-    parameters[CIPHER_ALG_OFFSET] = 0;
-    parameters[PADDING_OFFSET] = 0;
+    parameters[BLOCK_MODE_OFFSET] = KMType.INVALID_VALUE;;
+    parameters[OPER_MODE_OFFSET] = KMType.INVALID_VALUE;;
+    parameters[CIPHER_ALG_OFFSET] = KMType.INVALID_VALUE;;
+    parameters[PADDING_OFFSET] = KMType.INVALID_VALUE;;
   }
 
   @Override
@@ -196,8 +201,7 @@ public class KMOperationImpl implements KMOperation {
       }
     } finally {
       KMAndroidSEProvider.getInstance().clean();
-      KMAndroidSEProvider.getInstance().releaseCipherInstance(cipher);
-      resetCipher();
+      reset();
     }
     return len;
   }
@@ -210,8 +214,7 @@ public class KMOperationImpl implements KMOperation {
       len = ((Signature) operationInst[0]).sign(inputDataBuf, inputDataStart, inputDataLength,
         signBuf, signStart);
     } finally {
-      KMAndroidSEProvider.getInstance().releaseSignatureInstance((Signature) operationInst[0]);
-      operationInst[0] = null;
+      reset();
     }
     return len;
   }
@@ -224,25 +227,14 @@ public class KMOperationImpl implements KMOperation {
       ret = ((Signature) operationInst[0]).verify(inputDataBuf, inputDataStart, inputDataLength,
         signBuf, signStart, signLength);
     } finally {
-      KMAndroidSEProvider.getInstance().releaseSignatureInstance((Signature) operationInst[0]);
-      operationInst[0] = null;
+      reset();
     }
     return ret;
   }
 
   @Override
   public void abort() {
-    if (operationInst[0] != null) {
-      if (parameters[OPER_MODE_OFFSET] == KMType.ENCRYPT ||
-        parameters[OPER_MODE_OFFSET] == KMType.DECRYPT) {
-        KMAndroidSEProvider.getInstance().releaseCipherInstance((Cipher) operationInst[0]);
-        resetCipher();
-      } else {
-        KMAndroidSEProvider.getInstance().releaseSignatureInstance((Signature) operationInst[0]);
-      }
-      operationInst[0] = null;
-    }
-    KMAndroidSEProvider.getInstance().releaseOperationInstance(this);
+    reset();
   }
 
   @Override
