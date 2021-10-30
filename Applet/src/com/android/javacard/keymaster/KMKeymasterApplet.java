@@ -747,30 +747,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       //Clear the previous certificate chain.
       seProvider.clearCertificateChain();
     }
-    byte[] srcBuffer = apdu.getBuffer();
-    short recvLen = apdu.setIncomingAndReceive();
-    short srcOffset = apdu.getOffsetCdata();
-    bufferProp[BUF_LEN_OFFSET] = apdu.getIncomingLength();
-    bufferProp[BUF_START_OFFSET] = repository.alloc(bufferProp[BUF_LEN_OFFSET]);
-    short bytesRead = 0;
-    Util.arrayCopyNonAtomic(srcBuffer, srcOffset, (byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET],
-        recvLen);
-    // tmpVariables[1] holds the total length + Header length.
+    receiveIncoming(apdu);
     tmpVariables[1] = decoder.readCertificateChainLengthAndHeaderLen((byte[]) bufferRef[0],
-        bufferProp[BUF_START_OFFSET], recvLen);
-    while (recvLen > 0 && ((short) bytesRead <= bufferProp[BUF_LEN_OFFSET])) {
-      seProvider.persistPartialCertificateChain((byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET],
-          recvLen, bufferProp[BUF_LEN_OFFSET]);
-      bytesRead += recvLen;
-      recvLen = apdu.receiveBytes(srcOffset);
-      if (recvLen > 0) {
-        Util.arrayCopyNonAtomic(srcBuffer, srcOffset, (byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET],
-            recvLen);
-      }
-    }
-    if (tmpVariables[1] != bytesRead) {
+        bufferProp[BUF_START_OFFSET], bufferProp[BUF_LEN_OFFSET]);
+    if (tmpVariables[1] != bufferProp[BUF_LEN_OFFSET]) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
+    seProvider.persistCertificateChain((byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET],
+        bufferProp[BUF_LEN_OFFSET]);
+    //reclaim memory
+    repository.reclaimMemory(bufferProp[BUF_LEN_OFFSET]);
   }
 
   private void processProvisionAttestationKey(APDU apdu) {

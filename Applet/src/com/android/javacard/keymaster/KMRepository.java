@@ -398,7 +398,9 @@ public class KMRepository implements KMUpgradable {
     if (((short) (dataIndex + length)) > dataTable.length) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
+    JCSystem.beginTransaction();
     dataIndex += length;
+    JCSystem.commitTransaction();
     return (short) (dataIndex - length);
   }
 
@@ -427,34 +429,40 @@ public class KMRepository implements KMUpgradable {
   }
 
   private void clearDataEntry(short id) {
-    JCSystem.beginTransaction();
     id = (short) (id * DATA_INDEX_ENTRY_SIZE);
     short dataLen = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
     if (dataLen != 0) {
       short dataPtr = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET));
+      JCSystem.beginTransaction();
       Util.arrayFillNonAtomic(dataTable, dataPtr, dataLen, (byte) 0);
+      JCSystem.commitTransaction();
     }
-    JCSystem.commitTransaction();
   }
 
   private void writeDataEntry(short id, byte[] buf, short offset, short len) {
-    JCSystem.beginTransaction();
     short dataPtr;
     id = (short) (id * DATA_INDEX_ENTRY_SIZE);
     short dataLen = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
     if (dataLen == 0) {
       dataPtr = dataAlloc(len);
+      // Begin Transaction
+      JCSystem.beginTransaction();
       Util.setShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET), dataPtr);
       Util.setShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH), len);
       Util.arrayCopyNonAtomic(buf, offset, dataTable, dataPtr, len);
+      JCSystem.commitTransaction();
+      // End Transaction
     } else {
       if (len != dataLen) {
         KMException.throwIt(KMError.UNKNOWN_ERROR);
       }
       dataPtr = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET));
+      // Begin Transaction
+      JCSystem.beginTransaction();
       Util.arrayCopyNonAtomic(buf, offset, dataTable, dataPtr, len);
+      JCSystem.commitTransaction();
+      // End Transaction
     }
-    JCSystem.commitTransaction();
   }
 
   private short readDataEntry(short id, byte[] buf, short offset) {

@@ -368,8 +368,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         break;
       }
       if (null == pool[index]) {
-        // No instance of cipher/signature with this algorithm is found
-          JCSystem.beginTransaction();
+          // No instance of cipher/signature with this algorithm is found
           if (isCipher) { // Cipher
             pool[index] = getCipherInstance(alg);
           } else if (isSigner) { // Signature
@@ -377,7 +376,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
           } else {
             KMException.throwIt(KMError.INVALID_ARGUMENT);
           }
-          JCSystem.commitTransaction();
           return pool[index];
       }
       if ((isCipher && (alg == ((Cipher) pool[index]).getAlgorithm()))
@@ -1086,7 +1084,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
   //This function supports multi-part request data.
   @Override
-  public void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen) {
+  public void persistCertificateChain(byte[] buf, short offset, short len) {
     //  _____________________________________________________
     // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 |  Cert2 |...
     // |_________|________|_________|_______|________|_______
@@ -1094,17 +1092,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // CBOR format:
     // Next single byte holds the byte string header.
     // Next 3 bytes holds the total length of the certificate chain.
-    if (totalLen > (short) (CERT_CHAIN_MAX_SIZE - 2)) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    short persistedLen = Util.getShort(certificateChain, (short) 0);
-    if (persistedLen > totalLen) {
+    if (len > (short) (CERT_CHAIN_MAX_SIZE - 2)) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     JCSystem.beginTransaction();
-    Util.setShort(certificateChain, (short) 0, (short) (len + persistedLen));
-    Util.arrayCopyNonAtomic(buf, offset, certificateChain,
-        (short) (persistedLen + 2), len);
+    Util.setShort(certificateChain, (short) 0, len);
+    Util.arrayCopyNonAtomic(buf, offset, certificateChain, (short) 2, len);
     JCSystem.commitTransaction();
   }
 
