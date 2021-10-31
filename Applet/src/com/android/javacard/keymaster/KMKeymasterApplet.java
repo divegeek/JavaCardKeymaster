@@ -2087,11 +2087,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_MAC_LENGTH);
     }
     short key = repository.getComputedHmacKey();
-
-    if (!verifyVerificationTokenMacInLittleEndian(verToken, key, scratchPad) &&
-        !verifyVerificationTokenMacInBigEndian(verToken, key, scratchPad)) {
-        // Throw Exception if none of the combination works.
-        KMException.throwIt(KMError.VERIFICATION_FAILED);
+    boolean verify;
+    if (KMConfigurations.TEE_MACHINE_TYPE == KMConfigurations.LITTLE_ENDIAN) {
+      verify = verifyVerificationTokenMacInLittleEndian(verToken, key, scratchPad);
+    } else {
+      verify = verifyVerificationTokenMacInBigEndian(verToken, key, scratchPad);
+    }
+    if (!verify) {
+      // Throw Exception if none of the combination works.
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
     }
   }
 
@@ -2831,48 +2835,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
     }
   }
-  
-  private boolean verifyHwTokenMacAsPerSpecification(short hwToken, short key, byte[] scratchPad) {
-    short len = 0;
-    // add 0
-    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
-    len = 1;
-    // concatenate challenge - 8 bytes
-    short ptr = KMHardwareAuthToken.cast(hwToken).getChallenge();
-    KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
-    len += 8;
-    // concatenate user id - 8 bytes
-    ptr = KMHardwareAuthToken.cast(hwToken).getUserId();
-    KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
-    len += 8;
-    // concatenate authenticator id - 8 bytes
-    ptr = KMHardwareAuthToken.cast(hwToken).getAuthenticatorId();
-    KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
-    len += 8;
-    // concatenate authenticator type - 4 bytes
-    ptr = KMHardwareAuthToken.cast(hwToken).getHwAuthenticatorType();
-    scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
-    len += 4;
-    // concatenate timestamp -8 bytes
-    ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
-    KMInteger.cast(ptr)
-    .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
-    len += 8;
-    ptr = KMHardwareAuthToken.cast(hwToken).getMac();
-
-    return seProvider.hmacVerify(
-        KMByteBlob.cast(key).getBuffer(),
-        KMByteBlob.cast(key).getStartOff(),
-        KMByteBlob.cast(key).length(),
-        scratchPad,
-        (short) 0,
-        len,
-        KMByteBlob.cast(ptr).getBuffer(),
-        KMByteBlob.cast(ptr).getStartOff(),
-        KMByteBlob.cast(ptr).length());
-  }
 
   private boolean verifyHwTokenMacInBigEndian(short hwToken, short key, byte[] scratchPad) {
+    // The challenge, userId and authenticatorId, authenticatorType and timestamp
+    // are in network order (big-endian).
     short len = 0;
     // add 0
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
@@ -2918,6 +2884,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
   
   private boolean verifyHwTokenMacInLittleEndian(short hwToken, short key, byte[] scratchPad) {
+    // The challenge, userId and authenticatorId values are in little endian order, 
+    // but authenticatorType and timestamp are in network order (big-endian).
     short len = 0;
     // add 0
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
@@ -2936,12 +2904,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += 8;
     // concatenate authenticator type - 4 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getHwAuthenticatorType();
-    //scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
-    scratchPad[len] = KMEnum.cast(ptr).getVal();
+    scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
     len += 4;
-    // concatenate timestamp -8 bytes
+    // concatenate timestamp - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
-    KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
+    KMInteger.cast(ptr)
+    .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
     len += 8;
 
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
@@ -2966,12 +2934,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_MAC_LENGTH);
     }
     short key = repository.getComputedHmacKey();
-
-    if (!verifyHwTokenMacInLittleEndian(hwToken, key, scratchPad) &&
-        !verifyHwTokenMacInBigEndian(hwToken, key, scratchPad) &&
-        !verifyHwTokenMacAsPerSpecification(hwToken, key, scratchPad)) {
-          // Throw Exception if none of the combination works.
-          KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
+    boolean verify;
+    if (KMConfigurations.TEE_MACHINE_TYPE == KMConfigurations.LITTLE_ENDIAN) {
+      verify = verifyHwTokenMacInLittleEndian(hwToken, key, scratchPad);
+    } else {
+      verify = verifyHwTokenMacInBigEndian(hwToken, key, scratchPad);
+    }
+    if (!verify) {
+      // Throw Exception if none of the combination works.
+      KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
     }
   }
 

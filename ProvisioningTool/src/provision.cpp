@@ -152,7 +152,8 @@ int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, s
     return SUCCESS;
 }
 
-int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey, std::vector<uint8_t>& response) {
+int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey) {
+    std::vector<uint8_t> response;
     Json::Value val = root.get(jsonKey, Json::Value::nullRef);
     if (!val.isNull()) {
         if (val.isString()) {
@@ -200,21 +201,21 @@ int processInputFile() {
 
     if (keymasterVersion == KEYMASTER_VERSION) {
         printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
-        if (0 != provisionData(pSocket, kAttestKey, response) ||
-                0 != provisionData(pSocket, kAttestCertChain, response) ||
-                0 != provisionData(pSocket, kAttestCertParams, response)) {
+        if (0 != provisionData(pSocket, kAttestKey) ||
+                0 != provisionData(pSocket, kAttestCertChain) ||
+                0 != provisionData(pSocket, kAttestCertParams)) {
             return FAILURE;
         }
     } else {
         printf("\n Selected keymint version(%f) for provisioning \n", keymasterVersion);
-        if ( 0 != provisionData(pSocket, kDeviceUniqueKey, response) ||
-                0 != provisionData(pSocket, kAdditionalCertChain, response)) {
+        if ( 0 != provisionData(pSocket, kDeviceUniqueKey) ||
+                0 != provisionData(pSocket, kAdditionalCertChain)) {
             return FAILURE;
         }
     }
-    if (0 != provisionData(pSocket, kAttestationIds, response) ||
-            0 != provisionData(pSocket, kSharedSecret, response) ||
-            0 != provisionData(pSocket, kBootParams, response)) {
+    if (0 != provisionData(pSocket, kAttestationIds) ||
+            0 != provisionData(pSocket, kSharedSecret) ||
+            0 != provisionData(pSocket, kBootParams)) {
         return FAILURE;
     }
     return SUCCESS;

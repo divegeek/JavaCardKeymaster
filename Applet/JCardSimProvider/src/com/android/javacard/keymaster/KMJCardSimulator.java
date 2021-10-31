@@ -72,7 +72,6 @@ public class KMJCardSimulator implements KMSEProvider {
   public static final short MAX_RND_NUM_SIZE = 64;
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  private static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
   private static final short RSA_KEY_SIZE = 256;
 
 
@@ -114,7 +113,7 @@ public class KMJCardSimulator implements KMSEProvider {
     aesRngKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
     // various ciphers
     //Allocate buffer for certificate chain.
-    certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
+    certificateChain = new byte[(short) (KMConfigurations.CERT_CHAIN_MAX_SIZE + 2)];
     jCardSimulator = this;
   }
 
@@ -1195,7 +1194,8 @@ public class KMJCardSimulator implements KMSEProvider {
   @Override
   public void clearCertificateChain() {
     JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(certificateChain, (short) 0, CERT_CHAIN_MAX_SIZE, (byte) 0);
+    Util.arrayFillNonAtomic(certificateChain, (short) 0,
+        (short) (KMConfigurations.CERT_CHAIN_MAX_SIZE + 2), (byte) 0);
     JCSystem.commitTransaction();
   }
 
@@ -1210,7 +1210,7 @@ public class KMJCardSimulator implements KMSEProvider {
     // CBOR format:
     // Next single byte holds the byte string header.
     // Next 3 bytes holds the total length of the certificate chain.
-    if (len > (short) (CERT_CHAIN_MAX_SIZE - 2)) {
+    if (len > KMConfigurations.CERT_CHAIN_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     JCSystem.beginTransaction();

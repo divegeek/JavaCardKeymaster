@@ -116,7 +116,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final byte KEYSIZE_256_OFFSET = 0x01;
   public static final short TMP_ARRAY_SIZE = 300;
   private static final short RSA_KEY_SIZE = 256;
-  public static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
   private static final short MAX_OPERATIONS = 4;
 
   final byte[] CIPHER_ALGS = {
@@ -218,7 +217,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     rng = RandomData.getInstance(RandomData.ALG_KEYGENERATION);
     //Allocate buffer for certificate chain.
     if (!isUpgrading()) {
-      certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
+      // First 2 bytes for length.
+      certificateChain = new byte[(short) (KMConfigurations.CERT_CHAIN_MAX_SIZE + 2)];
       // Initialize attestationKey and preShared key with zeros.
       Util.arrayFillNonAtomic(tmpArray, (short) 0, TMP_ARRAY_SIZE, (byte) 0);
       // Create attestation key of P-256 curve.
@@ -1078,7 +1078,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public void clearCertificateChain() {
     JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(certificateChain, (short) 0, CERT_CHAIN_MAX_SIZE, (byte) 0);
+    Util.arrayFillNonAtomic(certificateChain, (short) 0, 
+        (short) (KMConfigurations.CERT_CHAIN_MAX_SIZE + 2), (byte) 0);
     JCSystem.commitTransaction();
   }
 
@@ -1092,7 +1093,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // CBOR format:
     // Next single byte holds the byte string header.
     // Next 3 bytes holds the total length of the certificate chain.
-    if (len > (short) (CERT_CHAIN_MAX_SIZE - 2)) {
+    if (len > KMConfigurations.CERT_CHAIN_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     JCSystem.beginTransaction();
