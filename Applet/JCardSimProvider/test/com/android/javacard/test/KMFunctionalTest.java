@@ -20,6 +20,7 @@ import com.android.javacard.keymaster.KMArray;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
+import com.android.javacard.keymaster.KMConfigurations;
 import com.android.javacard.keymaster.KMJCardSimApplet;
 import com.android.javacard.keymaster.KMJCardSimulator;
 import com.android.javacard.keymaster.KMSEProvider;
@@ -951,7 +952,7 @@ public class KMFunctionalTest {
     // create verification token
     short verToken = KMVerificationToken.instance();
     KMVerificationToken.cast(verToken).setTimestamp(KMInteger.uint_16((short) 1));
-    verToken = signVerificationToken(verToken);
+    verToken = signVerificationToken(verToken, KMConfigurations.TEE_MACHINE_TYPE);
     // device locked request
     deviceLock(verToken);
     // decrypt should fail
@@ -1046,7 +1047,7 @@ public class KMFunctionalTest {
     Assert.assertEquals(respBuf[0], KMError.OK);
   }
 
-  private short signVerificationToken(short verToken) {
+  private short signVerificationToken(short verToken, byte machineType) {
     byte[] scratchPad = new byte[256];
     byte[] authVer = "Auth Verification".getBytes();
     //print(authVer,(short)0,(short)authVer.length);
@@ -1058,17 +1059,29 @@ public class KMFunctionalTest {
     short len = (short) authVer.length;
     // concatenate challenge - 8 bytes
     short ptr = KMVerificationToken.cast(verToken).getChallenge();
-    KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    if (machineType == KMConfigurations.LITTLE_ENDIAN) {
+      KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
+    } else {
+      KMInteger.cast(ptr)
+          .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    }
     len += 8;
     // concatenate timestamp -8 bytes
     ptr = KMVerificationToken.cast(verToken).getTimestamp();
-    KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    if (machineType == KMConfigurations.LITTLE_ENDIAN) {
+      KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
+    } else {
+      KMInteger.cast(ptr)
+          .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    }
     len += 8;
     // concatenate security level - 4 bytes
     ptr = KMVerificationToken.cast(verToken).getSecurityLevel();
-    scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
+    if (machineType == KMConfigurations.LITTLE_ENDIAN) {
+      scratchPad[len] = KMEnum.cast(ptr).getVal();
+    } else {
+      scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
+    }
     len += 4;
     // concatenate Parameters verified - blob of encoded data.
     ptr = KMVerificationToken.cast(verToken).getParametersVerified();

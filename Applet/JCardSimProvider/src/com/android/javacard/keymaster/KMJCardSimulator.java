@@ -85,6 +85,8 @@ public class KMJCardSimulator implements KMSEProvider {
   private static byte[] entropyPool;
   private static byte[] rndNum;
   private byte[] certificateChain;
+  private byte[] certIssuer;
+  private byte[] certExpiry;
   private KMAESKey masterKey;
   private KMECPrivateKey attestationKey;
   private KMHmacKey preSharedKey;
@@ -112,8 +114,10 @@ public class KMJCardSimulator implements KMSEProvider {
     }
     aesRngKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
     // various ciphers
-    //Allocate buffer for certificate chain.
+    //Allocate buffer for certificate chain and cert parameters.
     certificateChain = new byte[(short) (KMConfigurations.CERT_CHAIN_MAX_SIZE + 2)];
+    certIssuer = new byte[(short) (KMConfigurations.CERT_ISSUER_SIZE + 2)];
+    certExpiry = new byte[(short) (KMConfigurations.CERT_EXPIRY_SIZE + 2)];
     jCardSimulator = this;
   }
 
@@ -1166,15 +1170,62 @@ public class KMJCardSimulator implements KMSEProvider {
     return KMAttestationCertImpl.instance(rsaCert);
   }
 
-  public short readCertificateChain(byte[] buf, short offset) {
-    short len = Util.getShort(certificateChain, (short) 0);
-    Util.arrayCopyNonAtomic(certificateChain, (short) 2, buf, offset, len);
+  private byte[] getProvisionDataBuffer(byte dataType) {
+    switch(dataType) {
+      case CERTIFICATE_CHAIN:
+        return certificateChain;
+      case CERTIFICATE_ISSUER:
+        return certIssuer;
+      case CERTIFICATE_EXPIRY:
+        return certExpiry;
+      default:
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    return null;
+  }
+
+  @Override
+  public void clearProvisionedData(byte dataType) {
+    byte[] buffer = getProvisionDataBuffer(dataType);
+    JCSystem.beginTransaction();
+    Util.arrayFillNonAtomic(buffer, (short) 0, (short) (buffer.length), (byte) 0);
+    JCSystem.commitTransaction();
+  }
+
+  //This function supports multi-part request data.
+  @Override
+  public void persistProvisionData(byte dataType, byte[] buf, short offset, short len) {
+    // All the buffers uses first two bytes for length. The certificate chain
+    // is stored as shown below.
+    //  _____________________________________________________
+    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 |  Cert2 |...
+    // |_________|________|_________|_______|________|_______
+    // First two bytes holds the length of the total buffer.
+    // CBOR format:
+    // Next single byte holds the byte string header.
+    // Next 3 bytes holds the total length of the certificate chain.
+    byte[] data = getProvisionDataBuffer(dataType);
+    if (len > (short) (data.length - 2)) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    JCSystem.beginTransaction();
+    Util.setShort(data, (short) 0, len);
+    Util.arrayCopyNonAtomic(buf, offset, data, (short) 2, len);
+    JCSystem.commitTransaction();
+  }
+
+  @Override
+  public short readProvisionedData(byte dataType, byte[] buf, short offset) {
+    byte[] data = getProvisionDataBuffer(dataType);
+    short len = Util.getShort(data, (short) 0);
+    Util.arrayCopyNonAtomic(data, (short) 2, buf, offset, len);
     return len;
   }
 
   @Override
-  public short getCertificateChainLength() {
-    return Util.getShort(certificateChain, (short) 0);
+  public short getProvisionedDataLength(byte dataType) {
+    byte[] data = getProvisionDataBuffer(dataType);
+    return Util.getShort(data, (short) 0);
   }
 
   @Override
@@ -1189,34 +1240,6 @@ public class KMJCardSimulator implements KMSEProvider {
     signer.init(key, Signature.MODE_SIGN);
     return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
         outputDataBuf, outputDataStart);
-  }
-
-  @Override
-  public void clearCertificateChain() {
-    JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(certificateChain, (short) 0,
-        (short) (KMConfigurations.CERT_CHAIN_MAX_SIZE + 2), (byte) 0);
-    JCSystem.commitTransaction();
-  }
-
-
-  //This function supports multi-part request data.
-  @Override
-  public void persistCertificateChain(byte[] buf, short offset, short len) {
-    //  _____________________________________________________
-    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 |  Cert2 |...
-    // |_________|________|_________|_______|________|_______
-    // First two bytes holds the length of the total buffer.
-    // CBOR format:
-    // Next single byte holds the byte string header.
-    // Next 3 bytes holds the total length of the certificate chain.
-    if (len > KMConfigurations.CERT_CHAIN_MAX_SIZE) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    JCSystem.beginTransaction();
-    Util.setShort(certificateChain, (short) 0, len);
-    Util.arrayCopyNonAtomic(buf, offset, certificateChain, (short) 2, len);
-    JCSystem.commitTransaction();
   }
 
   @Override

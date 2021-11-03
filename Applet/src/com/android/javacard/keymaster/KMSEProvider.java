@@ -25,6 +25,11 @@ import org.globalplatform.upgrade.Element;
  */
 public interface KMSEProvider extends KMUpgradable {
 
+  // Provision related constants.
+  public static final byte CERTIFICATE_CHAIN = 0;
+  public static final byte CERTIFICATE_EXPIRY = 1;
+  public static final byte CERTIFICATE_ISSUER = 2;
+
   /**
    * Create a symmetric key instance. If the algorithm and/or keysize are not supported then it
    * should throw a CryptoException.
@@ -445,34 +450,39 @@ public interface KMSEProvider extends KMUpgradable {
   KMAttestationCert getAttestationCert(boolean rsaCert);
 
   /**
-   * This operation persists the certificate chain in the persistent memory.
+   * This operation persists the provision data in the persistent memory.
    *
+   * @param dataType type of the provision data to read.
    * @param buf buffer containing certificate chain.
    * @param offset is the start of the buffer.
    * @param len is the length of the buffer.
    */
-  void persistCertificateChain(byte[] buf, short offset, short len);
+  void persistProvisionData(byte dataType, byte[] buf, short offset, short len);
 
   /**
-   * This operation clears the certificate chain from persistent memory.
-   */
-  void clearCertificateChain();
-
-  /**
-   * The operation reads the certificate chain from persistent memory.
+   * This operation clears the provisioned data from persistent memory.
    *
+   * @param dataType type of the provision data to read.
+   */
+  void clearProvisionedData(byte dataType);
+
+  /**
+   * The operation reads the provisioned data from persistent memory.
+   *
+   * @param dataType type of the provision data to read.
    * @param buf is the start of data buffer.
    * @param offset is the start of the data.
    * @return the length of the data buffer in bytes.
    */
-  short readCertificateChain(byte[] buf, short offset);
+  short readProvisionedData(byte dataType, byte[] buf, short offset);
 
   /**
-   * This function returns the cert chain length.
+   * This function returns the provisioned data length.
    *
+   * @param dataType type of the provision data to read.
    * @return length of the certificate chain.
    */
-  short getCertificateChainLength();
+  short getProvisionedDataLength(byte dataType);
 
   /**
    * This function tells if boot signal event is supported or not.
@@ -559,8 +569,7 @@ public interface KMSEProvider extends KMUpgradable {
   KMPreSharedKey getPresharedKey();
 
   /**
-   * Releases all the instance back to pool.
-   * Generally this is used when card is reset.
+   * Releases all the instance back to pool. Generally this is used when card is reset.
    */
   void releaseAllOperations();
 

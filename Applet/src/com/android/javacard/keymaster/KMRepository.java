@@ -29,10 +29,24 @@ import javacard.framework.Util;
  */
 public class KMRepository implements KMUpgradable {
 
-  // Data table configuration
-  public static final short DATA_INDEX_SIZE = 22;
+  public static final byte DEFAULT_TABLE_TABLE = 0;
+  public static final byte ATTEST_IDS_DATA_TABLE = 1;
+  // Data table configuration for attestation ids
+  public static final short ATTEST_IDS_DATA_INDEX_SIZE = 8;
+  public static final short ATTEST_IDS_DATA_TABLE_SIZE = 300;
+  public static final byte ATT_ID_BRAND = 0;
+  public static final byte ATT_ID_DEVICE = 1;
+  public static final byte ATT_ID_PRODUCT = 2;
+  public static final byte ATT_ID_SERIAL = 3;
+  public static final byte ATT_ID_IMEI = 4;
+  public static final byte ATT_ID_MEID = 5;
+  public static final byte ATT_ID_MANUFACTURER = 6;
+  public static final byte ATT_ID_MODEL = 7;
+
+  // Data table configuration other non provisioned parameters.
+  public static final short DATA_INDEX_SIZE = 13;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
-  public static final short DATA_MEM_SIZE = 2048;
+  public static final short DATA_MEM_SIZE = 300;
   public static final short HEAP_SIZE = 10000;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
@@ -45,28 +59,19 @@ public class KMRepository implements KMUpgradable {
   private static final byte POWER_RESET_STATUS_FLAG = (byte) 0xEF;
 
   // Data table offsets
-  public static final byte COMPUTED_HMAC_KEY = 8;
-  public static final byte HMAC_NONCE = 9;
-  public static final byte ATT_ID_BRAND = 0;
-  public static final byte ATT_ID_DEVICE = 1;
-  public static final byte ATT_ID_PRODUCT = 2;
-  public static final byte ATT_ID_SERIAL = 3;
-  public static final byte ATT_ID_IMEI = 4;
-  public static final byte ATT_ID_MEID = 5;
-  public static final byte ATT_ID_MANUFACTURER = 6;
-  public static final byte ATT_ID_MODEL = 7;
-  public static final byte CERT_ISSUER = 10;
-  public static final byte CERT_EXPIRY_TIME = 11;
-  public static final byte BOOT_OS_VERSION = 12;
-  public static final byte BOOT_OS_PATCH_LEVEL = 13;
-  public static final byte VENDOR_PATCH_LEVEL = 14;
-  public static final byte BOOT_PATCH_LEVEL = 15;
-  public static final byte BOOT_VERIFIED_BOOT_KEY = 16;
-  public static final byte BOOT_VERIFIED_BOOT_HASH = 17;
-  public static final byte BOOT_VERIFIED_BOOT_STATE = 18;
-  public static final byte BOOT_DEVICE_LOCKED_STATUS = 19;
-  public static final byte DEVICE_LOCKED_TIME = 20;
-  public static final byte DEVICE_LOCKED = 21;
+  public static final byte COMPUTED_HMAC_KEY = 0;
+  public static final byte HMAC_NONCE = 1;
+  public static final byte BOOT_OS_VERSION = 2;
+  public static final byte BOOT_OS_PATCH_LEVEL = 3;
+  public static final byte VENDOR_PATCH_LEVEL = 4;
+  public static final byte BOOT_PATCH_LEVEL = 5;
+  public static final byte BOOT_VERIFIED_BOOT_KEY = 6;
+  public static final byte BOOT_VERIFIED_BOOT_HASH = 7;
+  public static final byte BOOT_VERIFIED_BOOT_STATE = 8;
+  public static final byte BOOT_DEVICE_LOCKED_STATUS = 9;
+  public static final byte DEVICE_LOCKED_TIME = 10;
+  public static final byte DEVICE_LOCKED = 11;
+  public static final byte DEVICE_LOCKED_PASSWORD_ONLY = 12;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -83,6 +88,8 @@ public class KMRepository implements KMUpgradable {
   public static final short MAX_OPS = 4;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
+  private static final byte[] zero = {0, 0, 0, 0, 0, 0, 0, 0};
+
 
   // Class Attributes
   private Object[] operationStateTable;
@@ -90,6 +97,8 @@ public class KMRepository implements KMUpgradable {
   private short[] heapIndex;
   private byte[] dataTable;
   private short dataIndex;
+  private byte[] attestIdsTable;
+  private short attestIdsIdsIndex;
   private short[] reclaimIndex;
   // This variable is used to monitor the power reset status as the Applet does not get
   // any power reset event. Initially the value of this variable is set to POWER_RESET_STATUS_FLAG.
@@ -391,16 +400,17 @@ public class KMRepository implements KMUpgradable {
     return (short) (heapIndex[0] - length);
   }
 
-  private short dataAlloc(short length) {
+  private short dataAlloc(byte dataTableType, short length) {
+    byte[] dataTable = getDataTable(dataTableType);
+    short dataIndex = getDataTableIndex(dataTableType);
     if (length < 0) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     if (((short) (dataIndex + length)) > dataTable.length) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    JCSystem.beginTransaction();
     dataIndex += length;
-    JCSystem.commitTransaction();
+    setDataTableIndex(dataTableType, dataIndex);
     return (short) (dataIndex - length);
   }
 
@@ -411,24 +421,43 @@ public class KMRepository implements KMUpgradable {
         dataTable = new byte[DATA_MEM_SIZE];
         dataIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
       }
+      if (attestIdsTable == null) {
+        attestIdsTable = new byte[ATTEST_IDS_DATA_TABLE_SIZE];
+        attestIdsIdsIndex = (short) (ATTEST_IDS_DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
+      }
     }
   }
 
-  public void restoreData(short blob) {
-    JCSystem.beginTransaction();
-    Util.arrayCopy(
-        KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff(), dataTable,
-        (short) 0,
-        KMByteBlob.cast(blob).length()
-    );
-    JCSystem.commitTransaction();
+  public byte[] getDataTable(byte dataTableType) {
+    if (dataTableType == ATTEST_IDS_DATA_TABLE) {
+      return this.attestIdsTable;
+    } else {
+      return this.dataTable;
+    }
   }
 
-  public byte[] getDataTable() {
-    return dataTable;
+  private short getDataTableIndex(byte dataTableType) {
+    if (dataTableType == ATTEST_IDS_DATA_TABLE) {
+      return this.attestIdsIdsIndex;
+    } else {
+      return this.dataIndex;
+    }
   }
 
-  private void clearDataEntry(short id) {
+  private void setDataTableIndex(byte dataTableType, short index) {
+    if (dataTableType == ATTEST_IDS_DATA_TABLE) {
+      JCSystem.beginTransaction();
+      this.attestIdsIdsIndex = index;
+      JCSystem.commitTransaction();
+    } else {
+      JCSystem.beginTransaction();
+      this.dataIndex = index;
+      JCSystem.commitTransaction();
+    }
+  }
+
+  private void clearDataEntry(byte dataTableType, short id) {
+    byte[] dataTable = getDataTable(dataTableType);
     id = (short) (id * DATA_INDEX_ENTRY_SIZE);
     short dataLen = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
     if (dataLen != 0) {
@@ -439,12 +468,13 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-  private void writeDataEntry(short id, byte[] buf, short offset, short len) {
+  private void writeDataEntry(byte dataTableType, short id, byte[] buf, short offset, short len) {
     short dataPtr;
+    byte[] dataTable = getDataTable(dataTableType);
     id = (short) (id * DATA_INDEX_ENTRY_SIZE);
     short dataLen = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
     if (dataLen == 0) {
-      dataPtr = dataAlloc(len);
+      dataPtr = dataAlloc(dataTableType, len);
       // Begin Transaction
       JCSystem.beginTransaction();
       Util.setShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET), dataPtr);
@@ -465,7 +495,8 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-  private short readDataEntry(short id, byte[] buf, short offset) {
+  private short readDataEntry(byte dataTableType, short id, byte[] buf, short offset) {
+    byte[] dataTable = getDataTable(dataTableType);
     id = (short) (id * DATA_INDEX_ENTRY_SIZE);
     short len = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
     if (len != 0) {
@@ -479,9 +510,26 @@ public class KMRepository implements KMUpgradable {
     return len;
   }
 
-  private short dataLength(short id) {
+  private void clearDataEntry(short id) {
+    clearDataEntry(DEFAULT_TABLE_TABLE, id);
+  }
+
+  private void writeDataEntry(short id, byte[] buf, short offset, short len) {
+    writeDataEntry(DEFAULT_TABLE_TABLE, id, buf, offset, len);
+  }
+
+  private short readDataEntry(short id, byte[] buf, short offset) {
+    return readDataEntry(DEFAULT_TABLE_TABLE, id, buf, offset);
+  }
+
+  private short dataLength(byte dataTableType, short id) {
+    byte[] dataTable = getDataTable(dataTableType);
     id = (short) (id * DATA_INDEX_ENTRY_SIZE);
     return Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
+  }
+
+  private short dataLength(short id) {
+    return dataLength(DEFAULT_TABLE_TABLE, id);
   }
 
   public byte[] getHeap() {
@@ -497,55 +545,38 @@ public class KMRepository implements KMUpgradable {
   }
 
   public void persistAttId(byte id, byte[] buf, short start, short len) {
-    writeDataEntry(id, buf, start, len);
+    writeDataEntry(ATTEST_IDS_DATA_TABLE, id, buf, start, len);
   }
 
   public short getAttId(byte id) {
-    return readData(id);
+    return readData(ATTEST_IDS_DATA_TABLE, id);
   }
 
   public void deleteAttIds() {
-    clearDataEntry(ATT_ID_BRAND);
-    clearDataEntry(ATT_ID_MEID);
-    clearDataEntry(ATT_ID_DEVICE);
-    clearDataEntry(ATT_ID_IMEI);
-    clearDataEntry(ATT_ID_MODEL);
-    clearDataEntry(ATT_ID_PRODUCT);
-    clearDataEntry(ATT_ID_SERIAL);
-    clearDataEntry(ATT_ID_MANUFACTURER);
+    JCSystem.beginTransaction();
+    Util.arrayFillNonAtomic(attestIdsTable, (short) 0, (short) attestIdsTable.length, (byte) 0);
+    attestIdsIdsIndex = (short) (ATTEST_IDS_DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
+    JCSystem.commitTransaction();
   }
 
-  public short getIssuer() {
-    return readData(CERT_ISSUER);
+  public short readData(byte dataTableType, short id) {
+    short len = dataLength(dataTableType, id);
+    if (len != 0) {
+      short blob = KMByteBlob.instance(len);
+      readDataEntry(dataTableType, id, KMByteBlob.cast(blob).getBuffer(),
+          KMByteBlob.cast(blob).getStartOff());
+      return blob;
+    }
+    return KMType.INVALID_VALUE;
   }
 
   public short readData(short id) {
-    short blob = KMByteBlob.instance(dataLength(id));
-    if (readDataEntry(id, KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff())
-        == 0) {
-      return 0;
-    }
-    return blob;
+    return readData(DEFAULT_TABLE_TABLE, id);
   }
-
-  public void setIssuer(byte[] buf, short start, short len) {
-    writeDataEntry(CERT_ISSUER, buf, start, len);
-  }
-
-
-  public short getCertExpiryTime() {
-    return readData(CERT_EXPIRY_TIME);
-  }
-
-  public void setCertExpiryTime(byte[] buf, short start, short len) {
-    writeDataEntry(CERT_EXPIRY_TIME, buf, start, len);
-  }
-
-  private static final byte[] zero = {0, 0, 0, 0, 0, 0, 0, 0};
 
   public short getOsVersion() {
     short blob = readData(BOOT_OS_VERSION);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
@@ -555,7 +586,7 @@ public class KMRepository implements KMUpgradable {
 
   public short getVendorPatchLevel() {
     short blob = readData(VENDOR_PATCH_LEVEL);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
@@ -565,7 +596,7 @@ public class KMRepository implements KMUpgradable {
 
   public short getBootPatchLevel() {
     short blob = readData(BOOT_PATCH_LEVEL);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
@@ -575,7 +606,7 @@ public class KMRepository implements KMUpgradable {
 
   public short getOsPatch() {
     short blob = readData(BOOT_OS_PATCH_LEVEL);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
@@ -631,27 +662,39 @@ public class KMRepository implements KMUpgradable {
 
   public boolean getBootLoaderLock() {
     short blob = readData(BOOT_DEVICE_LOCKED_STATUS);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
     return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]) == 0x01;
   }
 
   public byte getBootState() {
     short blob = readData(BOOT_VERIFIED_BOOT_STATE);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
     return (getHeap())[KMByteBlob.cast(blob).getStartOff()];
   }
 
   public boolean getDeviceLock() {
     short blob = readData(DEVICE_LOCKED);
-    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()] & 0xFE) != 0;
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]) == 0x01;
   }
 
   public boolean getDeviceLockPasswordOnly() {
-    short blob = readData(DEVICE_LOCKED);
-    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()] & 0xFD) != 0;
+    short blob = readData(DEVICE_LOCKED_PASSWORD_ONLY);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]) == 0x01;
   }
 
   public short getDeviceTimeStamp() {
     short blob = readData(DEVICE_LOCKED_TIME);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_64(KMByteBlob.cast(blob).getBuffer(),
           KMByteBlob.cast(blob).getStartOff());
     } else {
@@ -701,9 +744,9 @@ public class KMRepository implements KMUpgradable {
   public void setDeviceLock(boolean flag) {
     short start = alloc(DEVICE_LOCK_FLAG_SIZE);
     if (flag) {
-      (getHeap())[start] = (byte) ((getHeap())[start] | 0x01);
+      (getHeap())[start] = (byte) 0x01;
     } else {
-      (getHeap())[start] = (byte) ((getHeap())[start] & 0xFE);
+      (getHeap())[start] = (byte) 0x00;
     }
     writeDataEntry(DEVICE_LOCKED, getHeap(), start, DEVICE_LOCK_FLAG_SIZE);
   }
@@ -711,11 +754,11 @@ public class KMRepository implements KMUpgradable {
   public void setDeviceLockPasswordOnly(boolean flag) {
     short start = alloc(DEVICE_LOCK_FLAG_SIZE);
     if (flag) {
-      (getHeap())[start] = (byte) ((getHeap())[start] | 0x02);
+      (getHeap())[start] = (byte) 0x01;
     } else {
-      (getHeap())[start] = (byte) ((getHeap())[start] & 0xFD);
+      (getHeap())[start] = (byte) 0x00;
     }
-    writeDataEntry(DEVICE_LOCKED, getHeap(), start, DEVICE_LOCK_FLAG_SIZE);
+    writeDataEntry(DEVICE_LOCKED_PASSWORD_ONLY, getHeap(), start, DEVICE_LOCK_FLAG_SIZE);
   }
 
   public void setDeviceLockTimestamp(byte[] buf, short start, short len) {
@@ -760,24 +803,28 @@ public class KMRepository implements KMUpgradable {
   @Override
   public void onSave(Element ele) {
     ele.write(dataIndex);
+    ele.write(attestIdsIdsIndex);
     ele.write(dataTable);
+    ele.write(attestIdsTable);
   }
 
   @Override
   public void onRestore(Element ele) {
     dataIndex = ele.readShort();
+    attestIdsIdsIndex = ele.readShort();
     dataTable = (byte[]) ele.readObject();
+    attestIdsTable =  (byte[]) ele.readObject();
   }
 
   @Override
   public short getBackupPrimitiveByteCount() {
     // dataIndex
-    return (short) 2;
+    return (short) 4;
   }
 
   @Override
   public short getBackupObjectCount() {
     // dataTable
-    return (short) 1;
+    return (short) 2;
   }
 }

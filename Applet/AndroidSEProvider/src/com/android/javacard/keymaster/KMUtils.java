@@ -419,19 +419,20 @@ public class KMUtils {
     return -1;
   }
 
-  //i * 1000 = (i << 9) + (i << 8) + (i << 7) + (i << 6) + (i << 5) + ( i << 3)
+  // i * 1000 = (i << 9) + (i << 8) + (i << 7) + (i << 6) + (i << 5) + ( i << 3)
   public static void convertToMilliseconds(byte[] buf, short inputOff, short outputOff,
-     short scratchPadOff) {
-   byte[] shiftPos = {9, 8, 7, 6, 5, 3};
-   short index = 0;
-   while (index < (short) (shiftPos.length)) {
-     Util.arrayCopyNonAtomic(buf, inputOff, buf, scratchPadOff, (short) 8);
-     shiftLeft(buf, scratchPadOff, shiftPos[index]);
-     Util.arrayCopyNonAtomic(buf, outputOff, buf, (short) (scratchPadOff + 8), (short) 8);
-     add(buf, scratchPadOff, (short) (8 + scratchPadOff), (short) (16 + scratchPadOff));
-     Util.arrayCopyNonAtomic(buf, (short) (scratchPadOff + 16), buf, outputOff, (short) 8);
-     Util.arrayFillNonAtomic(buf, scratchPadOff, (short) 24, (byte) 0);
-     index++;
-   }
- }
+      short scratchPadOff) {
+    byte[] shiftPos = {9, 8, 7, 6, 5, 3};
+    short index = 0;
+    while (index < (short) (shiftPos.length)) {
+      Util.arrayCopyNonAtomic(buf, inputOff, buf, scratchPadOff, (short) 8);
+      shiftLeft(buf, scratchPadOff, shiftPos[index]);
+      Util.arrayCopyNonAtomic(buf, outputOff, buf, (short) (scratchPadOff + 8), (short) 8);
+      add(buf, scratchPadOff, (short) (8 + scratchPadOff), (short) (16 + scratchPadOff));
+      Util.arrayCopyNonAtomic(buf, (short) (scratchPadOff + 16), buf, outputOff, (short) 8);
+      Util.arrayFillNonAtomic(buf, scratchPadOff, (short) 24, (byte) 0);
+      index++;
+    }
+  }
+
 }

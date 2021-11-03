@@ -693,10 +693,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     sendError(apdu, KMError.OK);
   }
+  
+  private short getProvisionedCertificateData(byte dataType) {
+    short len = seProvider.getProvisionedDataLength(dataType);
+    if (len == 0) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    short ptr = KMByteBlob.instance(len);
+    seProvider.readProvisionedData(
+        dataType,
+        KMByteBlob.cast(ptr).getBuffer(),
+        KMByteBlob.cast(ptr).getStartOff());
+    return ptr;
+  }
 
   private void processGetCertChainCmd(APDU apdu) {
     // Make the response
-    tmpVariables[0] = seProvider.getCertificateChainLength();
+    tmpVariables[0] = seProvider.getProvisionedDataLength(KMSEProvider.CERTIFICATE_CHAIN);
     short int32Ptr = buildErrorStatus(KMError.OK);
     //Total Extra length
     // Add arrayHeader and (PowerResetStatus + KMError.OK)
@@ -708,7 +721,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     bufferProp[BUF_LEN_OFFSET] = KMByteBlob.cast(tmpVariables[1]).length();
     // read the cert chain from non-volatile memory. Cert chain is already in
     // CBOR format.
-    seProvider.readCertificateChain((byte[]) bufferRef[0], (short) (bufferProp[BUF_START_OFFSET] + tmpVariables[2]));
+    seProvider.readProvisionedData(
+        KMSEProvider.CERTIFICATE_CHAIN,
+        (byte[]) bufferRef[0],
+        (short) (bufferProp[BUF_START_OFFSET] + tmpVariables[2]));
     // Encode cert chain.
     encoder.encodeCertChain((byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET], bufferProp[BUF_LEN_OFFSET], int32Ptr);
     sendOutgoing(apdu);
@@ -728,24 +744,36 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // save issuer - DER Encoded
     tmpVariables[0] = KMArray.cast(args).get((short) 0);
-    repository.setIssuer(
+    short len = seProvider.getProvisionedDataLength(KMSEProvider.CERTIFICATE_ISSUER);
+    if (len != 0) {
+      // Clear issuer buffer.
+      seProvider.clearProvisionedData(KMSEProvider.CERTIFICATE_ISSUER);
+    }
+    seProvider.persistProvisionData(
+        KMSEProvider.CERTIFICATE_ISSUER,
         KMByteBlob.cast(tmpVariables[0]).getBuffer(),
         KMByteBlob.cast(tmpVariables[0]).getStartOff(),
         KMByteBlob.cast(tmpVariables[0]).length());
 
     // save expiry time - UTC or General Time - YYMMDDhhmmssZ or YYYYMMDDhhmmssZ.
     tmpVariables[0] = KMArray.cast(args).get((short) 1);
-    repository.setCertExpiryTime(
+    len = seProvider.getProvisionedDataLength(KMSEProvider.CERTIFICATE_EXPIRY);
+    if (len != 0) {
+      // Clear issuer buffer.
+      seProvider.clearProvisionedData(KMSEProvider.CERTIFICATE_EXPIRY);
+    }
+    seProvider.persistProvisionData(
+        KMSEProvider.CERTIFICATE_EXPIRY,
         KMByteBlob.cast(tmpVariables[0]).getBuffer(),
         KMByteBlob.cast(tmpVariables[0]).getStartOff(),
         KMByteBlob.cast(tmpVariables[0]).length());
   }
 
   private void processProvisionAttestationCertChainCmd(APDU apdu) {
-    tmpVariables[0] = seProvider.getCertificateChainLength();
+    tmpVariables[0] = seProvider.getProvisionedDataLength(KMSEProvider.CERTIFICATE_CHAIN);
     if (tmpVariables[0] != 0) {
       //Clear the previous certificate chain.
-      seProvider.clearCertificateChain();
+      seProvider.clearProvisionedData(KMSEProvider.CERTIFICATE_CHAIN);
     }
     receiveIncoming(apdu);
     tmpVariables[1] = decoder.readCertificateChainLengthAndHeaderLen((byte[]) bufferRef[0],
@@ -753,8 +781,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[1] != bufferProp[BUF_LEN_OFFSET]) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    seProvider.persistCertificateChain((byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET],
-        bufferProp[BUF_LEN_OFFSET]);
+    seProvider.persistProvisionData(KMSEProvider.CERTIFICATE_CHAIN, (byte[]) bufferRef[0], 
+        bufferProp[BUF_START_OFFSET], bufferProp[BUF_LEN_OFFSET]);
     //reclaim memory
     repository.reclaimMemory(bufferProp[BUF_LEN_OFFSET]);
   }
@@ -843,6 +871,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.reclaimMemory(bufferProp[BUF_LEN_OFFSET]);
 
     data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 0);
+    repository.deleteAttIds();
     // persist attestation Ids - if any is missing then exception occurs
     saveAttId(KMType.ATTESTATION_ID_BRAND);
     saveAttId(KMType.ATTESTATION_ID_DEVICE);
@@ -1474,14 +1503,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // expiry time - byte blob
     tmpVariables[2] =
         KMKeyParameters.findTag(KMType.DATE_TAG, KMType.USAGE_EXPIRE_DATETIME, data[SW_PARAMETERS]);
-    cert.notAfter(tmpVariables[2], repository.getCertExpiryTime(), scratchPad, (short) 0);
+    cert.notAfter(tmpVariables[2],
+        getProvisionedCertificateData(KMSEProvider.CERTIFICATE_EXPIRY),
+        scratchPad,
+        (short) 0);
 
     addTags(KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getHardwareEnforced(), true, cert);
     addTags(
         KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getSoftwareEnforced(), false, cert);
 
     cert.deviceLocked(repository.getBootLoaderLock());
-    cert.issuer(repository.getIssuer());
+    cert.issuer(getProvisionedCertificateData(KMSEProvider.CERTIFICATE_ISSUER));
     cert.publicKey(data[PUB_KEY]);
     cert.verifiedBootHash(repository.getVerifiedBootHash());
 
@@ -1544,7 +1576,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         storedAttId = repository.getAttId(mapToAttId(attTags[index]));
         // Return CANNOT_ATTEST_IDS if Attestation IDs are not provisioned or
         // Attestation IDs are deleted.
-        if (storedAttId == 0 ||
+        if (storedAttId == KMType.INVALID_VALUE ||
             isEmpty(KMByteBlob.cast(storedAttId).getBuffer(),
                     KMByteBlob.cast(storedAttId).getStartOff(),
                     KMByteBlob.cast(storedAttId).length())) {
