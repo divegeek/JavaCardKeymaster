@@ -73,7 +73,10 @@ public class KMJCardSimulator implements KMSEProvider {
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   private static final short RSA_KEY_SIZE = 256;
-
+  private static final short CERT_CHAIN_OFFSET = 0;
+  private static final short CERT_ISSUER_OFFSET = KMConfigurations.CERT_CHAIN_MAX_SIZE;
+  private static final short CERT_EXPIRY_OFFSET =
+      (short) (CERT_ISSUER_OFFSET + KMConfigurations.CERT_ISSUER_MAX_SIZE);
 
   public static boolean jcardSim = false;
   private static Signature kdf;
@@ -84,9 +87,7 @@ public class KMJCardSimulator implements KMSEProvider {
   private static Cipher aesRngCipher;
   private static byte[] entropyPool;
   private static byte[] rndNum;
-  private byte[] certificateChain;
-  private byte[] certIssuer;
-  private byte[] certExpiry;
+  private byte[] provisionData;
   private KMAESKey masterKey;
   private KMECPrivateKey attestationKey;
   private KMHmacKey preSharedKey;
@@ -115,9 +116,10 @@ public class KMJCardSimulator implements KMSEProvider {
     aesRngKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
     // various ciphers
     //Allocate buffer for certificate chain and cert parameters.
-    certificateChain = new byte[(short) (KMConfigurations.CERT_CHAIN_MAX_SIZE + 2)];
-    certIssuer = new byte[(short) (KMConfigurations.CERT_ISSUER_SIZE + 2)];
-    certExpiry = new byte[(short) (KMConfigurations.CERT_EXPIRY_SIZE + 2)];
+    // First 2 bytes is reserved for length for all the 3 buffers.
+    short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
+        KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
+    provisionData = new byte[totalLen];
     jCardSimulator = this;
   }
 
@@ -1169,32 +1171,48 @@ public class KMJCardSimulator implements KMSEProvider {
   public KMAttestationCert getAttestationCert(boolean rsaCert) {
     return KMAttestationCertImpl.instance(rsaCert);
   }
-
-  private byte[] getProvisionDataBuffer(byte dataType) {
+  private short getProvisionDataBufferOffset(byte dataType) {
     switch(dataType) {
       case CERTIFICATE_CHAIN:
-        return certificateChain;
+        return CERT_CHAIN_OFFSET;
       case CERTIFICATE_ISSUER:
-        return certIssuer;
+        return CERT_ISSUER_OFFSET;
       case CERTIFICATE_EXPIRY:
-        return certExpiry;
+        return CERT_EXPIRY_OFFSET;
       default:
         KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    return null;
+    return 0;
   }
 
-  @Override
-  public void clearProvisionedData(byte dataType) {
-    byte[] buffer = getProvisionDataBuffer(dataType);
+  private void persistProvisionData(byte[] buf, short off, short len, short maxSize, short copyToOff) {
+    if (len > maxSize) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
     JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(buffer, (short) 0, (short) (buffer.length), (byte) 0);
+    Util.setShort(provisionData, copyToOff, len);
+    Util.arrayCopyNonAtomic(buf, off, provisionData, (short) (copyToOff + 2), len);
     JCSystem.commitTransaction();
   }
 
-  //This function supports multi-part request data.
+  private void persistCertificateChain(byte[] certChain, short certChainOff, short certChainLen) {
+    persistProvisionData(certChain, certChainOff, certChainLen,
+        KMConfigurations.CERT_CHAIN_MAX_SIZE, CERT_CHAIN_OFFSET);
+  }
+
+  private void persistCertficateIssuer(byte[] certIssuer, short certIssuerOff, short certIssuerLen) {
+    persistProvisionData(certIssuer, certIssuerOff, certIssuerLen,
+        KMConfigurations.CERT_ISSUER_MAX_SIZE, CERT_ISSUER_OFFSET);
+  }
+
+  private void persistCertificateExpiryTime(byte[] certExpiry, short certExpiryOff, short certExpiryLen) {
+    persistProvisionData(certExpiry, certExpiryOff, certExpiryLen,
+        KMConfigurations.CERT_EXPIRY_MAX_SIZE, CERT_EXPIRY_OFFSET);
+  }
+
   @Override
-  public void persistProvisionData(byte dataType, byte[] buf, short offset, short len) {
+  public void persistProvisionData(byte[] buffer, short certChainOff, short certChainLen,
+      short certIssuerOff, short certIssuerLen, short certExpiryOff ,short certExpiryLen) {
     // All the buffers uses first two bytes for length. The certificate chain
     // is stored as shown below.
     //  _____________________________________________________
@@ -1204,28 +1222,28 @@ public class KMJCardSimulator implements KMSEProvider {
     // CBOR format:
     // Next single byte holds the byte string header.
     // Next 3 bytes holds the total length of the certificate chain.
-    byte[] data = getProvisionDataBuffer(dataType);
-    if (len > (short) (data.length - 2)) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
+    // clear buffer.
     JCSystem.beginTransaction();
-    Util.setShort(data, (short) 0, len);
-    Util.arrayCopyNonAtomic(buf, offset, data, (short) 2, len);
+    Util.arrayFillNonAtomic(provisionData, (short) 0, (short) provisionData.length, (byte) 0);
     JCSystem.commitTransaction();
+    // Persist data.
+    persistCertificateChain(buffer, certChainOff, certChainLen);
+    persistCertficateIssuer(buffer, certIssuerOff, certIssuerLen);
+    persistCertificateExpiryTime(buffer, certExpiryOff, certExpiryLen);
   }
 
   @Override
   public short readProvisionedData(byte dataType, byte[] buf, short offset) {
-    byte[] data = getProvisionDataBuffer(dataType);
-    short len = Util.getShort(data, (short) 0);
-    Util.arrayCopyNonAtomic(data, (short) 2, buf, offset, len);
+    short provisionBufOffset = getProvisionDataBufferOffset(dataType);
+    short len = Util.getShort(provisionData, provisionBufOffset);
+    Util.arrayCopyNonAtomic(provisionData, (short) (2 + provisionBufOffset), buf, offset, len);
     return len;
   }
 
   @Override
   public short getProvisionedDataLength(byte dataType) {
-    byte[] data = getProvisionDataBuffer(dataType);
-    return Util.getShort(data, (short) 0);
+    short provisionBufOffset = getProvisionDataBufferOffset(dataType);
+    return Util.getShort(provisionData, provisionBufOffset);
   }
 
   @Override

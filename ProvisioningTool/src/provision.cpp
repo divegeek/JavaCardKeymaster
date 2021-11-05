@@ -26,7 +26,6 @@
 #include <cppbor/cppbor.h>
 #include <cppbor/cppbor_parse.h>
 
-#define SE_POWER_RESET_STATUS_FLAG (1 << 30)
 enum ProvisionStatus {
     NOT_PROVISIONED = 0x00,
     PROVISION_STATUS_ATTESTATION_KEY = 0x01,
@@ -52,7 +51,8 @@ using cppbor::MajorType;
 // static function declarations
 static uint16_t getApduStatus(std::vector<uint8_t>& inputData);
 static int sendData(std::shared_ptr<SocketTransport>& pSocket, std::string input, std::vector<uint8_t>& response);
-static int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey, std::vector<uint8_t>& response);
+static int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey);
+static int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, std::vector<uint8_t>& response);
 static int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t &value);
 
 
@@ -183,7 +183,7 @@ int openConnection(std::shared_ptr<SocketTransport>& pSocket) {
 // Parses the input json file. Sends the apdus to JCServer.
 int processInputFile() {
 
-    if (keymasterVersion != KEYMASTER_VERSION && keymasterVersion != KEYMINT_VERSION) {
+    if (keymasterVersion != KEYMASTER_VERSION_4_1 && keymasterVersion != KEYMASTER_VERSION_4_0) {
         printf("\n Error unknown version.\n");
         usage();
         return FAILURE;
@@ -199,23 +199,12 @@ int processInputFile() {
     }
     std::vector<uint8_t> response;
 
-    if (keymasterVersion == KEYMASTER_VERSION) {
-        printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
-        if (0 != provisionData(pSocket, kAttestKey) ||
-                0 != provisionData(pSocket, kAttestCertChain) ||
-                0 != provisionData(pSocket, kAttestCertParams)) {
-            return FAILURE;
-        }
-    } else {
-        printf("\n Selected keymint version(%f) for provisioning \n", keymasterVersion);
-        if ( 0 != provisionData(pSocket, kDeviceUniqueKey) ||
-                0 != provisionData(pSocket, kAdditionalCertChain)) {
-            return FAILURE;
-        }
-    }
-    if (0 != provisionData(pSocket, kAttestationIds) ||
-            0 != provisionData(pSocket, kSharedSecret) ||
-            0 != provisionData(pSocket, kBootParams)) {
+    printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
+    if (0 != provisionData(pSocket, kAttestKey) ||
+        0 != provisionData(pSocket, kAttestCertChain) ||
+        0 != provisionData(pSocket, kAttestationIds) ||
+        0 != provisionData(pSocket, kSharedSecret) ||
+        0 != provisionData(pSocket, kBootParams)) {
         return FAILURE;
     }
     return SUCCESS;

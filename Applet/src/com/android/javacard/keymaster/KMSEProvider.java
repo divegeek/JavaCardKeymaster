@@ -452,19 +452,16 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This operation persists the provision data in the persistent memory.
    *
-   * @param dataType type of the provision data to read.
-   * @param buf buffer containing certificate chain.
-   * @param offset is the start of the buffer.
-   * @param len is the length of the buffer.
+   * @param buf buffer which contains all the provision data.
+   * @param certChainOff is the start of the cert chain.
+   * @param certChainLen is the length of the cert chain.
+   * @param certIssuerOff is the start of the cert issuer.
+   * @param certIssuerLen is the length of the cert issuer.
+   * @param certExpiryOff is the start of the cert expiry.
+   * @param certExpiryLen is the length of the cert expiry.
    */
-  void persistProvisionData(byte dataType, byte[] buf, short offset, short len);
-
-  /**
-   * This operation clears the provisioned data from persistent memory.
-   *
-   * @param dataType type of the provision data to read.
-   */
-  void clearProvisionedData(byte dataType);
+  void persistProvisionData(byte[] buf, short certChainOff, short certChainLen,
+      short certIssuerOff, short certIssuerLen, short certExpiryOff, short certExpiryLen);
 
   /**
    * The operation reads the provisioned data from persistent memory.

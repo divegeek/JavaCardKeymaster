@@ -23,6 +23,6 @@ public class KMConfigurations {
 
   // Maximum cert chain size
   public static final short CERT_CHAIN_MAX_SIZE = 2500;
-  public static final short CERT_ISSUER_SIZE = 250;
-  public static final short CERT_EXPIRY_SIZE = 16;
+  public static final short CERT_ISSUER_MAX_SIZE = 250;
+  public static final short CERT_EXPIRY_MAX_SIZE = 20;
 }
