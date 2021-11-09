@@ -59,6 +59,7 @@ public class KMError {
   public static final short INVALID_NONCE = 52;
   public static final short MISSING_MAC_LENGTH = 53;
   public static final short CALLER_NONCE_PROHIBITED = 55;
+  public static final short KEY_MAX_OPS_EXCEEDED = 56;
   public static final short INVALID_MAC_LENGTH = 57;
   public static final short MISSING_MIN_MAC_LENGTH = 58;
   public static final short UNSUPPORTED_MIN_MAC_LENGTH = 59;

@@ -44,9 +44,9 @@ public class KMRepository implements KMUpgradable {
   public static final byte ATT_ID_MODEL = 7;
 
   // Data table configuration other non provisioned parameters.
-  public static final short DATA_INDEX_SIZE = 13;
+  public static final short DATA_INDEX_SIZE = 21;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
-  public static final short DATA_MEM_SIZE = 300;
+  public static final short DATA_MEM_SIZE = 500;
   public static final short HEAP_SIZE = 10000;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
@@ -72,6 +72,14 @@ public class KMRepository implements KMUpgradable {
   public static final byte DEVICE_LOCKED_TIME = 10;
   public static final byte DEVICE_LOCKED = 11;
   public static final byte DEVICE_LOCKED_PASSWORD_ONLY = 12;
+  public static final byte AUTH_TAG_1 = 13;
+  public static final byte AUTH_TAG_2 = 14;
+  public static final byte AUTH_TAG_3 = 15;
+  public static final byte AUTH_TAG_4 = 16;
+  public static final byte AUTH_TAG_5 = 17;
+  public static final byte AUTH_TAG_6 = 18;
+  public static final byte AUTH_TAG_7 = 19;
+  public static final byte AUTH_TAG_8 = 20;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -88,6 +96,10 @@ public class KMRepository implements KMUpgradable {
   public static final short MAX_OPS = 4;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
+  public static final short MAX_BLOB_STORAGE = 8;
+  public static final short AUTH_TAG_LENGTH = 16;
+  public static final short AUTH_TAG_COUNTER_SIZE = 4;
+  public static final short AUTH_TAG_ENTRY_SIZE = (AUTH_TAG_LENGTH + AUTH_TAG_COUNTER_SIZE + 1);
   private static final byte[] zero = {0, 0, 0, 0, 0, 0, 0, 0};
 
 
@@ -798,6 +810,116 @@ public class KMRepository implements KMUpgradable {
     short start = alloc(BOOT_STATE_SIZE);
     (getHeap())[start] = state;
     writeDataEntry(BOOT_VERIFIED_BOOT_STATE, getHeap(), start, BOOT_STATE_SIZE);
+  }
+
+  private boolean isAuthTagSlotAvailable(short tagId, byte[] buf, short offset) {
+    readDataEntry(tagId, buf, offset);
+    return (0 == buf[offset]);
+  }
+
+  private void writeAuthTagState(byte[] buf, short offset, byte state) {
+    buf[offset] = state;
+  }
+
+  public boolean persistAuthTag(short authTag) {
+
+    if (KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+
+    short authTagEntry = alloc(AUTH_TAG_ENTRY_SIZE);
+    short scratchPadOff = alloc(AUTH_TAG_ENTRY_SIZE);
+    byte[] scratchPad = getHeap();
+    writeAuthTagState(getHeap(), authTagEntry, (byte) 1);
+    Util.arrayCopyNonAtomic(
+        KMByteBlob.cast(authTag).getBuffer(),
+        KMByteBlob.cast(authTag).getStartOff(),
+        getHeap(), (short) (authTagEntry + 1), AUTH_TAG_LENGTH);
+    Util.setShort(getHeap(), (short) (authTagEntry + AUTH_TAG_LENGTH + 1 + 2),
+        (short) 1);
+    short index = 0;
+    while (index < MAX_BLOB_STORAGE) {
+      if ((dataLength((short) (index + AUTH_TAG_1)) == 0) ||
+          isAuthTagSlotAvailable((short) (index + AUTH_TAG_1), scratchPad, scratchPadOff)) {
+
+        writeDataEntry((short) (index + AUTH_TAG_1), getHeap(), authTagEntry, AUTH_TAG_ENTRY_SIZE);
+        return true;
+      }
+      index++;
+    }
+    return false;
+  }
+
+  public void removeAllAuthTags() {
+    short index = 0;
+    while (index < MAX_BLOB_STORAGE) {
+      clearDataEntry((short) (index + AUTH_TAG_1));
+      index++;
+    }
+  }
+
+  public boolean isAuthTagPersisted(short authTag) {
+    return (KMType.INVALID_VALUE != findTag(authTag));
+  }
+
+  private short findTag(short authTag) {
+    if (KMByteBlob.cast(authTag).length() != AUTH_TAG_LENGTH) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    short index = 0;
+    short found;
+    short offset = alloc(AUTH_TAG_ENTRY_SIZE);
+    while (index < MAX_BLOB_STORAGE) {
+      if (dataLength((short) (index + AUTH_TAG_1)) != 0) {
+        readDataEntry((short) (index + AUTH_TAG_1),
+            getHeap(), offset);
+        found =
+            Util.arrayCompare(
+                getHeap(),
+                (short) (offset + 1),
+                KMByteBlob.cast(authTag).getBuffer(),
+                KMByteBlob.cast(authTag).getStartOff(),
+                AUTH_TAG_LENGTH);
+        if (found == 0) {
+          return (short) (index + AUTH_TAG_1);
+        }
+      }
+      index++;
+    }
+    return KMType.INVALID_VALUE;
+  }
+
+  public short getRateLimitedKeyCount(short authTag, byte[] out, short outOff) {
+    short tag = findTag(authTag);
+    short blob;
+    if (tag != KMType.INVALID_VALUE) {
+      blob = readData(tag);
+      Util.arrayCopyNonAtomic(
+          KMByteBlob.cast(blob).getBuffer(),
+          (short) (KMByteBlob.cast(blob).getStartOff() + AUTH_TAG_LENGTH + 1),
+          out,
+          outOff,
+          AUTH_TAG_COUNTER_SIZE);
+      return AUTH_TAG_COUNTER_SIZE;
+    }
+    return (short) 0;
+  }
+
+  public void setRateLimitedKeyCount(short authTag, byte[] buf, short off, short len) {
+    short tag = findTag(authTag);
+    if (tag != KMType.INVALID_VALUE) {
+      short dataPtr = readData(tag);
+      Util.arrayCopyNonAtomic(
+          buf,
+          off,
+          KMByteBlob.cast(dataPtr).getBuffer(),
+          (short) (KMByteBlob.cast(dataPtr).getStartOff() + AUTH_TAG_LENGTH + 1),
+          len);
+      writeDataEntry(tag,
+          KMByteBlob.cast(dataPtr).getBuffer(),
+          KMByteBlob.cast(dataPtr).getStartOff(),
+          KMByteBlob.cast(dataPtr).length());
+    }
   }
 
   @Override
