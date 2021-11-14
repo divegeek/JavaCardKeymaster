@@ -215,18 +215,17 @@ ErrorCode OperationContext::finish(uint64_t operHandle, const std::vector<uint8_
 
  /*
   * This function is called for only Symmetric operations. It calculates the length of the data to be sent to the Applet
-  * by considering data from both of the sources i.e. buffered data and input data. Only block aligned length of data is
-  * sent to the Applet i.e. multiples of 16 for AES or multiples of 8 for DES/TDES. It first Copies the data to the out
+  * by considering data from both of the sources i.e. buffered data and input data. It first Copies the data to the out
   * buffer from buffered data and then the remaining from the input data. If the buffered data is empty then it copies
   * data to out buffer from only input and similarly if the input is empty then it copies from only buffer. Incase if
-  * only a portion of the input data is consumed then the remaining portion of input data is buffered. For AES/TDES
-  * Decryption operations with PKCS7 padding and for AES GCM Decryption operations a block size of data and tag length
-  * of data is always buffered respectively. This is done to make sure that there will be always a block size of data
-  * left for finish operation so that the Applet may remove the PKCS7 padding if any or get the tag data for AES GCM
-  * operation for authentication purpose. Once the data from the buffer is consumed then the buffer is cleared. No
-  * Buffering is done for AES GCM Encrypt and CTR Modes of operation.
+  * only a portion of the input data is consumed then the remaining portion of input data is buffered.
+  * For AES/TDES Encryption/Decryption operations with PKCS7 padding and for AES GCM Decryption operations a block size
+  * of data and tag length of data is always buffered respectively. This is done to make sure that there will be always
+  * a block size of data left for finish operation so that the Applet may remove the PKCS7 padding if any or get the tag
+  * data for AES GCM operation for authentication purpose. Once the data from the buffer is consumed then the buffer is
+  * cleared. No Buffering is done for other modes of operation.
   */
-ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, std::vector<uint8_t>& input,
+ErrorCode OperationContext::bufferData(uint64_t operHandle, std::vector<uint8_t>& input,
         Operation opr, std::vector<uint8_t>& out) {
     BufferedData& data = operationTable[operHandle].data;
     int dataToSELen = 0;/*Length of the data to be send to the Applet.*/
@@ -250,25 +249,20 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, std::vector
     } else {
         /*Update */
         //Calculate the block sized length on combined input of both buffered data and input data.
-        // AES/TDES, ECB and CBC Modes:
-        //     Buffer till (blockSize - 1) bytes of data is received.
-        // AES GCM(Encrypt) or CTR Modes:
-        //     No Buffering.
-        // AES/TDES, Decrypt PKCS7 Padding:
+        // AES/TDES, Encrypt/Decrypt PKCS7 Padding:
         //     Buffer till blockSize of data is received.
         // AES GCM Decrypt:
         //     Buffer tag length bytes of data.
-        //For symmetric ciphers, decryption operation and PKCS7 padding mode or AES GCM operation save the last
-        // blockSize/tagSize bytes of data and send this block in finish operation. This is done to make sure
-        // that there will be always a blockSize/tagSize bytes of data left for finish operation so that javacard
-        // Applet may remove PKCS7 padding if any or get the tag data for AES GCM operation for authentication purpose.
-        if (operationTable[operHandle].info.pad == PaddingMode::PKCS7 &&
-            operationTable[operHandle].info.purpose == KeyPurpose::DECRYPT) {
-            /* Buffer till we receive more than blockSize of data of atleast one byte*/
-            dataToSELen = ((data.buf_len + input.size())/blockSize) * blockSize;
-            int remaining = ((data.buf_len + input.size()) % blockSize);
-            if (dataToSELen >= blockSize && remaining == 0) {
-                dataToSELen -= blockSize;
+        if (operationTable[operHandle].info.pad == PaddingMode::PKCS7) {
+            if (operationTable[operHandle].info.purpose == KeyPurpose::DECRYPT) {
+                /* Buffer till we receive more than blockSize of data of atleast one byte*/
+                dataToSELen = ((data.buf_len + input.size()) / blockSize) * blockSize;
+                int remaining = ((data.buf_len + input.size()) % blockSize);
+                if (dataToSELen >= blockSize && remaining == 0) {
+                    dataToSELen -= blockSize;
+                }
+            } else { // Encrypt
+                dataToSELen = ((data.buf_len + input.size()) / blockSize) * blockSize;
             }
         } else if (operationTable[operHandle].info.mode == BlockMode::GCM &&
             operationTable[operHandle].info.purpose == KeyPurpose::DECRYPT) {
@@ -277,13 +271,9 @@ ErrorCode OperationContext::getBlockAlignedData(uint64_t operHandle, std::vector
             if ((data.buf_len + input.size()) > operationTable[operHandle].info.macLength) {
                 dataToSELen = (data.buf_len + input.size()) - operationTable[operHandle].info.macLength;
             }
-        } else if (operationTable[operHandle].info.mode == BlockMode::GCM ||
-            operationTable[operHandle].info.mode == BlockMode::CTR) {
+        } else {
             /* No Buffering */
             dataToSELen = input.size();
-        } else {
-            /* Buffer (BlockSize - 1) bytes */
-            dataToSELen = ((data.buf_len + input.size())/blockSize) * blockSize;
         }
         //Copy data to be send to SE from buffer, only if atleast a minimum block aligned size is available.
         if(dataToSELen > 0) {
@@ -332,7 +322,7 @@ ErrorCode OperationContext::handleInternalUpdate(uint64_t operHandle, std::vecto
     if(Algorithm::AES == operationTable[operHandle].info.alg ||
             Algorithm::TRIPLE_DES == operationTable[operHandle].info.alg) {
         /*Symmetric */
-        if(ErrorCode::OK != (errorCode = getBlockAlignedData(operHandle, data,
+        if(ErrorCode::OK != (errorCode = bufferData(operHandle, data,
                         opr, out))) {
             return errorCode;
         }
