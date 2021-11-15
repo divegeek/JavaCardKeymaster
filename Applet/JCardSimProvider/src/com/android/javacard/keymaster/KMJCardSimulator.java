@@ -77,6 +77,7 @@ public class KMJCardSimulator implements KMSEProvider {
   private static final short CERT_ISSUER_OFFSET = KMConfigurations.CERT_CHAIN_MAX_SIZE;
   private static final short CERT_EXPIRY_OFFSET =
       (short) (CERT_ISSUER_OFFSET + KMConfigurations.CERT_ISSUER_MAX_SIZE);
+  private static final short COMPUTED_HMAC_KEY_SIZE = 32;
 
   public static boolean jcardSim = false;
   private static Signature kdf;
@@ -91,6 +92,7 @@ public class KMJCardSimulator implements KMSEProvider {
   private KMAESKey masterKey;
   private KMECPrivateKey attestationKey;
   private KMHmacKey preSharedKey;
+  private KMHmacKey computedHmacKey;
 
   private static KMJCardSimulator jCardSimulator = null;
 
@@ -544,12 +546,6 @@ public class KMJCardSimulator implements KMSEProvider {
     return hmacSignature.sign(data, dataStart, dataLength, mac, macStart);
   }
 
-  public boolean hmacVerify(HMACKey key, byte[] data, short dataStart, short dataLength,
-      byte[] mac, short macStart, short macLength) {
-    hmacSignature.init(key, Signature.MODE_VERIFY);
-    return hmacSignature.verify(data, dataStart, dataLength, mac, macStart, macLength);
-  }
-
   @Override
   public short hmacKDF(KMMasterKey masterkey, byte[] data, short dataStart,
       short dataLength, byte[] signature, short signatureStart) {
@@ -562,17 +558,19 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
+  public boolean hmacVerify(KMComputedHmacKey key, byte[] data, short dataStart,
+      short dataLength, byte[] mac, short macStart, short macLength) {
+    KMHmacKey hmacKey = (KMHmacKey) key;
+    hmacSignature.init(hmacKey.getKey(), Signature.MODE_VERIFY);
+    return hmacSignature.verify(data, dataStart, dataLength, mac, macStart,
+        macLength);
+  }
+
+  @Override
   public short hmacSign(byte[] keyBuf, short keyStart, short keyLength, byte[] data,
       short dataStart, short dataLength, byte[] mac, short macStart) {
     HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
     return hmacSign(key, data, dataStart, dataLength, mac, macStart);
-  }
-
-  @Override
-  public boolean hmacVerify(byte[] keyBuf, short keyStart, short keyLength, byte[] data,
-      short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
-    HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
-    return hmacVerify(key, data, dataStart, dataLength, mac, macStart, macLength);
   }
 
   @Override
@@ -1339,6 +1337,20 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
+  public KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length) {
+    if (length != COMPUTED_HMAC_KEY_SIZE) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if (computedHmacKey == null) {
+      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) (length * 8),
+          false);
+      computedHmacKey = new KMHmacKey(key);
+    }
+    computedHmacKey.setKey(keyData, offset, length);
+    return (KMComputedHmacKey) computedHmacKey;
+  }
+
+  @Override
   public KMMasterKey getMasterKey() {
     return (KMMasterKey) masterKey;
   }
@@ -1351,6 +1363,11 @@ public class KMJCardSimulator implements KMSEProvider {
   @Override
   public KMPreSharedKey getPresharedKey() {
     return (KMPreSharedKey) preSharedKey;
+  }
+
+  @Override
+  public KMComputedHmacKey getComputedHmacKey() {
+    return (KMComputedHmacKey) computedHmacKey;
   }
 
   @Override

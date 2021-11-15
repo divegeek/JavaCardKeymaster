@@ -296,9 +296,7 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that verifies the signature using hmac algorithm.
    *
-   * @param keyBuf is the buffer with hmac key.
-   * @param keyStart is the start of the buffer.
-   * @param keyLength is the length of the buffer which will be in bytes from 8 to 64.
+   * @param hmacKey instance of KMComputedHmacKey.
    * @param data is the buffer containing data.
    * @param dataStart is the start of the data.
    * @param dataLength is the length of the data.
@@ -308,9 +306,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @return true if the signature matches.
    */
   boolean hmacVerify(
-      byte[] keyBuf,
-      short keyStart,
-      short keyLength,
+      KMComputedHmacKey hmacKey,
       byte[] data,
       short dataStart,
       short dataLength,
@@ -544,6 +540,16 @@ public interface KMSEProvider extends KMUpgradable {
    */
   KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length);
 
+ /**
+  * This function creates an HMACKey and initializes the key with the provided input key data.
+  *
+  * @param keyData buffer containing the key data.
+  * @param offset start of the buffer.
+  * @param length length of the buffer.
+  * @return An instance of the KMComputedHmacKey.
+  */
+  KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length);
+
   /**
    * Returns the master key.
    *
@@ -564,6 +570,13 @@ public interface KMSEProvider extends KMUpgradable {
    * @return Instance of the KMPreSharedKey.
    */
   KMPreSharedKey getPresharedKey();
+  
+  /**
+   * Returns the computed Hmac key.
+   *
+   * @return Instance of the computed hmac key. 
+   */
+  KMComputedHmacKey getComputedHmacKey();
 
   /**
    * Releases all the instance back to pool. Generally this is used when card is reset.

@@ -1131,7 +1131,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             scratchPad,
             (short) 0);
     // persist the computed hmac key.
-    repository.initComputedHmac(scratchPad, (short) 0, tmpVariables[6]);
+    seProvider.createComputedHmacKey(scratchPad, (short) 0, tmpVariables[6]);
 
     // Generate sharingKey verification signature and store that in scratch pad.
     tmpVariables[5] =
@@ -2030,7 +2030,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
-  private boolean verifyVerificationTokenMacInBigEndian(short verToken, short key, byte[] scratchPad) {
+  private boolean verifyVerificationTokenMacInBigEndian(short verToken, byte[] scratchPad) {
     // concatenation length will be 37 + length of verified parameters list - which
     // is typically
     // empty
@@ -2059,9 +2059,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     ptr = KMVerificationToken.cast(verToken).getMac();
 
     return seProvider.hmacVerify(
-        KMByteBlob.cast(key).getBuffer(),
-        KMByteBlob.cast(key).getStartOff(),
-        KMByteBlob.cast(key).length(),
+        seProvider.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -2070,7 +2068,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(ptr).length());
   }
 
-  private boolean verifyVerificationTokenMacInLittleEndian(short verToken, short key, byte[] scratchPad) {
+  private boolean verifyVerificationTokenMacInLittleEndian(short verToken, byte[] scratchPad) {
     // concatenation length will be 37 + length of verified parameters list - which
     // is typically
     // empty
@@ -2099,9 +2097,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     ptr = KMVerificationToken.cast(verToken).getMac();
 
     return seProvider.hmacVerify(
-        KMByteBlob.cast(key).getBuffer(),
-        KMByteBlob.cast(key).getStartOff(),
-        KMByteBlob.cast(key).length(),
+        seProvider.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -2116,12 +2112,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (KMByteBlob.cast(ptr).length() == 0) {
       KMException.throwIt(KMError.INVALID_MAC_LENGTH);
     }
-    short key = repository.getComputedHmacKey();
     boolean verify;
     if (KMConfigurations.TEE_MACHINE_TYPE == KMConfigurations.LITTLE_ENDIAN) {
-      verify = verifyVerificationTokenMacInLittleEndian(verToken, key, scratchPad);
+      verify = verifyVerificationTokenMacInLittleEndian(verToken, scratchPad);
     } else {
-      verify = verifyVerificationTokenMacInBigEndian(verToken, key, scratchPad);
+      verify = verifyVerificationTokenMacInBigEndian(verToken, scratchPad);
     }
     if (!verify) {
       // Throw Exception if none of the combination works.
@@ -2867,7 +2862,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return true;
   }
 
-  private boolean verifyHwTokenMacInBigEndian(short hwToken, short key, byte[] scratchPad) {
+  private boolean verifyHwTokenMacInBigEndian(short hwToken, byte[] scratchPad) {
     // The challenge, userId and authenticatorId, authenticatorType and timestamp
     // are in network order (big-endian).
     short len = 0;
@@ -2902,9 +2897,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
 
     return seProvider.hmacVerify(
-        KMByteBlob.cast(key).getBuffer(),
-        KMByteBlob.cast(key).getStartOff(),
-        KMByteBlob.cast(key).length(),
+        seProvider.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -2914,7 +2907,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   }
   
-  private boolean verifyHwTokenMacInLittleEndian(short hwToken, short key, byte[] scratchPad) {
+  private boolean verifyHwTokenMacInLittleEndian(short hwToken, byte[] scratchPad) {
     // The challenge, userId and authenticatorId values are in little endian order, 
     // but authenticatorType and timestamp are in network order (big-endian).
     short len = 0;
@@ -2946,9 +2939,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
 
     return seProvider.hmacVerify(
-        KMByteBlob.cast(key).getBuffer(),
-        KMByteBlob.cast(key).getStartOff(),
-        KMByteBlob.cast(key).length(),
+        seProvider.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -2964,11 +2955,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (KMByteBlob.cast(ptr).length() == 0) {
       return false;
     }
-    short key = repository.getComputedHmacKey();
     if (KMConfigurations.TEE_MACHINE_TYPE == KMConfigurations.LITTLE_ENDIAN) {
-      return verifyHwTokenMacInLittleEndian(hwToken, key, scratchPad);
+      return verifyHwTokenMacInLittleEndian(hwToken, scratchPad);
     } else {
-      return verifyHwTokenMacInBigEndian(hwToken, key, scratchPad);
+      return verifyHwTokenMacInBigEndian(hwToken, scratchPad);
     }
   }
 
@@ -3461,7 +3451,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.clearAndroidSystemProperties();
 
     // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
-    repository.clearComputedHmac();
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, KMRepository.COMPUTED_HMAC_KEY_SIZE, (byte) 0);
+    seProvider.createComputedHmacKey(scratchPad, (short) 0, KMRepository.COMPUTED_HMAC_KEY_SIZE);
     repository.clearHmacNonce();
 
     //Clear all the operation state.

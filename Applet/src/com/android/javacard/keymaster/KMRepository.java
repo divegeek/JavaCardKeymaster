@@ -31,9 +31,12 @@ public class KMRepository implements KMUpgradable {
 
   public static final byte DEFAULT_TABLE_TABLE = 0;
   public static final byte ATTEST_IDS_DATA_TABLE = 1;
+  public static final short DATA_INDEX_ENTRY_SIZE = 4;
   // Data table configuration for attestation ids
   public static final short ATTEST_IDS_DATA_INDEX_SIZE = 8;
-  public static final short ATTEST_IDS_DATA_TABLE_SIZE = 300;
+  public static final short ATTEST_IDS_DATA_TABLE_SIZE =
+      (ATTEST_IDS_DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE)
+          + KMConfigurations.TOTAL_ATTEST_IDS_SIZE;
   public static final byte ATT_ID_BRAND = 0;
   public static final byte ATT_ID_DEVICE = 1;
   public static final byte ATT_ID_PRODUCT = 2;
@@ -44,9 +47,7 @@ public class KMRepository implements KMUpgradable {
   public static final byte ATT_ID_MODEL = 7;
 
   // Data table configuration other non provisioned parameters.
-  public static final short DATA_INDEX_SIZE = 21;
-  public static final short DATA_INDEX_ENTRY_SIZE = 4;
-  public static final short DATA_MEM_SIZE = 500;
+  public static final short DATA_INDEX_SIZE = 20;
   public static final short HEAP_SIZE = 10000;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
@@ -59,27 +60,22 @@ public class KMRepository implements KMUpgradable {
   private static final byte POWER_RESET_STATUS_FLAG = (byte) 0xEF;
 
   // Data table offsets
-  public static final byte COMPUTED_HMAC_KEY = 0;
-  public static final byte HMAC_NONCE = 1;
-  public static final byte BOOT_OS_VERSION = 2;
-  public static final byte BOOT_OS_PATCH_LEVEL = 3;
-  public static final byte VENDOR_PATCH_LEVEL = 4;
-  public static final byte BOOT_PATCH_LEVEL = 5;
-  public static final byte BOOT_VERIFIED_BOOT_KEY = 6;
-  public static final byte BOOT_VERIFIED_BOOT_HASH = 7;
-  public static final byte BOOT_VERIFIED_BOOT_STATE = 8;
-  public static final byte BOOT_DEVICE_LOCKED_STATUS = 9;
-  public static final byte DEVICE_LOCKED_TIME = 10;
-  public static final byte DEVICE_LOCKED = 11;
-  public static final byte DEVICE_LOCKED_PASSWORD_ONLY = 12;
-  public static final byte AUTH_TAG_1 = 13;
-  public static final byte AUTH_TAG_2 = 14;
-  public static final byte AUTH_TAG_3 = 15;
-  public static final byte AUTH_TAG_4 = 16;
-  public static final byte AUTH_TAG_5 = 17;
-  public static final byte AUTH_TAG_6 = 18;
-  public static final byte AUTH_TAG_7 = 19;
-  public static final byte AUTH_TAG_8 = 20;
+  public static final byte BEGIN_OFFSET = 0;
+  public static final byte HMAC_NONCE = BEGIN_OFFSET + 0;
+  public static final byte BOOT_OS_VERSION = BEGIN_OFFSET + 1;
+  public static final byte BOOT_OS_PATCH_LEVEL = BEGIN_OFFSET + 2;
+  public static final byte VENDOR_PATCH_LEVEL = BEGIN_OFFSET + 3;
+  public static final byte BOOT_PATCH_LEVEL = BEGIN_OFFSET + 4;
+  public static final byte BOOT_VERIFIED_BOOT_KEY = BEGIN_OFFSET + 5;
+  public static final byte BOOT_VERIFIED_BOOT_HASH = BEGIN_OFFSET + 6;
+  public static final byte BOOT_VERIFIED_BOOT_STATE = BEGIN_OFFSET + 7;
+  public static final byte BOOT_DEVICE_LOCKED_STATUS = BEGIN_OFFSET + 8;
+  public static final byte DEVICE_LOCKED_TIME = BEGIN_OFFSET + 9;
+  public static final byte DEVICE_LOCKED = BEGIN_OFFSET + 10;
+  public static final byte DEVICE_LOCKED_PASSWORD_ONLY = BEGIN_OFFSET + 11;
+  // Total 8 Auth Tags start offset 12 and end offset 19.
+  public static final byte AUTH_TAG_1 = BEGIN_OFFSET + 12;
+  public static final byte END_OFFSET = 20;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -91,7 +87,9 @@ public class KMRepository implements KMUpgradable {
   public static final short VENDOR_PATCH_SIZE = 4;
   public static final short BOOT_PATCH_SIZE = 4;
   public static final short DEVICE_LOCK_TS_SIZE = 8;
-  public static final short DEVICE_LOCK_FLAG_SIZE = 1;
+  public static final short BOOT_DEVICE_LOCK_FLAG_SIZE = 1;
+  public static final short DEVICE_LOCKED_FLAG_SIZE = 1;
+  public static final short DEVICE_LOCKED_PASSWORD_ONLY_SIZE = 1;
   public static final short BOOT_STATE_SIZE = 1;
   public static final short MAX_OPS = 4;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
@@ -102,6 +100,20 @@ public class KMRepository implements KMUpgradable {
   public static final short AUTH_TAG_ENTRY_SIZE = (AUTH_TAG_LENGTH + AUTH_TAG_COUNTER_SIZE + 1);
   private static final byte[] zero = {0, 0, 0, 0, 0, 0, 0, 0};
 
+  private static final short DATA_MEM_SIZE = (DATA_INDEX_ENTRY_SIZE * DATA_INDEX_SIZE)
+      + HMAC_SEED_NONCE_SIZE
+      + OS_VERSION_SIZE
+      + OS_PATCH_SIZE
+      + VENDOR_PATCH_SIZE
+      + BOOT_PATCH_SIZE
+      + BOOT_KEY_MAX_SIZE
+      + BOOT_HASH_MAX_SIZE
+      + BOOT_STATE_SIZE
+      + BOOT_DEVICE_LOCK_FLAG_SIZE
+      + DEVICE_LOCK_TS_SIZE
+      + DEVICE_LOCKED_FLAG_SIZE
+      + DEVICE_LOCKED_PASSWORD_ONLY_SIZE
+      + (8 * AUTH_TAG_ENTRY_SIZE);
 
   // Class Attributes
   private Object[] operationStateTable;
@@ -329,13 +341,6 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-  public void initComputedHmac(byte[] key, short start, short len) {
-    if (len != COMPUTED_HMAC_KEY_SIZE) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    writeDataEntry(COMPUTED_HMAC_KEY, key, start, len);
-  }
-
   public void initHmacNonce(byte[] nonce, short offset, short len) {
     if (len != HMAC_SEED_NONCE_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
@@ -345,10 +350,6 @@ public class KMRepository implements KMUpgradable {
 
   public void clearHmacNonce() {
     clearDataEntry(HMAC_NONCE);
-  }
-
-  public void clearComputedHmac() {
-    clearDataEntry(COMPUTED_HMAC_KEY);
   }
 
   public void onUninstall() {
@@ -552,9 +553,6 @@ public class KMRepository implements KMUpgradable {
     return readData(HMAC_NONCE);
   }
 
-  public short getComputedHmacKey() {
-    return readData(COMPUTED_HMAC_KEY);
-  }
 
   public void persistAttId(byte id, byte[] buf, short start, short len) {
     writeDataEntry(ATTEST_IDS_DATA_TABLE, id, buf, start, len);
@@ -744,33 +742,33 @@ public class KMRepository implements KMUpgradable {
   }
 
   public void setBootloaderLocked(boolean flag) {
-    short start = alloc(DEVICE_LOCK_FLAG_SIZE);
+    short start = alloc(BOOT_DEVICE_LOCK_FLAG_SIZE);
     if (flag) {
       (getHeap())[start] = (byte) 0x01;
     } else {
       (getHeap())[start] = (byte) 0x00;
     }
-    writeDataEntry(BOOT_DEVICE_LOCKED_STATUS, getHeap(), start, DEVICE_LOCK_FLAG_SIZE);
+    writeDataEntry(BOOT_DEVICE_LOCKED_STATUS, getHeap(), start, BOOT_DEVICE_LOCK_FLAG_SIZE);
   }
 
   public void setDeviceLock(boolean flag) {
-    short start = alloc(DEVICE_LOCK_FLAG_SIZE);
+    short start = alloc(DEVICE_LOCKED_FLAG_SIZE);
     if (flag) {
       (getHeap())[start] = (byte) 0x01;
     } else {
       (getHeap())[start] = (byte) 0x00;
     }
-    writeDataEntry(DEVICE_LOCKED, getHeap(), start, DEVICE_LOCK_FLAG_SIZE);
+    writeDataEntry(DEVICE_LOCKED, getHeap(), start, DEVICE_LOCKED_FLAG_SIZE);
   }
 
   public void setDeviceLockPasswordOnly(boolean flag) {
-    short start = alloc(DEVICE_LOCK_FLAG_SIZE);
+    short start = alloc(DEVICE_LOCKED_PASSWORD_ONLY_SIZE);
     if (flag) {
       (getHeap())[start] = (byte) 0x01;
     } else {
       (getHeap())[start] = (byte) 0x00;
     }
-    writeDataEntry(DEVICE_LOCKED_PASSWORD_ONLY, getHeap(), start, DEVICE_LOCK_FLAG_SIZE);
+    writeDataEntry(DEVICE_LOCKED_PASSWORD_ONLY, getHeap(), start, DEVICE_LOCKED_PASSWORD_ONLY_SIZE);
   }
 
   public void setDeviceLockTimestamp(byte[] buf, short start, short len) {

@@ -20,7 +20,9 @@ import com.android.javacard.keymaster.KMArray;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
+import com.android.javacard.keymaster.KMComputedHmacKey;
 import com.android.javacard.keymaster.KMConfigurations;
+import com.android.javacard.keymaster.KMHmacKey;
 import com.android.javacard.keymaster.KMJCardSimApplet;
 import com.android.javacard.keymaster.KMJCardSimulator;
 import com.android.javacard.keymaster.KMSEProvider;
@@ -919,7 +921,7 @@ public class KMFunctionalTest {
     init();
     byte[] hmacKey = new byte[32];
     cryptoProvider.newRandomNumber(hmacKey, (short) 0, (short) 32);
-    KMRepository.instance().initComputedHmac(hmacKey, (short) 0, (short) 32);
+    cryptoProvider.createComputedHmacKey(hmacKey, (short) 0, (short) 32);
     // generate aes key with unlocked_device_required
     short aesKey = generateAesDesKey(KMType.AES, (short) 128, null, null, true);
     short keyBlobPtr = KMArray.cast(aesKey).get((short) 1);
@@ -946,26 +948,7 @@ public class KMFunctionalTest {
     KMVerificationToken.cast(verToken).setTimestamp(KMInteger.uint_16((short) 1));
     verToken = signVerificationToken(verToken, KMConfigurations.TEE_MACHINE_TYPE);
     // device locked request
-    deviceLock(verToken);
-    // decrypt should fail
-    inParams = getAesDesParams(KMType.AES, KMType.ECB, KMType.PKCS7, null);
-    short beginResp = begin(KMType.DECRYPT,
-        KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMKeyParameters.instance(inParams), (short) 0, false);
-    Assert.assertEquals(beginResp, KMError.DEVICE_LOCKED);
-    short hwToken = KMHardwareAuthToken.instance();
-    KMHardwareAuthToken.cast(hwToken).setTimestamp(KMInteger.uint_16((byte) 2));
-    KMHardwareAuthToken.cast(hwToken)
-        .setHwAuthenticatorType(KMEnum.instance(KMType.USER_AUTH_TYPE, (byte) KMType.PASSWORD));
-    inParams = getAesDesParams(KMType.AES, KMType.ECB, KMType.PKCS7, null);
-    hwToken = signHwToken(hwToken);
-    ret = processMessage(cipherData,
-        KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMType.DECRYPT,
-        KMKeyParameters.instance(inParams), hwToken, null, false, false
-    );
-    ret = KMArray.cast(ret).get((short) 0);
-    Assert.assertEquals(KMInteger.cast(ret).getShort(), KMError.OK);
+    deviceLock(verToken, KMError.VERIFICATION_FAILED);
     cleanUp();
   }
 
@@ -1008,13 +991,9 @@ public class KMFunctionalTest {
 
  */
     byte[] mac = new byte[32];
-    /*
-    len =
-      cryptoProvider.hmacSign(key, scratchPad, (short) 0, len,
-        mac,
-        (short)0);
-     */
-    short key = KMRepository.instance().getComputedHmacKey();
+    short key = KMByteBlob.instance((short) 32);
+    KMHmacKey computedHmacKey = (KMHmacKey) cryptoProvider.getComputedHmacKey();
+    computedHmacKey.getKey(KMByteBlob.cast(key).getBuffer(), KMByteBlob.cast(key).getStartOff());
     cryptoProvider.hmacSign(
         KMByteBlob.cast(key).getBuffer(),
         KMByteBlob.cast(key).getStartOff(),
@@ -1027,16 +1006,25 @@ public class KMFunctionalTest {
     return hwToken;
   }
 
-  private void deviceLock(short verToken) {
+  private void deviceLock(short verToken, short expectedError) {
     short req = KMArray.instance((short) 2);
     KMArray.cast(req).add((short) 0, KMInteger.uint_8((byte) 1));
     KMArray.cast(req).add((short) 1, verToken);
     CommandAPDU apdu = encodeApdu((byte) INS_DEVICE_LOCKED_CMD, req);
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    short ret = KMArray.instance((short) 1);
-    KMArray.cast(ret).add((short) 0, KMInteger.exp());
     byte[] respBuf = response.getBytes();
-    Assert.assertEquals(respBuf[0], KMError.OK);
+    short len = (short) respBuf.length;
+    byte majorType = readMajorType(respBuf);
+    short retError;
+    if (majorType == CBOR_ARRAY_MAJOR_TYPE) {
+      short ret = KMArray.instance((short) 1);
+      ret = decoder.decode(ret, respBuf, (short) 0, len);
+      retError = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
+    } else {//Major type UINT.
+      short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+      retError = KMInteger.cast(ret).getShort();
+    }
+    Assert.assertEquals(retError, expectedError);
   }
 
   private short signVerificationToken(short verToken, byte machineType) {
@@ -1095,7 +1083,9 @@ public class KMFunctionalTest {
         mac,
         (short)0);
      */
-    short key = KMRepository.instance().getComputedHmacKey();
+    short key = KMByteBlob.instance((short) 32);
+    KMHmacKey computedHmacKey = (KMHmacKey) cryptoProvider.getComputedHmacKey();
+    computedHmacKey.getKey(KMByteBlob.cast(key).getBuffer(), KMByteBlob.cast(key).getStartOff());
     cryptoProvider.hmacSign(KMByteBlob.cast(key).getBuffer(),
         KMByteBlob.cast(key).getStartOff(),
         KMByteBlob.cast(key).length(),

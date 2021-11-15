@@ -117,6 +117,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final short TMP_ARRAY_SIZE = 300;
   private static final short RSA_KEY_SIZE = 256;
   private static final short MAX_OPERATIONS = 4;
+  private static final short COMPUTED_HMAC_KEY_SIZE = 32;
   
   private static final short CERT_CHAIN_OFFSET = 0;
   private static final short CERT_ISSUER_OFFSET = KMConfigurations.CERT_CHAIN_MAX_SIZE;
@@ -177,6 +178,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private KMAESKey masterKey;
   private KMECPrivateKey attestationKey;
   private KMHmacKey preSharedKey;
+  private KMHmacKey computedHmacKey;
 
   private static KMAndroidSEProvider androidSEProvider = null;
 
@@ -728,9 +730,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return hmacSignature.sign(data, dataStart, dataLength, mac, macStart);
   }
 
-  public boolean hmacVerify(HMACKey key, byte[] data, short dataStart,
+  @Override
+  public boolean hmacVerify(KMComputedHmacKey key, byte[] data, short dataStart,
       short dataLength, byte[] mac, short macStart, short macLength) {
-    hmacSignature.init(key, Signature.MODE_VERIFY);
+    KMHmacKey hmacKey = (KMHmacKey) key;
+    hmacSignature.init(hmacKey.getKey(), Signature.MODE_VERIFY);
     return hmacSignature.verify(data, dataStart, dataLength, mac, macStart,
         macLength);
   }
@@ -755,15 +759,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
     } finally {
       clean();
     }
-  }
-
-  @Override
-  public boolean hmacVerify(byte[] keyBuf, short keyStart, short keyLength,
-      byte[] data, short dataStart, short dataLength, byte[] mac,
-      short macStart, short macLength) {
-    HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
-    return hmacVerify(key, data, dataStart, dataLength, mac, macStart,
-        macLength);
   }
 
   @Override
@@ -1179,6 +1174,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     KMAESKey.onSave(element, masterKey);
     KMECPrivateKey.onSave(element, attestationKey);
     KMHmacKey.onSave(element, preSharedKey);
+    KMHmacKey.onSave(element, computedHmacKey);
   }
 
   @Override
@@ -1187,6 +1183,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     masterKey = KMAESKey.onRestore(element);
     attestationKey = KMECPrivateKey.onRestore(element);
     preSharedKey = KMHmacKey.onRestore(element);
+    computedHmacKey = KMHmacKey.onRestore(element);
   }
 
   @Override
@@ -1242,6 +1239,20 @@ public class KMAndroidSEProvider implements KMSEProvider {
     attestationKey.setS(keyData, offset, length);
     return (KMAttestationKey) attestationKey;
   }
+  
+  @Override
+  public KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length) {
+    if (length != COMPUTED_HMAC_KEY_SIZE) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if (computedHmacKey == null) {
+      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) (length * 8),
+          false);
+      computedHmacKey = new KMHmacKey(key);
+    }
+    computedHmacKey.setKey(keyData, offset, length);
+    return (KMComputedHmacKey) computedHmacKey;
+  }  
 
   @Override
   public KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length) {
@@ -1280,5 +1291,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
       ((KMOperationImpl) operationPool[index]).abort();
       index++;
     }
+  }
+
+  @Override
+  public KMComputedHmacKey getComputedHmacKey() {
+    return computedHmacKey;
   }
 }
