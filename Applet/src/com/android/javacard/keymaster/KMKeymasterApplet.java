@@ -188,8 +188,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static short[] tmpVariables;
   protected static short[] data;
   protected static byte provisionStatus = NOT_PROVISIONED;
-  protected static boolean isBootEnded = true;
-  protected static boolean isEarlyBootEnded = true;
   
 
   /**
@@ -402,7 +400,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                 ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
               }
               //set the flag to mark boot ended
-              isBootEnded = true;
+              repository.setBootEndedStatus(true);
+              
               seProvider.clearDeviceBooted(false);
               sendError(apdu, KMError.OK);
               return;
@@ -537,7 +536,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processEarlyBootEndedCmd(APDU apdu) {
-	  isEarlyBootEnded = true;
+    repository.setEarlyBootEndedStatus(true);
   }
 
   private void processDeviceLockedCmd(APDU apdu) {
@@ -1692,6 +1691,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeUpdateFinishOperation(op, scratchPad);
     switch (op.getPurpose()) {
       case KMType.SIGN:
+    	  finishTrustedConfirmationOperation(op);
       case KMType.VERIFY:
         finishSigningVerifyingOperation(op, scratchPad);
         break;
@@ -2169,6 +2169,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
               KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
               KMByteBlob.cast(data[INPUT_DATA]).length());
+      // update trusted confirmation operation
+      updateTrustedConfirmationOperation(op);
+      
       data[OUTPUT_DATA] = KMType.INVALID_VALUE;
     } else if (op.getPurpose() == KMType.ENCRYPT || op.getPurpose() == KMType.DECRYPT) {
       // Update for encrypt/decrypt using RSA will not be supported because to do this op state
@@ -2292,6 +2295,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeAndBeginOperation(op, scratchPad);
     switch (op.getPurpose()) {
       case KMType.SIGN:
+     	beginTrustedConfirmationOperation(op);
       case KMType.VERIFY:
         beginSignVerifyOperation(op);
         break;
@@ -2567,14 +2571,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //Validate bootloader only 
     tmpVariables[0] =
             KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, data[HW_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE && isBootEnded) {
+    if (tmpVariables[0] != KMType.INVALID_VALUE && repository.getBootEndedStatus()) {
     	KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
     
   //Validate early boot
     tmpVariables[0] =
             KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, data[HW_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE && isEarlyBootEnded) {
+    if (tmpVariables[0] != KMType.INVALID_VALUE && repository.getEarlyBootEndedStatus()) {
     	KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
     
@@ -2686,6 +2690,21 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
           }
         }
+    }
+  }
+  
+  private void beginTrustedConfirmationOperation(KMOperationState op) {
+    // Check for trusted confirmation - if required then set the signer in op state.
+    if (KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
+        data[HW_PARAMETERS]) != KMType.INVALID_VALUE) {
+
+      op.setTrustedConfirmationSigner(
+          seProvider.initTrustedConfirmationSymmetricOperation(seProvider.getComputedHmacKey()));
+
+      op.getTrustedConfirmationSigner().update(
+          confirmationToken,
+          (short) 0,
+          (short) confirmationToken.length);
     }
   }
 
@@ -2990,12 +3009,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void importKey(APDU apdu, byte[] scratchPad) {
-    // Bootloader only not supported
+    
     tmpVariables[0] =
-        KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, data[KEY_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE) {
-      KMException.throwIt(KMError.INVALID_KEY_BLOB);
+            KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] != KMType.INVALID_VALUE && repository.getEarlyBootEndedStatus()) {
+      KMException.throwIt(KMError.EARLY_BOOT_ENDED);
     }
+    
     // Rollback protection not supported
     tmpVariables[0] =
         KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE, data[KEY_PARAMETERS]);
@@ -3463,10 +3483,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.initHmacNonce(scratchPad, (short) 0, KMRepository.HMAC_SEED_NONCE_SIZE);
     
     //flag to maintain the boot state
-    isBootEnded = false;
+    repository.setBootEndedStatus(false);
     
     //flag to maintain early boot ended state
-    isEarlyBootEnded = false;
+    repository.setEarlyBootEndedStatus(false);
     
     // Clear all the auth tags
     repository.removeAllAuthTags();
@@ -3491,7 +3511,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Check if EarlyBootEnded tag is present.
     tmpVariables[0] =
         KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, data[KEY_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE && isEarlyBootEnded) {
+    if (tmpVariables[0] != KMType.INVALID_VALUE && repository.getEarlyBootEndedStatus()) {
       KMException.throwIt(KMError.EARLY_BOOT_ENDED);
     }
     // Check if rollback resistance tag is present
@@ -4115,4 +4135,37 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMUtils.add(scratchPad, (short) 0, (short) 8, (short) 16);
     return KMInteger.uint_64(scratchPad, (short) 16);
   }
+  
+  private void updateTrustedConfirmationOperation(KMOperationState op) {
+    if (op.isTrustedConfirmationRequired()) {
+      op.getTrustedConfirmationSigner().update(
+          KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+          KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+          KMByteBlob.cast(data[INPUT_DATA]).length());
+    }
+  }
+  
+  private void finishTrustedConfirmationOperation(KMOperationState op) {
+    // Perform trusted confirmation if required
+    if (op.isTrustedConfirmationRequired()) {
+      tmpVariables[0] =
+          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.CONFIRMATION_TOKEN, data[KEY_PARAMETERS]);
+      if (tmpVariables[0] == KMType.INVALID_VALUE) {
+        KMException.throwIt(KMError.NO_USER_CONFIRMATION);
+      }
+      tmpVariables[0] = KMByteTag.cast(tmpVariables[0]).getValue();
+      boolean verified =
+          op.getTrustedConfirmationSigner().verify(
+              KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+              KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+              KMByteBlob.cast(data[INPUT_DATA]).length(),
+              KMByteBlob.cast(tmpVariables[0]).getBuffer(),
+              KMByteBlob.cast(tmpVariables[0]).getStartOff(),
+              KMByteBlob.cast(tmpVariables[0]).length());
+      if (!verified) {
+        KMException.throwIt(KMError.NO_USER_CONFIRMATION);
+      }
+    }
+  }
+
 }

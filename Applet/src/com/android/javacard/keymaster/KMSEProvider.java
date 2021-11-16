@@ -401,6 +401,14 @@ public interface KMSEProvider extends KMUpgradable {
       short ivLength,
       short macLength);
 
+   /**
+    * Initializes the trusted confirmation operation.
+    *
+    * @param computedHmacKey Instance of the computed Hmac key.
+    * @return instance of KMOperation.
+    */
+   KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey);
+  
   /**
    * This creates a persistent operation for signing, verify, encryption and decryption using RSA
    * and EC algorithms when keymaster hal's beginOperation function is executed. For RSA the public

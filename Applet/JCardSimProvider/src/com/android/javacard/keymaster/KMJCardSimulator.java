@@ -614,6 +614,14 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
+  public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {
+    KMOperationImpl opr = null;
+    KMHmacKey key = (KMHmacKey) computedHmacKey;
+    Signature signerVerifier = createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, key.getKey());
+    return new KMOperationImpl(signerVerifier);
+  }
+  
+  @Override
   public KMOperation initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest,
       byte[] privKeyBuf, short privKeyStart, short privKeyLength,
       byte[] pubModBuf, short pubModStart, short pubModLength) {
@@ -994,17 +1002,18 @@ public class KMJCardSimulator implements KMSEProvider {
     return ret;
   }
 
+  private Signature createHmacSignerVerifier(short purpose, short digest,
+      byte[] secret, short secretStart, short secretLength) {
+    HMACKey key = createHMACKey(secret, secretStart, secretLength);
+    return createHmacSignerVerifier(purpose, digest, key);
+  }
 
-  public Signature createHmacSignerVerifier(short purpose, short digest, byte[] secret,
-      short secretStart, short secretLength) {
-    short alg = Signature.ALG_HMAC_SHA_256;
+  private Signature createHmacSignerVerifier(short purpose, short digest, HMACKey key) {
+    byte alg = Signature.ALG_HMAC_SHA_256;
     if (digest != KMType.SHA2_256) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
     Signature hmacSignerVerifier = Signature.getInstance((byte) alg, false);
-    HMACKey key = (HMACKey) KeyBuilder
-        .buildKey(KeyBuilder.TYPE_HMAC, (short) (secretLength * 8), false);
-    key.setKey(secret, secretStart, secretLength);
     hmacSignerVerifier.init(key, (byte) purpose);
     return hmacSignerVerifier;
   }

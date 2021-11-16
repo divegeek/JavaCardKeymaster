@@ -117,6 +117,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final short TMP_ARRAY_SIZE = 300;
   private static final short RSA_KEY_SIZE = 256;
   private static final short MAX_OPERATIONS = 4;
+  private static final short HMAC_MAX_OPERATIONS = 8;
   private static final short COMPUTED_HMAC_KEY_SIZE = 32;
   
   private static final short CERT_CHAIN_OFFSET = 0;
@@ -164,7 +165,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private Object[] sigPool;
   // KMOperationImpl pool
   private Object[] operationPool;
-
+  // Hmac signer pool which is used to support TRUSTED_CONFIRMATION_REQUIRED tag.
+  private Object[] hmacSignOperationPool;
+  
   private Signature kdf;
 
   private Signature hmacSignature;
@@ -203,13 +206,18 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
     // Re-usable cipher and signature instances
     cipherPool = new Object[(short) (CIPHER_ALGS.length * 4)];
-    sigPool = new Object[(short) (SIG_ALGS.length * 4)];
+    // Extra 4 algorithms are used to support TRUSTED_CONFIRMATION_REQUIRED feature.
+    sigPool = new Object[(short) ((SIG_ALGS.length * 4) + 4)];
     operationPool = new Object[4];
+
+    //maintain seperate operation pool for hmac signer used to support trusted confirmation
+    hmacSignOperationPool = new Object[4];
     // Creates an instance of each cipher algorithm once.
     initializeCipherPool();
     // Creates an instance of each signature algorithm once.
     initializeSigPool();
     initializeOperationPool();
+    initializeHmacSignOperationPool();
     //RsaOAEP Decipher
     rsaOaepDecipher = new KMRsaOAEPEncoding(KMRsaOAEPEncoding.ALG_RSA_PKCS1_OAEP_SHA256_MGF1_SHA1);
 
@@ -288,6 +296,14 @@ public class KMAndroidSEProvider implements KMSEProvider {
       index++;
     }
   }
+  
+  private void initializeHmacSignOperationPool() {
+    short index = 0;
+    while (index < 4) {
+      hmacSignOperationPool[index] = new KMOperationImpl();
+      index++;
+    }
+  }
 
   // Create a signature instance of each algorithm once.
   private void initializeSigPool() {
@@ -339,6 +355,20 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     return null;
   }
+  
+  private KMOperationImpl getHmacSignOperationInstanceFromPool() {
+    short index = 0;
+    KMOperationImpl impl;
+    while (index < hmacSignOperationPool.length) {
+      impl = (KMOperationImpl) hmacSignOperationPool[index];
+      // Mode is always set. so compare using mode value.
+      if (impl.getMode() == KMType.INVALID_VALUE) {
+        return impl;
+      }
+      index++;
+    }
+    return null;
+  }
 
   private Signature getSignatureInstanceFromPool(byte alg) {
     return (Signature) getInstanceFromPool(sigPool, alg);
@@ -351,7 +381,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private boolean isResourceBusy(Object obj) {
     short index = 0;
     while (index < MAX_OPERATIONS) {
-      if (((KMOperationImpl) operationPool[index]).isResourceMatches(obj)) {
+      if (((KMOperationImpl) operationPool[index]).isResourceMatches(obj)
+    		  || ((KMOperationImpl) hmacSignOperationPool[index]).isResourceMatches(obj)) {
         return true;
       }
       index++;
@@ -372,8 +403,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
     short instanceCount = 0;
     boolean isCipher = isCipherAlgorithm(alg);
     boolean isSigner = isSignerAlgorithm(alg);
+    short maxOperations = MAX_OPERATIONS;
+    if (Signature.ALG_HMAC_SHA_256 == alg) {
+      maxOperations = HMAC_MAX_OPERATIONS;
+    }
     while (index < (short) pool.length) {
-      if (instanceCount >= MAX_OPERATIONS) {
+      if (instanceCount >= maxOperations) {
         KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
         break;
       }
@@ -925,14 +960,18 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return symmCipher;
   }
 
-  public Signature createHmacSignerVerifier(short purpose, short digest,
+  private Signature createHmacSignerVerifier(short purpose, short digest,
       byte[] secret, short secretStart, short secretLength) {
+    HMACKey key = createHMACKey(secret, secretStart, secretLength);
+    return createHmacSignerVerifier(purpose, digest, key);
+  }
+  
+  private Signature createHmacSignerVerifier(short purpose, short digest, HMACKey key) {
     byte alg = Signature.ALG_HMAC_SHA_256;
     if (digest != KMType.SHA2_256) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
     Signature hmacSignerVerifier = getSignatureInstanceFromPool(alg);
-    HMACKey key = createHMACKey(secret, secretStart, secretLength);
     hmacSignerVerifier.init(key, (byte) mapPurpose(purpose));
     return hmacSignerVerifier;
   }
@@ -969,6 +1008,17 @@ public class KMAndroidSEProvider implements KMSEProvider {
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
         break;
     }
+    return opr;
+  }
+
+  @Override
+  public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {
+    KMOperationImpl opr = null;
+    KMHmacKey key = (KMHmacKey) computedHmacKey;
+    Signature signerVerifier = createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, key.getKey());
+    opr = getHmacSignOperationInstanceFromPool();
+    opr.setMode(KMType.VERIFY);
+    opr.setSignature(signerVerifier);
     return opr;
   }
 
@@ -1191,6 +1241,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     short count =
         (short) (KMAESKey.getBackupPrimitiveByteCount() +
             KMECPrivateKey.getBackupPrimitiveByteCount() +
+            KMHmacKey.getBackupPrimitiveByteCount() +
             KMHmacKey.getBackupPrimitiveByteCount());
     return count;
   }
@@ -1201,6 +1252,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         (short) (1 + /* provisionData buffer */
             KMAESKey.getBackupObjectCount() +
             KMECPrivateKey.getBackupObjectCount() +
+            KMHmacKey.getBackupObjectCount() +
             KMHmacKey.getBackupObjectCount());
     return count;
   }
@@ -1289,6 +1341,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     short index = 0;
     while (index < operationPool.length) {
       ((KMOperationImpl) operationPool[index]).abort();
+      ((KMOperationImpl) hmacSignOperationPool[index]).abort();
       index++;
     }
   }

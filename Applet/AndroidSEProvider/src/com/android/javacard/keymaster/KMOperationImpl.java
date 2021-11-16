@@ -92,7 +92,6 @@ public class KMOperationImpl implements KMOperation {
     return operationInst[0] == object;
   }
 
-
   private void reset() {
     operationInst[0] = null;
     parameters[MAC_LENGTH_OFFSET] = KMType.INVALID_VALUE;
@@ -234,6 +233,25 @@ public class KMOperationImpl implements KMOperation {
 
   @Override
   public void abort() {
+    // Few simulators does not reset the Hmac signer instance on init so as
+    // a workaround to reset the hmac signer instance in case of abort/failure of the operation
+    // the corresponding sign / verify function is called.
+    if (operationInst[0] != null) {
+      if ((parameters[OPER_MODE_OFFSET] == KMType.SIGN || parameters[OPER_MODE_OFFSET] == KMType.VERIFY) &&
+          (((Signature) operationInst[0]).getAlgorithm() == Signature.ALG_HMAC_SHA_256)) {
+        byte[] empty = {};
+        Signature signer = (Signature) operationInst[0];
+        try {
+          if (parameters[OPER_MODE_OFFSET] == KMType.SIGN) {
+            signer.sign(empty, (short) 0, (short) 0, empty, (short) 0);
+          } else {
+            signer.verify(empty, (short) 0, (short) 0, empty, (short) 0, (short) 0);
+          }
+        } catch(Exception e) {
+          // Ignore.
+        }
+      }
+    }
     reset();
   }
 

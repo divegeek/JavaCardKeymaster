@@ -113,7 +113,6 @@ public class KMKeyParameters extends KMType {
   public static boolean hasUnsupportedTags(short keyParamsPtr) {
     final short[] tagArr = {
         // Unsupported tags.
-        KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
         KMType.BOOL_TAG, KMType.TRUSTED_USER_PRESENCE_REQUIRED,
         KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY,
         KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS
@@ -171,6 +170,7 @@ public class KMKeyParameters extends KMType {
         KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
         KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
         KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,
+        KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED
     };
     byte index = 0;
     short tagInd;

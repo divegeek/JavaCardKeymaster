@@ -47,7 +47,7 @@ public class KMRepository implements KMUpgradable {
   public static final byte ATT_ID_MODEL = 7;
 
   // Data table configuration other non provisioned parameters.
-  public static final short DATA_INDEX_SIZE = 20;
+  public static final short DATA_INDEX_SIZE = 22;
   public static final short HEAP_SIZE = 10000;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
@@ -75,7 +75,9 @@ public class KMRepository implements KMUpgradable {
   public static final byte DEVICE_LOCKED_PASSWORD_ONLY = BEGIN_OFFSET + 11;
   // Total 8 Auth Tags start offset 12 and end offset 19.
   public static final byte AUTH_TAG_1 = BEGIN_OFFSET + 12;
-  public static final byte END_OFFSET = 20;
+  public static final byte BOOT_ENDED_STATUS = BEGIN_OFFSET + 20;
+  public static final byte EARLY_BOOT_ENDED_STATUS = BEGIN_OFFSET + 21;
+  public static final byte END_OFFSET = 22;
 
   // Data Item sizes
   public static final short MASTER_KEY_SIZE = 16;
@@ -98,6 +100,8 @@ public class KMRepository implements KMUpgradable {
   public static final short AUTH_TAG_LENGTH = 16;
   public static final short AUTH_TAG_COUNTER_SIZE = 4;
   public static final short AUTH_TAG_ENTRY_SIZE = (AUTH_TAG_LENGTH + AUTH_TAG_COUNTER_SIZE + 1);
+  public static final short BOOT_ENDED_FLAG_SIZE = 1;
+  public static final short EARLY_BOOT_ENDED_FLAG_SIZE = 1;
   private static final byte[] zero = {0, 0, 0, 0, 0, 0, 0, 0};
 
   private static final short DATA_MEM_SIZE = (DATA_INDEX_ENTRY_SIZE * DATA_INDEX_SIZE)
@@ -113,7 +117,9 @@ public class KMRepository implements KMUpgradable {
       + DEVICE_LOCK_TS_SIZE
       + DEVICE_LOCKED_FLAG_SIZE
       + DEVICE_LOCKED_PASSWORD_ONLY_SIZE
-      + (8 * AUTH_TAG_ENTRY_SIZE);
+      + (8 * AUTH_TAG_ENTRY_SIZE)
+      + BOOT_ENDED_FLAG_SIZE
+      + EARLY_BOOT_ENDED_FLAG_SIZE;
 
   // Class Attributes
   private Object[] operationStateTable;
@@ -132,6 +138,7 @@ public class KMRepository implements KMUpgradable {
   // Operation table.
   private static final short OPER_TABLE_DATA_OFFSET = 0;
   private static final short OPER_TABLE_OPR_OFFSET = 1;
+  private static final short OPER_TABLE_HMAC_SIGNER_OPR_OFFSET = 2;
   private static final short OPER_DATA_LEN = OPERATION_HANDLE_ENTRY_SIZE + KMOperationState.MAX_DATA;
   private static final short DATA_ARRAY_LENGTH = MAX_OPS * OPER_DATA_LEN;
 
@@ -153,9 +160,10 @@ public class KMRepository implements KMUpgradable {
     powerResetStatus[0] = POWER_RESET_STATUS_FLAG;
     newDataTable(isUpgrading);
 
-    operationStateTable = new Object[2];
+    operationStateTable = new Object[3];
     operationStateTable[0] = JCSystem.makeTransientByteArray(DATA_ARRAY_LENGTH, JCSystem.CLEAR_ON_RESET);
     operationStateTable[1] = JCSystem.makeTransientObjectArray(MAX_OPS, JCSystem.CLEAR_ON_RESET);
+    operationStateTable[2] = JCSystem.makeTransientObjectArray(MAX_OPS, JCSystem.CLEAR_ON_RESET);
 
     //Initialize the device locked status
     if (!isUpgrading) {
@@ -203,12 +211,13 @@ public class KMRepository implements KMUpgradable {
     short offset = 0;
     oprTableData = (byte[]) operationStateTable[OPER_TABLE_DATA_OFFSET];
     Object[] operations = (Object[]) operationStateTable[OPER_TABLE_OPR_OFFSET];
+    Object[] hmacSignerOprs = (Object[]) operationStateTable[OPER_TABLE_HMAC_SIGNER_OPR_OFFSET];
     while (index < MAX_OPS) {
       offset = (short) (index * OPER_DATA_LEN);
       if (0 == Util.arrayCompare(buf, off, oprTableData, (short) (offset + OPERATION_HANDLE_OFFSET), len)) {
         return KMOperationState.read(oprTableData, (short) (offset + OPERATION_HANDLE_OFFSET), oprTableData,
             (short) (offset + OPERATION_HANDLE_ENTRY_SIZE),
-            operations[index]);
+            operations[index], hmacSignerOprs[index]);
       }
       index++;
     }
@@ -245,10 +254,11 @@ public class KMRepository implements KMUpgradable {
     return null;
   }
 
-  public void persistOperation(byte[] data, short opHandle, KMOperation op) {
+  public void persistOperation(byte[] data, short opHandle, KMOperation op, KMOperation hmacSignerOp) {
     short index = 0;
     byte[] oprTableData = (byte[]) operationStateTable[OPER_TABLE_DATA_OFFSET];
     Object[] operations = (Object[]) operationStateTable[OPER_TABLE_OPR_OFFSET];
+    Object[] hmacSignerOprs = (Object[]) operationStateTable[OPER_TABLE_HMAC_SIGNER_OPR_OFFSET];
     short offset = 0;
     short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
     getOperationHandle(
@@ -269,6 +279,7 @@ public class KMRepository implements KMUpgradable {
         Util.arrayCopy(data, (short) 0, oprTableData, (short) (offset + OPERATION_HANDLE_ENTRY_SIZE),
             KMOperationState.MAX_DATA);
         operations[index] = op;
+        hmacSignerOprs[index] = hmacSignerOp;
         return;
       }
       index++;
@@ -289,6 +300,7 @@ public class KMRepository implements KMUpgradable {
         Util.arrayCopy(data, (short) 0, oprTableData, (short) (offset + OPERATION_HANDLE_ENTRY_SIZE),
             KMOperationState.MAX_DATA);
         operations[index] = op;
+        hmacSignerOprs[index] = hmacSignerOp;
         break;
       }
       index++;
@@ -299,6 +311,7 @@ public class KMRepository implements KMUpgradable {
     short index = 0;
     byte[] oprTableData = (byte[]) operationStateTable[OPER_TABLE_DATA_OFFSET];
     Object[] operations = (Object[]) operationStateTable[OPER_TABLE_OPR_OFFSET];
+    Object[] hmacSignerOprs = (Object[]) operationStateTable[OPER_TABLE_HMAC_SIGNER_OPR_OFFSET];
     short offset = 0;
     short buf = KMByteBlob.instance(OPERATION_HANDLE_SIZE);
     getOperationHandle(
@@ -317,6 +330,7 @@ public class KMRepository implements KMUpgradable {
         Util.arrayFillNonAtomic(oprTableData, offset, OPER_DATA_LEN, (byte) 0);
         op.release();
         operations[index] = null;
+        hmacSignerOprs[index] = null;
         break;
       }
       index++;
@@ -327,6 +341,8 @@ public class KMRepository implements KMUpgradable {
     short index = 0;
     byte[] oprTableData = (byte[]) operationStateTable[OPER_TABLE_DATA_OFFSET];
     Object[] operations = (Object[]) operationStateTable[OPER_TABLE_OPR_OFFSET];
+    Object[] hmacSignerOprs = (Object[]) operationStateTable[OPER_TABLE_HMAC_SIGNER_OPR_OFFSET];
+    
     short offset = 0;
     while (index < MAX_OPS) {
       offset = (short) (index * OPER_DATA_LEN);
@@ -335,6 +351,10 @@ public class KMRepository implements KMUpgradable {
         if (operations[index] != null) {
           ((KMOperation) operations[index]).abort();
           operations[index] = null;
+        }
+        if (hmacSignerOprs[index] != null) {
+            ((KMOperation) hmacSignerOprs[index]).abort();
+            hmacSignerOprs[index] = null;
         }
       }
       index++;
@@ -947,4 +967,41 @@ public class KMRepository implements KMUpgradable {
     // dataTable
     return (short) 2;
   }
+  
+  public boolean getBootEndedStatus() {
+    short blob = readData(BOOT_ENDED_STATUS);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]) == 0x01;
+  }
+  
+  public void setBootEndedStatus(boolean flag) {
+    short start = alloc(BOOT_ENDED_STATUS);
+    if (flag) {
+      (getHeap())[start] = (byte) 0x01;
+    } else {
+      (getHeap())[start] = (byte) 0x00;
+    }
+    writeDataEntry(BOOT_ENDED_STATUS, getHeap(), start, BOOT_ENDED_FLAG_SIZE);
+  }
+  
+  public boolean getEarlyBootEndedStatus() {
+    short blob = readData(EARLY_BOOT_ENDED_STATUS);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]) == 0x01;
+  }
+	  
+  public void setEarlyBootEndedStatus(boolean flag) {
+    short start = alloc(EARLY_BOOT_ENDED_STATUS);
+    if (flag) {
+      (getHeap())[start] = (byte) 0x01;
+    } else {
+      (getHeap())[start] = (byte) 0x00;
+    }
+    writeDataEntry(EARLY_BOOT_ENDED_STATUS, getHeap(), start, EARLY_BOOT_ENDED_FLAG_SIZE);
+  }
+  
 }
