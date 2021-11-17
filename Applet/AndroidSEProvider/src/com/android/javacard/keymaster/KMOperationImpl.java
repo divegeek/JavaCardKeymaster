@@ -243,9 +243,9 @@ public class KMOperationImpl implements KMOperation {
         Signature signer = (Signature) operationInst[0];
         try {
           if (parameters[OPER_MODE_OFFSET] == KMType.SIGN) {
-            signer.sign(empty, (short) 0, (short) 0, empty, (short) 0);
-          } else {
             signer.verify(empty, (short) 0, (short) 0, empty, (short) 0, (short) 0);
+          } else {
+            signer.sign(empty, (short) 0, (short) 0, empty, (short) 0);
           }
         } catch(Exception e) {
           // Ignore.
