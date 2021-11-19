@@ -24,6 +24,8 @@
 #include <android-base/properties.h>
 #include "CborConverter.h"
 #include "TransportFactory.h"
+#include <cppbor.h>
+#include <cppbor_parse.h>
 #include <keymaster/keymaster_configuration.h>
 #include <keymaster/contexts/pure_soft_keymaster_context.h>
 #include <keymaster/android_keymaster.h>
@@ -32,6 +34,9 @@
 namespace keymaster {
 namespace V4_1 {
 namespace javacard {
+#define INS_BEGIN_KM_CMD 0x00
+#define INS_END_KM_PROVISION_CMD 0x20
+#define INS_END_KM_CMD 0x7F
 
 using ::android::hardware::hidl_vec;
 using ::android::hardware::hidl_string;
@@ -60,6 +65,34 @@ enum class OperationType {
     /* Private operations are processed inside strongbox */
     PRIVATE_OPERATION = 1,
     UNKNOWN = 2,
+};
+
+enum class Instruction {
+    // Keymaster commands
+    INS_GENERATE_KEY_CMD = INS_END_KM_PROVISION_CMD+1,
+    INS_IMPORT_KEY_CMD = INS_END_KM_PROVISION_CMD+2,
+    INS_IMPORT_WRAPPED_KEY_CMD = INS_END_KM_PROVISION_CMD+3,
+    INS_EXPORT_KEY_CMD = INS_END_KM_PROVISION_CMD+4,
+    INS_ATTEST_KEY_CMD = INS_END_KM_PROVISION_CMD+5,
+    INS_UPGRADE_KEY_CMD = INS_END_KM_PROVISION_CMD+6,
+    INS_DELETE_KEY_CMD = INS_END_KM_PROVISION_CMD+7,
+    INS_DELETE_ALL_KEYS_CMD = INS_END_KM_PROVISION_CMD+8,
+    INS_ADD_RNG_ENTROPY_CMD = INS_END_KM_PROVISION_CMD+9,
+    INS_COMPUTE_SHARED_HMAC_CMD = INS_END_KM_PROVISION_CMD+10,
+    INS_DESTROY_ATT_IDS_CMD = INS_END_KM_PROVISION_CMD+11,
+    INS_VERIFY_AUTHORIZATION_CMD = INS_END_KM_PROVISION_CMD+12,
+    INS_GET_HMAC_SHARING_PARAM_CMD = INS_END_KM_PROVISION_CMD+13,
+    INS_GET_KEY_CHARACTERISTICS_CMD = INS_END_KM_PROVISION_CMD+14,
+    INS_GET_HW_INFO_CMD = INS_END_KM_PROVISION_CMD+15,
+    INS_BEGIN_OPERATION_CMD = INS_END_KM_PROVISION_CMD+16,
+    INS_UPDATE_OPERATION_CMD = INS_END_KM_PROVISION_CMD+17,
+    INS_FINISH_OPERATION_CMD = INS_END_KM_PROVISION_CMD+18,
+    INS_ABORT_OPERATION_CMD = INS_END_KM_PROVISION_CMD+19,
+    INS_DEVICE_LOCKED_CMD = INS_END_KM_PROVISION_CMD+20,
+    INS_EARLY_BOOT_ENDED_CMD = INS_END_KM_PROVISION_CMD+21,
+    INS_GET_CERT_CHAIN_CMD = INS_END_KM_PROVISION_CMD+22,
+    INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD+7,
+    INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD+8,
 };
 
 class JavacardKeymaster4Device : public IKeymasterDevice {
@@ -93,9 +126,6 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     Return<V41ErrorCode> deviceLocked(bool passwordOnly, const VerificationToken& verificationToken) override;
     Return<V41ErrorCode> earlyBootEnded() override;
 
-protected:
-    CborConverter cborConverter_;
-
   private:
     ErrorCode handleBeginPublicKeyOperation(KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob,
                                             const hidl_vec<KeyParameter>& inParams,
@@ -120,9 +150,15 @@ protected:
 
     ErrorCode abortPrivateKeyOperation(uint64_t operationHandle);
 
+    ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response);
+    ErrorCode sendData(Instruction ins, cppbor::Array& arr, std::vector<uint8_t>& response);
+    ErrorCode setAndroidSystemProperties();
+
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
     std::unique_ptr<OperationContext> oprCtx_;
     bool isEachSystemPropertySet;
+    bool cachedEarlyBootEvent;
+    CborConverter cborConverter_;
 };
 
 }  // namespace javacard

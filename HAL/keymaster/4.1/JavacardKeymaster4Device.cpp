@@ -17,8 +17,6 @@
 
 #include <climits>
 #include <time.h>
-#include <cppbor.h>
-#include <cppbor_parse.h>
 #include <CborConverter.h>
 #include <Transport.h>
 #include <keymaster/key_blob_utils/software_keyblobs.h>
@@ -50,9 +48,6 @@
 #define APDU_P2  0x00
 #define APDU_RESP_STATUS_OK 0x9000
 
-#define INS_BEGIN_KM_CMD 0x00
-#define INS_END_KM_PROVISION_CMD 0x20
-#define INS_END_KM_CMD 0x7F
 #define SW_KM_OPR 0UL
 #define SB_KM_OPR 1UL
 #define SE_POWER_RESET_STATUS_FLAG ( 1 << 30)
@@ -71,43 +66,6 @@ std::map<uint64_t, OperationType> operationTable;
 
 struct KM_AUTH_LIST_Delete {
     void operator()(KM_AUTH_LIST* p) { KM_AUTH_LIST_free(p); }
-};
-
-enum class Instruction {
-    // Keymaster commands
-    INS_GENERATE_KEY_CMD = INS_END_KM_PROVISION_CMD+1,
-    INS_IMPORT_KEY_CMD = INS_END_KM_PROVISION_CMD+2,
-    INS_IMPORT_WRAPPED_KEY_CMD = INS_END_KM_PROVISION_CMD+3,
-    INS_EXPORT_KEY_CMD = INS_END_KM_PROVISION_CMD+4,
-    INS_ATTEST_KEY_CMD = INS_END_KM_PROVISION_CMD+5,
-    INS_UPGRADE_KEY_CMD = INS_END_KM_PROVISION_CMD+6,
-    INS_DELETE_KEY_CMD = INS_END_KM_PROVISION_CMD+7,
-    INS_DELETE_ALL_KEYS_CMD = INS_END_KM_PROVISION_CMD+8,
-    INS_ADD_RNG_ENTROPY_CMD = INS_END_KM_PROVISION_CMD+9,
-    INS_COMPUTE_SHARED_HMAC_CMD = INS_END_KM_PROVISION_CMD+10,
-    INS_DESTROY_ATT_IDS_CMD = INS_END_KM_PROVISION_CMD+11,
-    INS_VERIFY_AUTHORIZATION_CMD = INS_END_KM_PROVISION_CMD+12,
-    INS_GET_HMAC_SHARING_PARAM_CMD = INS_END_KM_PROVISION_CMD+13,
-    INS_GET_KEY_CHARACTERISTICS_CMD = INS_END_KM_PROVISION_CMD+14,
-    INS_GET_HW_INFO_CMD = INS_END_KM_PROVISION_CMD+15,
-    INS_BEGIN_OPERATION_CMD = INS_END_KM_PROVISION_CMD+16,
-    INS_UPDATE_OPERATION_CMD = INS_END_KM_PROVISION_CMD+17,
-    INS_FINISH_OPERATION_CMD = INS_END_KM_PROVISION_CMD+18,
-    INS_ABORT_OPERATION_CMD = INS_END_KM_PROVISION_CMD+19,
-    INS_DEVICE_LOCKED_CMD = INS_END_KM_PROVISION_CMD+20,
-    INS_EARLY_BOOT_ENDED_CMD = INS_END_KM_PROVISION_CMD+21,
-    INS_GET_CERT_CHAIN_CMD = INS_END_KM_PROVISION_CMD+22,
-    INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD+7,
-    INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD+8,
-};
-
-enum ProvisionStatus {
-    NOT_PROVISIONED = 0x00,
-    PROVISION_STATUS_ATTESTATION_KEY = 0x01,
-    PROVISION_STATUS_ATTESTATION_CERT_DATA = 0x02,
-    PROVISION_STATUS_ATTEST_IDS = 0x04,
-    PROVISION_STATUS_PRESHARED_SECRET = 0x08,
-    PROVISION_STATUS_PROVISIONING_LOCKED = 0x10,
 };
 
 //Extended error codes
@@ -406,7 +364,7 @@ uint16_t getStatus(std::vector<uint8_t>& inputData) {
     return (inputData.at(inputData.size()-2) << 8) | (inputData.at(inputData.size()-1));
 }
 
-ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response) {
+ErrorCode JavacardKeymaster4Device::sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response) {
     ErrorCode ret = ErrorCode::UNKNOWN_ERROR;
     std::vector<uint8_t> apdu;
 
@@ -431,11 +389,25 @@ ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<ui
     return (ErrorCode::OK);//success
 }
 
+ErrorCode JavacardKeymaster4Device::sendData(Instruction ins, cppbor::Array& arr, std::vector<uint8_t>& response) {
+    uint8_t earlyBootEndedFlag = 0;
+    if (cachedEarlyBootEvent) {
+        earlyBootEndedFlag = 1;
+    }
+    arr.add(earlyBootEndedFlag);
+    std::vector<uint8_t> input = arr.encode();
+    auto ret = sendData(ins, input, response);
+    if (ret == ErrorCode::OK) {
+        cachedEarlyBootEvent = false;
+    }
+    return ret;
+}
+
 /**
  * Sends android system properties like os_version, os_patchlevel and vendor_patchlevel to
  * the Applet.
  */
-static ErrorCode setAndroidSystemProperties(CborConverter& cborConverter_, const std::unique_ptr<OperationContext>& oprCtx) {
+ErrorCode JavacardKeymaster4Device::setAndroidSystemProperties() {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     cppbor::Array array;
     std::unique_ptr<Item> item;
@@ -450,7 +422,7 @@ static ErrorCode setAndroidSystemProperties(CborConverter& cborConverter_, const
     if (ErrorCode::OK == errorCode) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
-                true, oprCtx);
+                true, oprCtx_);
     }
     if (ErrorCode::OK != errorCode) 
         LOG(ERROR) << "Failed to set os_version, os_patchlevel and vendor_patchlevel err: " << (int32_t) errorCode;
@@ -465,12 +437,13 @@ JavacardKeymaster4Device::JavacardKeymaster4Device(): softKm_(new ::keymaster::A
             return context;
             }(),
             kOperationTableSize, keymaster::MessageVersion(keymaster::KmVersion::KEYMASTER_4_1,
-                                0 /* km_date */) )), oprCtx_(new OperationContext()), isEachSystemPropertySet(false) {
+                                0 /* km_date */) )), oprCtx_(new OperationContext()),
+                                isEachSystemPropertySet(false), cachedEarlyBootEvent(false) {
     // Send Android system properties like os_version, os_patchlevel and vendor_patchlevel
     // to the Applet. Incase if setting system properties fails here, again try setting
     // it from computeSharedHmac.
 
-    if (ErrorCode::OK == setAndroidSystemProperties(cborConverter_, oprCtx_)) {
+    if (ErrorCode::OK == setAndroidSystemProperties()) {
         LOG(ERROR) << "javacard strongbox : setAndroidSystemProperties from constructor - successful";
         isEachSystemPropertySet = true;
     }
@@ -517,11 +490,11 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
 
 Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingParameters_cb _hidl_cb) {
     std::vector<uint8_t> cborData;
-    std::vector<uint8_t> input;
+    cppbor::Array array;
     std::unique_ptr<Item> item;
     HmacSharingParameters hmacSharingParameters;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
-    errorCode = sendData(Instruction::INS_GET_HMAC_SHARING_PARAM_CMD, input, cborData);
+    errorCode = sendData(Instruction::INS_GET_HMAC_SHARING_PARAM_CMD, array, cborData);
     if (ErrorCode::OK == errorCode) {
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborData.begin(), cborData.end()-2),
@@ -551,7 +524,7 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
     // failed at construction time then this is one of the ideal places to send this information
     // to the Applet as computeSharedHmac is called everytime when Android device boots.
     if (!isEachSystemPropertySet) {
-        errorCode = setAndroidSystemProperties(cborConverter_, oprCtx_);
+        errorCode = setAndroidSystemProperties();
         if (ErrorCode::OK != errorCode) {
             LOG(ERROR) << " Failed to set os_version, os_patchlevel and vendor_patchlevel err: " << (int32_t)errorCode;
             _hidl_cb(errorCode, sharingCheck);
@@ -1539,6 +1512,9 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
         //Skip last 2 bytes in cborData, it contains status.
         std::tie(item, errorCode) = decodeData<V41ErrorCode>(
                 cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true, oprCtx_);
+    } else {
+        // Incase of failure cache the event and send in the next immediate request to Applet.
+        cachedEarlyBootEvent = true;
     }
     return errorCode;
 }
