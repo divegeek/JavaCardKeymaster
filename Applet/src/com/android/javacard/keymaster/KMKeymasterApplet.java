@@ -975,19 +975,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processGetHmacSharingParamCmd(APDU apdu) {
-    // Receive the incoming request fully from the master.
-    receiveIncoming(apdu);
-    // Arguments
-    short argsProto = KMArray.instance((short) 1);
-    KMArray.cast(argsProto).add((short) 0, KMInteger.exp());
-    // Decode the argument
-    short args = decoder.decode(argsProto, (byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET], bufferProp[BUF_LEN_OFFSET]);
-    //reclaim memory
-    repository.reclaimMemory(bufferProp[BUF_LEN_OFFSET]);
-    if ((short) 1 == KMInteger.cast(KMArray.cast(args).get((short) 0)).getShort()) {
-      repository.setEarlyBootEndedStatus(true);
-    }
-
+    // No Arguments
     // Create HMAC Sharing Parameters
     tmpVariables[2] = KMHmacSharingParameters.instance();
     KMHmacSharingParameters.cast(tmpVariables[2]).setNonce(repository.getHmacNonce());

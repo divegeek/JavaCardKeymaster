@@ -151,13 +151,13 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     ErrorCode abortPrivateKeyOperation(uint64_t operationHandle);
 
     ErrorCode sendData(Instruction ins, std::vector<uint8_t>& inData, std::vector<uint8_t>& response);
-    ErrorCode sendData(Instruction ins, cppbor::Array& arr, std::vector<uint8_t>& response);
     ErrorCode setAndroidSystemProperties();
+    void handleSendEarlyBootEndedEvent();
 
     std::unique_ptr<::keymaster::AndroidKeymaster> softKm_;
     std::unique_ptr<OperationContext> oprCtx_;
     bool isEachSystemPropertySet;
-    bool cachedEarlyBootEvent;
+    bool isEarlyBootEventPending;
     CborConverter cborConverter_;
 };
 
