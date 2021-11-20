@@ -656,16 +656,9 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
         return Void();
     }
     cborConverter_.addKeyparameters(array, keyParams);
-    array.add(static_cast<uint32_t>(KeyFormat::RAW)); //javacard accepts only RAW.
-    if(ErrorCode::OK != (errorCode = prepareCborArrayFromKeyData(keyParams, keyFormat, keyData, subArray))) {
-        LOG(ERROR) << "INS_IMPORT_KEY_CMD Error in while creating cbor data from key data:" << (int32_t) errorCode;
-        _hidl_cb(errorCode, keyBlob, keyCharacteristics);
-        return Void();
-    }
-    std::vector<uint8_t> encodedArray = subArray.encode();
-    cppbor::Bstr bstr(encodedArray.begin(), encodedArray.end());
-    array.add(bstr);
-
+    array.add(static_cast<uint32_t>(keyFormat)); //javacard accepts only RAW.
+  
+    array.add(std::vector<uint8_t>(keyData));
     std::vector<uint8_t> cborData = array.encode();
 
     errorCode = sendData(Instruction::INS_IMPORT_KEY_CMD, cborData, cborOutData);

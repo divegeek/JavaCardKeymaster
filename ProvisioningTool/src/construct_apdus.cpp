@@ -184,32 +184,22 @@ int processAttestationKey() {
     Json::Value keyFile = root.get(kAttestKey, Json::Value::nullRef);
     if (!keyFile.isNull()) {
         std::vector<uint8_t> data;
-        std::vector<uint8_t> privateKey;
-        std::vector<uint8_t> publicKey;
-
         std::string keyFileName = keyFile.asString();
         if(SUCCESS != readDataFromFile(keyFileName.data(), data)) {
             printf("\n Failed to read the attestation key from the file.\n");
             return FAILURE;
         }
-        if (SUCCESS != ecRawKeyFromPKCS8(data, privateKey, publicKey)) {
-            return FAILURE;
-        }
-
         // Prepare cbor input.
         Array input;
-        Array keys;
         Map map;
-        keys.add(privateKey);
-        keys.add(publicKey);
         map.add(kTagAlgorithm, kAlgorithmEc);
         map.add(kTagDigest, std::vector<uint8_t>({kDigestSha256}));
         map.add(kTagCurve, kCurveP256);
         map.add(kTagPurpose, std::vector<uint8_t>({kPurposeAttest}));
         // Add elements inside cbor array.
         input.add(std::move(map));
-        input.add(kKeyFormatRaw);
-        input.add(keys.encode());
+        input.add(kKeyFormatPkcs8);
+        input.add(data);
         std::vector<uint8_t> cborData = input.encode();
 
         if(SUCCESS != addApduHeader(kAttestationKeyCmd, cborData)) {
