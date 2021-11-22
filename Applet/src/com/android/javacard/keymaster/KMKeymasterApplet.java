@@ -773,11 +773,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     byte[] scratchPad = apdu.getBuffer();
     // Arguments
     short keyparams = KMKeyParameters.exp();
-    short keyFormat = KMEnum.instance(KMType.KEY_FORMAT);
+    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT);
     short blob = KMByteBlob.exp();
     short argsProto = KMArray.instance((short) 3);
     KMArray.cast(argsProto).add((short) 0, keyparams);
-    KMArray.cast(argsProto).add((short) 1, keyFormat);
+    KMArray.cast(argsProto).add((short) 1, keyFormatPtr);
     KMArray.cast(argsProto).add((short) 2, blob);
 
     // Decode the argument
@@ -790,8 +790,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] = KMArray.cast(args).get((short) 1);
     data[IMPORTED_KEY_BLOB] = KMArray.cast(args).get((short) 2);
     // Key format must be RAW format
-    tmpVariables[0] = KMEnum.cast(tmpVariables[0]).getVal();
-    if (tmpVariables[0] != KMType.PKCS8) {
+    byte keyFormat = KMEnum.cast(tmpVariables[0]).getVal();
+    if (keyFormat != KMType.RAW) {
       KMException.throwIt(KMError.UNIMPLEMENTED);
     }
     data[ORIGIN] = KMType.IMPORTED;
@@ -830,7 +830,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     // Import EC Key - initializes data[SECRET] data[PUB_KEY]
-    importECKeys(scratchPad);
+    importECKeys(scratchPad, keyFormat);
 
     // persist key
     seProvider.createAttestationKey(
@@ -1270,10 +1270,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[1] = KMEnumTag.getValue(KMType.ALGORITHM, tmpVariables[0]);
     // read key format
     tmpVariables[2] = KMArray.cast(args).get((short) 1);
-    tmpVariables[2] = KMEnum.cast(tmpVariables[2]).getVal();
-    // import of RSA and EC not supported with pkcs8 or x509 format
+    byte keyFormat = KMEnum.cast(tmpVariables[2]).getVal();
     if ((tmpVariables[1] == KMType.RSA || tmpVariables[1] == KMType.EC)
-        && (tmpVariables[2] != KMType.PKCS8)) {
+        && (keyFormat != KMType.PKCS8)) {
       KMException.throwIt(KMError.UNIMPLEMENTED);
     }
 
@@ -1384,7 +1383,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 0);
     // create key blob array
     data[IMPORTED_KEY_BLOB] = KMByteBlob.instance(scratchPad, (short) 0, KMByteBlob.cast(data[INPUT_DATA]).length());
-    importKey(apdu, scratchPad);
+    importKey(apdu, scratchPad, keyFormat);
   }
 
   private void processAttestKeyCmd(APDU apdu) {
@@ -2989,22 +2988,22 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 0);
     tmpVariables[3] = KMArray.cast(tmpVariables[2]).get((short) 1);
     data[IMPORTED_KEY_BLOB] = KMArray.cast(tmpVariables[2]).get((short) 2);
-    // Key format must be RAW format - X509 and PKCS8 not implemented.
-    tmpVariables[3] = KMEnum.cast(tmpVariables[3]).getVal();
-    
+
+    byte keyFormat = KMEnum.cast(tmpVariables[3]).getVal();
+
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);   
-    if((alg == KMType.AES || alg == KMType.DES || alg == KMType.HMAC) && tmpVariables[3] != KMType.RAW ){
+    if((alg == KMType.AES || alg == KMType.DES || alg == KMType.HMAC) && keyFormat != KMType.RAW ) {
         KMException.throwIt(KMError.UNIMPLEMENTED);
     }
-    if((alg == KMType.RSA || alg == KMType.EC) && tmpVariables[3] != KMType.PKCS8){
+    if((alg == KMType.RSA || alg == KMType.EC) && keyFormat != KMType.PKCS8){
         KMException.throwIt(KMError.UNIMPLEMENTED);
     }
     
     data[ORIGIN] = KMType.IMPORTED;
-    importKey(apdu, scratchPad);
+    importKey(apdu, scratchPad, keyFormat);
   }
 
-  private void importKey(APDU apdu, byte[] scratchPad) {
+  private void importKey(APDU apdu, byte[] scratchPad, byte keyFormat) {
     
     tmpVariables[0] =
             KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, data[KEY_PARAMETERS]);
@@ -3044,7 +3043,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         importHmacKey(scratchPad);
         break;
       case KMType.EC:
-        importECKeys(scratchPad);
+        importECKeys(scratchPad, keyFormat);
         break;
       default:
         KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
@@ -3065,12 +3064,35 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
-  private void importECKeys(byte[] scratchPad) {
+  private void decodeRawECKey() {
+    // Decode key material
+    tmpVariables[0] = KMArray.instance((short) 2);
+    KMArray.cast(tmpVariables[0]).add((short) 0, KMByteBlob.exp()); // secret
+    KMArray.cast(tmpVariables[0]).add((short) 1, KMByteBlob.exp()); // public key
+    tmpVariables[0] =
+        decoder.decode(
+            tmpVariables[0],
+            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).getBuffer(),
+            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).getStartOff(),
+            KMByteBlob.cast(data[IMPORTED_KEY_BLOB]).length());
+    data[SECRET] = KMArray.cast(tmpVariables[0]).get((short) 0);
+    data[PUB_KEY] = KMArray.cast(tmpVariables[0]).get((short) 1);
+  }
+
+  private void decodePKCS8ECKeys() {
     // Decode key material
     KMPKCS8Decoder pkcs8 = KMPKCS8Decoder.instance();
     short keyBlob = pkcs8.decodeEc(data[IMPORTED_KEY_BLOB]);
     data[PUB_KEY] = KMArray.cast(keyBlob).get((short) 0);
     data[SECRET] = KMArray.cast(keyBlob).get((short) 1);
+  }
+
+  private void importECKeys(byte[] scratchPad, byte keyFormat) {
+    if (keyFormat == KMType.RAW) {
+      decodeRawECKey();
+    } else {
+      decodePKCS8ECKeys();
+    }
     // initialize 256 bit p256 key for given private key and public key.
     tmpVariables[4] = 0; // index for update list in scratchPad
 

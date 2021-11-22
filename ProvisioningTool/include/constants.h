@@ -71,7 +71,7 @@ constexpr uint64_t kCurveP256 = 1;
 constexpr uint64_t kAlgorithmEc = 3;
 constexpr uint64_t kDigestSha256 = 4;
 constexpr uint64_t kPurposeAttest = 0x7F;
-constexpr uint64_t kKeyFormatPkcs8 = 1;
+constexpr uint64_t kKeyFormatRaw = 3;
 
 // json keys
 constexpr char kAttestKey[] = "attest_key";
