@@ -436,14 +436,14 @@ public class KMDecoder {
     }
   }
   
-//Reads the offset and length values of the ByteBlobs from a CBOR array buffer.
+  // Reads the offset and length values of the ByteBlobs from a CBOR array buffer.
   public void decodeCertificateData(short expectedArrLen, byte[] buf, short bufOffset, short bufLen,
       byte[] out, short outOff) {
-    // Read Array length
     bufferRef[0] = buf;
     scratchBuf[START_OFFSET] = bufOffset;
     scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
     short byteBlobLength = 0;
+    // Read Array length
     short payloadLength = readMajorTypeWithPayloadLength(ARRAY_TYPE);
     if (expectedArrLen != payloadLength) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
@@ -458,6 +458,15 @@ public class KMDecoder {
       outOff += 2;
       index++;
     }    
+  }
+  
+  public short getCborBytesStartOffset(byte[] buf, short bufOffset, short bufLen) {
+    bufferRef[0] = buf;
+    scratchBuf[START_OFFSET] = bufOffset;
+    scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
+
+    readMajorTypeWithPayloadLength(BYTES_TYPE);
+    return scratchBuf[START_OFFSET];
   }
 
 }

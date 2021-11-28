@@ -43,6 +43,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
+  // DATABASE version
+  public static final short DATABASE_VERSION_1 = 1;
+  public static final short CURRENT_DATABASE_VERSION = DATABASE_VERSION_1;
+  public static final short INVALID_DATA_VERSION = 0x7FFF;
+  protected short dataBaseVersion;
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
@@ -68,6 +73,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       0x6B,
       0x65, 0x6E
   };
+  
+  // getHardwareInfo constants.
+  private static final byte[] JAVACARD_KEYMASTER_DEVICE = {
+      0x4A, 0x61, 0x76, 0x61, 0x63, 0x61, 0x72, 0x64, 0x4B, 0x65, 0x79, 0x6D, 0x61, 0x73, 0x74,
+      0x65, 0x72, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65,
+  };
+  private static final byte[] GOOGLE = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
+
 
   // Possible states of the applet.
   private static final byte KM_BEGIN_STATE = 0x00;
@@ -199,9 +212,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     boolean isUpgrading = seImpl.isUpgrading();
     repository = new KMRepository(isUpgrading);
     initializeTransientArrays();
+    dataBaseVersion = INVALID_DATA_VERSION;
     if (!isUpgrading) {
       keymasterState = KMKeymasterApplet.INIT_STATE;
       seProvider.createMasterKey((short) (KMRepository.MASTER_KEY_SIZE * 8));
+      dataBaseVersion = CURRENT_DATABASE_VERSION;
     }
     KMType.initialize();
     encoder = new KMEncoder();
@@ -615,12 +630,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processGetHwInfoCmd(APDU apdu) {
     // No arguments expected
-    final byte[] JavacardKeymasterDevice = {
-        0x4A, 0x61, 0x76, 0x61, 0x63, 0x61, 0x72, 0x64, 0x4B, 0x65, 0x79, 0x6D, 0x61, 0x73, 0x74,
-        0x65, 0x72, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65,
-    };
-    final byte[] Google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
-
     // Make the response
     short respPtr = KMArray.instance((short) 3);
     KMArray resp = KMArray.cast(respPtr);
@@ -628,8 +637,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     resp.add(
         (short) 1,
         KMByteBlob.instance(
-            JavacardKeymasterDevice, (short) 0, (short) JavacardKeymasterDevice.length));
-    resp.add((short) 2, KMByteBlob.instance(Google, (short) 0, (short) Google.length));
+            JAVACARD_KEYMASTER_DEVICE, (short) 0, (short) JAVACARD_KEYMASTER_DEVICE.length));
+    resp.add((short) 2, KMByteBlob.instance(GOOGLE, (short) 0, (short) GOOGLE.length));
 
     bufferProp[BUF_START_OFFSET] = repository.allocAvailableMemory();
     // Encode the response - actual bufferProp[BUF_LEN_OFFSET] is 86
@@ -2025,7 +2034,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // empty
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
     // Add "Auth Verification" - 17 bytes.
-    Util.arrayCopy(authVerification, (short) 0, scratchPad, (short) 0, (short) authVerification.length);
+    Util.arrayCopyNonAtomic(authVerification, (short) 0, scratchPad, (short) 0, (short) authVerification.length);
     short len = (short) authVerification.length;
     // concatenate challenge - 8 bytes
     short ptr = KMVerificationToken.cast(verToken).getChallenge();
@@ -2063,7 +2072,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // empty
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 256, (byte) 0);
     // Add "Auth Verification" - 17 bytes.
-    Util.arrayCopy(authVerification, (short) 0, scratchPad, (short) 0, (short) authVerification.length);
+    Util.arrayCopyNonAtomic(authVerification, (short) 0, scratchPad, (short) 0, (short) authVerification.length);
     short len = (short) authVerification.length;
     // concatenate challenge - 8 bytes
     short ptr = KMVerificationToken.cast(verToken).getChallenge();
@@ -2307,7 +2316,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         // While sending the iv back for DES/CBC mode of opeation only send
         // 8 bytes back.
         tmpVariables[1] = KMByteBlob.instance((short) 8);
-        Util.arrayCopy(
+        Util.arrayCopyNonAtomic(
             KMByteBlob.cast(data[IV]).getBuffer(),
             KMByteBlob.cast(data[IV]).getStartOff(),
             KMByteBlob.cast(tmpVariables[1]).getBuffer(),

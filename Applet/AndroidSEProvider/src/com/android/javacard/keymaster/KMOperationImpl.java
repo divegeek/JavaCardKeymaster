@@ -28,6 +28,7 @@ public class KMOperationImpl implements KMOperation {
   private static final short OPER_MODE_OFFSET = 0x02;
   private static final short BLOCK_MODE_OFFSET = 0x03;
   private static final short MAC_LENGTH_OFFSET = 0x04;
+  private static final byte[] EMPTY = {};
   //This will hold the length of the buffer stored inside the
   //Java Card after the GCM update operation.
   private static final short AES_GCM_UPDATE_LEN_OFFSET = 0x05;
@@ -239,13 +240,12 @@ public class KMOperationImpl implements KMOperation {
     if (operationInst[0] != null) {
       if ((parameters[OPER_MODE_OFFSET] == KMType.SIGN || parameters[OPER_MODE_OFFSET] == KMType.VERIFY) &&
           (((Signature) operationInst[0]).getAlgorithm() == Signature.ALG_HMAC_SHA_256)) {
-        byte[] empty = {};
         Signature signer = (Signature) operationInst[0];
         try {
           if (parameters[OPER_MODE_OFFSET] == KMType.SIGN) {
-            signer.verify(empty, (short) 0, (short) 0, empty, (short) 0, (short) 0);
+            signer.sign(EMPTY, (short) 0, (short) 0, EMPTY, (short) 0);
           } else {
-            signer.sign(empty, (short) 0, (short) 0, empty, (short) 0);
+            signer.verify(EMPTY, (short) 0, (short) 0, EMPTY, (short) 0, (short) 0);
           }
         } catch(Exception e) {
           // Ignore.

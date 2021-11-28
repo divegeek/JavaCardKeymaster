@@ -88,7 +88,7 @@ public class KMOperationState {
   public static KMOperationState read(byte[] oprHandle, short off, byte[] data, short dataOff, Object opr, Object hmacSignerOpr) {
     KMOperationState opState = proto();
     opState.reset();
-    Util.arrayCopy(data, dataOff, prototype.data, (short) 0, (short) prototype.data.length);
+    Util.arrayCopyNonAtomic(data, dataOff, prototype.data, (short) 0, (short) prototype.data.length);
     prototype.objRefs[OPERATION] = opr;
     prototype.objRefs[HMAC_SIGNER_OPERATION] = hmacSignerOpr;
     Util.setShort(prototype.data, OP_HANDLE, KMInteger.uint_64(oprHandle, off));
@@ -176,7 +176,7 @@ public class KMOperationState {
   }
 
   public void setAuthTime(byte[] timeBuf, short start) {
-    Util.arrayCopy(timeBuf, start, data, (short) AUTH_TIME, (short) 8);
+    Util.arrayCopyNonAtomic(timeBuf, start, data, (short) AUTH_TIME, (short) 8);
     dataUpdated();
   }
 
@@ -220,7 +220,7 @@ public class KMOperationState {
     offset += 2;
     while (index < length) {
       obj = KMIntegerArrayTag.cast(integerArrayPtr).get(index);
-      Util.arrayCopy(
+      Util.arrayCopyNonAtomic(
           KMInteger.cast(obj).getBuffer(),
           KMInteger.cast(obj).getStartOff(),
           data,

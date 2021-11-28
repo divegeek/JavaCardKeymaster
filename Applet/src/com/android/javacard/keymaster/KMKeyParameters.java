@@ -26,9 +26,61 @@ import javacard.framework.Util;
  * arrayPtr is a pointer to array with any KMTag subtype instances.
  */
 public class KMKeyParameters extends KMType {
-  
-  
-  private static short[] customTags;
+
+  private static final short[] tagArr = {
+      // Unsupported tags.
+      KMType.BOOL_TAG, KMType.TRUSTED_USER_PRESENCE_REQUIRED,
+      KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY,
+      KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS
+  };
+
+  private static final short[] hwEnforcedTagArr = {
+      // HW Enforced
+      KMType.ENUM_TAG, KMType.ORIGIN,
+      KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,
+      KMType.ENUM_TAG, KMType.ALGORITHM,
+      KMType.UINT_TAG, KMType.KEYSIZE,
+      KMType.ULONG_TAG, KMType.RSA_PUBLIC_EXPONENT,
+      KMType.ENUM_TAG, KMType.BLOB_USAGE_REQ,
+      KMType.ENUM_ARRAY_TAG, KMType.DIGEST,
+      KMType.ENUM_ARRAY_TAG, KMType.PADDING,
+      KMType.ENUM_ARRAY_TAG, KMType.BLOCK_MODE,
+      KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID,
+      KMType.BOOL_TAG, KMType.NO_AUTH_REQUIRED,
+      KMType.UINT_TAG, KMType.AUTH_TIMEOUT,
+      KMType.BOOL_TAG, KMType.CALLER_NONCE,
+      KMType.UINT_TAG, KMType.MIN_MAC_LENGTH,
+      KMType.ENUM_TAG, KMType.ECCURVE,
+      KMType.BOOL_TAG, KMType.INCLUDE_UNIQUE_ID,
+      KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE,
+      KMType.ENUM_TAG, KMType.USER_AUTH_TYPE,
+      KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
+      KMType.BOOL_TAG, KMType.RESET_SINCE_ID_ROTATION,
+      KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
+      KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
+      KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,
+      KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED
+  };
+
+  private static final short[] swEnforcedTagsArr = {
+      KMType.DATE_TAG, KMType.ACTIVE_DATETIME,
+      KMType.DATE_TAG, KMType.ORIGINATION_EXPIRE_DATETIME,
+      KMType.DATE_TAG, KMType.USAGE_EXPIRE_DATETIME,
+      KMType.UINT_TAG, KMType.USERID,
+      KMType.DATE_TAG, KMType.CREATION_DATETIME,
+      KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY
+  };
+
+  private static final short[] invalidTagsArr = {
+      KMType.BYTES_TAG, KMType.NONCE,
+      KMType.BYTES_TAG, KMType.ASSOCIATED_DATA,
+      KMType.BYTES_TAG, KMType.UNIQUE_ID,
+      KMType.UINT_TAG, KMType.MAC_LENGTH,
+  };
+
+  private static final short[] customTags  = {
+      KMType.ULONG_TAG, KMType.AUTH_TIMEOUT_MILLIS,
+  };
 
   private static KMKeyParameters prototype;
 
@@ -111,12 +163,6 @@ public class KMKeyParameters extends KMType {
   }
 
   public static boolean hasUnsupportedTags(short keyParamsPtr) {
-    final short[] tagArr = {
-        // Unsupported tags.
-        KMType.BOOL_TAG, KMType.TRUSTED_USER_PRESENCE_REQUIRED,
-        KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY,
-        KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS
-    };
     byte index = 0;
     short tagInd;
     short tagPtr;
@@ -145,33 +191,6 @@ public class KMKeyParameters extends KMType {
   public static short makeHwEnforced(short keyParamsPtr, byte origin,
       short osVersionObjPtr, short osPatchObjPtr, short vendorPatchObjPtr,
       short bootPatchObjPtr, byte[] scratchPad) {
-    final short[] hwEnforcedTagArr = {
-        // HW Enforced
-        KMType.ENUM_TAG, KMType.ORIGIN,
-        KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,
-        KMType.ENUM_TAG, KMType.ALGORITHM,
-        KMType.UINT_TAG, KMType.KEYSIZE,
-        KMType.ULONG_TAG, KMType.RSA_PUBLIC_EXPONENT,
-        KMType.ENUM_TAG, KMType.BLOB_USAGE_REQ,
-        KMType.ENUM_ARRAY_TAG, KMType.DIGEST,
-        KMType.ENUM_ARRAY_TAG, KMType.PADDING,
-        KMType.ENUM_ARRAY_TAG, KMType.BLOCK_MODE,
-        KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID,
-        KMType.BOOL_TAG, KMType.NO_AUTH_REQUIRED,
-        KMType.UINT_TAG, KMType.AUTH_TIMEOUT,
-        KMType.BOOL_TAG, KMType.CALLER_NONCE,
-        KMType.UINT_TAG, KMType.MIN_MAC_LENGTH,
-        KMType.ENUM_TAG, KMType.ECCURVE,
-        KMType.BOOL_TAG, KMType.INCLUDE_UNIQUE_ID,
-        KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE,
-        KMType.ENUM_TAG, KMType.USER_AUTH_TYPE,
-        KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
-        KMType.BOOL_TAG, KMType.RESET_SINCE_ID_ROTATION,
-        KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
-        KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
-        KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,
-        KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED
-    };
     byte index = 0;
     short tagInd;
     short arrInd = 0;
@@ -224,14 +243,6 @@ public class KMKeyParameters extends KMType {
 
   // ALL_USERS, EXPORTABLE missing from types.hal
   public static short makeSwEnforced(short keyParamsPtr, byte[] scratchPad) {
-    final short[] swEnforcedTagsArr = {
-        KMType.DATE_TAG, KMType.ACTIVE_DATETIME,
-        KMType.DATE_TAG, KMType.ORIGINATION_EXPIRE_DATETIME,
-        KMType.DATE_TAG, KMType.USAGE_EXPIRE_DATETIME,
-        KMType.UINT_TAG, KMType.USERID,
-        KMType.DATE_TAG, KMType.CREATION_DATETIME,
-        KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY
-    };
     byte index = 0;
     short tagInd;
     short arrInd = 0;
@@ -296,12 +307,6 @@ public class KMKeyParameters extends KMType {
   }
 
   public static boolean isValidTag(short tagType, short tagKey) {
-    short[] invalidTagsArr = {
-        KMType.BYTES_TAG, KMType.NONCE,
-        KMType.BYTES_TAG, KMType.ASSOCIATED_DATA,
-        KMType.BYTES_TAG, KMType.UNIQUE_ID,
-        KMType.UINT_TAG, KMType.MAC_LENGTH,
-    };
     short index = 0;
     if (tagKey == KMType.INVALID_TAG) {
       return false;
@@ -326,18 +331,8 @@ public class KMKeyParameters extends KMType {
     }
     return KMKeyParameters.instance(arrPtr);
   }
-  
-  private static short[] getCustomTags() {
-    if (customTags == null) {
-      customTags  = new short[] {
-          KMType.ULONG_TAG, KMType.AUTH_TIMEOUT_MILLIS,
-      };
-    }
-    return customTags;
-  }
-  
+
   public static short addCustomTags(short keyParams, byte[] scratchPad, short offset) {
-    short[] customTags = getCustomTags();
     short index = 0;
     short tagPtr;
     short len = (short) customTags.length;
@@ -364,7 +359,6 @@ public class KMKeyParameters extends KMType {
 
   public void deleteCustomTags() {
     short arrPtr = getVals();
-    short[] customTags = getCustomTags();
     short index = (short) (customTags.length - 1);
     short obj;
     while (index >= 0) {
