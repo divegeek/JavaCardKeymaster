@@ -17,20 +17,20 @@ package com.android.javacard.keymaster;
 
 public interface KMPKCS8Decoder {
 
- /**
-   * Decodes the PKCS8 encoded RSA Key and extracts the private and public key 
+  /**
+   * Decodes the PKCS8 encoded RSA Key and extracts the private and public key
    *
    * @param Instance of the PKCS8 encoded data
    * @return Instance of KMArray holding RSA public key, RSA private key and modulus.
    */
   short decodeRsa(short blob);
-  
+
   /**
-   * Decodes the PKCS8 encoded EC Key and extracts the private and public key  
+   * Decodes the PKCS8 encoded EC Key and extracts the private and public key
    *
    * @param Instance of the PKCS8 encoded data.
    * @return Instance of KMArray holding EC public key and EC private key.
    */
   short decodeEc(short blob);
-	
+
 }

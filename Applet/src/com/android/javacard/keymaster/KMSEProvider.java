@@ -401,14 +401,14 @@ public interface KMSEProvider extends KMUpgradable {
       short ivLength,
       short macLength);
 
-   /**
-    * Initializes the trusted confirmation operation.
-    *
-    * @param computedHmacKey Instance of the computed Hmac key.
-    * @return instance of KMOperation.
-    */
-   KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey);
-  
+  /**
+   * Initializes the trusted confirmation operation.
+   *
+   * @param computedHmacKey Instance of the computed Hmac key.
+   * @return instance of KMOperation.
+   */
+  KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey);
+
   /**
    * This creates a persistent operation for signing, verify, encryption and decryption using RSA
    * and EC algorithms when keymaster hal's beginOperation function is executed. For RSA the public
@@ -555,14 +555,14 @@ public interface KMSEProvider extends KMUpgradable {
    */
   KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length);
 
- /**
-  * This function creates an HMACKey and initializes the key with the provided input key data.
-  *
-  * @param keyData buffer containing the key data.
-  * @param offset start of the buffer.
-  * @param length length of the buffer.
-  * @return An instance of the KMComputedHmacKey.
-  */
+  /**
+   * This function creates an HMACKey and initializes the key with the provided input key data.
+   *
+   * @param keyData buffer containing the key data.
+   * @param offset start of the buffer.
+   * @param length length of the buffer.
+   * @return An instance of the KMComputedHmacKey.
+   */
   KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length);
 
   /**
@@ -585,11 +585,11 @@ public interface KMSEProvider extends KMUpgradable {
    * @return Instance of the KMPreSharedKey.
    */
   KMPreSharedKey getPresharedKey();
-  
+
   /**
    * Returns the computed Hmac key.
    *
-   * @return Instance of the computed hmac key. 
+   * @return Instance of the computed hmac key.
    */
   KMComputedHmacKey getComputedHmacKey();
 
@@ -608,6 +608,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @param outOffset start offset of the digested output buffer.
    * @return length of the digested data.
    */
-  short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff, short outOffset);
+  short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
+      short outOffset);
 
 }

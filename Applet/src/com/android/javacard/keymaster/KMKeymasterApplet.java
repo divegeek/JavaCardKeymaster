@@ -3997,47 +3997,45 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private static void makeAuthData(byte[] scratchPad) {
-   
-	short arrayLen = 3;
-	if (KMArray.cast(data[KEY_BLOB]).length() == 5) {
-		arrayLen = 4;
-	}
-	short params = KMArray.instance((short) arrayLen);
-	KMArray.cast(params).add((short) 0, KMKeyParameters.cast(data[HW_PARAMETERS]).getVals());
-	KMArray.cast(params).add((short) 1, KMKeyParameters.cast(data[SW_PARAMETERS]).getVals());
-	KMArray.cast(params).add((short) 2, KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals());
-	if (4 == arrayLen) {
-		KMArray.cast(params).add((short) 3, data[PUB_KEY]);
-	}
-	
-    short authIndex = repository.alloc(MAX_AUTH_DATA_SIZE);
-	short index = 0;
-	short len = 0;
-	short paramsLen = KMArray.cast(params).length();
-	Util.arrayFillNonAtomic(repository.getHeap(), authIndex, (short) MAX_AUTH_DATA_SIZE, (byte) 0);
-	while (index < paramsLen) {
-		short tag = KMArray.cast(params).get(index);
-		len = encoder.encode(tag, repository.getHeap(), (short) (authIndex + 32));
-		Util.arrayCopyNonAtomic(repository.getHeap(), (short) authIndex, repository.getHeap(),
-				(short) (authIndex + len + 32), (short) 32);
-		len = seProvider.messageDigest256(repository.getHeap(),
-				(short) (authIndex + 32), (short) (len + 32), repository.getHeap(), (short) authIndex);
-		if (len != 32) {
-			KMException.throwIt(KMError.UNKNOWN_ERROR);
-		}
-		index++;
-	}
 
-	data[AUTH_DATA] = authIndex;
-	data[AUTH_DATA_LENGTH] = len;
+    short arrayLen = 3;
+    if (KMArray.cast(data[KEY_BLOB]).length() == 5) {
+      arrayLen = 4;
+    }
+    short params = KMArray.instance((short) arrayLen);
+    KMArray.cast(params).add((short) 0, KMKeyParameters.cast(data[HW_PARAMETERS]).getVals());
+    KMArray.cast(params).add((short) 1, KMKeyParameters.cast(data[SW_PARAMETERS]).getVals());
+    KMArray.cast(params).add((short) 2, KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals());
+    if (4 == arrayLen) {
+      KMArray.cast(params).add((short) 3, data[PUB_KEY]);
+    }
+
+    short authIndex = repository.alloc(MAX_AUTH_DATA_SIZE);
+    short index = 0;
+    short len = 0;
+    short paramsLen = KMArray.cast(params).length();
+    Util.arrayFillNonAtomic(repository.getHeap(), authIndex, (short) MAX_AUTH_DATA_SIZE, (byte) 0);
+    while (index < paramsLen) {
+      short tag = KMArray.cast(params).get(index);
+      len = encoder.encode(tag, repository.getHeap(), (short) (authIndex + 32));
+      Util.arrayCopyNonAtomic(repository.getHeap(), (short) authIndex, repository.getHeap(),
+          (short) (authIndex + len + 32), (short) 32);
+      len = seProvider.messageDigest256(repository.getHeap(),
+          (short) (authIndex + 32), (short) (len + 32), repository.getHeap(), (short) authIndex);
+      if (len != 32) {
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
+      }
+      index++;
+    }
+    data[AUTH_DATA] = authIndex;
+    data[AUTH_DATA_LENGTH] = len;
   }
 
   private static short deriveKey(byte[] scratchPad) {
-
     // KeyDerivation:
     // 1. Do HMAC Sign, Auth data.
     // 2. HMAC Sign generates an output of 32 bytes length.
-	//    Consume only first 16 bytes as derived key.
+    //    Consume only first 16 bytes as derived key.
     // Hmac sign.
     short len = seProvider.hmacKDF(
         seProvider.getMasterKey(),
