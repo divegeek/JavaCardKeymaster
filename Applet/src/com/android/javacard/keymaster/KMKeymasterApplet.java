@@ -43,11 +43,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final short MAX_AUTH_DATA_SIZE = (short) 256;
   private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
-  // DATABASE version
-  public static final short DATABASE_VERSION_1 = 1;
-  public static final short CURRENT_DATABASE_VERSION = DATABASE_VERSION_1;
-  public static final short INVALID_DATA_VERSION = 0x7FFF;
-  protected short dataBaseVersion;
+  // Magic number version
+  public static final byte KM_MAGIC_NUMBER = 0x7F;
+  public static final byte[] CURRENT_PACKAGE_VERSION = {0x00, 0x01, 0x00, 0x01};
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
@@ -202,6 +200,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static short[] tmpVariables;
   protected static short[] data;
   protected static byte provisionStatus = NOT_PROVISIONED;
+  // First two bytes are Major version and second bytes are minor version.
+  protected byte[] packageVersion;
   
 
   /**
@@ -212,11 +212,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     boolean isUpgrading = seImpl.isUpgrading();
     repository = new KMRepository(isUpgrading);
     initializeTransientArrays();
-    dataBaseVersion = INVALID_DATA_VERSION;
+    packageVersion = new byte[4];
     if (!isUpgrading) {
       keymasterState = KMKeymasterApplet.INIT_STATE;
       seProvider.createMasterKey((short) (KMRepository.MASTER_KEY_SIZE * 8));
-      dataBaseVersion = CURRENT_DATABASE_VERSION;
+      Util.arrayCopy(
+          CURRENT_PACKAGE_VERSION,
+          (short) 0,
+          packageVersion,
+          (short) 0,
+          (short) CURRENT_PACKAGE_VERSION.length);
     }
     KMType.initialize();
     encoder = new KMEncoder();
@@ -4035,7 +4040,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // KeyDerivation:
     // 1. Do HMAC Sign, Auth data.
     // 2. HMAC Sign generates an output of 32 bytes length.
-    //    Consume only first 16 bytes as derived key.
+    // Consume only first 16 bytes as derived key.
     // Hmac sign.
     short len = seProvider.hmacKDF(
         seProvider.getMasterKey(),

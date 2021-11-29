@@ -19,6 +19,8 @@ import org.globalplatform.upgrade.Element;
 import org.globalplatform.upgrade.OnUpgradeListener;
 import org.globalplatform.upgrade.UpgradeManager;
 
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
@@ -49,16 +51,25 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   @Override
   public void onRestore(Element element) {
     element.initRead();
-    provisionStatus = element.readByte();
-    keymasterState = element.readByte();
-    // TODO write a comment
-    if (dataBaseVersion <= CURRENT_DATABASE_VERSION) {
-      dataBaseVersion = element.readShort();
-    }
-    repository.onRestore(element, dataBaseVersion, CURRENT_DATABASE_VERSION);
-    seProvider.onRestore(element, dataBaseVersion, CURRENT_DATABASE_VERSION);
-    if (dataBaseVersion == INVALID_DATA_VERSION) {
-      handleDataUpgradeToVersion1();
+    byte magicNumber = element.readByte();
+    if (magicNumber != KMKeymasterApplet.KM_MAGIC_NUMBER) {
+      // Previous version of the applet does not have versioning support.
+      // In this case the first byte is the provision status.
+      provisionStatus = magicNumber;
+      keymasterState = element.readByte();
+      repository.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
+      seProvider.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
+      handleDataUpgradeToVersion1_1();
+    } else {
+      byte[] version = (byte[]) element.readObject();
+      if (!isUpgradeAllowed(version)) {
+        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+      }
+      packageVersion = version;
+      provisionStatus = element.readByte();
+      keymasterState = element.readByte();
+      repository.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
+      seProvider.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
     }
   }
 
@@ -77,25 +88,53 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     // Create element.
     Element element = UpgradeManager.createElement(Element.TYPE_SIMPLE,
         primitiveCount, objectCount);
+    element.write(KM_MAGIC_NUMBER);
+    element.write(packageVersion);
     element.write(provisionStatus);
     element.write(keymasterState);
-    element.write(dataBaseVersion);
     repository.onSave(element);
     seProvider.onSave(element);
     return element;
   }
 
   private short computePrimitveDataSize() {
-    // provisionStatus + keymasterState
-    return (short) 4;
+    // provisionStatus + keymasterState + magic byte
+    return (short) 3;
   }
 
   private short computeObjectCount() {
-    return (short) 0;
+    return (short) 1;
   }
   
-  public void handleDataUpgradeToVersion1() {
-    dataBaseVersion = CURRENT_DATABASE_VERSION;
+  public boolean isUpgradeAllowed(byte[] version) {
+    short oldMajorVersion = Util.getShort(version, (short) 0);
+    short oldMinorVersion = Util.getShort(version, (short) 2);
+    short currentMajorVersion = Util.getShort(CURRENT_PACKAGE_VERSION, (short) 0);
+    short currentMinorVersion = Util.getShort(CURRENT_PACKAGE_VERSION, (short) 2);
+    // Downgrade of the Applet is not allowed.
+    if (oldMajorVersion > currentMajorVersion ||
+        (oldMajorVersion == currentMajorVersion && oldMinorVersion > currentMinorVersion)) {
+      return false;
+    }
+    // Upgrade is not allowed to a next version which is not immediate.
+    if (1 < (currentMajorVersion - oldMajorVersion) ||
+        (oldMajorVersion == currentMajorVersion && 1 < (currentMinorVersion - oldMinorVersion)) ||
+        (oldMajorVersion < currentMajorVersion && 0 != currentMinorVersion)) {
+      return false;
+    }
+    return true;
+  }
+  
+  public void handleDataUpgradeToVersion1_1() {
+    
+    // Copy the package version.
+    Util.arrayCopy(
+        CURRENT_PACKAGE_VERSION,
+        (short) 0,
+        packageVersion,
+        (short) 0,
+        (short) CURRENT_PACKAGE_VERSION.length);
+
     // Update computed HMAC key.
     short blob = repository.getComputedHmacKey();
     if (blob != KMType.INVALID_VALUE) {

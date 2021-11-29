@@ -935,18 +935,16 @@ public class KMRepository implements KMUpgradable {
   }
 
   @Override
-  public void onRestore(Element ele, short oldVersion, short currentVersion) {
+  public void onRestore(Element ele, byte[] oldVersion, byte[] currentVersion) {
     dataIndex = ele.readShort();
     dataTable = (byte[]) ele.readObject();
-    if (oldVersion == KMKeymasterApplet.INVALID_DATA_VERSION) {
+    short oldMajorVersion = Util.getShort(oldVersion, (short) 0);
+    short oldMinorVersion = Util.getShort(oldVersion, (short) 2);
+    if (oldMajorVersion == 0 && oldMinorVersion == 0) {
       // Previous revisions does not contain version information.
-      handleDataUpgradeToVersion1();
-    } else if (oldVersion <= currentVersion) {
-      // No change in the data base version.
-      attestIdsIndex = ele.readShort();
+      handleDataUpgradeToVersion1_1();
     } else {
-      // Invalid case
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+      attestIdsIndex = ele.readShort();
     }
   }
 
@@ -998,7 +996,7 @@ public class KMRepository implements KMUpgradable {
     writeDataEntry(EARLY_BOOT_ENDED_STATUS, getHeap(), start, EARLY_BOOT_ENDED_FLAG_SIZE);
   }
   
-  public void handleDataUpgradeToVersion1() {
+  public void handleDataUpgradeToVersion1_1() {
     byte[] oldDataTable = dataTable;
     dataTable = new byte[2048];
     attestIdsIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);

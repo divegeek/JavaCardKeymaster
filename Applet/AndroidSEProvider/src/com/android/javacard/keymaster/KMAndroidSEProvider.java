@@ -1235,19 +1235,18 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public void onRestore(Element element, short oldVersion, short currentVersion) {
+  public void onRestore(Element element, byte[] oldVersion, byte[] currentVersion) {
     provisionData = (byte[]) element.readObject();
     masterKey = KMAESKey.onRestore(element);
     attestationKey = KMECPrivateKey.onRestore(element);
     preSharedKey = KMHmacKey.onRestore(element);
-    if (oldVersion == INVALID_DATA_VERSION) {
-      handleDataUpgradeToVersion1();
-    } else if (oldVersion <= currentVersion) {
-      computedHmacKey = KMHmacKey.onRestore(element);
+    short oldMajorVersion = Util.getShort(oldVersion, (short) 0);
+    short oldMinorVersion = Util.getShort(oldVersion, (short) 2);
+    if (oldMajorVersion == 0 && oldMinorVersion == 0) {
+      // Previous revisions does not contain version information.
+      handleDataUpgradeToVersion1_1();
     } else {
-      // Invalid case
-      // TODO test exception in on Restore.
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+      computedHmacKey = KMHmacKey.onRestore(element);
     }
   }
 
@@ -1366,7 +1365,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return computedHmacKey;
   }
   
-  private void handleDataUpgradeToVersion1() {
+  private void handleDataUpgradeToVersion1_1() {
     short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
         KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
     byte[] oldBuffer = provisionData;
