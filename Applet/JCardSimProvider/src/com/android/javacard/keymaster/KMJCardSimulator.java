@@ -40,6 +40,7 @@ import javacard.security.HMACKey;
 import javacard.security.Key;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
+import javacard.security.MessageDigest;
 import javacard.security.RSAPrivateKey;
 import javacard.security.RSAPublicKey;
 import javacard.security.RandomData;
@@ -1178,6 +1179,12 @@ public class KMJCardSimulator implements KMSEProvider {
   public KMAttestationCert getAttestationCert(boolean rsaCert) {
     return KMAttestationCertImpl.instance(rsaCert);
   }
+
+  @Override
+  public KMPKCS8Decoder getPKCS8DecoderInstance() {
+    return KMPKCS8DecoderImpl.instance();
+  }
+
   private short getProvisionDataBufferOffset(byte dataType) {
     switch(dataType) {
       case CERTIFICATE_CHAIN:
@@ -1286,7 +1293,7 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public void onRestore(Element ele) {
+  public void onRestore(Element ele, short oldVersion, short currentVersion) {
   }
 
   @Override
@@ -1383,4 +1390,19 @@ public class KMJCardSimulator implements KMSEProvider {
   public void releaseAllOperations() {
     //Do nothing.
   }
+
+  @Override
+  public short messageDigest256(byte[] inBuff, short inOffset,
+      short inLength, byte[] outBuff, short outOffset) {
+    MessageDigest mDigest = null;
+    short len = 0;
+    try {
+      mDigest = MessageDigest.getInitializedMessageDigestInstance(MessageDigest.ALG_SHA_256, false);
+      len = mDigest.doFinal(inBuff, inOffset, inLength, outBuff, outOffset);
+    } catch (Exception e) {
+
+    }
+    return len;
+  }
+
 }

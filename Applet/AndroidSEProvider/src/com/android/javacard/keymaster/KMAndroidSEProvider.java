@@ -18,6 +18,8 @@ package com.android.javacard.keymaster;
 import org.globalplatform.upgrade.Element;
 import org.globalplatform.upgrade.UpgradeManager;
 
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -119,13 +121,14 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private static final short MAX_OPERATIONS = 4;
   private static final short HMAC_MAX_OPERATIONS = 8;
   private static final short COMPUTED_HMAC_KEY_SIZE = 32;
+  public static final short INVALID_DATA_VERSION = 0x7FFF;
   
   private static final short CERT_CHAIN_OFFSET = 0;
   private static final short CERT_ISSUER_OFFSET = KMConfigurations.CERT_CHAIN_MAX_SIZE;
   private static final short CERT_EXPIRY_OFFSET = 
       (short) (CERT_ISSUER_OFFSET + KMConfigurations.CERT_ISSUER_MAX_SIZE);
 
-  final byte[] CIPHER_ALGS = {
+  private static final byte[] CIPHER_ALGS = {
       Cipher.ALG_AES_BLOCK_128_CBC_NOPAD,
       Cipher.ALG_AES_BLOCK_128_ECB_NOPAD,
       Cipher.ALG_DES_CBC_NOPAD,
@@ -136,7 +139,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       Cipher.ALG_RSA_NOPAD,
       AEADCipher.ALG_AES_GCM};
 
-  final byte[] SIG_ALGS = {
+  private static final byte[] SIG_ALGS = {
       Signature.ALG_RSA_SHA_256_PKCS1,
       Signature.ALG_RSA_SHA_256_PKCS1_PSS,
       Signature.ALG_ECDSA_SHA_256,
@@ -145,6 +148,14 @@ public class KMAndroidSEProvider implements KMSEProvider {
       KMRsa2048NoDigestSignature.ALG_RSA_PKCS1_NODIGEST,
       KMEcdsa256NoDigestSignature.ALG_ECDSA_NODIGEST};
 
+  // [L] 256 bits - hardcoded 32 bits as per
+  // reference impl in keymaster.
+  private static final byte[] CMAC_KDF_CONSTANT_L = {
+      0, 0, 1, 0
+  };
+  private static final byte[] CMAC_KDF_CONSTANT_ZERO = {
+      0
+  };
   // AESKey
   private AESKey aesKeys[];
   // DES3Key
@@ -715,15 +726,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       // This is hardcoded to requirement - 32 byte output with two concatenated
       // 16 bytes K1 and K2.
       final byte n = 2; // hardcoded
-      // [L] 256 bits - hardcoded 32 bits as per
-      // reference impl in keymaster.
-      final byte[] L = {
-          0, 0, 1, 0
-      };
-      // byte
-      final byte[] zero = {
-          0
-      };
+      
       // [i] counter - 32 bits
       short iBufLen = 4;
       short keyOutLen = n * 16;
@@ -746,10 +749,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
         // 4 bytes of iBuf with counter in it
         kdf.update(tmpArray, (short) 0, (short) iBufLen);
         kdf.update(label, labelStart, (short) labelLen); // label
-        kdf.update(zero, (short) 0, (short) 1); // 1 byte of 0x00
+        kdf.update(CMAC_KDF_CONSTANT_ZERO, (short) 0, (short) CMAC_KDF_CONSTANT_ZERO.length); // 1 byte of 0x00
         kdf.update(context, contextStart, contextLength); // context
         // 4 bytes of L - signature of 16 bytes
-        pos = kdf.sign(L, (short) 0, (short) 4, tmpArray,
+        pos = kdf.sign(CMAC_KDF_CONSTANT_L, (short) 0, (short) CMAC_KDF_CONSTANT_L.length, tmpArray,
             (short) (iBufLen + pos));
         i++;
       }
@@ -1120,6 +1123,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
+  public KMPKCS8Decoder getPKCS8DecoderInstance() {
+    return KMPKCS8DecoderImpl.instance();
+  }
+
+  @Override
   public short cmacKDF(KMPreSharedKey pSharedKey, byte[] label,
       short labelStart, short labelLen, byte[] context, short contextStart,
       short contextLength, byte[] keyBuf, short keyStart) {
@@ -1147,8 +1155,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     JCSystem.beginTransaction();
-    Util.setShort(provisionData, copyToOff, len);
-    Util.arrayCopyNonAtomic(buf, off, provisionData, (short) (copyToOff + 2), len);
+    Util.arrayCopyNonAtomic(buf, off, provisionData, Util.setShort(provisionData, copyToOff, len), len);
     JCSystem.commitTransaction();
   }
   
@@ -1228,12 +1235,20 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public void onRestore(Element element) {
+  public void onRestore(Element element, short oldVersion, short currentVersion) {
     provisionData = (byte[]) element.readObject();
     masterKey = KMAESKey.onRestore(element);
     attestationKey = KMECPrivateKey.onRestore(element);
     preSharedKey = KMHmacKey.onRestore(element);
-    computedHmacKey = KMHmacKey.onRestore(element);
+    if (oldVersion == INVALID_DATA_VERSION) {
+      handleDataUpgradeToVersion1();
+    } else if (oldVersion <= currentVersion) {
+      computedHmacKey = KMHmacKey.onRestore(element);
+    } else {
+      // Invalid case
+      // TODO test exception in on Restore.
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
   }
 
   @Override
@@ -1350,4 +1365,38 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public KMComputedHmacKey getComputedHmacKey() {
     return computedHmacKey;
   }
+  
+  private void handleDataUpgradeToVersion1() {
+    short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
+        KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
+    byte[] oldBuffer = provisionData;
+    provisionData = new byte[totalLen];
+    persistCertificateChain(
+        oldBuffer,
+        (short) 2,
+        Util.getShort(oldBuffer, (short) 0));
+
+    // Request object deletion
+    oldBuffer = null;
+    JCSystem.requestObjectDeletion();
+    
+  }
+
+  @Override
+  public short messageDigest256(byte[] inBuff, short inOffset,
+      short inLength, byte[] outBuff, short outOffset) {
+    MessageDigest.OneShot mDigest = null;
+    short len = 0;
+    try {
+      mDigest = MessageDigest.OneShot.open(MessageDigest.ALG_SHA_256);
+      len = mDigest.doFinal(inBuff, inOffset, inLength, outBuff, outOffset);
+    } finally {
+      if (mDigest != null) {
+        mDigest.close();
+        mDigest = null;
+      }
+    }
+    return len;
+  }
+  
 }
