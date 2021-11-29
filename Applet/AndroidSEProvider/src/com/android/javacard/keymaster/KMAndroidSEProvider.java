@@ -1018,8 +1018,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {
     KMOperationImpl opr = null;
     KMHmacKey key = (KMHmacKey) computedHmacKey;
-    byte[] data = new byte[32];
-    key.setKey(data, (short) 0, (short) 32);
     Signature signerVerifier = createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, key.getKey());
     opr = getHmacSignOperationInstanceFromPool();
     opr.setMode(KMType.VERIFY);
@@ -1122,6 +1120,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public KMAttestationCert getAttestationCert(boolean rsaCert) {
     return KMAttestationCertImpl.instance(rsaCert);
+  }
+
+  @Override
+  public KMPKCS8Decoder getPKCS8DecoderInstance() {
+    return KMPKCS8DecoderImpl.instance();
   }
 
   @Override
@@ -1378,4 +1381,22 @@ public class KMAndroidSEProvider implements KMSEProvider {
     JCSystem.requestObjectDeletion();
     
   }
+
+  @Override
+  public short messageDigest256(byte[] inBuff, short inOffset,
+      short inLength, byte[] outBuff, short outOffset) {
+    MessageDigest.OneShot mDigest = null;
+    short len = 0;
+    try {
+      mDigest = MessageDigest.OneShot.open(MessageDigest.ALG_SHA_256);
+      len = mDigest.doFinal(inBuff, inOffset, inLength, outBuff, outOffset);
+    } finally {
+      if (mDigest != null) {
+        mDigest.close();
+        mDigest = null;
+      }
+    }
+    return len;
+  }
+  
 }

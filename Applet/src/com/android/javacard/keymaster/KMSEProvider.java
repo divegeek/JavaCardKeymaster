@@ -454,6 +454,13 @@ public interface KMSEProvider extends KMUpgradable {
   KMAttestationCert getAttestationCert(boolean rsaCert);
 
   /**
+   * Returns the implementation of the PKCS8 decoder.
+   *
+   * @return Instance of PKCS8 decoder.
+   */
+  KMPKCS8Decoder getPKCS8DecoderInstance();
+
+  /**
    * This operation persists the provision data in the persistent memory.
    *
    * @param buf buffer which contains all the provision data.
@@ -590,5 +597,17 @@ public interface KMSEProvider extends KMUpgradable {
    * Releases all the instance back to pool. Generally this is used when card is reset.
    */
   void releaseAllOperations();
+
+  /**
+   * This is a one-shot operation the does digest of the input mesage.
+   *
+   * @param inBuff input buffer to be digested.
+   * @param inOffset start offset of the input buffer.
+   * @param inLength length of the input buffer.
+   * @param outBuff is the output buffer that contains the digested data.
+   * @param outOffset start offset of the digested output buffer.
+   * @return length of the digested data.
+   */
+  short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff, short outOffset);
 
 }
