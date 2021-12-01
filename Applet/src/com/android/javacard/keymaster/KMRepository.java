@@ -936,15 +936,17 @@ public class KMRepository implements KMUpgradable {
 
   @Override
   public void onRestore(Element ele, byte[] oldVersion, byte[] currentVersion) {
+    JCSystem.beginTransaction();
     dataIndex = ele.readShort();
     dataTable = (byte[]) ele.readObject();
-    short oldMajorVersion = Util.getShort(oldVersion, (short) 0);
-    short oldMinorVersion = Util.getShort(oldVersion, (short) 2);
-    if (oldMajorVersion == 0 && oldMinorVersion == 0) {
-      // Previous revisions does not contain version information.
+    JCSystem.commitTransaction();
+    if (oldVersion == null) {
+      // Previous versions does not contain version information.
       handleDataUpgradeToVersion1_1();
     } else {
+      JCSystem.beginTransaction();
       attestIdsIndex = ele.readShort();
+      JCSystem.commitTransaction();
     }
   }
 
@@ -998,9 +1000,12 @@ public class KMRepository implements KMUpgradable {
   
   public void handleDataUpgradeToVersion1_1() {
     byte[] oldDataTable = dataTable;
-    dataTable = new byte[2048];
+    byte[] newBuffer = new byte[2048];
+    JCSystem.beginTransaction();
+    dataTable = newBuffer;
     attestIdsIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
     dataIndex = (short) (attestIdsIndex + KMConfigurations.TOTAL_ATTEST_IDS_SIZE);
+    JCSystem.commitTransaction();
     // temp buffer.
     short startOffset = alloc((short) 256);
 

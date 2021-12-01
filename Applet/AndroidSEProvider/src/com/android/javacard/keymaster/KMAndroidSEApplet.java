@@ -21,6 +21,7 @@ import org.globalplatform.upgrade.UpgradeManager;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
@@ -51,26 +52,24 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   @Override
   public void onRestore(Element element) {
     element.initRead();
-    byte magicNumber = element.readByte();
-    if (magicNumber != KMKeymasterApplet.KM_MAGIC_NUMBER) {
-      // Previous version of the applet does not have versioning support.
-      // In this case the first byte is the provision status.
-      provisionStatus = magicNumber;
-      keymasterState = element.readByte();
-      repository.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
-      seProvider.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
-      handleDataUpgradeToVersion1_1();
-    } else {
-      byte[] version = (byte[]) element.readObject();
-      if (!isUpgradeAllowed(version)) {
-        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-      }
-      packageVersion = version;
-      provisionStatus = element.readByte();
-      keymasterState = element.readByte();
-      repository.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
-      seProvider.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
+    byte firstByte = element.readByte();
+    byte[] packageVersion_ = null;
+    byte provisionStatus_ = firstByte;
+    if (firstByte == KMKeymasterApplet.KM_MAGIC_NUMBER) {
+      packageVersion_ = (byte[]) element.readObject();
+      provisionStatus_ = element.readByte();
     }
+    if (null != packageVersion_ && !isUpgradeAllowed(packageVersion_)) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    JCSystem.beginTransaction();
+    packageVersion = packageVersion_;
+    provisionStatus = provisionStatus_;
+    keymasterState = element.readByte();
+    JCSystem.commitTransaction();
+    repository.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
+    seProvider.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
+    handleDataUpgradeToVersion1_1();
   }
 
   @Override
@@ -107,33 +106,58 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   }
   
   public boolean isUpgradeAllowed(byte[] version) {
+    boolean upgradeAllowed = false;
     short oldMajorVersion = Util.getShort(version, (short) 0);
     short oldMinorVersion = Util.getShort(version, (short) 2);
     short currentMajorVersion = Util.getShort(CURRENT_PACKAGE_VERSION, (short) 0);
     short currentMinorVersion = Util.getShort(CURRENT_PACKAGE_VERSION, (short) 2);
     // Downgrade of the Applet is not allowed.
-    if (oldMajorVersion > currentMajorVersion ||
-        (oldMajorVersion == currentMajorVersion && oldMinorVersion > currentMinorVersion)) {
-      return false;
-    }
     // Upgrade is not allowed to a next version which is not immediate.
-    if (1 < (currentMajorVersion - oldMajorVersion) ||
-        (oldMajorVersion == currentMajorVersion && 1 < (currentMinorVersion - oldMinorVersion)) ||
-        (oldMajorVersion < currentMajorVersion && 0 != currentMinorVersion)) {
-      return false;
+    if (currentMajorVersion - oldMajorVersion == 1) {
+      if (currentMinorVersion == 0) {
+        upgradeAllowed = true;
+      }
+    } else if (currentMajorVersion - oldMajorVersion == 0) {
+      if (currentMinorVersion - oldMinorVersion == 1) {
+        upgradeAllowed = true;
+      }
     }
-    return true;
+    return upgradeAllowed;
   }
   
   public void handleDataUpgradeToVersion1_1() {
     
+    if (packageVersion != null) {
+      // No Data upgrade required.
+      return;
+    }
+    byte status = provisionStatus;
+    // In the current version of the applet set boot parameters is removed from
+    // provision status so readjust the provision locked flag.
+    // 0x40 is provision locked flag in the older applet.
+    // Unset the 5th bit. setboot parameters flag.
+    status = (byte)  (status & 0xDF);
+    // Readjust the lock provisioned status flag.
+    if ((status & 0x40) == 0x40) {
+      // 0x40 to 0x20
+      // Unset 6th bit
+      status = (byte) (status & 0xBF);
+      // set the 5th bit
+      status = (byte) (status | 0x20);
+    }
+    byte[] version = new byte[4];
+
+    JCSystem.beginTransaction();
+    packageVersion = version;
+    provisionStatus = status;
     // Copy the package version.
-    Util.arrayCopy(
+    Util.arrayCopyNonAtomic(
         CURRENT_PACKAGE_VERSION,
         (short) 0,
         packageVersion,
         (short) 0,
         (short) CURRENT_PACKAGE_VERSION.length);
+    JCSystem.commitTransaction();
 
     // Update computed HMAC key.
     short blob = repository.getComputedHmacKey();

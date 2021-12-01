@@ -1236,17 +1236,19 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
   @Override
   public void onRestore(Element element, byte[] oldVersion, byte[] currentVersion) {
+    JCSystem.beginTransaction();
     provisionData = (byte[]) element.readObject();
     masterKey = KMAESKey.onRestore(element);
     attestationKey = KMECPrivateKey.onRestore(element);
     preSharedKey = KMHmacKey.onRestore(element);
-    short oldMajorVersion = Util.getShort(oldVersion, (short) 0);
-    short oldMinorVersion = Util.getShort(oldVersion, (short) 2);
-    if (oldMajorVersion == 0 && oldMinorVersion == 0) {
-      // Previous revisions does not contain version information.
+    JCSystem.commitTransaction();
+    if (oldVersion == null) {
+      // Previous versions does not contain version information.
       handleDataUpgradeToVersion1_1();
     } else {
+      JCSystem.beginTransaction();
       computedHmacKey = KMHmacKey.onRestore(element);
+      JCSystem.commitTransaction();
     }
   }
 
@@ -1369,7 +1371,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
     short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
         KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
     byte[] oldBuffer = provisionData;
-    provisionData = new byte[totalLen];
+    byte[] newBuffer = new byte[totalLen];
+    JCSystem.beginTransaction();
+    provisionData = newBuffer;
+    JCSystem.commitTransaction();
     persistCertificateChain(
         oldBuffer,
         (short) 2,

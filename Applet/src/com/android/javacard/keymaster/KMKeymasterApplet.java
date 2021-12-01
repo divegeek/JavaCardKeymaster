@@ -129,12 +129,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_END_KM_CMD = 0x7F;
 
   // Provision reporting status
-  private static final byte NOT_PROVISIONED = 0x00;
-  private static final byte PROVISION_STATUS_ATTESTATION_KEY = 0x01;
-  private static final byte PROVISION_STATUS_ATTESTATION_CERT_DATA = 0x02;
-  private static final byte PROVISION_STATUS_ATTEST_IDS = 0x04;
-  private static final byte PROVISION_STATUS_PRESHARED_SECRET = 0x08;
-  private static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x10;
+  protected static final byte NOT_PROVISIONED = 0x00;
+  protected static final byte PROVISION_STATUS_ATTESTATION_KEY = 0x01;
+  private static final byte PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x02;
+  private static final byte PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04;
+  protected static final byte PROVISION_STATUS_ATTEST_IDS = 0x08;
+  protected static final byte PROVISION_STATUS_PRESHARED_SECRET = 0x10;
+  protected static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x20;
 
   // Data Dictionary items
   public static final byte DATA_ARRAY_SIZE = 30;
@@ -212,10 +213,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     boolean isUpgrading = seImpl.isUpgrading();
     repository = new KMRepository(isUpgrading);
     initializeTransientArrays();
-    packageVersion = new byte[4];
     if (!isUpgrading) {
       keymasterState = KMKeymasterApplet.INIT_STATE;
       seProvider.createMasterKey((short) (KMRepository.MASTER_KEY_SIZE * 8));
+      packageVersion = new byte[4];
       Util.arrayCopy(
           CURRENT_PACKAGE_VERSION,
           (short) 0,
@@ -372,7 +373,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
           case INS_PROVISION_ATTESTATION_CERT_DATA_CMD:
             processProvisionAttestationCertDataCmd(apdu);
-            provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_DATA;
+            provisionStatus |= (KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_CHAIN |
+                KMKeymasterApplet.PROVISION_STATUS_ATTESTATION_CERT_PARAMS);
             sendError(apdu, KMError.OK);
             return;
 
@@ -539,7 +541,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private boolean isProvisioningComplete() {
     if ((0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_KEY))
-        && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_DATA))
+        && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_CHAIN))
+        && (0 != (provisionStatus & PROVISION_STATUS_ATTESTATION_CERT_PARAMS))
         && (0 != (provisionStatus & PROVISION_STATUS_PRESHARED_SECRET))) {
       return true;
     } else {
@@ -3246,7 +3249,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // update the key parameters list
     updateKeyParameters(scratchPad, tmpVariables[4]);
     // Read Minimum Mac length - it must not be present
-    //Added this error check based on default reference implementation.
+    // Added this error check based on default reference implementation.
     tmpVariables[0] =
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[KEY_PARAMETERS]);
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
@@ -3718,6 +3721,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private static void validateTDESKey() {
     // Read Minimum Mac length - it must not be present
+    // This below check is done based on the reference implementation.
     tmpVariables[0] =
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[KEY_PARAMETERS]);
     if (tmpVariables[0] != KMType.INVALID_VALUE) {
@@ -3743,13 +3747,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private static void validateHmacKey() {
     // If params does not contain any digest throw unsupported digest error.
-    if (KMType.INVALID_VALUE
-        == KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST, data[KEY_PARAMETERS])) {
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST, data[KEY_PARAMETERS]);
+    if (KMType.INVALID_VALUE == tmpVariables[0]) {
       KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
     }
-    // check whether digest sizes are greater then or equal to min mac length.
-    // Only SHA256 digest must be supported.
+
     if (KMEnumArrayTag.contains(KMType.DIGEST, KMType.DIGEST_NONE, data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
+    }
+    // Strongbox supports only SHA256.
+    if (!KMEnumArrayTag.contains(KMType.DIGEST, KMType.SHA2_256, data[KEY_PARAMETERS])) {
       KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
     }
     // Read Minimum Mac length
@@ -3758,6 +3766,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (tmpVariables[0] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.MISSING_MIN_MAC_LENGTH);
     }
+    // Check whether digest size is greater than or equal to min mac length.
+    // This below check is done based on the reference implementation.
     if (((short) (tmpVariables[0] % 8) != 0)
         || (tmpVariables[0] < (short) 64)
         || tmpVariables[0] > (short) 256) {

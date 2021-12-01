@@ -33,12 +33,11 @@ enum ProvisionStatus {
     PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04,
     PROVISION_STATUS_ATTEST_IDS = 0x08,
     PROVISION_STATUS_PRESHARED_SECRET = 0x10,
-    PROVISION_STATUS_BOOT_PARAM = 0x20,
-    PROVISION_STATUS_PROVISIONING_LOCKED = 0x40,
+    PROVISION_STATUS_PROVISIONING_LOCKED = 0x20,
 };
 
-std::string provisionStatusApdu = hex2str("80084000000000");
-std::string lockProvisionApdu = hex2str("80074000000000");
+std::string provisionStatusApdu = hex2str("80074000000000");
+std::string lockProvisionApdu = hex2str("80064000000000");
 
 Json::Value root;
 static double keymasterVersion = -1;
@@ -247,8 +246,7 @@ int getProvisionStatus() {
         if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) &&
             (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN)) &&
             (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM))) {
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET))) {
                 printf("\n SE is provisioned \n");
         } else {
             if (0 == (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) {
@@ -262,9 +260,6 @@ int getProvisionStatus() {
             }
             if (0 == (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) {
                 printf("\n Shared secret is not provisioned \n");
-            }
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM)) {
-                printf("\n Boot params are not provisioned \n");
             }
         }
     } else {

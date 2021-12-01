@@ -27,10 +27,9 @@ import javacard.framework.Util;
  */
 public class KMKeyParameters extends KMType {
 
-  private static final short[] tagArr = {
+  private static final short[] unsupportedTags = {
       // Unsupported tags.
       KMType.BOOL_TAG, KMType.TRUSTED_USER_PRESENCE_REQUIRED,
-      KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY,
       KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS
   };
 
@@ -175,9 +174,9 @@ public class KMKeyParameters extends KMType {
       tagPtr = KMArray.cast(arrPtr).get(index);
       tagKey = KMTag.getKey(tagPtr);
       tagType = KMTag.getTagType(tagPtr);
-      while (tagInd < (short) tagArr.length) {
-        if ((tagArr[tagInd] == tagType)
-            && (tagArr[(short) (tagInd + 1)] == tagKey)) {
+      while (tagInd < (short) unsupportedTags.length) {
+        if ((unsupportedTags[tagInd] == tagType)
+            && (unsupportedTags[(short) (tagInd + 1)] == tagKey)) {
           return true;
         }
         tagInd += 2;
