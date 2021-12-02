@@ -44,8 +44,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
   // Magic number version
-  public static final byte KM_MAGIC_NUMBER = 0x7F;
-  public static final byte[] CURRENT_PACKAGE_VERSION = {0x00, 0x01, 0x00, 0x01};
+  public static final byte KM_MAGIC_NUMBER = (byte) 0x81;
+  public static final short CURRENT_PACKAGE_VERSION = 0x0101; // 1.1
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
@@ -202,7 +202,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static short[] data;
   protected static byte provisionStatus = NOT_PROVISIONED;
   // First two bytes are Major version and second bytes are minor version.
-  protected byte[] packageVersion;
+  protected short packageVersion;
   
 
   /**
@@ -216,13 +216,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (!isUpgrading) {
       keymasterState = KMKeymasterApplet.INIT_STATE;
       seProvider.createMasterKey((short) (KMRepository.MASTER_KEY_SIZE * 8));
-      packageVersion = new byte[4];
-      Util.arrayCopy(
-          CURRENT_PACKAGE_VERSION,
-          (short) 0,
-          packageVersion,
-          (short) 0,
-          (short) CURRENT_PACKAGE_VERSION.length);
+      packageVersion = CURRENT_PACKAGE_VERSION;
     }
     KMType.initialize();
     encoder = new KMEncoder();

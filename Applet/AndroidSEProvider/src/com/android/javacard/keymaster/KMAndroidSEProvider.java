@@ -18,8 +18,6 @@ package com.android.javacard.keymaster;
 import org.globalplatform.upgrade.Element;
 import org.globalplatform.upgrade.UpgradeManager;
 
-import javacard.framework.ISO7816;
-import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -33,7 +31,6 @@ import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
 import javacard.security.MessageDigest;
 import javacard.security.RSAPrivateKey;
-import javacard.security.RSAPublicKey;
 import javacard.security.RandomData;
 import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
@@ -253,7 +250,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
       // Create attestation key of P-256 curve.
       createAttestationKey(tmpArray, (short)0, (short) 32);
       // Pre-shared secret key length is 32 bytes.
-      createPresharedKey(tmpArray, (short)0, (short) KMRepository.SHARED_SECRET_KEY_SIZE);
+      createPresharedKey(tmpArray, (short)0, (short) 32);
+      // Initialize the Computed Hmac Key object.
+      createComputedHmacKey(tmpArray, (short)0, (short) 32);
     }
     androidSEProvider = this;
   }
@@ -1235,20 +1234,16 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public void onRestore(Element element, byte[] oldVersion, byte[] currentVersion) {
-    JCSystem.beginTransaction();
+  public void onRestore(Element element, short oldVersion, short currentVersion) {
     provisionData = (byte[]) element.readObject();
     masterKey = KMAESKey.onRestore(element);
     attestationKey = KMECPrivateKey.onRestore(element);
     preSharedKey = KMHmacKey.onRestore(element);
-    JCSystem.commitTransaction();
-    if (oldVersion == null) {
+    if (oldVersion == 0) {
       // Previous versions does not contain version information.
       handleDataUpgradeToVersion1_1();
     } else {
-      JCSystem.beginTransaction();
       computedHmacKey = KMHmacKey.onRestore(element);
-      JCSystem.commitTransaction();
     }
   }
 
@@ -1371,10 +1366,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
         KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
     byte[] oldBuffer = provisionData;
-    byte[] newBuffer = new byte[totalLen];
-    JCSystem.beginTransaction();
-    provisionData = newBuffer;
-    JCSystem.commitTransaction();
+    provisionData = new byte[totalLen];
     persistCertificateChain(
         oldBuffer,
         (short) 2,
