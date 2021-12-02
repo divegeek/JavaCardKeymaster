@@ -25,15 +25,12 @@
 
 #define SUCCESS 0
 #define FAILURE 1
-#define KEYMASTER_VERSION 4.1
-#define KEYMINT_VERSION 5
+#define KEYMASTER_VERSION_4_1 4.1
+#define KEYMASTER_VERSION_4_0 4
 #define P1_40 0x40
 #define P1_50 0x50
 #define APDU_CLS 0x80
-#define APDU_P1(version)  \
-         (version == KEYMASTER_VERSION) ? \
-         P1_40 : \
-         P1_50
+#define APDU_P1 P1_40
 #define APDU_P2  0x00
 #define INS_BEGIN_KM_CMD 0x00
 #define APDU_RESP_STATUS_OK 0x9000
@@ -79,7 +76,6 @@ constexpr uint64_t kKeyFormatRaw = 3;
 // json keys
 constexpr char kAttestKey[] = "attest_key";
 constexpr char kAttestCertChain[] = "attest_cert_chain";
-constexpr char kAttestCertParams[] = "attest_cert_params";
 constexpr char kSharedSecret[] = "shared_secret";
 constexpr char kBootParams[] = "boot_params";
 constexpr char kAttestationIds[] = "attestation_ids";
@@ -90,12 +86,10 @@ constexpr char kLockProvision[] = "lock_provision";
 
 // Instruction constatnts
 constexpr int kAttestationKeyCmd = INS_BEGIN_KM_CMD + 1;
-constexpr int kAttestCertChainCmd = INS_BEGIN_KM_CMD + 2;
-constexpr int kAttestCertParamsCmd = INS_BEGIN_KM_CMD + 3;
-constexpr int kAttestationIdsCmd = INS_BEGIN_KM_CMD + 4;
-constexpr int kPresharedSecretCmd = INS_BEGIN_KM_CMD + 5;
-constexpr int kBootParamsCmd = INS_BEGIN_KM_CMD + 6;
-constexpr int kLockProvisionCmd = INS_BEGIN_KM_CMD + 7;
-constexpr int kGetProvisionStatusCmd = INS_BEGIN_KM_CMD + 8;
-constexpr int kDeviceUniqueKeyCmd = INS_BEGIN_KM_CMD + 10;
-constexpr int kAdditionalCertChainCmd = INS_BEGIN_KM_CMD + 11;
+constexpr int kAttestCertDataCmd = INS_BEGIN_KM_CMD + 2;
+constexpr int kAttestationIdsCmd = INS_BEGIN_KM_CMD + 3;
+constexpr int kPresharedSecretCmd = INS_BEGIN_KM_CMD + 4;
+constexpr int kBootParamsCmd = INS_BEGIN_KM_CMD + 5;
+constexpr int kLockProvisionCmd = INS_BEGIN_KM_CMD + 6;
+constexpr int kGetProvisionStatusCmd = INS_BEGIN_KM_CMD + 7;
+constexpr int kSetVersionPatchLevelCmd = INS_BEGIN_KM_CMD + 8;
