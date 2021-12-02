@@ -46,7 +46,7 @@ public class KMIntegerArrayTag extends KMTag {
     if (!validateTagType(tagType)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-    short arrPtr = KMArray.exp(KMType.INTEGER_TYPE);
+    short arrPtr = KMArray.exp(KMInteger.exp());
     short ptr = instance(TAG_TYPE, (short) 6);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), tagType);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), INVALID_TAG);
@@ -132,6 +132,17 @@ public class KMIntegerArrayTag extends KMTag {
 
   private static boolean validateTagType(short tagType) {
     return (tagType == ULONG_ARRAY_TAG) || (tagType == UINT_ARRAY_TAG);
+  }
+
+  public boolean contains(short tagValue) {
+    short index = 0;
+    while (index < length()) {
+      if (KMInteger.compare(tagValue, get(index)) == 0) {
+        return true;
+      }
+      index++;
+    }
+    return false;
   }
 
   public static boolean contains(short tagId, short tagValue, short params) {

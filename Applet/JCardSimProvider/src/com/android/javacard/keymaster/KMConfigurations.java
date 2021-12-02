@@ -8,23 +8,22 @@
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" (short)0IS,
+ * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
 package com.android.javacard.keymaster;
 
-import org.globalplatform.upgrade.Element;
+public class KMConfigurations {
+  // Machine types
+  public static final byte LITTLE_ENDIAN = 0x00;
+  public static final byte BIG_ENDIAN = 0x01;
+  public static final byte TEE_MACHINE_TYPE = LITTLE_ENDIAN;
 
-public interface KMUpgradable {
-
-  void onSave(Element ele);
-
-  void onRestore(Element ele, short oldVersion, short currentVersion);
-
-  short getBackupPrimitiveByteCount();
-
-  short getBackupObjectCount();
-
+  // Maximum cert chain size
+  public static final short CERT_CHAIN_MAX_SIZE = 2500;
+  public static final short CERT_ISSUER_MAX_SIZE = 250;
+  public static final short CERT_EXPIRY_MAX_SIZE = 20;
+  public static final short TOTAL_ATTEST_IDS_SIZE = 300;
 }
