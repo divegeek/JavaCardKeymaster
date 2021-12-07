@@ -130,4 +130,8 @@ public class KMByteBlob extends KMType {
     length = (short) (length - len);
     Util.setShort(heap, (short) (instanceTable[KM_BYTE_BLOB_OFFSET] + 1), length);
   }
+
+  public void setLength(short len) {
+    Util.setShort(heap, (short)(instanceTable[KM_BYTE_BLOB_OFFSET] + 1), len);
+  }
 }

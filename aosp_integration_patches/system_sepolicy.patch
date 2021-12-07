@@ -1,0 +1,28 @@
+diff --git a/public/hal_neverallows.te b/public/hal_neverallows.te
+index cd1591009..56f3ad1c4 100644
+--- a/public/hal_neverallows.te
++++ b/public/hal_neverallows.te
+@@ -2,6 +2,7 @@
+ # network capabilities
+ neverallow {
+   halserverdomain
++  -hal_keymaster_server
+   -hal_bluetooth_server
+   -hal_can_controller_server
+   -hal_wifi_server
+@@ -21,6 +22,7 @@ neverallow {
+ # will result in CTS failure.
+ neverallow {
+   halserverdomain
++  -hal_keymaster_server
+   -hal_automotive_socket_exemption
+   -hal_can_controller_server
+   -hal_tetheroffload_server
+@@ -35,6 +37,7 @@ neverallow {
+ 
+ neverallow {
+   halserverdomain
++  -hal_keymaster_server
+   -hal_automotive_socket_exemption
+   -hal_can_controller_server
+   -hal_tetheroffload_server

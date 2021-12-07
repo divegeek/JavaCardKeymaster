@@ -26,7 +26,6 @@
 #include <cppbor/cppbor.h>
 #include <cppbor/cppbor_parse.h>
 
-#define SE_POWER_RESET_STATUS_FLAG (1 << 30)
 enum ProvisionStatus {
     NOT_PROVISIONED = 0x00,
     PROVISION_STATUS_ATTESTATION_KEY = 0x01,
@@ -34,12 +33,11 @@ enum ProvisionStatus {
     PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04,
     PROVISION_STATUS_ATTEST_IDS = 0x08,
     PROVISION_STATUS_PRESHARED_SECRET = 0x10,
-    PROVISION_STATUS_BOOT_PARAM = 0x20,
-    PROVISION_STATUS_PROVISIONING_LOCKED = 0x40,
+    PROVISION_STATUS_PROVISIONING_LOCKED = 0x20,
 };
 
-std::string provisionStatusApdu = hex2str("80084000000000");
-std::string lockProvisionApdu = hex2str("80074000000000");
+std::string provisionStatusApdu = hex2str("80074000000000");
+std::string lockProvisionApdu = hex2str("80064000000000");
 
 Json::Value root;
 static double keymasterVersion = -1;
@@ -52,7 +50,8 @@ using cppbor::MajorType;
 // static function declarations
 static uint16_t getApduStatus(std::vector<uint8_t>& inputData);
 static int sendData(std::shared_ptr<SocketTransport>& pSocket, std::string input, std::vector<uint8_t>& response);
-static int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey, std::vector<uint8_t>& response);
+static int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey);
+static int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, std::vector<uint8_t>& response);
 static int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t &value);
 
 
@@ -62,7 +61,7 @@ void usage() {
     printf("provision [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
-    printf("-v, --km_version version \t Version of the keymaster(4.0 or 4.1 for keymaster; 100 for keymint \n");
+    printf("-v, --km_version version \t Version of the keymaster(4.1 for keymaster; 5 for keymint \n");
     printf("-i, --input  jsonFile \t Input json file \n");
     printf("-s, --provision_status jsonFile \t Gets the provision status of applet. \n");
     printf("-l, --lock_provision jsonFile \t Gets the provision status of applet. \n");
@@ -152,7 +151,8 @@ int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, s
     return SUCCESS;
 }
 
-int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey, std::vector<uint8_t>& response) {
+int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey) {
+    std::vector<uint8_t> response;
     Json::Value val = root.get(jsonKey, Json::Value::nullRef);
     if (!val.isNull()) {
         if (val.isString()) {
@@ -182,7 +182,7 @@ int openConnection(std::shared_ptr<SocketTransport>& pSocket) {
 // Parses the input json file. Sends the apdus to JCServer.
 int processInputFile() {
 
-    if (keymasterVersion != KEYMASTER_VERSION40 && keymasterVersion != KEYMASTER_VERSION41 && keymasterVersion != KEYMINT_VERSION) {
+    if (keymasterVersion != KEYMASTER_VERSION_4_1 && keymasterVersion != KEYMASTER_VERSION_4_0) {
         printf("\n Error unknown version.\n");
         usage();
         return FAILURE;
@@ -198,23 +198,12 @@ int processInputFile() {
     }
     std::vector<uint8_t> response;
 
-    if (keymasterVersion == KEYMASTER_VERSION40 || keymasterVersion == KEYMASTER_VERSION41) {
-        printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
-        if (0 != provisionData(pSocket, kAttestKey, response) ||
-                0 != provisionData(pSocket, kAttestCertChain, response) ||
-                0 != provisionData(pSocket, kAttestCertParams, response)) {
-            return FAILURE;
-        }
-    } else {
-        printf("\n Selected keymint version(%f) for provisioning \n", keymasterVersion);
-        if ( 0 != provisionData(pSocket, kDeviceUniqueKey, response) ||
-                0 != provisionData(pSocket, kAdditionalCertChain, response)) {
-            return FAILURE;
-        }
-    }
-    if (0 != provisionData(pSocket, kAttestationIds, response) ||
-            0 != provisionData(pSocket, kSharedSecret, response) ||
-            0 != provisionData(pSocket, kBootParams, response)) {
+    printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
+    if (0 != provisionData(pSocket, kAttestKey) ||
+        0 != provisionData(pSocket, kAttestCertChain) ||
+        0 != provisionData(pSocket, kAttestationIds) ||
+        0 != provisionData(pSocket, kSharedSecret) ||
+        0 != provisionData(pSocket, kBootParams)) {
         return FAILURE;
     }
     return SUCCESS;
@@ -257,8 +246,7 @@ int getProvisionStatus() {
         if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) &&
             (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN)) &&
             (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM))) {
+            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET))) {
                 printf("\n SE is provisioned \n");
         } else {
             if (0 == (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) {
@@ -272,9 +260,6 @@ int getProvisionStatus() {
             }
             if (0 == (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) {
                 printf("\n Shared secret is not provisioned \n");
-            }
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM)) {
-                printf("\n Boot params are not provisioned \n");
             }
         }
     } else {

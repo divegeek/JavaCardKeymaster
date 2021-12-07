@@ -59,6 +59,7 @@ public class KMError {
   public static final short INVALID_NONCE = 52;
   public static final short MISSING_MAC_LENGTH = 53;
   public static final short CALLER_NONCE_PROHIBITED = 55;
+  public static final short KEY_MAX_OPS_EXCEEDED = 56;
   public static final short INVALID_MAC_LENGTH = 57;
   public static final short MISSING_MIN_MAC_LENGTH = 58;
   public static final short UNSUPPORTED_MIN_MAC_LENGTH = 59;
@@ -67,10 +68,9 @@ public class KMError {
 
   public static final short ATTESTATION_APPLICATION_ID_MISSING = 65;
   public static final short CANNOT_ATTEST_IDS = 66;
-  public static final short ROLLBACK_RESISTANCE_UNAVAILABLE = 67;
-
+  public static final short ROLLBACK_RESISTANCE_UNAVAILABLE = 67;  
+  public static final short NO_USER_CONFIRMATION = 71;
   public static final short DEVICE_LOCKED = 72;
-  public static final short EARLY_BOOT_ENDED = 73;
   public static final short UNIMPLEMENTED = 100;
   public static final short UNKNOWN_ERROR = 1000;
 

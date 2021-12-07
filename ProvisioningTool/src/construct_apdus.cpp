@@ -47,12 +47,9 @@ using cppbor::Bstr;
 // static function declarations
 static int processInputFile();
 static int processAttestationKey();
-static int processAttestationCertificateChain();
-static int processAttestationCertificateParams();
+static int processAttestationCertificateData();
 static int processAttestationIds();
 static int processSharedSecret();
-static int processDeviceUniqueKey();
-static int processAdditionalCertificateChain();
 static int processSetBootParameters();
 static int readDataFromFile(const char *fileName, std::vector<uint8_t>& data);
 static int addApduHeader(const int ins, std::vector<uint8_t>& inputData);
@@ -70,7 +67,7 @@ void usage() {
     printf("construct_apdus [options]\n");
     printf("Valid options are:\n");
     printf("-h, --help    show this help message and exit.\n");
-    printf("-v, --km_version version \t Version of the keymaster (40 or 41 for respective keymaster version; 100 for keymint) \n");
+    printf("-v, --km_version version \t Version of the keymaster (4.1 for keymaster; 4 for keymaster4_0) \n");
     printf("-i, --input  jsonFile \t Input json file \n");
     printf("-o, --output jsonFile \t Output json file \n");
 }
@@ -163,30 +160,18 @@ int getBootParameterBlobValue(Json::Value& bootParamsObj, const char* key, std::
 // Parses the input json file. Prepares the apdu for each entry in the json
 // file and dump all the apdus into the output json file.
 int processInputFile() {
-
     // Parse Json file
     if (0 != readJsonFile(root, inputFileName)) {
         return FAILURE;
     }
 
-    if (keymasterVersion == KEYMASTER_VERSION40 || keymasterVersion == KEYMASTER_VERSION41) {
-        printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
-        if (0 != processAttestationKey() ||
-                0 != processAttestationCertificateChain() ||
-                0 != processAttestationCertificateParams()) {
-            return FAILURE;
-        }
-    } else {
-        printf("\n Selected keymint version(%f) for provisioning \n", keymasterVersion);
-        if ( 0 != processDeviceUniqueKey() ||
-                0 != processAttestationCertificateChain()) {
-            return FAILURE;
-        }
-    }
-    if (0 != processAttestationIds() ||
-            0 != processSharedSecret() ||
-            0 != processSetBootParameters()) {
-        return FAILURE;
+    printf("\n Selected Keymaster version(%f) for provisioning \n", keymasterVersion);
+    if (0 != processAttestationKey() ||
+        0 != processAttestationCertificateData() ||
+        0 != processAttestationIds() ||
+        0 != processSharedSecret() ||
+        0 != processSetBootParameters()) {
+      return FAILURE;
     }
     if (SUCCESS != writeJsonFile(writerRoot, outputFileName)) {
         return FAILURE;
@@ -240,18 +225,37 @@ int processAttestationKey() {
     return SUCCESS;
 }
 
-static int processAttestationCertificateChain() {
+static int processAttestationCertificateData() {
     Json::Value certChainFiles = root.get(kAttestCertChain, Json::Value::nullRef);
     if (!certChainFiles.isNull()) {
         std::vector<uint8_t> certData;
+        std::vector<uint8_t> subject;
+        std::vector<uint8_t> notAfter;
 
         if(certChainFiles.isArray()) {
+            if (certChainFiles.size() == 0) {
+                printf("\n empty certificate.\n");
+                return FAILURE;
+            }
             for (uint32_t i = 0; i < certChainFiles.size(); i++) {
                 if(certChainFiles[i].isString()) {
                     /* Read the certificates. */
                     if(SUCCESS != readDataFromFile(certChainFiles[i].asString().data(), certData)) {
                         printf("\n Failed to read the Root certificate\n");
                         return FAILURE;
+                    }
+                    if (i == 0) { // Leaf certificate
+                        /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
+                        /* Get X509 certificate instance for the root certificate.*/
+                        X509_Ptr x509(parseDerCertificate(certData));
+                        if (!x509) {
+                          return FAILURE;
+                        }
+
+                        /* Get subject in DER */
+                        getDerSubjectName(x509.get(), subject);
+                        /* Get Expirty Time */
+                        getNotAfter(x509.get(), notAfter);
                     }
                 } else {
                     printf("\n Fail: Only proper certificate paths as a string is allowed inside the json file. \n");
@@ -263,8 +267,12 @@ static int processAttestationCertificateChain() {
             return FAILURE;
         }
         // Prepare cbor input
-        std::vector<uint8_t> cborData = Bstr(certData).encode();
-        if (SUCCESS != addApduHeader(kAttestCertChainCmd, cborData)) {
+        Array array;
+        array.add(certData);
+        array.add(subject);
+        array.add(notAfter);
+        std::vector<uint8_t> cborData = array.encode();
+        if (SUCCESS != addApduHeader(kAttestCertDataCmd, cborData)) {
             return FAILURE;
         }
         // Write to json.
@@ -274,59 +282,6 @@ static int processAttestationCertificateChain() {
         return FAILURE;
     }
     printf("\n Constructed attestation certificate chain APDU successfully. \n");
-    return SUCCESS;
-}
-
-int processAttestationCertificateParams() {
-    Json::Value certChainFile = root.get(kAttestCertChain, Json::Value::nullRef);
-    if (!certChainFile.isNull()) {
-        std::vector<std::vector<uint8_t>> certData;
-        if (certChainFile.isArray()) {
-            if (certChainFile.size() == 0) {
-                printf("\n empty certificate.\n");
-                return FAILURE;
-            }
-            std::vector<uint8_t> leafCertificate;
-            if (SUCCESS != readDataFromFile(certChainFile[0].asString().data(), leafCertificate)) {
-                printf("\n Failed to read the Root certificate\n");
-                return FAILURE;
-            }
-            // ----------------
-            // Prepare cbor data.
-            Array array;
-            std::vector<uint8_t> subject;
-            std::vector<uint8_t> notAfter;
-
-            /* Subject, AuthorityKeyIdentifier and Expirty time of the root certificate are required by javacard. */
-            /* Get X509 certificate instance for the root certificate.*/
-            X509_Ptr x509(parseDerCertificate(leafCertificate));
-            if (!x509) {
-                return FAILURE;
-            }
-
-            /* Get subject in DER */
-            getDerSubjectName(x509.get(), subject);
-            /* Get Expirty Time */
-            getNotAfter(x509.get(), notAfter);
-
-            array.add(subject);
-            array.add(notAfter);
-            std::vector<uint8_t> cborData = array.encode();
-            if (SUCCESS != addApduHeader(kAttestCertParamsCmd, cborData)) {
-                return FAILURE;
-            }
-            // Write to json.
-            writerRoot[kAttestCertParams] = getHexString(cborData);
-            //-----------------
-        } else {
-            printf("\n Fail: cert chain value should be an array inside the json file. \n");
-            return FAILURE;
-        }
-    } else {
-        printf("\n Fail: Improper value found for attest_cert_chain key inside json file \n");
-        return FAILURE;
-    }
-    printf("\n Constructed attestation certificate params APDU successfully. \n");
     return SUCCESS;
 }
 
@@ -535,7 +490,7 @@ int addApduHeader(const int ins, std::vector<uint8_t>& inputData) {
     }
 
     inputData.insert(inputData.begin(), static_cast<uint8_t>(APDU_P2));//P2
-    inputData.insert(inputData.begin(), static_cast<uint8_t>(APDU_P1(keymasterVersion)));//P1
+    inputData.insert(inputData.begin(), static_cast<uint8_t>(APDU_P1));//P1
     inputData.insert(inputData.begin(), static_cast<uint8_t>(ins));//INS
     inputData.insert(inputData.begin(), static_cast<uint8_t>(APDU_CLS));//CLS
     return SUCCESS;
@@ -563,11 +518,6 @@ exit:
     fclose(fp);
     return ret;
 }
-
-// TODO
-static int processDeviceUniqueKey() { return 0; }
-static int processAdditionalCertificateChain() { return 0; }
-
 
 int main(int argc, char* argv[]) {
     int c;
@@ -624,7 +574,7 @@ int main(int argc, char* argv[]) {
         usage();
         return FAILURE;
     }
-    if (keymasterVersion != KEYMASTER_VERSION40 && keymasterVersion != KEYMASTER_VERSION41 && keymasterVersion != KEYMINT_VERSION) {
+    if (keymasterVersion != KEYMASTER_VERSION_4_1 && keymasterVersion != KEYMASTER_VERSION_4_0) {
         printf("\n Error unknown version.");
         return FAILURE;
     }

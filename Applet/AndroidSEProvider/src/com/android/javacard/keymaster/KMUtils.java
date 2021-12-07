@@ -52,6 +52,8 @@ public class KMUtils {
       0, 0, 0, 0, (byte) 0x9A, 0x7E, (byte) 0xC8, 0x00};//2592000000
   public static final short year2051 = 2051;
   public static final short year2020 = 2020;
+  // Convert to milliseconds constants
+  public static final byte[] SEC_TO_MILLIS_SHIFT_POS = {9, 8, 7, 6, 5, 3};
 
   // --------------------------------------
   public static short convertToDate(short time, byte[] scratchPad,
@@ -419,19 +421,20 @@ public class KMUtils {
     return -1;
   }
 
-  //i * 1000 = (i << 9) + (i << 8) + (i << 7) + (i << 6) + (i << 5) + ( i << 3)
+  // i * 1000 = (i << 9) + (i << 8) + (i << 7) + (i << 6) + (i << 5) + ( i << 3)
   public static void convertToMilliseconds(byte[] buf, short inputOff, short outputOff,
-     short scratchPadOff) {
-   byte[] shiftPos = {9, 8, 7, 6, 5, 3};
-   short index = 0;
-   while (index < (short) (shiftPos.length)) {
-     Util.arrayCopyNonAtomic(buf, inputOff, buf, scratchPadOff, (short) 8);
-     shiftLeft(buf, scratchPadOff, shiftPos[index]);
-     Util.arrayCopyNonAtomic(buf, outputOff, buf, (short) (scratchPadOff + 8), (short) 8);
-     add(buf, scratchPadOff, (short) (8 + scratchPadOff), (short) (16 + scratchPadOff));
-     Util.arrayCopyNonAtomic(buf, (short) (scratchPadOff + 16), buf, outputOff, (short) 8);
-     Util.arrayFillNonAtomic(buf, scratchPadOff, (short) 24, (byte) 0);
-     index++;
-   }
- }
+      short scratchPadOff) {
+    short index = 0;
+    short length = (short) SEC_TO_MILLIS_SHIFT_POS.length;
+    while (index < length) {
+      Util.arrayCopyNonAtomic(buf, inputOff, buf, scratchPadOff, (short) 8);
+      shiftLeft(buf, scratchPadOff, SEC_TO_MILLIS_SHIFT_POS[index]);
+      Util.arrayCopyNonAtomic(buf, outputOff, buf, (short) (scratchPadOff + 8), (short) 8);
+      add(buf, scratchPadOff, (short) (8 + scratchPadOff), (short) (16 + scratchPadOff));
+      Util.arrayCopyNonAtomic(buf, (short) (scratchPadOff + 16), buf, outputOff, (short) 8);
+      Util.arrayFillNonAtomic(buf, scratchPadOff, (short) 24, (byte) 0);
+      index++;
+    }
+  }
+
 }

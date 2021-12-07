@@ -15,29 +15,22 @@
  */
 package com.android.javacard.keymaster;
 
-import javacard.security.HMACKey;
+public interface KMPKCS8Decoder {
 
-public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey {
+  /**
+   * Decodes the PKCS8 encoded RSA Key and extracts the private and public key
+   *
+   * @param Instance of the PKCS8 encoded data
+   * @return Instance of KMArray holding RSA public key, RSA private key and modulus.
+   */
+  short decodeRsa(short blob);
 
-  private HMACKey hmacKey;
+  /**
+   * Decodes the PKCS8 encoded EC Key and extracts the private and public key
+   *
+   * @param Instance of the PKCS8 encoded data.
+   * @return Instance of KMArray holding EC public key and EC private key.
+   */
+  short decodeEc(short blob);
 
-  public KMHmacKey(HMACKey key) {
-    hmacKey = key;
-  }
-
-  public void setKey(byte[] keyData, short kOff, short length) {
-    hmacKey.setKey(keyData, kOff, length);
-  }
-
-  public byte getKey(byte[] keyData, short kOff) {
-    return hmacKey.getKey(keyData, kOff);
-  }
-
-  public HMACKey getKey() {
-    return hmacKey;
-  }
-
-  public short getKeySizeBits() {
-    return hmacKey.getSize();
-  }
 }
