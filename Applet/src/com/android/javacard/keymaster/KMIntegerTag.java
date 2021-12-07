@@ -48,7 +48,9 @@ public class KMIntegerTag extends KMTag {
     ACTIVE_DATETIME,
     ORIGINATION_EXPIRE_DATETIME,
     USAGE_EXPIRE_DATETIME,
-    CREATION_DATETIME
+    CREATION_DATETIME,
+    // Custom tag.
+    AUTH_TIMEOUT_MILLIS
   };
 
   private KMIntegerTag() {
