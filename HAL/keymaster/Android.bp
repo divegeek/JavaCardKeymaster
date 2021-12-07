@@ -89,9 +89,6 @@ cc_library {
     name: "libjc_transport",
     host_supported: true,
     vendor_available: true,
-    vndk: {
-        enabled: true,
-    },
 
     srcs: [
         "4.1/SocketTransport.cpp",
