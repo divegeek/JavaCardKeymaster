@@ -17,16 +17,6 @@
 #ifndef __SE_TRANSPORT__
 #define __SE_TRANSPORT__
 
-#include <aidl/android/se/omapi/BnSecureElementListener.h>
-#include <aidl/android/se/omapi/ISecureElementChannel.h>
-#include <aidl/android/se/omapi/ISecureElementListener.h>
-#include <aidl/android/se/omapi/ISecureElementReader.h>
-#include <aidl/android/se/omapi/ISecureElementService.h>
-#include <aidl/android/se/omapi/ISecureElementSession.h>
-#include <android/binder_manager.h>
-
-#include <map>
-
 namespace se_transport {
 
 /**
@@ -40,7 +30,7 @@ class ITransport {
     /**
      * Opens connection.
      */
-      virtual bool openConnection() = 0;
+	virtual bool openConnection() = 0;
     /**
      * Send data over communication channel and receives data back from the remote end.
      */
@@ -69,7 +59,7 @@ public:
      * Gets the binder instance of ISEService, gets the reader corresponding to secure element, establishes a session
      * and opens a basic channel.
      */
-      bool openConnection() override;
+	bool openConnection() override;
     /**
      * Transmists the data over the opened basic channel and receives the data back.
      */
@@ -85,19 +75,6 @@ public:
      */
     bool isConnected() override;
 
-private:
-    std::shared_ptr<aidl::android::se::omapi::ISecureElementService> omapiSeService = nullptr;
-    std::shared_ptr<aidl::android::se::omapi::ISecureElementReader> eSEReader = nullptr;
-    std::map<std::string, std::shared_ptr<aidl::android::se::omapi::ISecureElementReader>>
-            mVSReaders = {};
-    std::string const ESE_READER_PREFIX = "eSE";
-    constexpr static const char omapiServiceName[] =
-            "android.system.omapi.ISecureElementService/default";
-
-    bool initialize();
-    bool internalTransmitApdu(
-            std::shared_ptr<aidl::android::se::omapi::ISecureElementReader> reader,
-            std::vector<uint8_t> apdu, std::vector<uint8_t>& transmitResponse);
 };
 
 class SocketTransport : public ITransport {
@@ -108,7 +85,7 @@ public:
     /**
      * Creates a socket instance and connects to the provided server IP and port.
      */
-      bool openConnection() override;
+	bool openConnection() override;
     /**
      * Sends data over socket and receives data back.
      */
