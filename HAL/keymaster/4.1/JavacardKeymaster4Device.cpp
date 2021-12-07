@@ -93,7 +93,7 @@ static inline std::unique_ptr<se_transport::TransportFactory>& getTransportFacto
         if (!isEmulator) {
             std::string fingerprint = android::base::GetProperty(PROP_BUILD_FINGERPRINT, "");
             if (!fingerprint.empty()) {
-                if (fingerprint.find(CUTTLEFISH_FINGERPRINT_SS, 0)) {
+                if (fingerprint.find(CUTTLEFISH_FINGERPRINT_SS, 0) != std::string::npos) {
                     isEmulator = true;
                 }
             }

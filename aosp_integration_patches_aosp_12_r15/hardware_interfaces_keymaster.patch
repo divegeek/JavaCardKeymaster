@@ -1,0 +1,36 @@
+diff --git a/keymaster/4.0/vts/functional/Android.bp b/keymaster/4.0/vts/functional/Android.bp
+index a7be660c4..dd91e9089 100644
+--- a/keymaster/4.0/vts/functional/Android.bp
++++ b/keymaster/4.0/vts/functional/Android.bp
+@@ -31,9 +31,11 @@ cc_test {
+         "VerificationTokenTest.cpp",
+         "keymaster_hidl_hal_test.cpp",
+     ],
++    shared_libs: [
++        "libcrypto",
++    ],
+     static_libs: [
+         "android.hardware.keymaster@4.0",
+-        "libcrypto_static",
+         "libkeymaster4support",
+         "libkeymaster4vtstest",
+     ],
+diff --git a/keymaster/4.0/vts/functional/keymaster_hidl_hal_test.cpp b/keymaster/4.0/vts/functional/keymaster_hidl_hal_test.cpp
+index 476eed8b1..823683d75 100644
+--- a/keymaster/4.0/vts/functional/keymaster_hidl_hal_test.cpp
++++ b/keymaster/4.0/vts/functional/keymaster_hidl_hal_test.cpp
+@@ -1079,9 +1079,12 @@ TEST_P(SigningOperationsTest, RsaPaddingNoneDoesNotAllowOther) {
+  * presented.
+  */
+ TEST_P(SigningOperationsTest, NoUserConfirmation) {
+-    if (SecLevel() == SecurityLevel::STRONGBOX) return;
++    size_t key_size = 1024;
++    if (SecLevel() == SecurityLevel::STRONGBOX){
++        key_size = 2048;
++    }
+     ASSERT_EQ(ErrorCode::OK, GenerateKey(AuthorizationSetBuilder()
+-                                             .RsaSigningKey(1024, 65537)
++                                             .RsaSigningKey(key_size, 65537)
+                                              .Digest(Digest::NONE)
+                                              .Padding(PaddingMode::NONE)
+                                              .Authorization(TAG_NO_AUTH_REQUIRED)
