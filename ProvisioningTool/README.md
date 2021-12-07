@@ -28,7 +28,7 @@ paths mentioned in the sample json file.
 Usage: construct_apdus options
 Valid options are:
 -h, --help                        show the help message and exit.
--v, --km_version version Version of the keymaster (4.1 for keymaster; 5.0 for keymint)
+-v, --km_version version Version of the keymaster ((4.0 or 4.1 for respective keymaster version))
 -i, --input  jsonFile	 Input json file
 -o, --output jsonFile 	 Output json file
 </pre>
@@ -38,7 +38,7 @@ Valid options are:
 Usage: provision options
 Valid options are:
 -h, --help                      show the help message and exit.
--v, --km_version version  Version of the keymaster (4.1 for keymaster; 5.0 for keymint)
+-v, --km_version version  Version of the keymaster ((4.0 or 4.1 for respective keymaster version))
 -i, --input  jsonFile 	  Input json file 
 -s, --provision_stautus   Prints the current provision status.
 -l, --lock_provision      Locks the provision state.
