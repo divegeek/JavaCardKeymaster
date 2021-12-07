@@ -20,6 +20,9 @@ import com.android.javacard.keymaster.KMArray;
 import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
+import com.android.javacard.keymaster.KMComputedHmacKey;
+import com.android.javacard.keymaster.KMConfigurations;
+import com.android.javacard.keymaster.KMHmacKey;
 import com.android.javacard.keymaster.KMJCardSimApplet;
 import com.android.javacard.keymaster.KMJCardSimulator;
 import com.android.javacard.keymaster.KMSEProvider;
@@ -85,14 +88,13 @@ public class KMFunctionalTest {
 
   private static final byte INS_BEGIN_KM_CMD = 0x00;
   private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = INS_BEGIN_KM_CMD + 1; //0x01
-  private static final byte INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD = INS_BEGIN_KM_CMD + 2; //0x02
-  private static final byte INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD = INS_BEGIN_KM_CMD + 3; //0x03
-  private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_BEGIN_KM_CMD + 4; //0x04
-  private static final byte INS_PROVISION_PRESHARED_SECRET_CMD = INS_BEGIN_KM_CMD + 5; //0x05
-  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD + 6; //0x06
-  private static final byte INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 7; //0x07
-  private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 8; //0x08
-  private static final byte INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD + 9; //0x09
+  private static final byte INS_PROVISION_ATTESTATION_CERT_DATA_CMD = INS_BEGIN_KM_CMD + 2; //0x02
+  private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_BEGIN_KM_CMD + 3; //0x04
+  private static final byte INS_PROVISION_PRESHARED_SECRET_CMD = INS_BEGIN_KM_CMD + 4; //0x05
+  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_BEGIN_KM_CMD + 5; //0x06
+  private static final byte INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 6; //0x07
+  private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 7; //0x08
+  private static final byte INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD + 8; //0x09
   // Top 32 commands are reserved for provisioning.
   private static final byte INS_END_KM_PROVISION_CMD = 0x20;
 
@@ -534,6 +536,8 @@ public class KMFunctionalTest {
   }
 
   private void provisionSigningCertificate(CardSimulator simulator) {
+    short arrPtr = KMArray.instance((short) 3);
+
     short byteBlobPtr = KMByteBlob.instance(
         (short) (kEcAttestCert.length + kEcAttestRootCert.length));
     Util.arrayCopyNonAtomic(kEcAttestCert, (short) 0,
@@ -545,8 +549,17 @@ public class KMFunctionalTest {
         (short) (KMByteBlob.cast(byteBlobPtr).getStartOff()
             + kEcAttestCert.length),
         (short) kEcAttestRootCert.length);
+    KMArray.cast(arrPtr).add((short) 0, byteBlobPtr);
+
+    short byteBlob1 = KMByteBlob.instance(X509Issuer, (short) 0,
+        (short) X509Issuer.length);
+    KMArray.cast(arrPtr).add((short) 1, byteBlob1);
+    short byteBlob2 = KMByteBlob.instance(expiryTime, (short) 0,
+        (short) expiryTime.length);
+    KMArray.cast(arrPtr).add((short) 2, byteBlob2);
+
     CommandAPDU apdu = encodeApdu(
-        (byte) INS_PROVISION_ATTESTATION_CERT_CHAIN_CMD, byteBlobPtr);
+        (byte) INS_PROVISION_ATTESTATION_CERT_DATA_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
@@ -588,23 +601,6 @@ public class KMFunctionalTest {
 
     CommandAPDU apdu = encodeApdu((byte) INS_PROVISION_ATTESTATION_KEY_CMD,
         finalArrayPtr);
-    // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-  }
-
-  private void provisionCertificateParams(CardSimulator simulator) {
-
-    short arrPtr = KMArray.instance((short) 2);
-    short byteBlob1 = KMByteBlob.instance(X509Issuer, (short) 0,
-        (short) X509Issuer.length);
-    KMArray.cast(arrPtr).add((short) 0, byteBlob1);
-    short byteBlob2 = KMByteBlob.instance(expiryTime, (short) 0,
-        (short) expiryTime.length);
-    KMArray.cast(arrPtr).add((short) 1, byteBlob2);
-
-    CommandAPDU apdu = encodeApdu(
-        (byte) INS_PROVISION_ATTESTATION_CERT_PARAMS_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(0x9000, response.getSW());
@@ -676,7 +672,6 @@ public class KMFunctionalTest {
   private void provisionCmd(CardSimulator simulator) {
     provisionSigningKey(simulator);
     provisionSigningCertificate(simulator);
-    provisionCertificateParams(simulator);
     provisionSharedSecret(simulator);
     provisionAttestIds(simulator);
     // set bootup parameters
@@ -926,7 +921,7 @@ public class KMFunctionalTest {
     init();
     byte[] hmacKey = new byte[32];
     cryptoProvider.newRandomNumber(hmacKey, (short) 0, (short) 32);
-    KMRepository.instance().initComputedHmac(hmacKey, (short) 0, (short) 32);
+    cryptoProvider.createComputedHmacKey(hmacKey, (short) 0, (short) 32);
     // generate aes key with unlocked_device_required
     short aesKey = generateAesDesKey(KMType.AES, (short) 128, null, null, true);
     short keyBlobPtr = KMArray.cast(aesKey).get((short) 1);
@@ -951,28 +946,9 @@ public class KMFunctionalTest {
     // create verification token
     short verToken = KMVerificationToken.instance();
     KMVerificationToken.cast(verToken).setTimestamp(KMInteger.uint_16((short) 1));
-    verToken = signVerificationToken(verToken);
+    verToken = signVerificationToken(verToken, KMConfigurations.TEE_MACHINE_TYPE);
     // device locked request
-    deviceLock(verToken);
-    // decrypt should fail
-    inParams = getAesDesParams(KMType.AES, KMType.ECB, KMType.PKCS7, null);
-    short beginResp = begin(KMType.DECRYPT,
-        KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMKeyParameters.instance(inParams), (short) 0, false);
-    Assert.assertEquals(beginResp, KMError.DEVICE_LOCKED);
-    short hwToken = KMHardwareAuthToken.instance();
-    KMHardwareAuthToken.cast(hwToken).setTimestamp(KMInteger.uint_16((byte) 2));
-    KMHardwareAuthToken.cast(hwToken)
-        .setHwAuthenticatorType(KMEnum.instance(KMType.USER_AUTH_TYPE, (byte) KMType.PASSWORD));
-    inParams = getAesDesParams(KMType.AES, KMType.ECB, KMType.PKCS7, null);
-    hwToken = signHwToken(hwToken);
-    ret = processMessage(cipherData,
-        KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
-        KMType.DECRYPT,
-        KMKeyParameters.instance(inParams), hwToken, null, false, false
-    );
-    ret = KMArray.cast(ret).get((short) 0);
-    Assert.assertEquals(KMInteger.cast(ret).getShort(), KMError.OK);
+    deviceLock(verToken, KMError.VERIFICATION_FAILED);
     cleanUp();
   }
 
@@ -1015,13 +991,9 @@ public class KMFunctionalTest {
 
  */
     byte[] mac = new byte[32];
-    /*
-    len =
-      cryptoProvider.hmacSign(key, scratchPad, (short) 0, len,
-        mac,
-        (short)0);
-     */
-    short key = KMRepository.instance().getComputedHmacKey();
+    short key = KMByteBlob.instance((short) 32);
+    KMHmacKey computedHmacKey = (KMHmacKey) cryptoProvider.getComputedHmacKey();
+    computedHmacKey.getKey(KMByteBlob.cast(key).getBuffer(), KMByteBlob.cast(key).getStartOff());
     cryptoProvider.hmacSign(
         KMByteBlob.cast(key).getBuffer(),
         KMByteBlob.cast(key).getStartOff(),
@@ -1034,19 +1006,28 @@ public class KMFunctionalTest {
     return hwToken;
   }
 
-  private void deviceLock(short verToken) {
+  private void deviceLock(short verToken, short expectedError) {
     short req = KMArray.instance((short) 2);
     KMArray.cast(req).add((short) 0, KMInteger.uint_8((byte) 1));
     KMArray.cast(req).add((short) 1, verToken);
     CommandAPDU apdu = encodeApdu((byte) INS_DEVICE_LOCKED_CMD, req);
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    short ret = KMArray.instance((short) 1);
-    KMArray.cast(ret).add((short) 0, KMInteger.exp());
     byte[] respBuf = response.getBytes();
-    Assert.assertEquals(respBuf[0], KMError.OK);
+    short len = (short) respBuf.length;
+    byte majorType = readMajorType(respBuf);
+    short retError;
+    if (majorType == CBOR_ARRAY_MAJOR_TYPE) {
+      short ret = KMArray.instance((short) 1);
+      ret = decoder.decode(ret, respBuf, (short) 0, len);
+      retError = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
+    } else {//Major type UINT.
+      short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+      retError = KMInteger.cast(ret).getShort();
+    }
+    Assert.assertEquals(retError, expectedError);
   }
 
-  private short signVerificationToken(short verToken) {
+  private short signVerificationToken(short verToken, byte machineType) {
     byte[] scratchPad = new byte[256];
     byte[] authVer = "Auth Verification".getBytes();
     //print(authVer,(short)0,(short)authVer.length);
@@ -1058,17 +1039,29 @@ public class KMFunctionalTest {
     short len = (short) authVer.length;
     // concatenate challenge - 8 bytes
     short ptr = KMVerificationToken.cast(verToken).getChallenge();
-    KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    if (machineType == KMConfigurations.LITTLE_ENDIAN) {
+      KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
+    } else {
+      KMInteger.cast(ptr)
+          .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    }
     len += 8;
     // concatenate timestamp -8 bytes
     ptr = KMVerificationToken.cast(verToken).getTimestamp();
-    KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    if (machineType == KMConfigurations.LITTLE_ENDIAN) {
+      KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
+    } else {
+      KMInteger.cast(ptr)
+          .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
+    }
     len += 8;
     // concatenate security level - 4 bytes
     ptr = KMVerificationToken.cast(verToken).getSecurityLevel();
-    scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
+    if (machineType == KMConfigurations.LITTLE_ENDIAN) {
+      scratchPad[len] = KMEnum.cast(ptr).getVal();
+    } else {
+      scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
+    }
     len += 4;
     // concatenate Parameters verified - blob of encoded data.
     ptr = KMVerificationToken.cast(verToken).getParametersVerified();
@@ -1090,7 +1083,9 @@ public class KMFunctionalTest {
         mac,
         (short)0);
      */
-    short key = KMRepository.instance().getComputedHmacKey();
+    short key = KMByteBlob.instance((short) 32);
+    KMHmacKey computedHmacKey = (KMHmacKey) cryptoProvider.getComputedHmacKey();
+    computedHmacKey.getKey(KMByteBlob.cast(key).getBuffer(), KMByteBlob.cast(key).getStartOff());
     cryptoProvider.hmacSign(KMByteBlob.cast(key).getBuffer(),
         KMByteBlob.cast(key).getStartOff(),
         KMByteBlob.cast(key).length(),
@@ -1197,6 +1192,142 @@ public class KMFunctionalTest {
   }
 
   @Test
+  public void testRateLimitExceptsMaxOpsExceeded() {
+    init();
+    short rsaKeyArr = generateRsaKey(null, null, KMInteger.uint_8((byte) 2));
+    Assert.assertEquals(KMInteger.cast(KMArray.cast(rsaKeyArr).get((short) 0)).getShort(),
+        KMError.OK);
+
+    // Cache keyblob
+    short keyBlobPtr = KMArray.cast(rsaKeyArr).get((short) 1);
+    byte[] keyBlob = new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
+        KMByteBlob.cast(keyBlobPtr).getStartOff(),
+        keyBlob, (short) 0, (short) keyBlob.length);
+    short inParams = getRsaParams(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN);
+    inParams = KMKeyParameters.instance(inParams);
+    // Begin
+    begin(KMType.SIGN, keyBlobPtr, inParams, (short) 0, false);
+
+    keyBlobPtr = KMByteBlob.instance((short) keyBlob.length);
+    Util.arrayCopyNonAtomic(keyBlob, (short) 0,
+        KMByteBlob.cast(keyBlobPtr).getBuffer(),
+        KMByteBlob.cast(keyBlobPtr).getStartOff(),
+        (short) keyBlob.length);
+    inParams = getRsaParams(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN);
+    inParams = KMKeyParameters.instance(inParams);
+    begin(KMType.SIGN, keyBlobPtr, inParams, (short) 0, false);
+
+    keyBlobPtr = KMByteBlob.instance((short) keyBlob.length);
+    Util.arrayCopyNonAtomic(keyBlob, (short) 0,
+        KMByteBlob.cast(keyBlobPtr).getBuffer(),
+        KMByteBlob.cast(keyBlobPtr).getStartOff(),
+        (short) keyBlob.length);
+    inParams = getRsaParams(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN);
+    inParams = KMKeyParameters.instance(inParams);
+    short beginResp = begin(KMType.SIGN, keyBlobPtr, inParams, (short) 0, false);
+    Assert.assertEquals(KMError.KEY_MAX_OPS_EXCEEDED, beginResp);
+    cleanUp();
+  }
+
+  @Test
+  public void testRateLimitExceptsTooManyOperations() {
+    init();
+    byte[] plainData = "Hello World 123!".getBytes();
+    for (int i = 0; i <= 8; i++) {
+      short rsaKeyArr = generateRsaKey(null, null, KMInteger.uint_8((byte) 1));
+      Assert.assertEquals(KMInteger.cast(KMArray.cast(rsaKeyArr).get((short) 0)).getShort(),
+          KMError.OK);
+
+      // Cache keyblob
+      short keyBlobPtr = KMArray.cast(rsaKeyArr).get((short) 1);
+      short inParams = getRsaParams(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN);
+      inParams = KMKeyParameters.instance(inParams);
+      // Begin
+      short beginResp = begin(KMType.SIGN, keyBlobPtr, inParams, (short) 0, false);
+      if (i == 8) {
+        // Only 8 keys are allowed for MAX_USES_PER_BOOT
+        Assert.assertEquals(KMError.TOO_MANY_OPERATIONS, beginResp);
+        return;
+      }
+      short opHandle = KMArray.cast(beginResp).get((short) 2);
+      finish(opHandle,
+          KMByteBlob.instance(plainData, (short) 0, (short) plainData.length), null,
+          (short) 0, (short) 0, (short) 0, KMError.OK, false);
+    }
+    cleanUp();
+  }
+
+  @Test
+  public void testRateLimitClearBufferAfterReboot() {
+    init();
+    byte[] plainData = "Hello World 123!".getBytes();
+    for (int i = 0; i <= 32; i++) {
+      if (i % 8 == 0) {
+        // Simulate reboot using set boot parameters.
+        // Clear the rate limited keys from the flash memory
+        setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
+      }
+      short rsaKeyArr = generateRsaKey(null, null, KMInteger.uint_8((byte) 1));
+      Assert.assertEquals(KMInteger.cast(KMArray.cast(rsaKeyArr).get((short) 0)).getShort(),
+          KMError.OK);
+
+      // Cache keyblob
+      short keyBlobPtr = KMArray.cast(rsaKeyArr).get((short) 1);
+      short inParams = getRsaParams(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN);
+      inParams = KMKeyParameters.instance(inParams);
+      // Begin
+      short beginResp = begin(KMType.SIGN, keyBlobPtr, inParams, (short) 0, false);
+      short opHandle = KMArray.cast(beginResp).get((short) 2);
+      // Finish
+      finish(opHandle,
+          KMByteBlob.instance(plainData, (short) 0, (short) plainData.length), null,
+          (short) 0, (short) 0, (short) 0, KMError.OK, false);
+    }
+    cleanUp();
+  }
+
+  @Test
+  public void testRateLimitWithHugeCount() {
+    init();
+    short maxUsesPerBoot = 1000;
+    byte[] plainData = "Hello World 123!".getBytes();
+    short rsaKeyArr = generateRsaKey(null, null, KMInteger.uint_16(maxUsesPerBoot));
+    Assert.assertEquals(KMInteger.cast(KMArray.cast(rsaKeyArr).get((short) 0)).getShort(),
+        KMError.OK);
+
+    // Cache keyblob
+    short keyBlobPtr = KMArray.cast(rsaKeyArr).get((short) 1);
+    byte[] keyBlob = new byte[KMByteBlob.cast(keyBlobPtr).length()];
+    Util.arrayCopyNonAtomic(KMByteBlob.cast(keyBlobPtr).getBuffer(),
+        KMByteBlob.cast(keyBlobPtr).getStartOff(),
+        keyBlob, (short) 0, (short) keyBlob.length);
+
+    for (int i = 0; i <= maxUsesPerBoot; i++) {
+      // Cache keyblob
+      keyBlobPtr = KMByteBlob.instance((short) keyBlob.length);
+      Util.arrayCopyNonAtomic(keyBlob, (short) 0,
+          KMByteBlob.cast(keyBlobPtr).getBuffer(),
+          KMByteBlob.cast(keyBlobPtr).getStartOff(),
+          (short) keyBlob.length);
+      short inParams = getRsaParams(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN);
+      inParams = KMKeyParameters.instance(inParams);
+      // Begin
+      short beginResp = begin(KMType.SIGN, keyBlobPtr, inParams, (short) 0, false);
+      if (i == maxUsesPerBoot) {
+        Assert.assertEquals(KMError.KEY_MAX_OPS_EXCEEDED, beginResp);
+        return;
+      }
+      short opHandle = KMArray.cast(beginResp).get((short) 2);
+      // Finish
+      finish(opHandle,
+          KMByteBlob.instance(plainData, (short) 0, (short) plainData.length), null,
+          (short) 0, (short) 0, (short) 0, KMError.OK, false);
+    }
+    cleanUp();
+  }
+
+  @Test
   public void testRsaGenerateKeySuccess() {
     init();
     short ret = generateRsaKey(null, null);
@@ -1223,13 +1354,16 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
-  private short generateRsaKey(byte[] clientId, byte[] appData) {
+  private short generateRsaKey(byte[] clientId, byte[] appData, short keyUsageLimitPtr) {
     byte[] activeAndCreationDateTime = {0, 0, 0x01, 0x73, 0x51, 0x7C, (byte) 0xCC, 0x00};
     short tagCount = 11;
     if (clientId != null) {
       tagCount++;
     }
     if (appData != null) {
+      tagCount++;
+    }
+    if (keyUsageLimitPtr != KMType.INVALID_VALUE) {
       tagCount++;
     }
     short arrPtr = KMArray.instance(tagCount);
@@ -1284,6 +1418,10 @@ public class KMFunctionalTest {
           KMByteTag.instance(KMType.APPLICATION_DATA,
               KMByteBlob.instance(appData, (short) 0, (short) appData.length)));
     }
+    if (keyUsageLimitPtr != KMType.INVALID_VALUE) {
+      KMArray.cast(arrPtr).add(tagIndex++, KMIntegerTag
+          .instance(KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT, keyUsageLimitPtr));
+    }
     short keyParams = KMKeyParameters.instance(arrPtr);
     arrPtr = KMArray.instance((short) 1);
     KMArray arg = KMArray.cast(arrPtr);
@@ -1301,6 +1439,10 @@ public class KMFunctionalTest {
     short len = (short) respBuf.length;
     ret = decoder.decode(ret, respBuf, (short) 0, len);
     return ret;
+  }
+
+  private short generateRsaKey(byte[] clientId, byte[] appData) {
+    return generateRsaKey(clientId, appData, KMType.INVALID_VALUE);
   }
 
   private short generateAttestationKey() {

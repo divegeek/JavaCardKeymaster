@@ -64,6 +64,7 @@ public:
      * Transmists the data over the opened basic channel and receives the data back.
      */
     bool sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) override;
+
     /**
      * Closes the connection.
      */
@@ -79,7 +80,7 @@ public:
 class SocketTransport : public ITransport {
 
 public:
-    SocketTransport() : mSocket(-1), socketStatus(false) {
+    SocketTransport() : mSocket(-1), mSocketStatus(false){
     }
     /**
      * Creates a socket instance and connects to the provided server IP and port.
@@ -89,6 +90,7 @@ public:
      * Sends data over socket and receives data back.
      */
     bool sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) override;
+
     /**
      * Closes the connection.
      */
@@ -103,8 +105,7 @@ private:
      * Socket instance.
      */
     int mSocket;
-    bool socketStatus;
-
+    bool mSocketStatus;
 };
 
 }

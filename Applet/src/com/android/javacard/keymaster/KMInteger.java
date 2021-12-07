@@ -101,14 +101,14 @@ public class KMInteger extends KMType {
   // create integer and copy integer value
   public static short uint_32(byte[] num, short offset) {
     short ptr = instance(UINT_32);
-    Util.arrayCopy(num, offset, heap, (short) (ptr + TLV_HEADER_SIZE), UINT_32);
+    Util.arrayCopyNonAtomic(num, offset, heap, (short) (ptr + TLV_HEADER_SIZE), UINT_32);
     return ptr;
   }
 
   // create integer and copy integer value
   public static short uint_64(byte[] num, short offset) {
     short ptr = instance(UINT_64);
-    Util.arrayCopy(num, offset, heap, (short) (ptr + TLV_HEADER_SIZE), UINT_64);
+    Util.arrayCopyNonAtomic(num, offset, heap, (short) (ptr + TLV_HEADER_SIZE), UINT_64);
     return ptr;
   }
 
@@ -144,6 +144,15 @@ public class KMInteger extends KMType {
 
   public short value(byte[] dest, short destOff) {
     Util.arrayCopyNonAtomic(heap, (short) (instanceTable[KM_INTEGER_OFFSET] + TLV_HEADER_SIZE), dest, destOff, length());
+    return length();
+  }
+
+  public short toLittleEndian(byte[] dest, short destOff) {
+    short index = (short) (length() - 1);
+    while (index >= 0) {
+      dest[destOff++] = heap[(short) (instanceTable[KM_INTEGER_OFFSET] + TLV_HEADER_SIZE + index)];
+      index--;
+    }
     return length();
   }
 
