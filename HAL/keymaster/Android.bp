@@ -90,7 +90,6 @@ cc_library {
 
     srcs: [
         "4.0/SocketTransport.cpp",
-        "4.0/OmapiTransport.cpp"
     ],
     export_include_dirs: [
         "include"
