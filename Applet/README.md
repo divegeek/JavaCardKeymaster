@@ -18,3 +18,4 @@ which serves to intermediate between Android Keystore and this applet.
 - set JC_HOME_SIMULATOR environment variable to the installed sdk.
 - Give ant build from Applet folder.
 - Download [gpapi-upgrade.jar](https://globalplatform.wpengine.com/specs-library/globalplatform-card-api-org-globalplatform-upgrade-v1/) and copy inside lib folder of both AndroidSEProvider and JCardSimProvider to resolve the compilation errors.
+

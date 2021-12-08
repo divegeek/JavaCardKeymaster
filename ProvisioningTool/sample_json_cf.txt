@@ -12,15 +12,15 @@
    "shared_secret": "0000000000000000000000000000000000000000000000000000000000000000",
    "set_boot_params": {
       "boot_patch_level": 0,
-      "verified_boot_key": "0000000000000000000000000000000000000000000000000000000000000000",
+      "verified_boot_key": "268CCCE87338C993759F96124A232710E4ECFF38A83E96DC74765CB2DA89A787",
       "verified_boot_key_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-      "boot_state": 2,
+      "boot_state": 0,
       "device_locked": 1
    },
-   "attest_key": "/data/vendor/batch_key.der",
+   "attest_key": "test_resources/batch_key.der",
    "attest_cert_chain": [
-   "/data/vendor/batch_cert.der",
-   "/data/vendor/intermediate_cert.der",
-   "/data/vendor/ca_cert.der"
+   "test_resources/batch_cert.der",
+   "test_resources/intermediate_cert.der",
+   "test_resources/ca_cert.der"
    ]
 }
