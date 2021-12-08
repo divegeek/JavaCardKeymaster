@@ -1,12 +1,18 @@
 # Provisioning tool
-This directory contains provisioning tool which helps in provisioning 
-the secure element by using the APIs exposed by Provision library.
-This tool takes the input parameters from json file.
+This directory contains two tools. One which constructs the apdus and dumps them to a json file, Other which gets the apuds from the json file and provision them into a secure element simulator. Both the tools can be compiled and executed from a Linux machine.
 
-#### Build
-This tool can be built along with aosp build. It has dependency on 
-[libjc_common](../HAL/keymaster/Android.bp) and
-[libjc_provision](Android.bp).
+#### Build instruction
+The default target generates both the executables. One construct_apdus and the other provision.
+$ make
+Individual targets can also be selected as shown below
+$ make construct_apdus
+$ make provision
+Make clean will remove all the object files and binaries
+$ make clean
+
+#### Environment setup
+Before executing the binaries make sure LD_LIBRARY_PATH is set
+export LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH
 
 #### Sample resources for quick testing
 Two sample json files are located in this directory with names
@@ -17,18 +23,23 @@ keys can be found in [test_resources](test_resources) directory. Copy the
 certificates and the key into the emulator/device filesystem in their respective
 paths mentioned in the sample json file.
 
-#### Usage
+#### Usage for construct_apdus
 <pre>
-Usage: provision_tool options
+Usage: construct_apdus options
 Valid options are:
 -h, --help                        show the help message and exit.
--a, --all jsonFile                Executes all the provision commands.
--k, --attest_key jsonFile         Provision attestation key.
--c, --cert_chain jsonFile         Provision attestation certificate chain.
--p, --cert_params jsonFile        Provision attestation certificate parameters.
--i, --attest_ids jsonFile         Provision attestation IDs.
--r, --shared_secret jsonFile      Provision pre-shared secret.
--b, --set_boot_params jsonFile    Provision boot parameters.
--s, --provision_stautus           Prints the current provision status.
--l, --lock_provision              Locks the provision commands.
+-v, --km_version version Version of the keymaster ((4.0 or 4.1 for respective keymaster version))
+-i, --input  jsonFile	 Input json file
+-o, --output jsonFile 	 Output json file
+</pre>
+
+#### Usage for provision
+<pre>
+Usage: provision options
+Valid options are:
+-h, --help                      show the help message and exit.
+-v, --km_version version  Version of the keymaster ((4.0 or 4.1 for respective keymaster version))
+-i, --input  jsonFile 	  Input json file 
+-s, --provision_stautus   Prints the current provision status.
+-l, --lock_provision      Locks the provision state.
 </pre>

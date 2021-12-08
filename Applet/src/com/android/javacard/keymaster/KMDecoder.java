@@ -435,14 +435,38 @@ public class KMDecoder {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
-
-  public short readCertificateChainLengthAndHeaderLen(byte[] buf, short bufOffset,
-      short bufLen) {
+  
+  // Reads the offset and length values of the ByteBlobs from a CBOR array buffer.
+  public void decodeCertificateData(short expectedArrLen, byte[] buf, short bufOffset, short bufLen,
+      byte[] out, short outOff) {
     bufferRef[0] = buf;
     scratchBuf[START_OFFSET] = bufOffset;
     scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
-    short totalLen = readMajorTypeWithPayloadLength(BYTES_TYPE);
-    totalLen += (short) (scratchBuf[START_OFFSET] - bufOffset);
-    return totalLen;
+    short byteBlobLength = 0;
+    // Read Array length
+    short payloadLength = readMajorTypeWithPayloadLength(ARRAY_TYPE);
+    if (expectedArrLen != payloadLength) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short index = 0;
+    while (index < payloadLength) {
+      incrementStartOff(byteBlobLength);
+      byteBlobLength = readMajorTypeWithPayloadLength(BYTES_TYPE);
+      Util.setShort(out, outOff, scratchBuf[START_OFFSET]); // offset
+      outOff += 2;
+      Util.setShort(out, outOff, byteBlobLength); // length
+      outOff += 2;
+      index++;
+    }    
   }
+  
+  public short getCborBytesStartOffset(byte[] buf, short bufOffset, short bufLen) {
+    bufferRef[0] = buf;
+    scratchBuf[START_OFFSET] = bufOffset;
+    scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
+
+    readMajorTypeWithPayloadLength(BYTES_TYPE);
+    return scratchBuf[START_OFFSET];
+  }
+
 }

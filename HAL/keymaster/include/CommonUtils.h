@@ -59,9 +59,7 @@ inline keymaster_tag_type_t typeFromTag(const keymaster_tag_t tag) {
 }
 
 inline hidl_vec<uint8_t> kmBuffer2hidlVec(const ::keymaster::Buffer& buf) {
-    hidl_vec<uint8_t> result;
-    result.setToExternal(const_cast<unsigned char*>(buf.peek_read()), buf.available_read());
-    return result;
+    return hidl_vec<uint8_t>(buf.begin(), buf.end());
 }
 
 inline void blob2Vec(const uint8_t *from, size_t size, std::vector<uint8_t>& to) {
@@ -71,9 +69,7 @@ inline void blob2Vec(const uint8_t *from, size_t size, std::vector<uint8_t>& to)
 }
 
 inline hidl_vec<uint8_t> kmBlob2hidlVec(const keymaster_blob_t& blob) {
-    hidl_vec<uint8_t> result;
-    result.setToExternal(const_cast<unsigned char*>(blob.data), blob.data_length);
-    return result;
+   return hidl_vec<uint8_t>(blob.data, blob.data+blob.data_length);
 }
 
 keymaster_key_param_set_t hidlKeyParams2Km(const hidl_vec<KeyParameter>& keyParams);

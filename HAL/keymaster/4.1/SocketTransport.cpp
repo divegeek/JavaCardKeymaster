@@ -22,7 +22,7 @@
 #include <errno.h>
 
 #define PORT    8080
-#define IPADDR  "10.9.40.24"
+#define IPADDR  "192.168.0.29"
 //#define IPADDR  "192.168.0.5"
 #define MAX_RECV_BUFFER_SIZE 2500
 
@@ -30,6 +30,11 @@ namespace se_transport {
 
 bool SocketTransport::openConnection() {
 	struct sockaddr_in serv_addr;
+
+        if(mSocketStatus){
+          closeConnection();
+        }
+
 	if ((mSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	{
         LOG(ERROR) << "Socket creation failed" << " Error: "<<strerror(errno);
@@ -42,24 +47,26 @@ bool SocketTransport::openConnection() {
 	// Convert IPv4 and IPv6 addresses from text to binary form
 	if(inet_pton(AF_INET, IPADDR, &serv_addr.sin_addr)<=0)
 	{
-        LOG(ERROR) << "Invalid address/ Address not supported.";
-        return false;
+          LOG(ERROR) << "Invalid address/ Address not supported.";
+          closeConnection();
+          return false;
 	}
 
 	if (connect(mSocket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
 	{
-        close(mSocket);
-        LOG(ERROR) << "Connection failed. Error: " << strerror(errno);
-        return false;
+          close(mSocket);
+          LOG(ERROR) << "Connection failed. Error: " << strerror(errno);
+          return false;
 	}
-    socketStatus = true;
+    mSocketStatus = true;
     return true;
 }
 
 bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::vector<uint8_t>& output) {
     uint8_t buffer[MAX_RECV_BUFFER_SIZE];
     int count = 1;
-    while(!socketStatus && count++ < 5 ) {
+    bool sendStatus = false;
+    while(!mSocketStatus && count++ < 5 ) {
         sleep(1);
         LOG(ERROR) << "Trying to open socket connection... count: " << count;
         openConnection();
@@ -67,22 +74,24 @@ bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::v
 
     if(count >= 5) {
         LOG(ERROR) << "Failed to open socket connection";
+        closeConnection();
         return false;
     }
 
-	if (0 > send(mSocket, inData, inLen , 0 )) {
+    if (send(mSocket, inData, inLen , 0)< 0) {
         static int connectionResetCnt = 0; /* To avoid loop */
         if (ECONNRESET == errno && connectionResetCnt == 0) {
             //Connection reset. Try open socket and then sendData.
-            socketStatus = false;
+            closeConnection();
             connectionResetCnt++;
-            return sendData(inData, inLen, output);
+            sendStatus =  sendData(inData, inLen, output);
+            return sendStatus; 
         }
         LOG(ERROR) << "Failed to send data over socket err: " << errno;
         connectionResetCnt = 0;
         return false;
     }
-	ssize_t valRead = read( mSocket , buffer, MAX_RECV_BUFFER_SIZE);
+    ssize_t valRead = read( mSocket , buffer, MAX_RECV_BUFFER_SIZE);
     if(0 > valRead) {
         LOG(ERROR) << "Failed to read data from socket.";
     }
@@ -93,13 +102,14 @@ bool SocketTransport::sendData(const uint8_t* inData, const size_t inLen, std::v
 }
 
 bool SocketTransport::closeConnection() {
-    close(mSocket);
-    socketStatus = false;
+    if(mSocketStatus)
+      close(mSocket);
+    mSocketStatus = false;
     return true;
 }
 
 bool SocketTransport::isConnected() {
-    return socketStatus;
+    return mSocketStatus;
 }
 
 }
