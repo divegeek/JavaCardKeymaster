@@ -1241,7 +1241,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     preSharedKey = KMHmacKey.onRestore(element);
     if (oldVersion == 0) {
       // Previous versions does not contain version information.
-      handleDataUpgradeToVersion1_1();
+      handleDataUpgradeToVersion2_0();
     } else {
       computedHmacKey = KMHmacKey.onRestore(element);
     }
@@ -1362,7 +1362,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return computedHmacKey;
   }
   
-  private void handleDataUpgradeToVersion1_1() {
+  private void handleDataUpgradeToVersion2_0() {
     short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
         KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
     byte[] oldBuffer = provisionData;
