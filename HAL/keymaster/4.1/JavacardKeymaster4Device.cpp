@@ -177,7 +177,7 @@ static void clearStrongboxOprHandleEntries(const std::unique_ptr<OperationContex
         << "Secure Element reset or applet upgrade detected. Removing existing operation handles";
     auto it = operationTable.begin();
     while (it != operationTable.end()) {
-        if (it->second == OperationType::PRIVATE_OPERATION) {  // Strongbox operation
+        if (it->second == OperationType::PRIVATE_OPERATION) { // Strongbox operation
             LOG(INFO) << "operation handle: " << it->first << " is removed";
             oprCtx->clearOperationData(it->first);
             it = operationTable.erase(it);
@@ -968,8 +968,7 @@ Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<
     errorCode = handleBeginOperation(purpose, keyBlob, inParams, authToken, outParams,
                                      operationHandle, operType);
     if (errorCode == ErrorCode::OK && isOperationHandleExists(operationHandle)) {
-        LOG(DEBUG) << "Operation handle " << operationHandle
-                   << "already exists"
+        LOG(DEBUG) << "Operation handle " << operationHandle << "already exists"
                       "in the opertion table. so aborting this opertaion.";
         // abort the operation.
         errorCode = abortOperation(operationHandle, operType);
