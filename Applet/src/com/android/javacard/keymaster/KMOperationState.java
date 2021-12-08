@@ -16,8 +16,6 @@
 
 package com.android.javacard.keymaster;
 
-import javacard.framework.ISO7816;
-import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
@@ -29,9 +27,8 @@ import javacard.framework.Util;
  */
 public class KMOperationState {
 
-  public static final byte MAX_DATA = 63;
+  public static final byte MAX_DATA = 20;
   private static final byte OPERATION = 0;
-  private static final byte HMAC_SIGNER_OPERATION = 1;
   private static final byte TRUE = 1;
   private static final byte FALSE = 0;
   // byte type
@@ -41,23 +38,18 @@ public class KMOperationState {
   private static final byte BLOCKMODE = 3;
   private static final byte DIGEST = 4;
   private static final byte FLAGS = 5;
-  private static final byte AUTH_TYPE = 6;
   // short type
-  private static final byte KEY_SIZE = 7;
-  private static final byte MAC_LENGTH = 9;
+  private static final byte KEY_SIZE = 6;
+  private static final byte MAC_LENGTH = 8;
   // Handle - currently this is short
-  private static final byte OP_HANDLE = 11;
+  private static final byte OP_HANDLE = 10;
   // Auth time 64 bits
-  private static final byte AUTH_TIME = 13;
-  // Secure user ids 5 * 8 = 40 bytes ( Considering Maximum 5 SECURE USER IDs)
-  // First two bytes are reserved to store number of secure ids. SO total 42 bytes.
-  private static final byte USER_SECURE_ID = 21;
+  private static final byte AUTH_TIME = 12;
   // Flag masks
   private static final byte AUTH_PER_OP_REQD = 1;
   private static final byte SECURE_USER_ID_REQD = 2;
   private static final byte AUTH_TIMEOUT_VALIDATED = 4;
   private static final byte AES_GCM_UPDATE_ALLOWED = 8;
-  private static final byte MAX_SECURE_USER_IDS = 5;
 
   // Object References
   private byte[] data;
@@ -67,7 +59,7 @@ public class KMOperationState {
 
   private KMOperationState() {
     data = JCSystem.makeTransientByteArray(MAX_DATA, JCSystem.CLEAR_ON_RESET);
-    objRefs = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
+    objRefs = JCSystem.makeTransientObjectArray((short) 1, JCSystem.CLEAR_ON_RESET);
     isDataUpdated = JCSystem.makeTransientByteArray((short) 1, JCSystem.CLEAR_ON_RESET);
   }
 
@@ -85,12 +77,11 @@ public class KMOperationState {
     return opState;
   }
 
-  public static KMOperationState read(byte[] oprHandle, short off, byte[] data, short dataOff, Object opr, Object hmacSignerOpr) {
+  public static KMOperationState read(byte[] oprHandle, short off, byte[] data, short dataOff, Object opr) {
     KMOperationState opState = proto();
     opState.reset();
-    Util.arrayCopyNonAtomic(data, dataOff, prototype.data, (short) 0, (short) prototype.data.length);
+    Util.arrayCopy(data, dataOff, prototype.data, (short) 0, (short) prototype.data.length);
     prototype.objRefs[OPERATION] = opr;
-    prototype.objRefs[HMAC_SIGNER_OPERATION] = hmacSignerOpr;
     Util.setShort(prototype.data, OP_HANDLE, KMInteger.uint_64(oprHandle, off));
     return opState;
   }
@@ -101,8 +92,7 @@ public class KMOperationState {
     }
     KMRepository.instance().persistOperation(data,
         Util.getShort(data, OP_HANDLE),
-        (KMOperation) objRefs[OPERATION],
-        (KMOperation) objRefs[HMAC_SIGNER_OPERATION]);
+        (KMOperation) objRefs[OPERATION]);
     isDataUpdated[0] = FALSE;
   }
 
@@ -117,7 +107,6 @@ public class KMOperationState {
   public void reset() {
     isDataUpdated[0] = FALSE;
     objRefs[OPERATION] = null;
-    objRefs[HMAC_SIGNER_OPERATION] = null;
     Util.arrayFillNonAtomic(
         data, (short) 0, (short) data.length, (byte) 0);
   }
@@ -127,12 +116,8 @@ public class KMOperationState {
   }
 
   public void release() {
-    if (objRefs[OPERATION] != null) {
+    if (objRefs[OPERATION] != null)
       ((KMOperation) objRefs[OPERATION]).abort();
-    }
-    if (objRefs[HMAC_SIGNER_OPERATION] != null) {
-      ((KMOperation) objRefs[HMAC_SIGNER_OPERATION]).abort();
-    }
     reset();
   }
 
@@ -176,59 +161,7 @@ public class KMOperationState {
   }
 
   public void setAuthTime(byte[] timeBuf, short start) {
-    Util.arrayCopyNonAtomic(timeBuf, start, data, (short) AUTH_TIME, (short) 8);
-    dataUpdated();
-  }
-
-  public void setAuthType(byte authType) {
-    data[AUTH_TYPE] = authType;
-    dataUpdated();
-  }
-
-  public short getAuthType() {
-    return data[AUTH_TYPE];
-  }
-
-  public short getUserSecureId() {
-    short offset = USER_SECURE_ID;
-    short length = Util.getShort(data, USER_SECURE_ID);
-    if (length == 0) {
-      return KMType.INVALID_VALUE;
-    }
-    short arrObj = KMArray.instance(length);
-    short index = 0;
-    short obj;
-    offset = (short) (2 + USER_SECURE_ID);
-    while (index < length) {
-      obj = KMInteger.instance(data, (short) (offset + index * 8), (short) 8);
-      KMArray.cast(arrObj).add(index, obj);
-      index++;
-    }
-    return KMIntegerArrayTag.instance(KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID, arrObj);
-  }
-
-  public void setUserSecureId(short integerArrayPtr) {
-    short length = KMIntegerArrayTag.cast(integerArrayPtr).length();
-    if (length > MAX_SECURE_USER_IDS) {
-      KMException.throwIt(KMError.INVALID_KEY_BLOB);
-    }
-    Util.arrayFillNonAtomic(data, USER_SECURE_ID, (short) (MAX_SECURE_USER_IDS * 8) , (byte) 0);
-    short index = 0;
-    short obj;
-    short offset = USER_SECURE_ID;
-    Util.setShort(data, offset, length);
-    offset += 2;
-    while (index < length) {
-      obj = KMIntegerArrayTag.cast(integerArrayPtr).get(index);
-      Util.arrayCopyNonAtomic(
-          KMInteger.cast(obj).getBuffer(),
-          KMInteger.cast(obj).getStartOff(),
-          data,
-          (short) (8 - KMInteger.cast(obj).length() + offset + 8 * index),
-          KMInteger.cast(obj).length()
-      );
-      index++;
-    }
+    Util.arrayCopy(timeBuf, start, data, (short) AUTH_TIME, (short) 8);
     dataUpdated();
   }
 
@@ -317,18 +250,4 @@ public class KMOperationState {
   public short getMacLength() {
     return Util.getShort(data, MAC_LENGTH);
   }
-
-  public void setTrustedConfirmationSigner(KMOperation hmacSignerOp) {
-    objRefs[HMAC_SIGNER_OPERATION] = hmacSignerOp;
-    dataUpdated();
-  }
-
-  public KMOperation getTrustedConfirmationSigner() {
-    return (KMOperation)objRefs[HMAC_SIGNER_OPERATION];
-  }
-
-  public boolean isTrustedConfirmationRequired() {
-    return objRefs[HMAC_SIGNER_OPERATION] != null;
-  }
-  
 }

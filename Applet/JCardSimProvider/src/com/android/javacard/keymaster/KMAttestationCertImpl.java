@@ -160,16 +160,12 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   @Override
   public KMAttestationCert verifiedBootHash(short obj) {
-    if (obj == KMType.INVALID_VALUE)
-      KMException.throwIt(KMError.INVALID_DATA);
     verifiedHash = obj;
     return this;
   }
 
   @Override
   public KMAttestationCert verifiedBootKey(short obj) {
-    if (obj == KMType.INVALID_VALUE)
-      KMException.throwIt(KMError.INVALID_DATA);
     verifiedBootKey = obj;
     return this;
   }
@@ -253,8 +249,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   @Override
   public KMAttestationCert issuer(short obj) {
-    if (obj == KMType.INVALID_VALUE)
-      KMException.throwIt(KMError.INVALID_DATA);
     issuer = obj;
     return this;
   }
@@ -325,7 +319,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   // Time SEQUENCE{UTCTime, UTC or Generalized Time)
   private static void pushValidity() {
     short last = stackPtr;
-    if (notAfter != KMType.INVALID_VALUE) {
+    if (notAfter != 0) {
       pushBytes(
           KMByteBlob.cast(notAfter).getBuffer(),
           KMByteBlob.cast(notAfter).getStartOff(),
@@ -670,6 +664,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static void pushIntegerTag(short tagId, byte[] buf, short start, short len) {
     short last = stackPtr;
     pushInteger(buf, start, len);
+    //    pushIntegerHeader((short) (last - stackPtr));
     pushTagIdHeader(tagId, (short) (last - stackPtr));
   }
 

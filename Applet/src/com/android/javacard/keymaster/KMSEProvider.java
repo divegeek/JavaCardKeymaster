@@ -25,11 +25,6 @@ import org.globalplatform.upgrade.Element;
  */
 public interface KMSEProvider extends KMUpgradable {
 
-  // Provision related constants.
-  public static final byte CERTIFICATE_CHAIN = 0;
-  public static final byte CERTIFICATE_EXPIRY = 1;
-  public static final byte CERTIFICATE_ISSUER = 2;
-
   /**
    * Create a symmetric key instance. If the algorithm and/or keysize are not supported then it
    * should throw a CryptoException.
@@ -228,7 +223,7 @@ public interface KMSEProvider extends KMUpgradable {
    * This is a oneshot operation that performs key derivation function using cmac kdf (CKDF) as
    * defined in android keymaster hal definition.
    *
-   * @param hmacKey instance of pre-shared key.
+   * @param instance of pre-shared key.
    * @param label is the label to be used for ckdf.
    * @param labelStart is the start of label.
    * @param labelLen is the length of the label.
@@ -277,7 +272,7 @@ public interface KMSEProvider extends KMUpgradable {
    * This is a oneshot operation that signs the data using hmac algorithm. This is used to derive
    * the key, which is used to encrypt the keyblob.
    *
-   * @param masterKey instance of masterkey.
+   * @param instance of masterkey.
    * @param data is the buffer containing data to be signed.
    * @param dataStart is the start of the data.
    * @param dataLength is the length of the data.
@@ -286,7 +281,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @return length of the signature buffer in bytes.
    */
   short hmacKDF(
-      KMMasterKey masterKey,
+      KMMasterKey masterkey,
       byte[] data,
       short dataStart,
       short dataLength,
@@ -296,7 +291,9 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that verifies the signature using hmac algorithm.
    *
-   * @param hmacKey instance of KMComputedHmacKey.
+   * @param keyBuf is the buffer with hmac key.
+   * @param keyStart is the start of the buffer.
+   * @param keyLength is the length of the buffer which will be in bytes from 8 to 64.
    * @param data is the buffer containing data.
    * @param dataStart is the start of the data.
    * @param dataLength is the length of the data.
@@ -306,7 +303,9 @@ public interface KMSEProvider extends KMUpgradable {
    * @return true if the signature matches.
    */
   boolean hmacVerify(
-      KMComputedHmacKey hmacKey,
+      byte[] keyBuf,
+      short keyStart,
+      short keyLength,
       byte[] data,
       short dataStart,
       short dataLength,
@@ -348,7 +347,7 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that signs the data using EC private key.
    *
-   * @param ecPrivKey instance of KMAttestationKey.
+   * @param instance of KMAttestationKey.
    * @param inputDataBuf is the buffer of the input data.
    * @param inputDataStart is the start of the input data buffer.
    * @param inputDataLength is the length of the inpur data buffer in bytes.
@@ -402,14 +401,6 @@ public interface KMSEProvider extends KMUpgradable {
       short macLength);
 
   /**
-   * Initializes the trusted confirmation operation.
-   *
-   * @param computedHmacKey Instance of the computed Hmac key.
-   * @return instance of KMOperation.
-   */
-  KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey);
-
-  /**
    * This creates a persistent operation for signing, verify, encryption and decryption using RSA
    * and EC algorithms when keymaster hal's beginOperation function is executed. For RSA the public
    * exponent is always 0x0100101. For EC the curve is always p256. The KMOperation instance can be
@@ -454,43 +445,35 @@ public interface KMSEProvider extends KMUpgradable {
   KMAttestationCert getAttestationCert(boolean rsaCert);
 
   /**
-   * Returns the implementation of the PKCS8 decoder.
+   * This operation persists the certificate chain in the persistent memory in multiple requests.
    *
-   * @return Instance of PKCS8 decoder.
+   * @param buf buffer containing certificate chain.
+   * @param offset is the start of the buffer.
+   * @param len is the length of the buffer.
+   * @param totalLen is the total length of cert chain.
    */
-  KMPKCS8Decoder getPKCS8DecoderInstance();
+  void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen);
 
   /**
-   * This operation persists the provision data in the persistent memory.
-   *
-   * @param buf buffer which contains all the provision data.
-   * @param certChainOff is the start of the cert chain.
-   * @param certChainLen is the length of the cert chain.
-   * @param certIssuerOff is the start of the cert issuer.
-   * @param certIssuerLen is the length of the cert issuer.
-   * @param certExpiryOff is the start of the cert expiry.
-   * @param certExpiryLen is the length of the cert expiry.
+   * This operation clears the certificate chain from persistent memory.
    */
-  void persistProvisionData(byte[] buf, short certChainOff, short certChainLen,
-      short certIssuerOff, short certIssuerLen, short certExpiryOff, short certExpiryLen);
+  void clearCertificateChain();
 
   /**
-   * The operation reads the provisioned data from persistent memory.
+   * The operation reads the certificate chain from persistent memory.
    *
-   * @param dataType type of the provision data to read.
    * @param buf is the start of data buffer.
    * @param offset is the start of the data.
    * @return the length of the data buffer in bytes.
    */
-  short readProvisionedData(byte dataType, byte[] buf, short offset);
+  short readCertificateChain(byte[] buf, short offset);
 
   /**
-   * This function returns the provisioned data length.
+   * This function returns the cert chain length.
    *
-   * @param dataType type of the provision data to read.
    * @return length of the certificate chain.
    */
-  short getProvisionedDataLength(byte dataType);
+  short getCertificateChainLength();
 
   /**
    * This function tells if boot signal event is supported or not.
@@ -556,16 +539,6 @@ public interface KMSEProvider extends KMUpgradable {
   KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length);
 
   /**
-   * This function creates an HMACKey and initializes the key with the provided input key data.
-   *
-   * @param keyData buffer containing the key data.
-   * @param offset start of the buffer.
-   * @param length length of the buffer.
-   * @return An instance of the KMComputedHmacKey.
-   */
-  KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length);
-
-  /**
    * Returns the master key.
    *
    * @return Instance of the KMMasterKey
@@ -587,28 +560,9 @@ public interface KMSEProvider extends KMUpgradable {
   KMPreSharedKey getPresharedKey();
 
   /**
-   * Returns the computed Hmac key.
-   *
-   * @return Instance of the computed hmac key.
-   */
-  KMComputedHmacKey getComputedHmacKey();
-
-  /**
-   * Releases all the instance back to pool. Generally this is used when card is reset.
+   * Releases all the instance back to pool.
+   * Generally this is used when card is reset.
    */
   void releaseAllOperations();
-
-  /**
-   * This is a one-shot operation the does digest of the input mesage.
-   *
-   * @param inBuff input buffer to be digested.
-   * @param inOffset start offset of the input buffer.
-   * @param inLength length of the input buffer.
-   * @param outBuff is the output buffer that contains the digested data.
-   * @param outOffset start offset of the digested output buffer.
-   * @return length of the digested data.
-   */
-  short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
-      short outOffset);
 
 }

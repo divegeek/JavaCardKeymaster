@@ -186,8 +186,6 @@ public abstract class KMType {
   public static final short USERID = 0x01F5;
   // Auth Timeout
   public static final short AUTH_TIMEOUT = 0x01F9;
-  // Auth Timeout in Milliseconds
-  public static final short AUTH_TIMEOUT_MILLIS = 0x7FFF;
   // OS Version
   public static final short OS_VERSION = 0x02C1;
   // OS Patch Level

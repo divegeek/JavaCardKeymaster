@@ -30,7 +30,7 @@ public class KMEnum extends KMType {
   private static KMEnum prototype;
 
   // The allowed enum types.
-  private static final short[] types = {
+  private static short[] types = {
     HARDWARE_TYPE,
     KEY_FORMAT,
     KEY_DERIVATION_FUNCTION,

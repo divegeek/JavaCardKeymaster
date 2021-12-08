@@ -70,31 +70,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       0x03,
       0x02
   };
-
-  // Below are the allowed softwareEnforced Authorization tags inside the attestation certificate's extension.
-  private static final short[] swTagIds = {
-      KMType.ATTESTATION_APPLICATION_ID,
-      KMType.CREATION_DATETIME,
-      KMType.USAGE_EXPIRE_DATETIME,
-      KMType.ORIGINATION_EXPIRE_DATETIME,
-      KMType.ACTIVE_DATETIME,
-      KMType.UNLOCKED_DEVICE_REQUIRED
-  };
-
-  // Below are the allowed hardwareEnforced Authorization tags inside the attestation certificate's extension.
-  private static final short[] hwTagIds = {
-      KMType.BOOT_PATCH_LEVEL, KMType.VENDOR_PATCH_LEVEL,
-      KMType.ATTESTATION_ID_MODEL, KMType.ATTESTATION_ID_MANUFACTURER,
-      KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI,
-      KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
-      KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
-      KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
-      KMType.ORIGIN, KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE,
-      KMType.NO_AUTH_REQUIRED, KMType.USER_SECURE_ID,
-      KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE, KMType.MIN_MAC_LENGTH,
-      KMType.CALLER_NONCE, KMType.PADDING, KMType.DIGEST, KMType.BLOCK_MODE,
-      KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE};
-
   // Validity is not fixed field
   // Subject is a fixed field with only CN= Android Keystore Key - same for all the keys
   private static final byte[] X509Subject = {
@@ -191,16 +166,12 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   @Override
   public KMAttestationCert verifiedBootHash(short obj) {
-    if (obj == KMType.INVALID_VALUE)
-      KMException.throwIt(KMError.INVALID_DATA);
     verifiedHash = obj;
     return this;
   }
 
   @Override
   public KMAttestationCert verifiedBootKey(short obj) {
-    if (obj == KMType.INVALID_VALUE)
-      KMException.throwIt(KMError.INVALID_DATA);
     verifiedBootKey = obj;
     return this;
   }
@@ -284,8 +255,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   @Override
   public KMAttestationCert issuer(short obj) {
-    if (obj == KMType.INVALID_VALUE)
-      KMException.throwIt(KMError.INVALID_DATA);
     issuer = obj;
     return this;
   }
@@ -356,7 +325,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   // Time SEQUENCE{UTCTime, UTC or Generalized Time)
   private static void pushValidity() {
     short last = stackPtr;
-    if (notAfter != KMType.INVALID_VALUE) {
+    if (notAfter != 0) {
       pushBytes(
           KMByteBlob.cast(notAfter).getBuffer(),
           KMByteBlob.cast(notAfter).getStartOff(),
@@ -476,27 +445,44 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   private static void pushSWParams() {
     short last = stackPtr;
+    // Below are the allowed softwareEnforced Authorization tags inside the attestation certificate's extension.
+    short[] tagIds = {
+        KMType.ATTESTATION_APPLICATION_ID, KMType.CREATION_DATETIME,
+        KMType.USAGE_EXPIRE_DATETIME, KMType.ORIGINATION_EXPIRE_DATETIME,
+        KMType.ACTIVE_DATETIME, KMType.UNLOCKED_DEVICE_REQUIRED};
     byte index = 0;
-    short length = (short) swTagIds.length;
     do {
-      pushParams(swParams, swParamsIndex, swTagIds[index]);
-    } while (++index < length);
+      pushParams(swParams, swParamsIndex, tagIds[index]);
+    } while (++index < tagIds.length);
     pushSequenceHeader((short) (last - stackPtr));
   }
 
   private static void pushHWParams() {
     short last = stackPtr;
+    // Below are the allowed hardwareEnforced Authorization tags inside the attestation certificate's extension.
+    short[] tagIds = {
+        KMType.BOOT_PATCH_LEVEL, KMType.VENDOR_PATCH_LEVEL,
+        KMType.ATTESTATION_ID_MODEL, KMType.ATTESTATION_ID_MANUFACTURER,
+        KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI,
+        KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
+        KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
+        KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
+        KMType.ORIGIN, KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE,
+        KMType.NO_AUTH_REQUIRED, KMType.USER_SECURE_ID,
+        KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE, KMType.MIN_MAC_LENGTH,
+        KMType.CALLER_NONCE, KMType.PADDING, KMType.DIGEST, KMType.BLOCK_MODE,
+        KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE};
+
     byte index = 0;
-    short length = (short) hwTagIds.length;
     do {
-      if (hwTagIds[index] == KMType.ROOT_OF_TRUST) {
+      if (tagIds[index] == KMType.ROOT_OF_TRUST) {
         pushRoT();
         continue;
       }
-      if (pushParams(hwParams, hwParamsIndex, hwTagIds[index])) {
+      if (pushParams(hwParams, hwParamsIndex, tagIds[index])) {
         continue;
       }
-    } while (++index < length);
+    } while (++index < tagIds.length);
     pushSequenceHeader((short) (last - stackPtr));
   }
 

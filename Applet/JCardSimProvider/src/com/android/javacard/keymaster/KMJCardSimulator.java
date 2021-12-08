@@ -40,7 +40,6 @@ import javacard.security.HMACKey;
 import javacard.security.Key;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
-import javacard.security.MessageDigest;
 import javacard.security.RSAPrivateKey;
 import javacard.security.RSAPublicKey;
 import javacard.security.RandomData;
@@ -73,12 +72,9 @@ public class KMJCardSimulator implements KMSEProvider {
   public static final short MAX_RND_NUM_SIZE = 64;
   public static final short ENTROPY_POOL_SIZE = 16; // simulator does not support 256 bit aes keys
   public static final byte[] aesICV = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  private static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
   private static final short RSA_KEY_SIZE = 256;
-  private static final short CERT_CHAIN_OFFSET = 0;
-  private static final short CERT_ISSUER_OFFSET = KMConfigurations.CERT_CHAIN_MAX_SIZE;
-  private static final short CERT_EXPIRY_OFFSET =
-      (short) (CERT_ISSUER_OFFSET + KMConfigurations.CERT_ISSUER_MAX_SIZE);
-  private static final short COMPUTED_HMAC_KEY_SIZE = 32;
+
 
   public static boolean jcardSim = false;
   private static Signature kdf;
@@ -89,11 +85,10 @@ public class KMJCardSimulator implements KMSEProvider {
   private static Cipher aesRngCipher;
   private static byte[] entropyPool;
   private static byte[] rndNum;
-  private byte[] provisionData;
+  private byte[] certificateChain;
   private KMAESKey masterKey;
   private KMECPrivateKey attestationKey;
   private KMHmacKey preSharedKey;
-  private KMHmacKey computedHmacKey;
 
   private static KMJCardSimulator jCardSimulator = null;
 
@@ -118,11 +113,8 @@ public class KMJCardSimulator implements KMSEProvider {
     }
     aesRngKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
     // various ciphers
-    //Allocate buffer for certificate chain and cert parameters.
-    // First 2 bytes is reserved for length for all the 3 buffers.
-    short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
-        KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
-    provisionData = new byte[totalLen];
+    //Allocate buffer for certificate chain.
+    certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
     jCardSimulator = this;
   }
 
@@ -547,6 +539,12 @@ public class KMJCardSimulator implements KMSEProvider {
     return hmacSignature.sign(data, dataStart, dataLength, mac, macStart);
   }
 
+  public boolean hmacVerify(HMACKey key, byte[] data, short dataStart, short dataLength,
+      byte[] mac, short macStart, short macLength) {
+    hmacSignature.init(key, Signature.MODE_VERIFY);
+    return hmacSignature.verify(data, dataStart, dataLength, mac, macStart, macLength);
+  }
+
   @Override
   public short hmacKDF(KMMasterKey masterkey, byte[] data, short dataStart,
       short dataLength, byte[] signature, short signatureStart) {
@@ -559,19 +557,17 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public boolean hmacVerify(KMComputedHmacKey key, byte[] data, short dataStart,
-      short dataLength, byte[] mac, short macStart, short macLength) {
-    KMHmacKey hmacKey = (KMHmacKey) key;
-    hmacSignature.init(hmacKey.getKey(), Signature.MODE_VERIFY);
-    return hmacSignature.verify(data, dataStart, dataLength, mac, macStart,
-        macLength);
-  }
-
-  @Override
   public short hmacSign(byte[] keyBuf, short keyStart, short keyLength, byte[] data,
       short dataStart, short dataLength, byte[] mac, short macStart) {
     HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
     return hmacSign(key, data, dataStart, dataLength, mac, macStart);
+  }
+
+  @Override
+  public boolean hmacVerify(byte[] keyBuf, short keyStart, short keyLength, byte[] data,
+      short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
+    HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
+    return hmacVerify(key, data, dataStart, dataLength, mac, macStart, macLength);
   }
 
   @Override
@@ -614,14 +610,6 @@ public class KMJCardSimulator implements KMSEProvider {
     return null;
   }
 
-  @Override
-  public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {
-    KMOperationImpl opr = null;
-    KMHmacKey key = (KMHmacKey) computedHmacKey;
-    Signature signerVerifier = createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, key.getKey());
-    return new KMOperationImpl(signerVerifier);
-  }
-  
   @Override
   public KMOperation initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest,
       byte[] privKeyBuf, short privKeyStart, short privKeyLength,
@@ -1003,18 +991,17 @@ public class KMJCardSimulator implements KMSEProvider {
     return ret;
   }
 
-  private Signature createHmacSignerVerifier(short purpose, short digest,
-      byte[] secret, short secretStart, short secretLength) {
-    HMACKey key = createHMACKey(secret, secretStart, secretLength);
-    return createHmacSignerVerifier(purpose, digest, key);
-  }
 
-  private Signature createHmacSignerVerifier(short purpose, short digest, HMACKey key) {
-    byte alg = Signature.ALG_HMAC_SHA_256;
+  public Signature createHmacSignerVerifier(short purpose, short digest, byte[] secret,
+      short secretStart, short secretLength) {
+    short alg = Signature.ALG_HMAC_SHA_256;
     if (digest != KMType.SHA2_256) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
     Signature hmacSignerVerifier = Signature.getInstance((byte) alg, false);
+    HMACKey key = (HMACKey) KeyBuilder
+        .buildKey(KeyBuilder.TYPE_HMAC, (short) (secretLength * 8), false);
+    key.setKey(secret, secretStart, secretLength);
     hmacSignerVerifier.init(key, (byte) purpose);
     return hmacSignerVerifier;
   }
@@ -1180,84 +1167,15 @@ public class KMJCardSimulator implements KMSEProvider {
     return KMAttestationCertImpl.instance(rsaCert);
   }
 
-  @Override
-  public KMPKCS8Decoder getPKCS8DecoderInstance() {
-    return KMPKCS8DecoderImpl.instance();
-  }
-
-  private short getProvisionDataBufferOffset(byte dataType) {
-    switch(dataType) {
-      case CERTIFICATE_CHAIN:
-        return CERT_CHAIN_OFFSET;
-      case CERTIFICATE_ISSUER:
-        return CERT_ISSUER_OFFSET;
-      case CERTIFICATE_EXPIRY:
-        return CERT_EXPIRY_OFFSET;
-      default:
-        KMException.throwIt(KMError.INVALID_ARGUMENT);
-    }
-    return 0;
-  }
-
-  private void persistProvisionData(byte[] buf, short off, short len, short maxSize, short copyToOff) {
-    if (len > maxSize) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    JCSystem.beginTransaction();
-    Util.setShort(provisionData, copyToOff, len);
-    Util.arrayCopyNonAtomic(buf, off, provisionData, (short) (copyToOff + 2), len);
-    JCSystem.commitTransaction();
-  }
-
-  private void persistCertificateChain(byte[] certChain, short certChainOff, short certChainLen) {
-    persistProvisionData(certChain, certChainOff, certChainLen,
-        KMConfigurations.CERT_CHAIN_MAX_SIZE, CERT_CHAIN_OFFSET);
-  }
-
-  private void persistCertficateIssuer(byte[] certIssuer, short certIssuerOff, short certIssuerLen) {
-    persistProvisionData(certIssuer, certIssuerOff, certIssuerLen,
-        KMConfigurations.CERT_ISSUER_MAX_SIZE, CERT_ISSUER_OFFSET);
-  }
-
-  private void persistCertificateExpiryTime(byte[] certExpiry, short certExpiryOff, short certExpiryLen) {
-    persistProvisionData(certExpiry, certExpiryOff, certExpiryLen,
-        KMConfigurations.CERT_EXPIRY_MAX_SIZE, CERT_EXPIRY_OFFSET);
-  }
-
-  @Override
-  public void persistProvisionData(byte[] buffer, short certChainOff, short certChainLen,
-      short certIssuerOff, short certIssuerLen, short certExpiryOff ,short certExpiryLen) {
-    // All the buffers uses first two bytes for length. The certificate chain
-    // is stored as shown below.
-    //  _____________________________________________________
-    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 |  Cert2 |...
-    // |_________|________|_________|_______|________|_______
-    // First two bytes holds the length of the total buffer.
-    // CBOR format:
-    // Next single byte holds the byte string header.
-    // Next 3 bytes holds the total length of the certificate chain.
-    // clear buffer.
-    JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(provisionData, (short) 0, (short) provisionData.length, (byte) 0);
-    JCSystem.commitTransaction();
-    // Persist data.
-    persistCertificateChain(buffer, certChainOff, certChainLen);
-    persistCertficateIssuer(buffer, certIssuerOff, certIssuerLen);
-    persistCertificateExpiryTime(buffer, certExpiryOff, certExpiryLen);
-  }
-
-  @Override
-  public short readProvisionedData(byte dataType, byte[] buf, short offset) {
-    short provisionBufOffset = getProvisionDataBufferOffset(dataType);
-    short len = Util.getShort(provisionData, provisionBufOffset);
-    Util.arrayCopyNonAtomic(provisionData, (short) (2 + provisionBufOffset), buf, offset, len);
+  public short readCertificateChain(byte[] buf, short offset) {
+    short len = Util.getShort(certificateChain, (short) 0);
+    Util.arrayCopyNonAtomic(certificateChain, (short) 2, buf, offset, len);
     return len;
   }
 
   @Override
-  public short getProvisionedDataLength(byte dataType) {
-    short provisionBufOffset = getProvisionDataBufferOffset(dataType);
-    return Util.getShort(provisionData, provisionBufOffset);
+  public short getCertificateChainLength() {
+    return Util.getShort(certificateChain, (short) 0);
   }
 
   @Override
@@ -1272,6 +1190,37 @@ public class KMJCardSimulator implements KMSEProvider {
     signer.init(key, Signature.MODE_SIGN);
     return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
         outputDataBuf, outputDataStart);
+  }
+
+  @Override
+  public void clearCertificateChain() {
+    JCSystem.beginTransaction();
+    Util.arrayFillNonAtomic(certificateChain, (short) 0, CERT_CHAIN_MAX_SIZE, (byte) 0);
+    JCSystem.commitTransaction();
+  }
+
+  @Override
+  public void persistPartialCertificateChain(byte[] buf, short offset,
+      short len, short totalLen) {
+    //  _____________________________________________________
+    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 |  Cert2 |...
+    // |_________|________|_________|_______|________|_______
+    // First two bytes holds the length of the total buffer.
+    // CBOR format:
+    // Next single byte holds the byte string header.
+    // Next 3 bytes holds the total length of the certificate chain.
+    if (totalLen > (short) (CERT_CHAIN_MAX_SIZE - 2)) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    short persistedLen = Util.getShort(certificateChain, (short) 0);
+    if (persistedLen > totalLen) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    JCSystem.beginTransaction();
+    Util.setShort(certificateChain, (short) 0, (short) (len + persistedLen));
+    Util.arrayCopyNonAtomic(buf, offset, certificateChain,
+        (short) (persistedLen + 2), len);
+    JCSystem.commitTransaction();
   }
 
   @Override
@@ -1293,7 +1242,7 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public void onRestore(Element ele, short oldVersion, short currentVersion) {
+  public void onRestore(Element ele) {
   }
 
   @Override
@@ -1353,20 +1302,6 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length) {
-    if (length != COMPUTED_HMAC_KEY_SIZE) {
-      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-    }
-    if (computedHmacKey == null) {
-      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) (length * 8),
-          false);
-      computedHmacKey = new KMHmacKey(key);
-    }
-    computedHmacKey.setKey(keyData, offset, length);
-    return (KMComputedHmacKey) computedHmacKey;
-  }
-
-  @Override
   public KMMasterKey getMasterKey() {
     return (KMMasterKey) masterKey;
   }
@@ -1382,27 +1317,7 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public KMComputedHmacKey getComputedHmacKey() {
-    return (KMComputedHmacKey) computedHmacKey;
-  }
-
-  @Override
   public void releaseAllOperations() {
     //Do nothing.
   }
-
-  @Override
-  public short messageDigest256(byte[] inBuff, short inOffset,
-      short inLength, byte[] outBuff, short outOffset) {
-    MessageDigest mDigest = null;
-    short len = 0;
-    try {
-      mDigest = MessageDigest.getInitializedMessageDigestInstance(MessageDigest.ALG_SHA_256, false);
-      len = mDigest.doFinal(inBuff, inOffset, inLength, outBuff, outOffset);
-    } catch (Exception e) {
-
-    }
-    return len;
-  }
-
 }

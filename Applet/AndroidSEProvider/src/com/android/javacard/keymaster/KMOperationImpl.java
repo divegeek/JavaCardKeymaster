@@ -28,7 +28,6 @@ public class KMOperationImpl implements KMOperation {
   private static final short OPER_MODE_OFFSET = 0x02;
   private static final short BLOCK_MODE_OFFSET = 0x03;
   private static final short MAC_LENGTH_OFFSET = 0x04;
-  private static final byte[] EMPTY = {};
   //This will hold the length of the buffer stored inside the
   //Java Card after the GCM update operation.
   private static final short AES_GCM_UPDATE_LEN_OFFSET = 0x05;
@@ -88,19 +87,15 @@ public class KMOperationImpl implements KMOperation {
   public void setSignature(Signature signer) {
     operationInst[0] = signer;
   }
-  
-  public boolean isResourceMatches(Object object) {
-    return operationInst[0] == object;
-  }
 
-  private void reset() {
+  private void resetCipher() {
     operationInst[0] = null;
-    parameters[MAC_LENGTH_OFFSET] = KMType.INVALID_VALUE;
+    parameters[MAC_LENGTH_OFFSET] = 0;
     parameters[AES_GCM_UPDATE_LEN_OFFSET] = 0;
-    parameters[BLOCK_MODE_OFFSET] = KMType.INVALID_VALUE;;
-    parameters[OPER_MODE_OFFSET] = KMType.INVALID_VALUE;;
-    parameters[CIPHER_ALG_OFFSET] = KMType.INVALID_VALUE;;
-    parameters[PADDING_OFFSET] = KMType.INVALID_VALUE;;
+    parameters[BLOCK_MODE_OFFSET] = 0;
+    parameters[OPER_MODE_OFFSET] = 0;
+    parameters[CIPHER_ALG_OFFSET] = 0;
+    parameters[PADDING_OFFSET] = 0;
   }
 
   @Override
@@ -201,7 +196,8 @@ public class KMOperationImpl implements KMOperation {
       }
     } finally {
       KMAndroidSEProvider.getInstance().clean();
-      reset();
+      KMAndroidSEProvider.getInstance().releaseCipherInstance(cipher);
+      resetCipher();
     }
     return len;
   }
@@ -214,7 +210,8 @@ public class KMOperationImpl implements KMOperation {
       len = ((Signature) operationInst[0]).sign(inputDataBuf, inputDataStart, inputDataLength,
         signBuf, signStart);
     } finally {
-      reset();
+      KMAndroidSEProvider.getInstance().releaseSignatureInstance((Signature) operationInst[0]);
+      operationInst[0] = null;
     }
     return len;
   }
@@ -227,32 +224,25 @@ public class KMOperationImpl implements KMOperation {
       ret = ((Signature) operationInst[0]).verify(inputDataBuf, inputDataStart, inputDataLength,
         signBuf, signStart, signLength);
     } finally {
-      reset();
+      KMAndroidSEProvider.getInstance().releaseSignatureInstance((Signature) operationInst[0]);
+      operationInst[0] = null;
     }
     return ret;
   }
 
   @Override
   public void abort() {
-    // Few simulators does not reset the Hmac signer instance on init so as
-    // a workaround to reset the hmac signer instance in case of abort/failure of the operation
-    // the corresponding sign / verify function is called.
     if (operationInst[0] != null) {
-      if ((parameters[OPER_MODE_OFFSET] == KMType.SIGN || parameters[OPER_MODE_OFFSET] == KMType.VERIFY) &&
-          (((Signature) operationInst[0]).getAlgorithm() == Signature.ALG_HMAC_SHA_256)) {
-        Signature signer = (Signature) operationInst[0];
-        try {
-          if (parameters[OPER_MODE_OFFSET] == KMType.SIGN) {
-            signer.sign(EMPTY, (short) 0, (short) 0, EMPTY, (short) 0);
-          } else {
-            signer.verify(EMPTY, (short) 0, (short) 0, EMPTY, (short) 0, (short) 0);
-          }
-        } catch(Exception e) {
-          // Ignore.
-        }
+      if (parameters[OPER_MODE_OFFSET] == KMType.ENCRYPT ||
+        parameters[OPER_MODE_OFFSET] == KMType.DECRYPT) {
+        KMAndroidSEProvider.getInstance().releaseCipherInstance((Cipher) operationInst[0]);
+        resetCipher();
+      } else {
+        KMAndroidSEProvider.getInstance().releaseSignatureInstance((Signature) operationInst[0]);
       }
+      operationInst[0] = null;
     }
-    reset();
+    KMAndroidSEProvider.getInstance().releaseOperationInstance(this);
   }
 
   @Override

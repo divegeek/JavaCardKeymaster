@@ -17,7 +17,7 @@ package com.android.javacard.keymaster;
 
 import javacard.security.HMACKey;
 
-public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey {
+public class KMHmacKey implements KMPreSharedKey {
 
   private HMACKey hmacKey;
 
@@ -31,10 +31,6 @@ public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey {
 
   public byte getKey(byte[] keyData, short kOff) {
     return hmacKey.getKey(keyData, kOff);
-  }
-
-  public HMACKey getKey() {
-    return hmacKey;
   }
 
   public short getKeySizeBits() {
