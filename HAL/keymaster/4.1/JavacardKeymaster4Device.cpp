@@ -947,11 +947,7 @@ Return<ErrorCode> JavacardKeymaster4Device::destroyAttestationIds() {
     return errorCode;
 }
 
-Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose,
-                                             const hidl_vec<uint8_t>& keyBlob,
-                                             const hidl_vec<KeyParameter>& inParams,
-                                             const HardwareAuthToken& authToken,
-                                             begin_cb _hidl_cb) {
+Return<void> JavacardKeymaster4Device::begin(KeyPurpose purpose, const hidl_vec<uint8_t>& keyBlob, const hidl_vec<KeyParameter>& inParams, const HardwareAuthToken& authToken, begin_cb _hidl_cb) {
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     uint64_t operationHandle = 0;
     OperationType operType = OperationType::PRIVATE_OPERATION;
