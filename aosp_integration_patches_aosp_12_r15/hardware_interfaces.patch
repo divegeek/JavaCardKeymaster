@@ -1,0 +1,1213 @@
+diff --git a/compatibility_matrices/compatibility_matrix.6.xml b/compatibility_matrices/compatibility_matrix.6.xml
+index aee2c5164..1391bbf54 100644
+--- a/compatibility_matrices/compatibility_matrix.6.xml
++++ b/compatibility_matrices/compatibility_matrix.6.xml
+@@ -349,6 +349,13 @@
+             <instance>default</instance>
+         </interface>
+     </hal>
++    <hal format="aidl" optional="true">
++        <name>android.hardware.security.keymint</name>
++        <interface>
++            <name>IRemotelyProvisionedComponent</name>
++            <instance>strongbox</instance>
++        </interface>
++    </hal>
+     <hal format="aidl" optional="true">
+         <name>android.hardware.light</name>
+         <version>1</version>
+diff --git a/compatibility_matrices/compatibility_matrix.current.xml b/compatibility_matrices/compatibility_matrix.current.xml
+index 8b6e8414d..4955db7d7 100644
+--- a/compatibility_matrices/compatibility_matrix.current.xml
++++ b/compatibility_matrices/compatibility_matrix.current.xml
+@@ -66,7 +66,7 @@
+         <interface>
+             <name>IEvsEnumerator</name>
+             <instance>default</instance>
+-            <regex-instance>[a-z]+/[0-9]+</regex-instance>
++            <regex-instance>[a-z]/[0-9]</regex-instance>
+         </interface>
+     </hal>
+     <hal format="aidl" optional="true">
+@@ -168,7 +168,7 @@
+         <version>2.4-7</version>
+         <interface>
+             <name>ICameraProvider</name>
+-            <regex-instance>[^/]+/[0-9]+</regex-instance>
++            <regex-instance>[^/]/[0-9]</regex-instance>
+         </interface>
+     </hal>
+     <hal format="hidl" optional="true">
+@@ -349,6 +349,13 @@
+             <instance>default</instance>
+         </interface>
+     </hal>
++    <hal format="aidl" optional="true">
++        <name>android.hardware.security.keymint</name>
++        <interface>
++            <name>IRemotelyProvisionedComponent</name>
++            <instance>strongbox</instance>
++        </interface>
++    </hal>
+     <hal format="aidl" optional="true">
+         <name>android.hardware.light</name>
+         <version>1</version>
+@@ -511,6 +518,15 @@
+             <instance>strongbox</instance>
+         </interface>
+     </hal>
++    <hal format="aidl" optional="true">
++        <name>android.hardware.security.sharedsecret</name>
++        <version>1</version>
++        <interface>
++            <name>ISharedSecret</name>
++            <instance>strongbox</instance>
++        </interface>
++    </hal>
++
+     <hal format="hidl" optional="true">
+         <name>android.hardware.sensors</name>
+         <version>1.0</version>
+diff --git a/security/keymint/aidl/vts/functional/AttestKeyTest.cpp b/security/keymint/aidl/vts/functional/AttestKeyTest.cpp
+index 26ed34427..2d5bc9575 100644
+--- a/security/keymint/aidl/vts/functional/AttestKeyTest.cpp
++++ b/security/keymint/aidl/vts/functional/AttestKeyTest.cpp
+@@ -198,7 +198,7 @@ TEST_P(AttestKeyTest, RsaAttestedAttestKeys) {
+     AttestationKey attest_key;
+     vector<KeyCharacteristics> attest_key_characteristics;
+     vector<Certificate> attest_key_cert_chain;
+-    ASSERT_EQ(ErrorCode::OK,
++    auto result =
+               GenerateKey(AuthorizationSetBuilder()
+                                   .RsaSigningKey(2048, 65537)
+                                   .AttestKey()
+@@ -209,7 +209,13 @@ TEST_P(AttestKeyTest, RsaAttestedAttestKeys) {
+                                   .Authorization(TAG_NO_AUTH_REQUIRED)
+                                   .SetDefaultValidity(),
+                           {} /* attestation signing key */, &attest_key.keyBlob,
+-                          &attest_key_characteristics, &attest_key_cert_chain));
++                          &attest_key_characteristics, &attest_key_cert_chain);
++    //Strongbox does not support Factory provisioned attestation key.
++    if (SecLevel() == SecurityLevel::STRONGBOX) {
++        ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++        return;
++    }
++    ASSERT_EQ(ErrorCode::OK, result);
+ 
+     EXPECT_GT(attest_key_cert_chain.size(), 1);
+     verify_subject_and_serial(attest_key_cert_chain[0], serial_int, subject, false);
+@@ -297,7 +303,7 @@ TEST_P(AttestKeyTest, RsaAttestKeyChaining) {
+             attest_key_opt = attest_key;
+         }
+ 
+-        EXPECT_EQ(ErrorCode::OK,
++        auto result =
+                   GenerateKey(AuthorizationSetBuilder()
+                                       .RsaSigningKey(2048, 65537)
+                                       .AttestKey()
+@@ -308,8 +314,13 @@ TEST_P(AttestKeyTest, RsaAttestKeyChaining) {
+                                       .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+                                       .SetDefaultValidity(),
+                               attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
+-                              &cert_chain_list[i]));
+-
++                              &cert_chain_list[i]);
++        // Strongbox does not support Factory provisioned attestation key.
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            return;
++        }
++        ASSERT_EQ(ErrorCode::OK, result);
+         AuthorizationSet hw_enforced = HwEnforcedAuthorizations(attested_key_characteristics);
+         AuthorizationSet sw_enforced = SwEnforcedAuthorizations(attested_key_characteristics);
+         ASSERT_GT(cert_chain_list[i].size(), 0);
+@@ -369,7 +380,7 @@ TEST_P(AttestKeyTest, EcAttestKeyChaining) {
+             attest_key_opt = attest_key;
+         }
+ 
+-        EXPECT_EQ(ErrorCode::OK,
++        auto result =
+                   GenerateKey(AuthorizationSetBuilder()
+                                       .EcdsaSigningKey(EcCurve::P_256)
+                                       .AttestKey()
+@@ -380,8 +391,13 @@ TEST_P(AttestKeyTest, EcAttestKeyChaining) {
+                                       .Authorization(TAG_NO_AUTH_REQUIRED)
+                                       .SetDefaultValidity(),
+                               attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
+-                              &cert_chain_list[i]));
+-
++                              &cert_chain_list[i]);
++        // Strongbox does not support Factory provisioned attestation key.
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            return;
++        }
++        ASSERT_EQ(ErrorCode::OK, result);
+         AuthorizationSet hw_enforced = HwEnforcedAuthorizations(attested_key_characteristics);
+         AuthorizationSet sw_enforced = SwEnforcedAuthorizations(attested_key_characteristics);
+         ASSERT_GT(cert_chain_list[i].size(), 0);
+@@ -442,35 +458,40 @@ TEST_P(AttestKeyTest, AlternateAttestKeyChaining) {
+             attest_key.keyBlob = key_blob_list[i - 1];
+             attest_key_opt = attest_key;
+         }
+-
++        ErrorCode result;
+         if ((i & 0x1) == 1) {
+-            EXPECT_EQ(ErrorCode::OK,
+-                      GenerateKey(AuthorizationSetBuilder()
+-                                          .EcdsaSigningKey(EcCurve::P_256)
+-                                          .AttestKey()
+-                                          .AttestationChallenge("foo")
+-                                          .AttestationApplicationId("bar")
+-                                          .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
+-                                          .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+-                                          .Authorization(TAG_NO_AUTH_REQUIRED)
+-                                          .SetDefaultValidity(),
+-                                  attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
+-                                  &cert_chain_list[i]));
++            result =
++                GenerateKey(AuthorizationSetBuilder()
++                                    .EcdsaSigningKey(EcCurve::P_256)
++                                    .AttestKey()
++                                    .AttestationChallenge("foo")
++                                    .AttestationApplicationId("bar")
++                                    .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
++                                    .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
++                                    .Authorization(TAG_NO_AUTH_REQUIRED)
++                                    .SetDefaultValidity(),
++                              attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
++                              &cert_chain_list[i]);
+         } else {
+-            EXPECT_EQ(ErrorCode::OK,
+-                      GenerateKey(AuthorizationSetBuilder()
+-                                          .RsaSigningKey(2048, 65537)
+-                                          .AttestKey()
+-                                          .AttestationChallenge("foo")
+-                                          .AttestationApplicationId("bar")
+-                                          .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
+-                                          .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+-                                          .Authorization(TAG_NO_AUTH_REQUIRED)
+-                                          .SetDefaultValidity(),
+-                                  attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
+-                                  &cert_chain_list[i]));
++            result =
++                GenerateKey(AuthorizationSetBuilder()
++                                     .RsaSigningKey(2048, 65537)
++                                     .AttestKey()
++                                     .AttestationChallenge("foo")
++                                     .AttestationApplicationId("bar")
++                                     .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
++                                     .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
++                                     .Authorization(TAG_NO_AUTH_REQUIRED)
++                                     .SetDefaultValidity(),
++                              attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
++                              &cert_chain_list[i]);
+         }
+-
++        // Strongbox does not support Factory provisioned attestation key.
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            return;
++        }
++        ASSERT_EQ(ErrorCode::OK, result);
+         AuthorizationSet hw_enforced = HwEnforcedAuthorizations(attested_key_characteristics);
+         AuthorizationSet sw_enforced = SwEnforcedAuthorizations(attested_key_characteristics);
+         ASSERT_GT(cert_chain_list[i].size(), 0);
+diff --git a/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.cpp b/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.cpp
+index 20324117b..741bcf8f6 100644
+--- a/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.cpp
++++ b/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.cpp
+@@ -1145,6 +1145,15 @@ vector<EcCurve> KeyMintAidlTestBase::InvalidCurves() {
+     }
+ }
+ 
++vector<uint64_t> KeyMintAidlTestBase::ValidExponents() {
++    if (SecLevel() == SecurityLevel::STRONGBOX) {
++        return {65537};
++    } else {
++        return {3, 65537};
++    }
++}
++
++
+ vector<Digest> KeyMintAidlTestBase::ValidDigests(bool withNone, bool withMD5) {
+     switch (SecLevel()) {
+         case SecurityLevel::SOFTWARE:
+diff --git a/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.h b/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.h
+index ec3fcf6a3..0561a9b94 100644
+--- a/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.h
++++ b/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.h
+@@ -250,7 +250,9 @@ class KeyMintAidlTestBase : public ::testing::TestWithParam<string> {
+                                                      .SetDefaultValidity();
+         tagModifier(&rsaBuilder);
+         errorCode = GenerateKey(rsaBuilder, &rsaKeyData.blob, &rsaKeyData.characteristics);
+-        EXPECT_EQ(expectedReturn, errorCode);
++        if (!(SecLevel() == SecurityLevel::STRONGBOX && ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED == errorCode)) {
++            EXPECT_EQ(expectedReturn, errorCode);
++        }      
+ 
+         /* ECDSA */
+         KeyData ecdsaKeyData;
+@@ -262,7 +264,10 @@ class KeyMintAidlTestBase : public ::testing::TestWithParam<string> {
+                                                        .SetDefaultValidity();
+         tagModifier(&ecdsaBuilder);
+         errorCode = GenerateKey(ecdsaBuilder, &ecdsaKeyData.blob, &ecdsaKeyData.characteristics);
+-        EXPECT_EQ(expectedReturn, errorCode);
++        if (!(SecLevel() == SecurityLevel::STRONGBOX && ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED == errorCode)) {
++            EXPECT_EQ(expectedReturn, errorCode);
++        }
++
+         return {aesKeyData, hmacKeyData, rsaKeyData, ecdsaKeyData};
+     }
+     bool IsSecure() const { return securityLevel_ != SecurityLevel::SOFTWARE; }
+@@ -279,6 +284,7 @@ class KeyMintAidlTestBase : public ::testing::TestWithParam<string> {
+     vector<EcCurve> InvalidCurves();
+ 
+     vector<Digest> ValidDigests(bool withNone, bool withMD5);
++    vector<uint64_t> ValidExponents();
+ 
+     static vector<string> build_params() {
+         auto params = ::android::getAidlHalInstanceNames(IKeyMintDevice::descriptor);
+diff --git a/security/keymint/aidl/vts/functional/KeyMintTest.cpp b/security/keymint/aidl/vts/functional/KeyMintTest.cpp
+index 5a87b8385..d30f9dae9 100644
+--- a/security/keymint/aidl/vts/functional/KeyMintTest.cpp
++++ b/security/keymint/aidl/vts/functional/KeyMintTest.cpp
+@@ -902,8 +902,8 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestation) {
+     for (auto key_size : ValidKeySizes(Algorithm::RSA)) {
+         vector<uint8_t> key_blob;
+         vector<KeyCharacteristics> key_characteristics;
+-        ASSERT_EQ(ErrorCode::OK,
+-                  GenerateKey(AuthorizationSetBuilder()
++               
++        auto result = GenerateKey(AuthorizationSetBuilder()
+                                       .RsaSigningKey(key_size, 65537)
+                                       .Digest(Digest::NONE)
+                                       .Padding(PaddingMode::NONE)
+@@ -913,8 +913,14 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestation) {
+                                       .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
+                                       .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+                                       .SetDefaultValidity(),
+-                              &key_blob, &key_characteristics));
++                              &key_blob, &key_characteristics);
+ 
++        // Strongbox does not support Factory provisioned attestation key
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            return;
++        }
++        ASSERT_EQ(ErrorCode::OK, result);
+         ASSERT_GT(key_blob.size(), 0U);
+         CheckBaseParams(key_characteristics);
+         CheckCharacteristics(key_blob, key_characteristics);
+@@ -1031,8 +1037,7 @@ TEST_P(NewKeyGenerationTest, RsaEncryptionWithAttestation) {
+ 
+     vector<uint8_t> key_blob;
+     vector<KeyCharacteristics> key_characteristics;
+-    ASSERT_EQ(ErrorCode::OK,
+-              GenerateKey(AuthorizationSetBuilder()
++    auto result = GenerateKey(AuthorizationSetBuilder()
+                                   .RsaEncryptionKey(key_size, 65537)
+                                   .Padding(PaddingMode::NONE)
+                                   .AttestationChallenge(challenge)
+@@ -1041,8 +1046,14 @@ TEST_P(NewKeyGenerationTest, RsaEncryptionWithAttestation) {
+                                   .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
+                                   .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+                                   .SetDefaultValidity(),
+-                          &key_blob, &key_characteristics));
++                          &key_blob, &key_characteristics);
+ 
++    // Strongbox does not support Factory provisioned attestation key
++    if (SecLevel() == SecurityLevel::STRONGBOX) {
++        ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++        return;
++    }
++    ASSERT_EQ(ErrorCode::OK, result);
+     ASSERT_GT(key_blob.size(), 0U);
+     AuthorizationSet auths;
+     for (auto& entry : key_characteristics) {
+@@ -1143,15 +1154,21 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestationMissAppId) {
+     vector<uint8_t> key_blob;
+     vector<KeyCharacteristics> key_characteristics;
+ 
+-    ASSERT_EQ(ErrorCode::ATTESTATION_APPLICATION_ID_MISSING,
+-              GenerateKey(AuthorizationSetBuilder()
++    auto result = GenerateKey(AuthorizationSetBuilder()
+                                   .RsaSigningKey(2048, 65537)
+                                   .Digest(Digest::NONE)
+                                   .Padding(PaddingMode::NONE)
+                                   .AttestationChallenge(challenge)
+                                   .Authorization(TAG_NO_AUTH_REQUIRED)
+                                   .SetDefaultValidity(),
+-                          &key_blob, &key_characteristics));
++                          &key_blob, &key_characteristics);
++
++    // Strongbox does not support Factory provisioned attestation key
++    if (SecLevel() == SecurityLevel::STRONGBOX) {
++        ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++        return;
++    }
++    ASSERT_EQ(ErrorCode::ATTESTATION_APPLICATION_ID_MISSING, result);
+ }
+ 
+ /*
+@@ -1261,8 +1278,8 @@ TEST_P(NewKeyGenerationTest, LimitedUsageRsaWithAttestation) {
+     for (auto key_size : ValidKeySizes(Algorithm::RSA)) {
+         vector<uint8_t> key_blob;
+         vector<KeyCharacteristics> key_characteristics;
+-        ASSERT_EQ(ErrorCode::OK,
+-                  GenerateKey(AuthorizationSetBuilder()
++        
++        auto result = GenerateKey(AuthorizationSetBuilder()
+                                       .RsaSigningKey(key_size, 65537)
+                                       .Digest(Digest::NONE)
+                                       .Padding(PaddingMode::NONE)
+@@ -1273,7 +1290,14 @@ TEST_P(NewKeyGenerationTest, LimitedUsageRsaWithAttestation) {
+                                       .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
+                                       .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+                                       .SetDefaultValidity(),
+-                              &key_blob, &key_characteristics));
++                              &key_blob, &key_characteristics);
++        
++            //Strongbox does not support Factory provisioned attestation key
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            return;
++        }
++	    ASSERT_EQ(ErrorCode::OK, result);
+ 
+         ASSERT_GT(key_blob.size(), 0U);
+         CheckBaseParams(key_characteristics);
+@@ -1404,8 +1428,8 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestation) {
+     for (auto curve : ValidCurves()) {
+         vector<uint8_t> key_blob;
+         vector<KeyCharacteristics> key_characteristics;
+-        ASSERT_EQ(ErrorCode::OK,
+-                  GenerateKey(AuthorizationSetBuilder()
++        
++        auto result = GenerateKey(AuthorizationSetBuilder()
+                                       .Authorization(TAG_NO_AUTH_REQUIRED)
+                                       .EcdsaSigningKey(curve)
+                                       .Digest(Digest::NONE)
+@@ -1414,7 +1438,15 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestation) {
+                                       .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
+                                       .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+                                       .SetDefaultValidity(),
+-                              &key_blob, &key_characteristics));
++                              &key_blob, &key_characteristics);
++    
++                //Strongbox does not support Factory provisioned attestation key
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            return;
++        }
++        ASSERT_EQ(ErrorCode::OK, result);                              
++                              
+         ASSERT_GT(key_blob.size(), 0U);
+         CheckBaseParams(key_characteristics);
+         CheckCharacteristics(key_blob, key_characteristics);
+@@ -1491,6 +1523,12 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTags) {
+             // Tag not required to be supported by all KeyMint implementations.
+             continue;
+         }
++        
++        //Strongbox does not support Factory provisioned attestation key
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            continue;
++        }
+         ASSERT_EQ(result, ErrorCode::OK);
+         ASSERT_GT(key_blob.size(), 0U);
+ 
+@@ -1540,8 +1578,14 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTags) {
+                         .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+                         .SetDefaultValidity();
+         builder.push_back(tag);
+-        ASSERT_EQ(ErrorCode::CANNOT_ATTEST_IDS,
+-                  GenerateKey(builder, &key_blob, &key_characteristics));
++        
++        auto result = GenerateKey(builder, &key_blob, &key_characteristics);
++        //Strongbox does not support Factory provisioned attestation key
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            continue;
++        }
++    	ASSERT_EQ(ErrorCode::CANNOT_ATTEST_IDS, result);          
+     }
+ }
+ 
+@@ -1577,6 +1621,13 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTagNoApplicationId) {
+                                       .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
+                                       .SetDefaultValidity(),
+                               &key_blob, &key_characteristics);
++
++    // Strongbox does not support Factory provisioned attestation key
++    if (SecLevel() == SecurityLevel::STRONGBOX) {
++        ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++        return;
++    }
++
+     ASSERT_EQ(result, ErrorCode::OK);
+     ASSERT_GT(key_blob.size(), 0U);
+ 
+@@ -1655,13 +1706,19 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationRequireAppId) {
+     vector<uint8_t> key_blob;
+     vector<KeyCharacteristics> key_characteristics;
+ 
+-    ASSERT_EQ(ErrorCode::ATTESTATION_APPLICATION_ID_MISSING,
+-              GenerateKey(AuthorizationSetBuilder()
++    auto result = GenerateKey(AuthorizationSetBuilder()
+                                   .EcdsaSigningKey(EcCurve::P_256)
+                                   .Digest(Digest::NONE)
+                                   .AttestationChallenge(challenge)
+                                   .SetDefaultValidity(),
+-                          &key_blob, &key_characteristics));
++                          &key_blob, &key_characteristics);
++
++    // Strongbox does not support Factory provisioned attestation key
++    if (SecLevel() == SecurityLevel::STRONGBOX) {
++        ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++        return;
++    }
++    ASSERT_EQ(ErrorCode::ATTESTATION_APPLICATION_ID_MISSING, result);
+ }
+ 
+ /*
+@@ -1718,14 +1775,21 @@ TEST_P(NewKeyGenerationTest, AttestationApplicationIDLengthProperlyEncoded) {
+         const string app_id(length, 'a');
+         vector<uint8_t> key_blob;
+         vector<KeyCharacteristics> key_characteristics;
+-        ASSERT_EQ(ErrorCode::OK, GenerateKey(AuthorizationSetBuilder()
++        auto result = GenerateKey(AuthorizationSetBuilder()
+                                                      .Authorization(TAG_NO_AUTH_REQUIRED)
+                                                      .EcdsaSigningKey(EcCurve::P_256)
+                                                      .Digest(Digest::NONE)
+                                                      .AttestationChallenge(challenge)
+                                                      .AttestationApplicationId(app_id)
+                                                      .SetDefaultValidity(),
+-                                             &key_blob, &key_characteristics));
++                                             &key_blob, &key_characteristics);
++        //Strongbox does not support Factory provisioned attestation key
++        if (SecLevel() == SecurityLevel::STRONGBOX) {
++            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
++            return;
++        }
++        ASSERT_EQ(ErrorCode::OK, result);
++                                             
+         ASSERT_GT(key_blob.size(), 0U);
+         CheckBaseParams(key_characteristics);
+         CheckCharacteristics(key_blob, key_characteristics);
+@@ -3755,25 +3819,27 @@ typedef KeyMintAidlTestBase EncryptionOperationsTest;
+  * Verifies that raw RSA decryption works.
+  */
+ TEST_P(EncryptionOperationsTest, RsaNoPaddingSuccess) {
+-    for (uint64_t exponent : {3, 65537}) {
+-        ASSERT_EQ(ErrorCode::OK, GenerateKey(AuthorizationSetBuilder()
+-                                                     .Authorization(TAG_NO_AUTH_REQUIRED)
+-                                                     .RsaEncryptionKey(2048, exponent)
+-                                                     .Padding(PaddingMode::NONE)
+-                                                     .SetDefaultValidity()));
+ 
+-        string message = string(2048 / 8, 'a');
+-        auto params = AuthorizationSetBuilder().Padding(PaddingMode::NONE);
+-        string ciphertext1 = LocalRsaEncryptMessage(message, params);
+-        EXPECT_EQ(2048U / 8, ciphertext1.size());
++    for (uint64_t exponent : ValidExponents())
++    {
++	ASSERT_EQ(ErrorCode::OK, GenerateKey(AuthorizationSetBuilder()
++		                             .Authorization(TAG_NO_AUTH_REQUIRED)
++		                             .RsaEncryptionKey(2048, exponent)
++		                             .Padding(PaddingMode::NONE)
++		                             .SetDefaultValidity()));
+ 
+-        string ciphertext2 = LocalRsaEncryptMessage(message, params);
+-        EXPECT_EQ(2048U / 8, ciphertext2.size());
++	string message = string(2048 / 8, 'a');
++	auto params = AuthorizationSetBuilder().Padding(PaddingMode::NONE);
++	string ciphertext1 = LocalRsaEncryptMessage(message, params);
++	EXPECT_EQ(2048U / 8, ciphertext1.size());
+ 
+-        // Unpadded RSA is deterministic
+-        EXPECT_EQ(ciphertext1, ciphertext2);
++	string ciphertext2 = LocalRsaEncryptMessage(message, params);
++	EXPECT_EQ(2048U / 8, ciphertext2.size());
+ 
+-        CheckedDeleteKey();
++	// Unpadded RSA is deterministic
++	EXPECT_EQ(ciphertext1, ciphertext2);
++
++	CheckedDeleteKey();
+     }
+ }
+ 
+@@ -6255,7 +6321,7 @@ TEST_P(ClearOperationsTest, TooManyOperations) {
+     size_t i;
+ 
+     for (i = 0; i < max_operations; i++) {
+-        result = Begin(KeyPurpose::ENCRYPT, key_blob_, params, &out_params, op_handles[i]);
++        result = Begin(KeyPurpose::DECRYPT, key_blob_, params, &out_params, op_handles[i]);
+         if (ErrorCode::OK != result) {
+             break;
+         }
+@@ -6263,12 +6329,12 @@ TEST_P(ClearOperationsTest, TooManyOperations) {
+     EXPECT_EQ(ErrorCode::TOO_MANY_OPERATIONS, result);
+     // Try again just in case there's a weird overflow bug
+     EXPECT_EQ(ErrorCode::TOO_MANY_OPERATIONS,
+-              Begin(KeyPurpose::ENCRYPT, key_blob_, params, &out_params));
++              Begin(KeyPurpose::DECRYPT, key_blob_, params, &out_params));
+     for (size_t j = 0; j < i; j++) {
+         EXPECT_EQ(ErrorCode::OK, Abort(op_handles[j]))
+                 << "Aboort failed for i = " << j << std::endl;
+     }
+-    EXPECT_EQ(ErrorCode::OK, Begin(KeyPurpose::ENCRYPT, key_blob_, params, &out_params));
++    EXPECT_EQ(ErrorCode::OK, Begin(KeyPurpose::DECRYPT, key_blob_, params, &out_params));
+     AbortIfNeeded();
+ }
+ 
+@@ -6367,7 +6433,6 @@ TEST_P(KeyAgreementTest, Ecdh) {
+             OPENSSL_free(p);
+ 
+             // Generate EC key in KeyMint (only access to public key material)
+-            vector<uint8_t> challenge = {0x41, 0x42};
+             EXPECT_EQ(
+                     ErrorCode::OK,
+                     GenerateKey(AuthorizationSetBuilder()
+@@ -6376,7 +6441,6 @@ TEST_P(KeyAgreementTest, Ecdh) {
+                                         .Authorization(TAG_PURPOSE, KeyPurpose::AGREE_KEY)
+                                         .Authorization(TAG_ALGORITHM, Algorithm::EC)
+                                         .Authorization(TAG_ATTESTATION_APPLICATION_ID, {0x61, 0x62})
+-                                        .Authorization(TAG_ATTESTATION_CHALLENGE, challenge)
+                                         .SetDefaultValidity()))
+                     << "Failed to generate key";
+             ASSERT_GT(cert_chain_.size(), 0);
+@@ -6456,14 +6520,24 @@ TEST_P(EarlyBootKeyTest, CreateEarlyBootKeys) {
+             CreateTestKeys(TAG_EARLY_BOOT_ONLY, ErrorCode::OK);
+ 
+     for (const auto& keyData : {aesKeyData, hmacKeyData, rsaKeyData, ecdsaKeyData}) {
++    
++        if (SecLevel() == SecurityLevel::STRONGBOX && keyData.blob.size() == 0U) {
++            continue;
++        }
+         ASSERT_GT(keyData.blob.size(), 0U);
+         AuthorizationSet crypto_params = SecLevelAuthorizations(keyData.characteristics);
+         EXPECT_TRUE(crypto_params.Contains(TAG_EARLY_BOOT_ONLY)) << crypto_params;
+     }
+     CheckedDeleteKey(&aesKeyData.blob);
+     CheckedDeleteKey(&hmacKeyData.blob);
+-    CheckedDeleteKey(&rsaKeyData.blob);
+-    CheckedDeleteKey(&ecdsaKeyData.blob);
++    
++    if (rsaKeyData.blob.size() != 0U) {
++        CheckedDeleteKey(&rsaKeyData.blob);
++    }
++    if (ecdsaKeyData.blob.size() != 0U) {
++        CheckedDeleteKey(&ecdsaKeyData.blob);
++    }
++    
+ }
+ 
+ /*
+@@ -6479,14 +6553,21 @@ TEST_P(EarlyBootKeyTest, CreateAttestedEarlyBootKey) {
+             });
+ 
+     for (const auto& keyData : {aesKeyData, hmacKeyData, rsaKeyData, ecdsaKeyData}) {
++        if (SecLevel() == SecurityLevel::STRONGBOX && keyData.blob.size() == 0U) {
++            continue;
++        }
+         ASSERT_GT(keyData.blob.size(), 0U);
+         AuthorizationSet crypto_params = SecLevelAuthorizations(keyData.characteristics);
+         EXPECT_TRUE(crypto_params.Contains(TAG_EARLY_BOOT_ONLY)) << crypto_params;
+     }
+     CheckedDeleteKey(&aesKeyData.blob);
+     CheckedDeleteKey(&hmacKeyData.blob);
+-    CheckedDeleteKey(&rsaKeyData.blob);
+-    CheckedDeleteKey(&ecdsaKeyData.blob);
++    if (rsaKeyData.blob.size() != 0U) {
++        CheckedDeleteKey(&rsaKeyData.blob);
++    }
++    if (ecdsaKeyData.blob.size() != 0U) {
++        CheckedDeleteKey(&ecdsaKeyData.blob);
++    }
+ }
+ 
+ /*
+diff --git a/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp b/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
+index 38f358686..74e44c7b4 100644
+--- a/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
++++ b/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
+@@ -164,6 +164,7 @@ class VtsRemotelyProvisionedComponentTests : public testing::TestWithParam<std::
+             provisionable_ = IRemotelyProvisionedComponent::fromBinder(binder);
+         }
+         ASSERT_NE(provisionable_, nullptr);
++        ASSERT_TRUE(provisionable_->getHardwareInfo(&rpcHardwareInfo).isOk());
+     }
+ 
+     static vector<string> build_params() {
+@@ -173,6 +174,7 @@ class VtsRemotelyProvisionedComponentTests : public testing::TestWithParam<std::
+ 
+   protected:
+     std::shared_ptr<IRemotelyProvisionedComponent> provisionable_;
++    RpcHardwareInfo rpcHardwareInfo;
+ };
+ 
+ using GenerateKeyTests = VtsRemotelyProvisionedComponentTests;
+@@ -273,11 +275,10 @@ TEST_P(GenerateKeyTests, generateEcdsaP256Key_testMode) {
+ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+   protected:
+     CertificateRequestTest() : eekId_(string_to_bytevec("eekid")), challenge_(randomBytes(32)) {
+-        generateTestEekChain(3);
+     }
+ 
+     void generateTestEekChain(size_t eekLength) {
+-        auto chain = generateEekChain(eekLength, eekId_);
++        auto chain = generateEekChain(rpcHardwareInfo.supportedEekCurve, eekLength, eekId_);
+         EXPECT_TRUE(chain) << chain.message();
+         if (chain) testEekChain_ = chain.moveValue();
+         testEekLength_ = eekLength;
+@@ -298,6 +299,17 @@ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+         }
+     }
+ 
++    ErrMsgOr<bytevec> getSessionKey(ErrMsgOr<std::pair<bytevec, bytevec>>& senderPubkey) {
++        if (rpcHardwareInfo.supportedEekCurve == RpcHardwareInfo::CURVE_25519 ||
++            rpcHardwareInfo.supportedEekCurve == RpcHardwareInfo::CURVE_NONE) {
++            return x25519_HKDF_DeriveKey(testEekChain_.last_pubkey, testEekChain_.last_privkey,
++                                         senderPubkey->first, false /* senderIsA */);
++        } else {
++            return ECDH_HKDF_DeriveKey(testEekChain_.last_pubkey, testEekChain_.last_privkey,
++                                       senderPubkey->first, false /* senderIsA */);
++        }
++    }
++
+     void checkProtectedData(const DeviceInfo& deviceInfo, const cppbor::Array& keysToSign,
+                             const bytevec& keysToSignMac, const ProtectedData& protectedData,
+                             std::vector<BccEntryData>* bccOutput = nullptr) {
+@@ -310,9 +322,7 @@ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+         ASSERT_TRUE(senderPubkey) << senderPubkey.message();
+         EXPECT_EQ(senderPubkey->second, eekId_);
+ 
+-        auto sessionKey =
+-                x25519_HKDF_DeriveKey(testEekChain_.last_pubkey, testEekChain_.last_privkey,
+-                                      senderPubkey->first, false /* senderIsA */);
++        auto sessionKey = getSessionKey(senderPubkey);
+         ASSERT_TRUE(sessionKey) << sessionKey.message();
+ 
+         auto protectedDataPayload =
+@@ -322,7 +332,7 @@ class CertificateRequestTest : public VtsRemotelyProvisionedComponentTests {
+         auto [parsedPayload, __, payloadErrMsg] = cppbor::parse(*protectedDataPayload);
+         ASSERT_TRUE(parsedPayload) << "Failed to parse payload: " << payloadErrMsg;
+         ASSERT_TRUE(parsedPayload->asArray());
+-        EXPECT_EQ(parsedPayload->asArray()->size(), 2U);
++        EXPECT_LE(parsedPayload->asArray()->size(), 3U);
+ 
+         auto& signedMac = parsedPayload->asArray()->get(0);
+         auto& bcc = parsedPayload->asArray()->get(1);
+@@ -406,6 +416,7 @@ TEST_P(CertificateRequestTest, NewKeyPerCallInTestMode) {
+     bytevec keysToSignMac;
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
++    generateTestEekChain(3);
+     auto status = provisionable_->generateCertificateRequest(
+             testMode, {} /* keysToSign */, testEekChain_.chain, challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+@@ -445,7 +456,7 @@ TEST_P(CertificateRequestTest, DISABLED_EmptyRequest_prodMode) {
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
+     auto status = provisionable_->generateCertificateRequest(
+-            testMode, {} /* keysToSign */, getProdEekChain(), challenge_, &deviceInfo,
++            testMode, {} /* keysToSign */, getProdEekChain(rpcHardwareInfo.supportedEekCurve), challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+     EXPECT_TRUE(status.isOk());
+ }
+@@ -486,7 +497,7 @@ TEST_P(CertificateRequestTest, DISABLED_NonEmptyRequest_prodMode) {
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
+     auto status = provisionable_->generateCertificateRequest(
+-            testMode, keysToSign_, getProdEekChain(), challenge_, &deviceInfo, &protectedData,
++            testMode, keysToSign_, getProdEekChain(rpcHardwareInfo.supportedEekCurve), challenge_, &deviceInfo, &protectedData,
+             &keysToSignMac);
+     EXPECT_TRUE(status.isOk());
+ }
+@@ -502,6 +513,7 @@ TEST_P(CertificateRequestTest, NonEmptyRequestCorruptMac_testMode) {
+     bytevec keysToSignMac;
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
++    generateTestEekChain(3);
+     auto status = provisionable_->generateCertificateRequest(
+             testMode, {keyWithCorruptMac}, testEekChain_.chain, challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+@@ -521,7 +533,7 @@ TEST_P(CertificateRequestTest, NonEmptyRequestCorruptMac_prodMode) {
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
+     auto status = provisionable_->generateCertificateRequest(
+-            testMode, {keyWithCorruptMac}, getProdEekChain(), challenge_, &deviceInfo,
++            testMode, {keyWithCorruptMac}, getProdEekChain(rpcHardwareInfo.supportedEekCurve), challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+     ASSERT_FALSE(status.isOk()) << status.getMessage();
+     EXPECT_EQ(status.getServiceSpecificError(), BnRemotelyProvisionedComponent::STATUS_INVALID_MAC);
+@@ -535,7 +547,7 @@ TEST_P(CertificateRequestTest, NonEmptyCorruptEekRequest_prodMode) {
+     bool testMode = false;
+     generateKeys(testMode, 4 /* numKeys */);
+ 
+-    auto prodEekChain = getProdEekChain();
++    auto prodEekChain = getProdEekChain(rpcHardwareInfo.supportedEekCurve);
+     auto [parsedChain, _, parseErr] = cppbor::parse(prodEekChain);
+     ASSERT_NE(parsedChain, nullptr) << parseErr;
+     ASSERT_NE(parsedChain->asArray(), nullptr);
+@@ -566,7 +578,7 @@ TEST_P(CertificateRequestTest, NonEmptyIncompleteEekRequest_prodMode) {
+ 
+     // Build an EEK chain that omits the first self-signed cert.
+     auto truncatedChain = cppbor::Array();
+-    auto [chain, _, parseErr] = cppbor::parse(getProdEekChain());
++    auto [chain, _, parseErr] = cppbor::parse(getProdEekChain(rpcHardwareInfo.supportedEekCurve));
+     ASSERT_TRUE(chain);
+     auto eekChain = chain->asArray();
+     ASSERT_NE(eekChain, nullptr);
+@@ -594,6 +606,7 @@ TEST_P(CertificateRequestTest, NonEmptyRequest_prodKeyInTestCert) {
+     bytevec keysToSignMac;
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
++    generateTestEekChain(3);
+     auto status = provisionable_->generateCertificateRequest(
+             true /* testMode */, keysToSign_, testEekChain_.chain, challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+@@ -612,6 +625,7 @@ TEST_P(CertificateRequestTest, NonEmptyRequest_testKeyInProdCert) {
+     bytevec keysToSignMac;
+     DeviceInfo deviceInfo;
+     ProtectedData protectedData;
++    generateTestEekChain(3);
+     auto status = provisionable_->generateCertificateRequest(
+             false /* testMode */, keysToSign_, testEekChain_.chain, challenge_, &deviceInfo,
+             &protectedData, &keysToSignMac);
+diff --git a/security/keymint/support/Android.bp b/security/keymint/support/Android.bp
+index 9e218b6a3..73fb8c277 100644
+--- a/security/keymint/support/Android.bp
++++ b/security/keymint/support/Android.bp
+@@ -62,6 +62,7 @@ cc_library {
+         "libcppcose_rkp",
+         "libcrypto",
+         "libjsoncpp",
++	"android.hardware.security.keymint-V1-ndk_platform",
+     ],
+ }
+ 
+diff --git a/security/keymint/support/include/remote_prov/remote_prov_utils.h b/security/keymint/support/include/remote_prov/remote_prov_utils.h
+index 406b7a9b7..4d9ed2b0c 100644
+--- a/security/keymint/support/include/remote_prov/remote_prov_utils.h
++++ b/security/keymint/support/include/remote_prov/remote_prov_utils.h
+@@ -52,6 +52,20 @@ inline constexpr uint8_t kCoseEncodedGeekCert[] = {
+         0x31, 0xbf, 0x6b, 0xe8, 0x1e, 0x35, 0xe2, 0xf0, 0x2d, 0xce, 0x6c, 0x2f, 0x4f, 0xf2,
+         0xf5, 0x4f, 0xa5, 0xd4, 0x83, 0xad, 0x96, 0xa2, 0xf1, 0x87, 0x58, 0x04};
+ 
++// The Google ECDSA root key for the Endpoint Encryption Key chain, encoded as COSE_Sign1
++inline constexpr uint8_t kCoseEncodedEcdsaRootCert[] = {
++        0x84, 0x43, 0xa1, 0x01, 0x26, 0xa0, 0x58, 0x4d, 0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01,
++        0x21, 0x58, 0x20, 0xf7, 0x14, 0x8a, 0xdb, 0x97, 0xf4, 0xcc, 0x53, 0xef, 0xd2, 0x64, 0x11,
++        0xc4, 0xe3, 0x75, 0x1f, 0x66, 0x1f, 0xa4, 0x71, 0x0c, 0x6c, 0xcf, 0xfa, 0x09, 0x46, 0x80,
++        0x74, 0x87, 0x54, 0xf2, 0xad, 0x22, 0x58, 0x20, 0x5e, 0x7f, 0x5b, 0xf6, 0xec, 0xe4, 0xf6,
++        0x19, 0xcc, 0xff, 0x13, 0x37, 0xfd, 0x0f, 0xa1, 0xc8, 0x93, 0xdb, 0x18, 0x06, 0x76, 0xc4,
++        0x5d, 0xe6, 0xd7, 0x6a, 0x77, 0x86, 0xc3, 0x2d, 0xaf, 0x8f, 0x58, 0x47, 0x30, 0x45, 0x02,
++        0x20, 0x2f, 0x97, 0x8e, 0x42, 0xfb, 0xbe, 0x07, 0x2d, 0x95, 0x47, 0x85, 0x47, 0x93, 0x40,
++        0xb0, 0x1f, 0xd4, 0x9b, 0x47, 0xa4, 0xc4, 0x44, 0xa9, 0xf2, 0xa1, 0x07, 0x87, 0x10, 0xc7,
++        0x9f, 0xcb, 0x11, 0x02, 0x21, 0x00, 0xf4, 0xbf, 0x9f, 0xe8, 0x3b, 0xe0, 0xe7, 0x34, 0x4c,
++        0x15, 0xfc, 0x7b, 0xc3, 0x7e, 0x33, 0x05, 0xf4, 0xd1, 0x34, 0x3c, 0xed, 0x02, 0x04, 0x60,
++        0x7a, 0x15, 0xe0, 0x79, 0xd3, 0x8a, 0xff, 0x24};
++
+ /**
+  * Generates random bytes.
+  */
+@@ -67,12 +81,12 @@ struct EekChain {
+  * Generates an X25518 EEK with the specified eekId and an Ed25519 chain of the
+  * specified length. All keys are generated randomly.
+  */
+-ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId);
++ErrMsgOr<EekChain> generateEekChain(int32_t supportedEekCurve, size_t length, const bytevec& eekId);
+ 
+ /**
+  * Returns the CBOR-encoded, production Google Endpoint Encryption Key chain.
+  */
+-bytevec getProdEekChain();
++bytevec getProdEekChain(int32_t supportedEekCurve);
+ 
+ struct BccEntryData {
+     bytevec pubKey;
+diff --git a/security/keymint/support/remote_prov_utils.cpp b/security/keymint/support/remote_prov_utils.cpp
+index 0cbee5104..ae5120f8b 100644
+--- a/security/keymint/support/remote_prov_utils.cpp
++++ b/security/keymint/support/remote_prov_utils.cpp
+@@ -17,15 +17,195 @@
+ #include <iterator>
+ #include <tuple>
+ 
++#include <aidl/android/hardware/security/keymint/RpcHardwareInfo.h>
+ #include <android-base/properties.h>
+ #include <cppbor.h>
+ #include <json/json.h>
++#include <keymaster/km_openssl/ec_key.h>
++#include <keymaster/km_openssl/ecdsa_operation.h>
++#include <keymaster/km_openssl/openssl_err.h>
++#include <keymaster/km_openssl/openssl_utils.h>
+ #include <openssl/base64.h>
++#include <openssl/evp.h>
+ #include <openssl/rand.h>
+ #include <remote_prov/remote_prov_utils.h>
+ 
+ namespace aidl::android::hardware::security::keymint::remote_prov {
+ 
++constexpr int kP256AffinePointSize = 32;
++
++using EC_KEY_Ptr = bssl::UniquePtr<EC_KEY>;
++using EVP_PKEY_Ptr = bssl::UniquePtr<EVP_PKEY>;
++using EVP_PKEY_CTX_Ptr = bssl::UniquePtr<EVP_PKEY_CTX>;
++
++ErrMsgOr<bytevec> ecKeyGetPrivateKey(const EC_KEY* ecKey) {
++    // Extract private key.
++    const BIGNUM* bignum = EC_KEY_get0_private_key(ecKey);
++    if (bignum == nullptr) {
++        return "Error getting bignum from private key";
++    }
++    int size = BN_num_bytes(bignum);
++    // Pad with zeros incase the length is lesser than 32.
++    bytevec privKey(32, 0);
++    BN_bn2bin(bignum, privKey.data() + 32 - size);
++    return privKey;
++}
++
++ErrMsgOr<bytevec> ecKeyGetPublicKey(const EC_KEY* ecKey) {
++    // Extract public key.
++    auto group = EC_GROUP_Ptr(EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1));
++    if (group.get() == nullptr) {
++        return "Error creating EC group by curve name";
++    }
++    const EC_POINT* point = EC_KEY_get0_public_key(ecKey);
++    if (point == nullptr) return "Error getting ecpoint from public key";
++
++    int size = EC_POINT_point2oct(group.get(), point,
++                                  POINT_CONVERSION_UNCOMPRESSED, nullptr, 0,
++                                  nullptr);
++    if (size == 0) {
++        return "Error generating public key encoding";
++    }
++
++    bytevec publicKey;
++    publicKey.resize(size);
++    EC_POINT_point2oct(group.get(), point,
++                       POINT_CONVERSION_UNCOMPRESSED, publicKey.data(),
++                       publicKey.size(), nullptr);
++    return publicKey;
++}
++
++ErrMsgOr<std::tuple<bytevec, bytevec>> getAffineCoordinates(
++    const bytevec& pubKey) {
++    auto group = EC_GROUP_Ptr(
++        EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1));
++    if (group.get() == nullptr) {
++        return "Error creating EC group by curve name";
++    }
++    auto point = EC_POINT_Ptr(EC_POINT_new(group.get()));
++    if (EC_POINT_oct2point(group.get(), point.get(), pubKey.data(),
++                           pubKey.size(), nullptr) != 1) {
++        return "Error decoding publicKey";
++    }
++    BIGNUM_Ptr x(BN_new());
++    BIGNUM_Ptr y(BN_new());
++    BN_CTX_Ptr ctx(BN_CTX_new());
++    if (!ctx.get()) return "Failed to create BN_CTX instance";
++
++    if (!EC_POINT_get_affine_coordinates_GFp(group.get(), point.get(),
++                                             x.get(), y.get(),
++                                             ctx.get())) {
++        return "Failed to get affine coordinates from ECPoint";
++    }
++    bytevec pubX(kP256AffinePointSize);
++    bytevec pubY(kP256AffinePointSize);
++    if (BN_bn2binpad(x.get(), pubX.data(), kP256AffinePointSize) !=
++        kP256AffinePointSize) {
++        return "Error in converting absolute value of x cordinate to big-endian";
++    }
++    if (BN_bn2binpad(y.get(), pubY.data(), kP256AffinePointSize) !=
++        kP256AffinePointSize) {
++        return "Error in converting absolute value of y cordinate to big-endian";
++    }
++    return std::make_tuple(std::move(pubX), std::move(pubY));
++}
++
++ErrMsgOr<std::tuple<bytevec, bytevec>> generateEc256KeyPair() {
++    auto ec_key = EC_KEY_Ptr(EC_KEY_new());
++    if (ec_key.get() == nullptr) {
++        return "Failed to allocate ec key";
++    }
++
++    auto group = EC_GROUP_Ptr(EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1));
++    if (group.get() == nullptr) {
++        return "Error creating EC group by curve name";
++    }
++
++    if (EC_KEY_set_group(ec_key.get(), group.get()) != 1 ||
++        EC_KEY_generate_key(ec_key.get()) != 1 || EC_KEY_check_key(ec_key.get()) < 0) {
++        return "Error generating key";
++    }
++
++    auto privKey = ecKeyGetPrivateKey(ec_key.get());
++    if (!privKey) return privKey.moveMessage();
++
++    auto pubKey = ecKeyGetPublicKey(ec_key.get());
++    if (!pubKey) return pubKey.moveMessage();
++
++    return std::make_tuple(pubKey.moveValue(), privKey.moveValue());
++}
++
++ErrMsgOr<std::tuple<bytevec, bytevec>> generateX25519KeyPair() {
++    /* Generate X25519 key pair */
++    bytevec pubKey(X25519_PUBLIC_VALUE_LEN);
++    bytevec privKey(X25519_PRIVATE_KEY_LEN);
++    X25519_keypair(pubKey.data(), privKey.data());
++    return std::make_tuple(std::move(pubKey), std::move(privKey));
++}
++
++ErrMsgOr<std::tuple<bytevec, bytevec>> generateED25519KeyPair() {
++    /* Generate ED25519 key pair */
++    bytevec pubKey(ED25519_PUBLIC_KEY_LEN);
++    bytevec privKey(ED25519_PRIVATE_KEY_LEN);
++    ED25519_keypair(pubKey.data(), privKey.data());
++    return std::make_tuple(std::move(pubKey), std::move(privKey));
++}
++
++ErrMsgOr<std::tuple<bytevec, bytevec>> generateKeyPair(
++    int32_t supportedEekCurve, bool isEek) {
++
++    switch (supportedEekCurve) {
++        case RpcHardwareInfo::CURVE_NONE:
++        case RpcHardwareInfo::CURVE_25519:
++            if (isEek) {
++                return generateX25519KeyPair();
++            }
++            return generateED25519KeyPair();
++        case RpcHardwareInfo::CURVE_P256:
++            return generateEc256KeyPair();
++        default:
++            return "Unknown EEK Curve.";
++    }
++}
++
++ErrMsgOr<bytevec> constructCoseKey(int32_t supportedEekCurve, const bytevec& eekId,
++                                   const bytevec& pubKey) {
++    CoseKeyType keyType;
++    CoseKeyAlgorithm algorithm;
++    CoseKeyCurve curve;
++    bytevec pubX;
++    bytevec pubY;
++    switch (supportedEekCurve) {
++    case RpcHardwareInfo::CURVE_NONE:
++    case RpcHardwareInfo::CURVE_25519:
++        keyType = OCTET_KEY_PAIR;
++        algorithm = (eekId.empty()) ? EDDSA : ECDH_ES_HKDF_256;
++        curve = (eekId.empty()) ? ED25519 : cppcose::X25519;
++        pubX = pubKey;
++        break;
++    case RpcHardwareInfo::CURVE_P256: {
++        keyType = EC2;
++        algorithm = (eekId.empty()) ? ES256 : ECDH_ES_HKDF_256;
++        curve = P256;
++        auto affineCoordinates = getAffineCoordinates(pubKey);
++        if (!affineCoordinates) return affineCoordinates.moveMessage();
++        std::tie(pubX, pubY) = affineCoordinates.moveValue();
++    } break;
++    default:
++        return "Unknown EEK Curve.";
++    }
++    cppbor::Map coseKey = cppbor::Map()
++                              .add(CoseKey::KEY_TYPE, keyType)
++                              .add(CoseKey::ALGORITHM, algorithm)
++                              .add(CoseKey::CURVE, curve)
++                              .add(CoseKey::PUBKEY_X, pubX);
++
++    if (!pubY.empty()) coseKey.add(CoseKey::PUBKEY_Y, pubY);
++    if (!eekId.empty()) coseKey.add(CoseKey::KEY_ID, eekId);
++
++    return coseKey.canonicalize().encode();
++}
++
+ bytevec kTestMacKey(32 /* count */, 0 /* byte value */);
+ 
+ bytevec randomBytes(size_t numBytes) {
+@@ -34,7 +214,17 @@ bytevec randomBytes(size_t numBytes) {
+     return retval;
+ }
+ 
+-ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId) {
++ErrMsgOr<cppbor::Array> constructCoseSign1(int32_t supportedEekCurve, const bytevec& key,
++                                           const bytevec& payload, const bytevec& aad) {
++    if (supportedEekCurve == RpcHardwareInfo::CURVE_P256) {
++        return constructECDSACoseSign1(key, {} /* protectedParams */, payload, aad);
++    } else {
++        return cppcose::constructCoseSign1(key, payload, aad);
++    }
++}
++
++ErrMsgOr<EekChain> generateEekChain(int32_t supportedEekCurve, size_t length,
++                                    const bytevec& eekId) {
+     if (length < 2) {
+         return "EEK chain must contain at least 2 certs.";
+     }
+@@ -43,42 +233,31 @@ ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId) {
+ 
+     bytevec prev_priv_key;
+     for (size_t i = 0; i < length - 1; ++i) {
+-        bytevec pub_key(ED25519_PUBLIC_KEY_LEN);
+-        bytevec priv_key(ED25519_PRIVATE_KEY_LEN);
+-
+-        ED25519_keypair(pub_key.data(), priv_key.data());
++        auto keyPair = generateKeyPair(supportedEekCurve, false);
++        if (!keyPair) keyPair.moveMessage();
++        auto [pub_key, priv_key] = keyPair.moveValue();
+ 
+         // The first signing key is self-signed.
+         if (prev_priv_key.empty()) prev_priv_key = priv_key;
+ 
+-        auto coseSign1 = constructCoseSign1(prev_priv_key,
+-                                            cppbor::Map() /* payload CoseKey */
+-                                                    .add(CoseKey::KEY_TYPE, OCTET_KEY_PAIR)
+-                                                    .add(CoseKey::ALGORITHM, EDDSA)
+-                                                    .add(CoseKey::CURVE, ED25519)
+-                                                    .add(CoseKey::PUBKEY_X, pub_key)
+-                                                    .canonicalize()
+-                                                    .encode(),
++        auto coseKey = constructCoseKey(supportedEekCurve, {}, pub_key);
++        if (!coseKey) return coseKey.moveMessage();
++
++        auto coseSign1 = constructCoseSign1(supportedEekCurve, prev_priv_key, coseKey.moveValue(),
+                                             {} /* AAD */);
+         if (!coseSign1) return coseSign1.moveMessage();
+         eekChain.add(coseSign1.moveValue());
+ 
+         prev_priv_key = priv_key;
+     }
++    auto keyPair = generateKeyPair(supportedEekCurve, true);
++    if (!keyPair) keyPair.moveMessage();
++    auto [pub_key, priv_key] = keyPair.moveValue();
+ 
+-    bytevec pub_key(X25519_PUBLIC_VALUE_LEN);
+-    bytevec priv_key(X25519_PRIVATE_KEY_LEN);
+-    X25519_keypair(pub_key.data(), priv_key.data());
++    auto coseKey = constructCoseKey(supportedEekCurve, eekId, pub_key);
++    if (!coseKey) return coseKey.moveMessage();
+ 
+-    auto coseSign1 = constructCoseSign1(prev_priv_key,
+-                                        cppbor::Map() /* payload CoseKey */
+-                                                .add(CoseKey::KEY_TYPE, OCTET_KEY_PAIR)
+-                                                .add(CoseKey::KEY_ID, eekId)
+-                                                .add(CoseKey::ALGORITHM, ECDH_ES_HKDF_256)
+-                                                .add(CoseKey::CURVE, cppcose::X25519)
+-                                                .add(CoseKey::PUBKEY_X, pub_key)
+-                                                .canonicalize()
+-                                                .encode(),
++    auto coseSign1 = constructCoseSign1(supportedEekCurve, prev_priv_key, coseKey.moveValue(),
+                                         {} /* AAD */);
+     if (!coseSign1) return coseSign1.moveMessage();
+     eekChain.add(coseSign1.moveValue());
+@@ -86,16 +265,15 @@ ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId) {
+     return EekChain{eekChain.encode(), pub_key, priv_key};
+ }
+ 
+-bytevec getProdEekChain() {
+-    bytevec prodEek;
+-    prodEek.reserve(1 + sizeof(kCoseEncodedRootCert) + sizeof(kCoseEncodedGeekCert));
+-
+-    // In CBOR encoding, 0x82 indicates an array of two items
+-    prodEek.push_back(0x82);
+-    prodEek.insert(prodEek.end(), std::begin(kCoseEncodedRootCert), std::end(kCoseEncodedRootCert));
+-    prodEek.insert(prodEek.end(), std::begin(kCoseEncodedGeekCert), std::end(kCoseEncodedGeekCert));
+-
+-    return prodEek;
++bytevec getProdEekChain(int32_t supportedEekCurve) {
++    cppbor::Array chain;
++    if (supportedEekCurve == RpcHardwareInfo::CURVE_P256) {
++        chain.add(cppbor::EncodedItem(bytevec(std::begin(kCoseEncodedEcdsaRootCert), std::end(kCoseEncodedEcdsaRootCert))));
++    } else {
++        chain.add(cppbor::EncodedItem(bytevec(std::begin(kCoseEncodedRootCert), std::end(kCoseEncodedRootCert))));
++        chain.add(cppbor::EncodedItem(bytevec(std::begin(kCoseEncodedGeekCert), std::end(kCoseEncodedGeekCert))));
++    }
++    return chain.encode();
+ }
+ 
+ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
+@@ -122,7 +300,8 @@ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
+     }
+ 
+     auto& algorithm = parsedProtParams->asMap()->get(ALGORITHM);
+-    if (!algorithm || !algorithm->asInt() || algorithm->asInt()->value() != EDDSA) {
++    if (!algorithm || !algorithm->asInt() || (algorithm->asInt()->value() != EDDSA &&
++        algorithm->asInt()->value() != ES256)) {
+         return "Unsupported signature algorithm";
+     }
+ 
+@@ -136,16 +315,35 @@ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
+     if (!serializedKey || !serializedKey->asBstr()) return "Could not find key entry";
+ 
+     bool selfSigned = signingCoseKey.empty();
+-    auto key =
++    bytevec key;
++    if (algorithm->asInt()->value() == EDDSA) {
++        auto key =
+             CoseKey::parseEd25519(selfSigned ? serializedKey->asBstr()->value() : signingCoseKey);
+-    if (!key) return "Bad signing key: " + key.moveMessage();
++        if (!key) return "Bad signing key: " + key.moveMessage();
+ 
+-    bytevec signatureInput =
++        bytevec signatureInput =
+             cppbor::Array().add("Signature1").add(*protectedParams).add(aad).add(*payload).encode();
+ 
+-    if (!ED25519_verify(signatureInput.data(), signatureInput.size(), signature->value().data(),
+-                        key->getBstrValue(CoseKey::PUBKEY_X)->data())) {
+-        return "Signature verification failed";
++        if (!ED25519_verify(signatureInput.data(), signatureInput.size(), signature->value().data(),
++                            key->getBstrValue(CoseKey::PUBKEY_X)->data())) {
++            return "Signature verification failed";
++        }
++    } else { // P256
++        auto key =
++            CoseKey::parseP256(selfSigned ? serializedKey->asBstr()->value() : signingCoseKey);
++        if (!key || key->getBstrValue(CoseKey::PUBKEY_X)->empty() ||
++            key->getBstrValue(CoseKey::PUBKEY_Y)->empty()) {
++            return "Bad signing key: " + key.moveMessage();
++        }
++        auto publicKey = key->getEcPublicKey();
++        if (!publicKey) return publicKey.moveMessage();
++
++        bytevec signatureInput =
++            cppbor::Array().add("Signature1").add(*protectedParams).add(aad).add(*payload).encode();
++
++        if (!verifyEcdsaDigest(publicKey.moveValue(), sha256(signatureInput), signature->value())) {
++            return "Signature verification failed";
++        }
+     }
+ 
+     return serializedKey->asBstr()->value();
+diff --git a/security/keymint/support/remote_prov_utils_test.cpp b/security/keymint/support/remote_prov_utils_test.cpp
+index 8697c5190..0009bf713 100644
+--- a/security/keymint/support/remote_prov_utils_test.cpp
++++ b/security/keymint/support/remote_prov_utils_test.cpp
+@@ -14,6 +14,7 @@
+  * limitations under the License.
+  */
+ 
++#include <aidl/android/hardware/security/keymint/RpcHardwareInfo.h>
+ #include <android-base/properties.h>
+ #include <cppbor_parse.h>
+ #include <gmock/gmock.h>
+@@ -35,13 +36,13 @@ using ::keymaster::validateAndExtractEekPubAndId;
+ using ::testing::ElementsAreArray;
+ 
+ TEST(RemoteProvUtilsTest, GenerateEekChainInvalidLength) {
+-    ASSERT_FALSE(generateEekChain(1, /*eekId=*/{}));
++    ASSERT_FALSE(generateEekChain(CURVE_25519, 1, /*eekId=*/{}));
+ }
+ 
+ TEST(RemoteProvUtilsTest, GenerateEekChain) {
+     bytevec kTestEekId = {'t', 'e', 's', 't', 'I', 'd', 0};
+     for (size_t length : {2, 3, 31}) {
+-        auto get_eek_result = generateEekChain(length, kTestEekId);
++        auto get_eek_result = generateEekChain(CURVE_25519, length, kTestEekId);
+         ASSERT_TRUE(get_eek_result) << get_eek_result.message();
+ 
+         auto& [chain, pubkey, privkey] = *get_eek_result;
