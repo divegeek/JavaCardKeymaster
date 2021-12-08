@@ -1,0 +1,40 @@
+diff --git a/prebuilts/api/31.0/public/hal_neverallows.te b/prebuilts/api/31.0/public/hal_neverallows.te
+index 105689b8a..275f9a5c2 100644
+--- a/prebuilts/api/31.0/public/hal_neverallows.te
++++ b/prebuilts/api/31.0/public/hal_neverallows.te
+@@ -9,6 +9,7 @@ neverallow {
+   -hal_wifi_supplicant_server
+   -hal_telephony_server
+   -hal_uwb_server
++  -hal_keymint_server
+ } self:global_capability_class_set { net_admin net_raw };
+ 
+ # Unless a HAL's job is to communicate over the network, or control network
+@@ -27,6 +28,7 @@ neverallow {
+   -hal_wifi_supplicant_server
+   -hal_telephony_server
+   -hal_uwb_server
++  -hal_keymint_server
+ } domain:{ tcp_socket udp_socket rawip_socket } *;
+ 
+ # The UWB HAL is not actually a networking HAL but may need to bring up and down
+diff --git a/public/hal_neverallows.te b/public/hal_neverallows.te
+index 105689b8a..275f9a5c2 100644
+--- a/public/hal_neverallows.te
++++ b/public/hal_neverallows.te
+@@ -9,6 +9,7 @@ neverallow {
+   -hal_wifi_supplicant_server
+   -hal_telephony_server
+   -hal_uwb_server
++  -hal_keymint_server
+ } self:global_capability_class_set { net_admin net_raw };
+ 
+ # Unless a HAL's job is to communicate over the network, or control network
+@@ -27,6 +28,7 @@ neverallow {
+   -hal_wifi_supplicant_server
+   -hal_telephony_server
+   -hal_uwb_server
++  -hal_keymint_server
+ } domain:{ tcp_socket udp_socket rawip_socket } *;
+ 
+ # The UWB HAL is not actually a networking HAL but may need to bring up and down
