@@ -66,7 +66,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     keymasterState = element.readByte();
     repository.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
     seProvider.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
-    handleDataUpgradeToVersion1_1();
+    handleDataUpgradeToVersion2_0();
   }
 
   @Override
@@ -101,10 +101,10 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private short computeObjectCount() {
     return (short) 0;
   }
-  
+
   public boolean isUpgradeAllowed(short version) {
     boolean upgradeAllowed = false;
-    short oldMajorVersion = (short) (version >> 8 & 0x00FF);
+    short oldMajorVersion = (short) ((version >> 8) & 0x00FF);
     short oldMinorVersion = (short) (version & 0x00FF);
     short currentMajorVersion = (short) (CURRENT_PACKAGE_VERSION >> 8 & 0x00FF);
     short currentMinorVersion = (short) (CURRENT_PACKAGE_VERSION & 0x00FF);
@@ -121,8 +121,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     }
     return upgradeAllowed;
   }
-  
-  public void handleDataUpgradeToVersion1_1() {
+
+  public void handleDataUpgradeToVersion2_0() {
     
     if (packageVersion != 0) {
       // No Data upgrade required.
@@ -185,7 +185,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         issuerLen,
         (short) (certChaionOff + certChainLen + issuerLen), // cert expiry offset
         certExpiryLen);
-    
 
     // Update computed HMAC key.
     short blob = repository.getComputedHmacKey();
