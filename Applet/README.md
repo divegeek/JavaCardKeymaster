@@ -10,8 +10,6 @@ which mediates between Android Keystore and this applet.
   - Keymint 1.0 supported functions for required VTS compliance.
   - SharedSecret 1.0 supported functions for required VTS compliance.
 
-# Exceptions
-  - Generate and Import key with client supplied attestation key is not yet supported.
 # Not supported features
   - Factory provisioned attestation key will not be supported in this applet.
   - Limited usage keys will not be supported in this applet.

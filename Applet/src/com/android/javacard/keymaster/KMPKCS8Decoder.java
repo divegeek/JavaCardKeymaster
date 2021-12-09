@@ -1,5 +1,6 @@
 package com.android.javacard.keymaster;
 
+import com.android.javacard.seprovider.KMException;
 import javacard.framework.Util;
 
 public class KMPKCS8Decoder {

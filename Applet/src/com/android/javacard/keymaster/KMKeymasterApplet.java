@@ -16,7 +16,10 @@
 
 package com.android.javacard.keymaster;
 
-import com.android.javacard.rkp.RemotelyProvisionedComponentDevice;
+import com.android.javacard.seprovider.KMAttestationCert;
+import com.android.javacard.seprovider.KMDeviceUniqueKey;
+import com.android.javacard.seprovider.KMException;
+import com.android.javacard.seprovider.KMSEProvider;
 import javacard.framework.APDU;
 import javacard.framework.Applet;
 import javacard.framework.AppletEvent;
@@ -334,8 +337,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         return KMError.SW_WRONG_LENGTH;
       case ISO7816.SW_UNKNOWN:
       default:
-//        return KMError.UNKNOWN_ERROR;
-        return KMError.INVALID_NONCE;
+        return KMError.UNKNOWN_ERROR;
     }
   }
 
@@ -352,8 +354,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       case CryptoException.UNINITIALIZED_KEY:
         return KMError.CRYPTO_UNINITIALIZED_KEY;
       default:
- //       return KMError.UNKNOWN_ERROR;
-        return KMError.INVALID_NONCE;
+        return KMError.UNKNOWN_ERROR;
     }
   }
 
@@ -483,7 +484,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       resetWrappingKey();
       sendError(apdu, KMException.reason());
     } catch (ISOException exp) {
-      //    sendError(apdu, mapISOErrorToKMError(exp.getReason()));
+      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
       freeOperations();
       resetWrappingKey();
       sendError(apdu, mapISOErrorToKMError(exp.getReason()));
@@ -492,7 +493,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       resetWrappingKey();
       sendError(apdu, mapCryptoErrorToKMError(e.getReason()));
     } catch (Exception e) {
-//      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
+      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
       freeOperations();
       resetWrappingKey();
       sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
@@ -1192,7 +1193,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private KMAttestationCert makeCommonCert(byte[] scratchPad) {
     short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, data[KEY_PARAMETERS]);
     boolean rsaCert = KMEnumTag.cast(alg).getValue() == KMType.RSA;
-    KMAttestationCert cert = seProvider.getAttestationCert(rsaCert);
+    KMAttestationCert cert = KMAttestationCertImpl.instance(rsaCert, seProvider);
 
     short subject = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.CERTIFICATE_SUBJECT_NAME, data[KEY_PARAMETERS]);
 
@@ -2100,15 +2101,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       short len  = KMByteBlob.cast(data[INPUT_DATA]).length();
       short additionalExpOutLen = 0;
       if (op.getAlgorithm() == KMType.AES) {
-        if (op.getBlockMode() == KMType.GCM) {
+        if (op.getBlockMode() == KMType.GCM || op.getBlockMode() == KMType.CTR) {
           if(op.isAesGcmUpdateAllowed()){
             op.setAesGcmUpdateComplete();
-          }
-          // if input data present then it should be block aligned.
-          if (len > 0) {
-            if (len % AES_BLOCK_SIZE != 0) {
-              KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-            }
           }
           additionalExpOutLen = 16;
         } else {
@@ -2331,11 +2326,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
 
     short params = KMKeyParameters.instance(iv);
-    short resp  = KMArray.instance((short) 4);
+    short resp  = KMArray.instance((short) 5);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(resp).add((short) 1, params);
     KMArray.cast(resp).add((short) 2, data[OP_HANDLE]);
     KMArray.cast(resp).add((short) 3, KMInteger.uint_8(op.getBufferingMode()));
+    KMArray.cast(resp).add((short) 4, KMInteger.uint_16((short) (op.getMacLength() / 8)));
     sendOutgoing(apdu, resp);
   }
 
@@ -3144,6 +3140,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = KMArray.instance((short) 4);
   }
 
+  private void validateAesKeySize(short keySizeBits) {
+    if (keySizeBits != 128 && keySizeBits != 256) {
+      KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
+    }
+  }
+
   private void importAESKey(byte[] scratchPad) {
     // Get Key
     data[SECRET] = data[IMPORTED_KEY_BLOB];
@@ -3153,12 +3155,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short keysize =
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.KEYSIZE, data[KEY_PARAMETERS]);
     if (keysize != KMType.INVALID_VALUE) {
-      if (keysize != 128 && keysize != 256) {
-        KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
-      }
+      validateAesKeySize(keysize);
     } else {
       // add the key size to scratchPad
-      keysize = KMInteger.uint_16(KMByteBlob.cast(data[SECRET]).length());
+      keysize = (short) ( 8 * KMByteBlob.cast(data[SECRET]).length());
+      validateAesKeySize(keysize);
+      keysize = KMInteger.uint_16(keysize);
       short keysizeTag = KMIntegerTag.instance(KMType.UINT_TAG, KMType.KEYSIZE, keysize);
       Util.setShort(scratchPad, index, keysizeTag);
       index += 2;
@@ -4034,6 +4036,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   public void powerReset() {
     //TODO handle power reset signal.
+    releaseAllOperations();
+    resetWrappingKey();
   }
 
   public static void generateRkpKey(byte[] scratchPad, short keyParams) {
@@ -4100,7 +4104,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ptr2 = KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PAYLOAD_OFFSET);
       ptr2 = decoder.decode(coseKeyExp, KMByteBlob.cast(ptr2).getBuffer(),
           KMByteBlob.cast(ptr2).getStartOff(), KMByteBlob.cast(ptr2).length());
-      if (index == (short) (len - 1)) {
+      if ((index == (short) (len - 1)) && len > 1) {
         alg = expLeafCertAlg;
       }
       if (!KMCoseKey.cast(ptr2).isDataValid(KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE, alg,
@@ -4147,5 +4151,90 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       prevCoseKey = ptr2;
     }
     return prevCoseKey;
+  }
+
+
+  public static short generateBcc(boolean testMode, byte[] scratchPad) {
+    if (!testMode && seProvider.isProvisionLocked()) {
+      KMException.throwIt(KMError.STATUS_FAILED);
+    }
+    KMDeviceUniqueKey deviceUniqueKey = seProvider.getDeviceUniqueKey(testMode);
+    short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
+    short coseKey =
+        KMCose.constructCoseKey(
+            KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
+            KMType.INVALID_VALUE,
+            KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
+            KMInteger.uint_8(KMCose.COSE_KEY_OP_VERIFY),
+            KMInteger.uint_8(KMCose.COSE_ECCURVE_256),
+            scratchPad,
+            (short) 0,
+            temp,
+            KMType.INVALID_VALUE,
+            false
+        );
+    temp = KMKeymasterApplet.encodeToApduBuffer(coseKey, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+    // Construct payload.
+    short payload =
+        KMCose.constructCoseCertPayload(
+            KMCosePairTextStringTag.instance(KMInteger.uint_8(KMCose.ISSUER),
+                KMTextString.instance(KMCose.TEST_ISSUER_NAME, (short) 0,
+                    (short) KMCose.TEST_ISSUER_NAME.length)),
+            KMCosePairTextStringTag.instance(KMInteger.uint_8(KMCose.SUBJECT),
+                KMTextString.instance(KMCose.TEST_SUBJECT_NAME, (short) 0,
+                    (short) KMCose.TEST_SUBJECT_NAME.length)),
+            KMCosePairByteBlobTag.instance(KMNInteger.uint_32(KMCose.SUBJECT_PUBLIC_KEY, (short) 0),
+                KMByteBlob.instance(scratchPad, (short) 0, temp)),
+            KMCosePairByteBlobTag.instance(KMNInteger.uint_32(KMCose.KEY_USAGE, (short) 0),
+                KMByteBlob.instance(KMCose.KEY_USAGE_SIGN, (short) 0,
+                    (short) KMCose.KEY_USAGE_SIGN.length))
+        );
+    // temp temporarily holds the length of encoded cert payload.
+    temp = KMKeymasterApplet.encodeToApduBuffer(payload, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+    payload = KMByteBlob.instance(scratchPad, (short) 0, temp);
+
+    // protected header
+    short protectedHeader =
+        KMCose.constructHeaders(KMNInteger.uint_8(KMCose.COSE_ALG_ES256), KMType.INVALID_VALUE,
+            KMType.INVALID_VALUE, KMType.INVALID_VALUE);
+    // temp temporarily holds the length of encoded headers.
+    temp = KMKeymasterApplet.encodeToApduBuffer(protectedHeader, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+    protectedHeader = KMByteBlob.instance(scratchPad, (short) 0, temp);
+
+    //unprotected headers.
+    short arr = KMArray.instance((short) 0);
+    short unprotectedHeader = KMCoseHeaders.instance(arr);
+
+    // construct cose sign structure.
+    short coseSignStructure =
+        KMCose.constructCoseSignStructure(protectedHeader, KMByteBlob.instance((short) 0), payload);
+    // temp temporarily holds the length of encoded sign structure.
+    // Encode cose Sign_Structure.
+    temp = KMKeymasterApplet.encodeToApduBuffer(coseSignStructure, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+    // do sign
+    short len =
+        seProvider.ecSign256(
+            deviceUniqueKey,
+            scratchPad,
+            (short) 0,
+            temp,
+            scratchPad,
+            temp
+        );
+    coseSignStructure = KMByteBlob.instance(scratchPad, temp, len);
+
+    // construct cose_sign1
+    short coseSign1 =
+        KMCose.constructCoseSign1(protectedHeader, unprotectedHeader, payload, coseSignStructure);
+
+    // [Cose_Key, Cose_Sign1]
+    short bcc = KMArray.instance((short) 2);
+    KMArray.cast(bcc).add((short) 0, coseKey);
+    KMArray.cast(bcc).add((short) 1, coseSign1);
+    return bcc;
   }
 }

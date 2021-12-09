@@ -16,6 +16,7 @@
 
 package com.android.javacard.keymaster;
 
+import com.android.javacard.seprovider.KMException;
 import javacard.framework.Util;
 
 /**

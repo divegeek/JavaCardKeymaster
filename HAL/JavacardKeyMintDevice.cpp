@@ -296,16 +296,18 @@ ScopedAStatus JavacardKeyMintDevice::begin(KeyPurpose purpose, const std::vector
     // return the result
     uint64_t opHandle;
     uint8_t bufMode;
+    uint16_t macLength;
     if (!cbor_.getKeyParameters(item, 1, result->params) ||
         !cbor_.getUint64<uint64_t>(item, 2, opHandle) ||
-        !cbor_.getUint64<uint8_t>(item, 3, bufMode)) {
+        !cbor_.getUint64<uint8_t>(item, 3, bufMode) ||
+        !cbor_.getUint64<uint16_t>(item, 4, macLength)) {
         LOG(ERROR) << "Error in decoding the response in begin.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
     result->challenge = opHandle;
     result->operation = ndk::SharedRefBase::make<JavacardKeyMintOperation>(
         static_cast<keymaster_operation_handle_t>(opHandle), static_cast<BufferingMode>(bufMode),
-        card_);
+        macLength, card_);
     return ScopedAStatus::ok();
 }
 

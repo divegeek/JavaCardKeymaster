@@ -16,6 +16,8 @@
 
 package com.android.javacard.keymaster;
 
+import com.android.javacard.seprovider.KMException;
+import com.android.javacard.seprovider.KMUpgradable;
 import org.globalplatform.upgrade.Element;
 
 import javacard.framework.ISO7816;
