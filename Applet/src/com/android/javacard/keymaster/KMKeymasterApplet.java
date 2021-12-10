@@ -45,7 +45,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
   // Magic number version
   public static final byte KM_MAGIC_NUMBER = (byte) 0x81;
-  public static final short CURRENT_PACKAGE_VERSION = 0x0101; // 1.1
+  // MSB byte is for Major version and LSB byte is for Minor version.
+  public static final short CURRENT_PACKAGE_VERSION = 0x0200; // 2.0
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
