@@ -940,7 +940,7 @@ public class KMRepository implements KMUpgradable {
     dataTable = (byte[]) ele.readObject();
     if (oldVersion == 0) {
       // Previous versions does not contain version information.
-      handleDataUpgradeToVersion1_1();
+      handleDataUpgradeToVersion2_0();
     } else {
       attestIdsIndex = ele.readShort();
     }
@@ -994,7 +994,7 @@ public class KMRepository implements KMUpgradable {
     writeDataEntry(EARLY_BOOT_ENDED_STATUS, getHeap(), start, EARLY_BOOT_ENDED_FLAG_SIZE);
   }
   
-  public void handleDataUpgradeToVersion1_1() {
+  public void handleDataUpgradeToVersion2_0() {
     byte[] oldDataTable = dataTable;
     dataTable = new byte[2048];
     attestIdsIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
