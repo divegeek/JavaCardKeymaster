@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package com.android.javacard.seprovider;
+import javacard.framework.JCSystem;
 import javacard.security.KeyAgreement;
 import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;

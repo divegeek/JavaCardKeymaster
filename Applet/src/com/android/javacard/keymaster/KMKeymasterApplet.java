@@ -1558,7 +1558,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   protected short getBootKey(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_KEY_SIZE, (byte)0);
-    short len = seProvider.getVerifiedBootHash(scratchPad,(short)0);
+    short len = seProvider.getBootKey(scratchPad, (short) 0);
     if(len != VERIFIED_BOOT_KEY_SIZE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
@@ -1567,7 +1567,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   protected short getVerifiedBootHash(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_HASH_SIZE, (byte)0);
-    short len = seProvider.getVerifiedBootHash(scratchPad,(short)0);
+    short len = seProvider.getVerifiedBootHash(scratchPad, (short) 0);
     if(len != VERIFIED_BOOT_HASH_SIZE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
@@ -3436,7 +3436,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       // Attestation challenge present then it is an error because no factory provisioned attest key
       if (attChallenge != KMType.INVALID_VALUE && KMByteBlob.cast(attChallenge).length() > 0) {
         KMException.throwIt(KMError.ATTESTATION_KEYS_NOT_PROVISIONED);
-      } else if(KMEnumArrayTag.contains(KMType.PURPOSE, KMType.SIGN, data[KEY_PARAMETERS])) {
+      } else if(KMEnumArrayTag.contains(KMType.PURPOSE, KMType.ATTEST_KEY, data[KEY_PARAMETERS]) ||
+          KMEnumArrayTag.contains(KMType.PURPOSE, KMType.SIGN, data[KEY_PARAMETERS])) {
         mode = KMType.SELF_SIGNED_CERT;
       }else{
         mode = KMType.FAKE_CERT;
@@ -3829,8 +3830,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short len = seProvider.getBootKey(scratchPad, (short)0);
     len += seProvider.getVerifiedBootHash(scratchPad, (short)len);
     short bootState = seProvider.getBootState();
-    Util.setShort(scratchPad, (short)0,bootState);
-    len +=2;
+    len = Util.setShort(scratchPad, len, bootState);
     if(seProvider.isDeviceBootLocked()){
       scratchPad[len] = (byte)1;
     }else{

@@ -1,8 +1,8 @@
 diff --git a/shared/device.mk b/shared/device.mk
-index c86840539..e61e5276b 100644
+index 54042c107..622c6a549 100644
 --- a/shared/device.mk
 +++ b/shared/device.mk
-@@ -558,6 +558,9 @@ endif
+@@ -607,6 +607,9 @@ endif
   PRODUCT_PACKAGES += \
      $(LOCAL_KEYMINT_PRODUCT_PACKAGE)
  
@@ -13,10 +13,10 @@ index c86840539..e61e5276b 100644
  ifneq ($(LOCAL_PREFER_VENDOR_APEX),true)
  PRODUCT_COPY_FILES += \
 diff --git a/shared/sepolicy/vendor/file_contexts b/shared/sepolicy/vendor/file_contexts
-index cebac258e..42d3ad6f9 100644
+index 55b8d964e..a0e88fb2e 100644
 --- a/shared/sepolicy/vendor/file_contexts
 +++ b/shared/sepolicy/vendor/file_contexts
-@@ -93,6 +93,7 @@
+@@ -85,6 +85,7 @@
  /vendor/bin/hw/android\.hardware\.input\.classifier@1\.0-service.default  u:object_r:hal_input_classifier_default_exec:s0
  /vendor/bin/hw/android\.hardware\.thermal@2\.0-service\.mock  u:object_r:hal_thermal_default_exec:s0
  /vendor/bin/hw/android\.hardware\.security\.keymint-service\.remote  u:object_r:hal_keymint_remote_exec:s0
