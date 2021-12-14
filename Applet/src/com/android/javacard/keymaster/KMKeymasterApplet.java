@@ -1770,10 +1770,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         break;
       case KMType.AES:
       case KMType.DES:
-        if(op.getBlockMode() == KMType.GCM && (len < (short) (op.getMacLength() / 8))){
-          // Check if there is at least MAC Length bytes of input data
-            KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-        }
         finishAesDesOperation(op);
         break;
     }
@@ -1786,13 +1782,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       blockSize= DES_BLOCK_SIZE;
     }
 
-    // If no padding then data length must be block aligned
-    if(op.getPadding() == KMType.PADDING_NONE && op.getPurpose() == KMType.ENCRYPT
-        && (op.getBlockMode() == KMType.ECB || op.getBlockMode() == KMType.CBC)
-        && ((short) (len % blockSize) != 0)){
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-
     if(op.getPurpose() == KMType.DECRYPT && len > 0
         && (op.getBlockMode() == KMType.ECB || op.getBlockMode() == KMType.CBC)
         && ((short) (len % blockSize) != 0)){
@@ -1800,26 +1789,32 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
 
     if (op.getBlockMode() == KMType.GCM) {
+      if (op.getPurpose() == KMType.DECRYPT && (len < (short) (op.getMacLength() / 8))) {
+        KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+      }
       if(op.isAesGcmUpdateAllowed()){
         op.setAesGcmUpdateComplete();
       }
-      //Get output size as it can be more then input size in case of GCM
+      // Get the output size
       len = op.getOperation().getAESGCMOutputSize(len, (short) (op.getMacLength() / 8));
     }
     // If padding i.e. pkcs7 then add padding to right
     // Output data can at most one block size more the input data in case of pkcs7 encryption
     // In case of gcm we will allocate extra memory of the size equal to blocksize.
-    short outData  = KMByteBlob.instance((short) (len + blockSize));
-    len =
-        op.getOperation()
-            .finish(
-                KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
-                KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
-                KMByteBlob.cast(data[INPUT_DATA]).length(),
-                KMByteBlob.cast(outData).getBuffer(),
-                KMByteBlob.cast(outData).getStartOff());
-    KMByteBlob.cast(outData).setLength(len);
-    data[OUTPUT_DATA] = outData;
+    data[OUTPUT_DATA]  = KMByteBlob.instance((short) (len + 2 * blockSize));
+    try {
+      len = op.getOperation().finish(
+          KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+          KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
+          KMByteBlob.cast(data[INPUT_DATA]).length(),
+          KMByteBlob.cast(data[OUTPUT_DATA]).getBuffer(),
+          KMByteBlob.cast(data[OUTPUT_DATA]).getStartOff());
+    } catch (CryptoException e) {
+      if (e.getReason() == CryptoException.ILLEGAL_USE) {
+        KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+      }
+    }
+    KMByteBlob.cast(data[OUTPUT_DATA]).setLength(len);
   }
 
   private void finishKeyAgreementOperation(KMOperationState op, byte[] scratchPad) {
@@ -2084,7 +2079,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeUpdateFinishOperation(op, scratchPad);
 
     if (op.getPurpose() == KMType.SIGN || op.getPurpose() == KMType.VERIFY) {
-       short len = KMByteBlob.cast(data[INPUT_DATA]).length();
       // update the data.
       op.getOperation()
           .update(
@@ -2099,28 +2093,21 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.OPERATION_CANCELLED);
       }
       short len  = KMByteBlob.cast(data[INPUT_DATA]).length();
-      short additionalExpOutLen = 0;
+      short blockSize = DES_BLOCK_SIZE;
       if (op.getAlgorithm() == KMType.AES) {
-        if (op.getBlockMode() == KMType.GCM || op.getBlockMode() == KMType.CTR) {
-          if(op.isAesGcmUpdateAllowed()){
-            op.setAesGcmUpdateComplete();
+          blockSize = AES_BLOCK_SIZE;
+          if (op.getBlockMode() == KMType.GCM) {
+            // if input data present
+            if (len > 0) {
+              // no more future updateAAD allowed if input data present.
+              if (op.isAesGcmUpdateAllowed()) {
+                op.setAesGcmUpdateComplete();
+              }
+            }
           }
-          additionalExpOutLen = 16;
-        } else {
-          // input data must be block aligned.
-          // 128 bit block size - HAL must send block aligned data
-          if (len % AES_BLOCK_SIZE != 0 || len  <= 0) {
-            KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-          }
-        }
-      } else if (op.getAlgorithm() == KMType.DES) {
-        // 64 bit block size - HAL must send block aligned data
-        if (len % DES_BLOCK_SIZE != 0) {
-          KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-        }
       }
       // Allocate output buffer as input data is already block aligned
-      data[OUTPUT_DATA] = KMByteBlob.instance((short) (len + additionalExpOutLen));
+      data[OUTPUT_DATA] = KMByteBlob.instance((short) (len + 2 * blockSize));
       // Otherwise just update the data.
       // HAL consumes all the input and maintains a buffered data inside it. So the
       // applet sends the inputConsumed length as same as the input length.
@@ -2139,16 +2126,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
       // Adjust the Output data if it is not equal to input data.
       // This happens in case of JCardSim provider.
-      if (len != KMByteBlob.cast(data[OUTPUT_DATA]).length()) {
-        data[INPUT_DATA] = data[OUTPUT_DATA];
-        data[OUTPUT_DATA] = KMByteBlob.instance(len);
-        Util.arrayCopy(
-            KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
-            KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
-            KMByteBlob.cast(data[OUTPUT_DATA]).getBuffer(),
-            KMByteBlob.cast(data[OUTPUT_DATA]).getStartOff(),
-            len);
-      }
+      KMByteBlob.cast(data[OUTPUT_DATA]).setLength(len);
     }
 
     if (data[OUTPUT_DATA] == KMType.INVALID_VALUE) {

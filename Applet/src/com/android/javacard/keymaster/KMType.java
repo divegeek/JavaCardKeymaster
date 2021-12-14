@@ -349,10 +349,10 @@ public abstract class KMType {
   public static final byte BUF_NONE = 0;
   public static final byte BUF_RSA_NO_DIGEST = 1;
   public static final byte BUF_EC_NO_DIGEST = 2;
-  public static final byte BUF_AES_BLOCK_ALIGN = 3;
-  public static final byte BUF_AES_PKCS7_DECRYPT_BLOCK_ALIGN = 4;
-  public static final byte BUF_DES_BLOCK_ALIGN = 5;
-  public static final byte BUF_DES_PKCS7_DECRYPT_BLOCK_ALIGN = 6;
+  public static final byte BUF_AES_ENCRYPT_PKCS7_BLOCK_ALIGN = 3;
+  public static final byte BUF_AES_DECRYPT_PKCS7_BLOCK_ALIGN = 4;
+  public static final byte BUF_DES_ENCRYPT_PKCS7_BLOCK_ALIGN = 5;
+  public static final byte BUF_DES_DECRYPT_PKCS7_BLOCK_ALIGN = 6;
   public static final byte BUF_AES_GCM_DECRYPT_BLOCK_ALIGN = 7;
 
   protected static KMRepository repository;
