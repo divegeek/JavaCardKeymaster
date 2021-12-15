@@ -257,19 +257,19 @@ public class KMRepository implements KMUpgradable {
   }
 
   public short readData(short id) {
-    short blob = KMByteBlob.instance(dataLength(id));
-    if (readDataEntry(id, KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff())
-        == 0) {
-      return 0;
+    short len = dataLength(id);
+    if (len != 0) {
+      short blob = KMByteBlob.instance(dataLength(id));
+      readDataEntry(id, KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     }
-    return blob;
+    return KMType.INVALID_VALUE;
   }
 
   private static final byte[] zero = {0, 0, 0, 0, 0, 0, 0, 0};
 
   public short getOsVersion() {
     short blob = readData(BOOT_OS_VERSION);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
@@ -279,7 +279,7 @@ public class KMRepository implements KMUpgradable {
 
   public short getVendorPatchLevel() {
     short blob = readData(VENDOR_PATCH_LEVEL);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
@@ -287,10 +287,9 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-
   public short getOsPatch() {
     short blob = readData(BOOT_OS_PATCH_LEVEL);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
@@ -300,6 +299,9 @@ public class KMRepository implements KMUpgradable {
 
   private boolean readBoolean(short id) {
     short blob = readData(id);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
     return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]) == 0x01;
   }
 
@@ -313,7 +315,7 @@ public class KMRepository implements KMUpgradable {
 
   public short getDeviceTimeStamp() {
     short blob = readData(DEVICE_LOCKED_TIME);
-    if (blob != 0) {
+    if (blob != KMType.INVALID_VALUE) {
       return KMInteger.uint_64(KMByteBlob.cast(blob).getBuffer(),
           KMByteBlob.cast(blob).getStartOff());
     } else {

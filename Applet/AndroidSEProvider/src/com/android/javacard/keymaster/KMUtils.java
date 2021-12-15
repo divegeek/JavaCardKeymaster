@@ -103,10 +103,8 @@ public class KMUtils {
         (short) 8) >= 0) {
       Util.arrayCopyNonAtomic(fourYrsMsec, (short) 0, scratchPad, (short) 8,
           (short) 8);
-      yrsCount = divide(scratchPad, (short) 0, (short) 8, (short) 16); // quotient
-      // is
-      // multiple
-      // of 4
+      // quotient is multiple of 4
+      yrsCount = divide(scratchPad, (short) 0, (short) 8, (short) 16);
       yrsCount = (short) (yrsCount * 4); // number of yrs.
       // copy reminder as new dividend
       Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
