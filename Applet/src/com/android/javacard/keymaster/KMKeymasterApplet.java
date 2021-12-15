@@ -97,8 +97,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       0x6E
   };
 
-
   public static final short MAX_COSE_BUF_SIZE = (short) 1024;
+  // TODO INS_SET_BOOT_PARAMS_CMD is duplicated again in this class.
+  // TODO Is there a better way to handle the cleanup when device reboots ?
+  private static final byte INS_SET_BOOT_PARAMS_CMD = 5; // 0x05
   // Top 32 commands are reserved for provisioning.
   private static final byte KEYMINT_CMD_APDU_START = 0x20;
 
@@ -400,6 +402,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           processInitStrongBoxCmd(apdu);
           sendError(apdu, KMError.OK);
           return;
+        case INS_SET_BOOT_PARAMS_CMD:
+          // Clear all auth tags.
+          repository.removeAllAuthTags();
+          break;
         case INS_GENERATE_KEY_CMD:
           processGenerateKey(apdu);
           break;
@@ -1952,6 +1958,49 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
+  private void authorizeKeyUsageForCount(byte[] scratchPad) {
+    short scratchPadOff = 0;
+    Util.arrayFillNonAtomic(scratchPad, scratchPadOff, (short) 12, (byte) 0);
+
+    short usageLimitBufLen = KMIntegerTag.getValue(scratchPad, scratchPadOff,
+        KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT, data[HW_PARAMETERS]);
+
+    if (usageLimitBufLen == KMType.INVALID_VALUE) {
+      return;
+    }
+
+    if (usageLimitBufLen > 4) {
+      KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+
+    if (repository.isAuthTagPersisted(data[AUTH_TAG])) {
+      // Get current counter, update and increment it.
+      short len = repository
+          .getRateLimitedKeyCount(data[AUTH_TAG], scratchPad, (short) (scratchPadOff + 4));
+      if (len != 4) {
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
+      }
+      if (0 >= KMInteger.unsignedByteArrayCompare(scratchPad, scratchPadOff, scratchPad,
+          (short) (scratchPadOff + 4), (short) 4)) {
+        KMException.throwIt(KMError.KEY_MAX_OPS_EXCEEDED);
+      }
+      // Increment the counter.
+      Util.arrayFillNonAtomic(scratchPad, scratchPadOff, len, (byte) 0);
+      Util.setShort(scratchPad, (short) (scratchPadOff + 2), (short) 1);
+      KMUtils.add(scratchPad, scratchPadOff, (short) (scratchPadOff + len),
+          (short) (scratchPadOff + len * 2));
+
+      repository
+          .setRateLimitedKeyCount(data[AUTH_TAG], scratchPad, (short) (scratchPadOff + len * 2),
+              len);
+    } else {
+      // Persist auth tag.
+      if (!repository.persistAuthTag(data[AUTH_TAG])) {
+        KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
+      }
+    }
+  }
+
   private void authorizeDeviceUnlock(short hwToken) {
     // If device is locked and key characteristics requires unlocked device then check whether
     // HW auth token has correct timestamp.
@@ -2579,6 +2628,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     authorizeUserSecureIdAuthTimeout(op);
     authorizeDeviceUnlock(data[HW_TOKEN]);
+    authorizeKeyUsageForCount(scratchPad);
     // Authorize Caller Nonce - if caller nonce absent in key char and nonce present in
     // key params then fail if it is not a Decrypt operation
     data[IV] = KMType.INVALID_VALUE;

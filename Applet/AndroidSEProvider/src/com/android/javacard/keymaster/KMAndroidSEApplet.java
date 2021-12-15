@@ -100,6 +100,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         switch (apduIns) {
           case INS_SET_BOOT_PARAMS_CMD:
             processSetBootParamsCmd(apdu);
+            // set boot params event is propagated to KMKeymasterApplet to handle any
+            // necessary cleanup after device reboot.
+            super.process(apdu);
             break;
           default:
             super.process(apdu);

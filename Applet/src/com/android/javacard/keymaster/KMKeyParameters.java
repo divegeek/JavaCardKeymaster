@@ -133,8 +133,7 @@ public class KMKeyParameters extends KMType {
         KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
         KMType.BOOL_TAG, KMType.TRUSTED_USER_PRESENCE_REQUIRED,
         KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY,
-        KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS,
-        KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT
+        KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS
     };
     byte index = 0;
     short tagInd;
@@ -185,6 +184,7 @@ public class KMKeyParameters extends KMType {
         KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
         KMType.BOOL_TAG, KMType.RESET_SINCE_ID_ROTATION,
         KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
+        KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,
     };
     byte index = 0;
     short tagInd;

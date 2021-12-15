@@ -58,9 +58,6 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
 
   KMJCardSimApplet() {
     super(new KMJCardSimulator());
-    //   setDummyBootParams();
-    //   setDummyPresharedKey();
-    //   setDummyAttestationIds();
   }
 
   /**
@@ -91,6 +88,9 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
         switch (apduIns) {
           case INS_SET_BOOT_PARAMS_CMD:
             processSetBootParamsCmd(apdu);
+            // set boot params event is propagated to KMKeymasterApplet to handle any
+            // necessary cleanup after device reboot.
+            super.process(apdu);
             break;
           default:
             super.process(apdu);
