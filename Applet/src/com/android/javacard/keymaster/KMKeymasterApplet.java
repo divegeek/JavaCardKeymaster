@@ -956,9 +956,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     isKeyUpgradeRequired |=
         isKeyUpgradeRequired(KMType.VENDOR_PATCH_LEVEL, repository.getVendorPatchLevel());
     // Get boot patch level.
-    short len = seProvider.getBootPatchLevel(scratchPad, (short) 0);
+    seProvider.getBootPatchLevel(scratchPad, (short) 0);
     isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.BOOT_PATCH_LEVEL,
-        KMByteBlob.instance(scratchPad, (short) 0, len));
+        KMInteger.uint_32(scratchPad, (short) 0));
 
     if (isKeyUpgradeRequired) {
       // copy origin
