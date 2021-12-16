@@ -34,7 +34,7 @@ public class KMRepository implements KMUpgradable {
   public static final short HEAP_SIZE = 15000;
 
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 16;
+  public static final short DATA_INDEX_SIZE = 17;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
@@ -53,6 +53,7 @@ public class KMRepository implements KMUpgradable {
   public static final byte DEVICE_LOCKED_PASSWORD_ONLY = 7;
   // Total 8 auth tags, so the next offset is AUTH_TAG_1 + 8
   public static final byte AUTH_TAG_1 = 8;
+  public static final byte EARLY_BOOT_ENDED_FLAG = 16;
 
 
   // Data Item sizes
@@ -314,6 +315,10 @@ public class KMRepository implements KMUpgradable {
     return readBoolean(DEVICE_LOCKED_PASSWORD_ONLY);
   }
 
+  public boolean getEarlyBootEndedStatus() {
+    return readBoolean(EARLY_BOOT_ENDED_FLAG);
+  }
+
   public short getDeviceTimeStamp() {
     short blob = readData(DEVICE_LOCKED_TIME);
     if (blob != KMType.INVALID_VALUE) {
@@ -361,6 +366,10 @@ public class KMRepository implements KMUpgradable {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     writeDataEntry(DEVICE_LOCKED_TIME, buf, start, len);
+  }
+
+  public void setEarlyBootEndedStatus(boolean flag) {
+    writeBoolean(EARLY_BOOT_ENDED_FLAG, flag);
   }
 
   public void clearDeviceLockTimeStamp() {

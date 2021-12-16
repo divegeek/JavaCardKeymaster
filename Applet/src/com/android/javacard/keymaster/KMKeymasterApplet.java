@@ -405,6 +405,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_SET_BOOT_PARAMS_CMD:
           // Clear all auth tags.
           repository.removeAllAuthTags();
+          // clear early boot ended status.
+          repository.setEarlyBootEndedStatus(false);
           break;
         case INS_GENERATE_KEY_CMD:
           processGenerateKey(apdu);
@@ -525,7 +527,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processEarlyBootEndedCmd(APDU apdu) {
-    KMException.throwIt(KMError.UNIMPLEMENTED);
+    repository.setEarlyBootEndedStatus(true);
   }
 
   private short deviceLockedCmd(APDU apdu){
@@ -2607,6 +2609,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeUserSecureIdAuthTimeout(op);
     authorizeDeviceUnlock(data[HW_TOKEN]);
     authorizeKeyUsageForCount(scratchPad);
+
+    //Validate early boot
+    if (repository.getEarlyBootEndedStatus()) {
+      KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
+          KMError.INVALID_KEY_BLOB);
+    }
+
     // Authorize Caller Nonce - if caller nonce absent in key char and nonce present in
     // key params then fail if it is not a Decrypt operation
     data[IV] = KMType.INVALID_VALUE;
@@ -2961,7 +2970,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void validateImportKey(short params, short keyFmt){
     // Rollback protection not supported
     KMTag.assertAbsence(params, KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE, KMError.ROLLBACK_RESISTANCE_UNAVAILABLE);
-    // vts disallows importing EARLY_BOOT keys
+    // As per specification, Early boot keys may not be imported at all, if Tag::EARLY_BOOT_ONLY is
+    // provided to IKeyMintDevice::importKey
     KMTag.assertAbsence(params, KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, KMError.EARLY_BOOT_ENDED);
     // Importing Bootloader only keys not supported.
     KMTag.assertAbsence(params, KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, KMError.INVALID_KEY_BLOB);
@@ -3384,6 +3394,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMTag.assertAbsence(data[KEY_PARAMETERS], KMType.BOOL_TAG,KMType.ROLLBACK_RESISTANCE, KMError.ROLLBACK_RESISTANCE_UNAVAILABLE);
     // BOOTLOADER_ONLY keys not supported.
     KMTag.assertAbsence(data[KEY_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, KMError.INVALID_KEY_BLOB);
+    // As per specification Early boot keys may be created after early boot ended.
     // Algorithm must be present
     KMTag.assertPresence(data[KEY_PARAMETERS], KMType.ENUM_TAG, KMType.ALGORITHM, KMError.INVALID_ARGUMENT);
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
