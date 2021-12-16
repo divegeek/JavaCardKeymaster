@@ -261,6 +261,7 @@ public class KMRepository implements KMUpgradable {
     if (len != 0) {
       short blob = KMByteBlob.instance(dataLength(id));
       readDataEntry(id, KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
+      return blob;
     }
     return KMType.INVALID_VALUE;
   }
