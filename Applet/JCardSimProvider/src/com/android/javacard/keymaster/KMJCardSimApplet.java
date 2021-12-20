@@ -45,9 +45,8 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private static final byte PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04;
   private static final byte PROVISION_STATUS_ATTEST_IDS = 0x08;
   private static final byte PROVISION_STATUS_PRESHARED_SECRET = 0x10;
-  private static final byte PROVISION_STATUS_BOOT_PARAM = 0x20;
-  private static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x40;
-  private static final byte PROVISION_STATUS_DEVICE_UNIQUE_KEY = 0x60;
+  private static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x20;
+  private static final byte PROVISION_STATUS_DEVICE_UNIQUE_KEY = 0x40;
   private static final byte PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = (byte) 0x80;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
   public static final short SHARED_SECRET_KEY_SIZE = 32;
@@ -88,9 +87,6 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
         switch (apduIns) {
           case INS_SET_BOOT_PARAMS_CMD:
             processSetBootParamsCmd(apdu);
-            // set boot params event is propagated to KMKeymasterApplet to handle any
-            // necessary cleanup after device reboot.
-            super.process(apdu);
             break;
           default:
             super.process(apdu);
@@ -120,7 +116,6 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
           break;
         case INS_SET_BOOT_PARAMS_CMD:
           processSetBootParamsCmd(apdu);
-          provisionStatus |= PROVISION_STATUS_BOOT_PARAM;
           break;
         case INS_PROVISION_DEVICE_UNIQUE_KEY_CMD:
           processProvisionDeviceUniqueKey(apdu);

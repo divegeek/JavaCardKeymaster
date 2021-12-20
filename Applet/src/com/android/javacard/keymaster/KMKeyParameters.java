@@ -30,6 +30,10 @@ public class KMKeyParameters extends KMType {
 
   private static KMKeyParameters prototype;
 
+  private static final short[] customTags  = {
+      KMType.ULONG_TAG, KMType.AUTH_TIMEOUT_MILLIS,
+  };
+
   private KMKeyParameters() {
   }
 
@@ -389,6 +393,9 @@ public class KMKeyParameters extends KMType {
       }
       index++;
     }
+    // Add custom tags at the end of the array. So it becomes easy to
+    // delete them when sending key characteristics back to HAL.
+    arrInd = addCustomTags(keyParamsPtr, scratchPad, arrInd);
     return createKeyParameters(scratchPad, (short) (arrInd / 2));
   }
 
@@ -456,5 +463,57 @@ public class KMKeyParameters extends KMType {
       ptr += 2;
     }
     return KMKeyParameters.instance(arrPtr);
+  }
+
+  public static short addCustomTags(short keyParams, byte[] scratchPad, short offset) {
+    short index = 0;
+    short tagPtr;
+    short len = (short) customTags.length;
+    short tagType;
+    while (index < len) {
+      tagType = customTags[(short) (index + 1)];
+      switch(tagType) {
+        case KMType.AUTH_TIMEOUT_MILLIS:
+          short authTimeOutTag =
+              KMKeyParameters.cast(keyParams).findTag(KMType.UINT_TAG, KMType.AUTH_TIMEOUT);
+          if (authTimeOutTag != KMType.INVALID_VALUE) {
+            tagPtr = createAuthTimeOutMillisTag(authTimeOutTag, scratchPad, offset);
+            Util.setShort(scratchPad, offset, tagPtr);
+            offset += 2;
+          }
+          break;
+        default:
+          break;
+      }
+      index += 2;
+    }
+    return offset;
+  }
+
+  public void deleteCustomTags() {
+    short arrPtr = getVals();
+    short index = (short) (customTags.length - 1);
+    short obj;
+    while (index >= 0) {
+      obj = findTag(customTags[(short) (index - 1)], customTags[index]);
+      if (obj != KMType.INVALID_VALUE) {
+        KMArray.cast(arrPtr).deleteLastEntry();
+      }
+      index -= 2;
+    }
+  }
+
+  public static short createAuthTimeOutMillisTag(short authTimeOutTag, byte[] scratchPad, short offset) {
+    short authTime = KMIntegerTag.cast(authTimeOutTag).getValue();
+    Util.arrayFillNonAtomic(scratchPad, offset, (short) 40, (byte) 0);
+    Util.arrayCopyNonAtomic(
+        KMInteger.cast(authTime).getBuffer(),
+        KMInteger.cast(authTime).getStartOff(),
+        scratchPad,
+        (short) (offset + 8 - KMInteger.cast(authTime).length()),
+        KMInteger.cast(authTime).length());
+    KMUtils.convertToMilliseconds(scratchPad, offset, (short) (offset + 8), (short) (offset + 16));
+    return KMIntegerTag.instance(KMType.ULONG_TAG, KMType.AUTH_TIMEOUT_MILLIS,
+        KMInteger.uint_64(scratchPad, (short) (offset + 8)));
   }
 }

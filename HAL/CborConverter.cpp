@@ -331,8 +331,8 @@ bool CborConverter::addSharedSecretParameters(Array& array,
 
 bool CborConverter::addTimeStampToken(Array& array, const TimeStampToken& token) {
     Array vToken;
-    vToken.add(token.challenge);
-    vToken.add(token.timestamp.milliSeconds);
+    vToken.add(static_cast<uint64_t>(token.challenge));
+    vToken.add(static_cast<uint64_t>(token.timestamp.milliSeconds));
     vToken.add((std::vector<uint8_t>(token.mac)));
     array.add(std::move(vToken));
     return true;
@@ -341,11 +341,11 @@ bool CborConverter::addTimeStampToken(Array& array, const TimeStampToken& token)
 bool CborConverter::addHardwareAuthToken(Array& array, const HardwareAuthToken& authToken) {
 
     Array hwAuthToken;
-    hwAuthToken.add(authToken.challenge);
-    hwAuthToken.add(authToken.userId);
-    hwAuthToken.add(authToken.authenticatorId);
+    hwAuthToken.add(static_cast<uint64_t>(authToken.challenge));
+    hwAuthToken.add(static_cast<uint64_t>(authToken.userId));
+    hwAuthToken.add(static_cast<uint64_t>(authToken.authenticatorId));
     hwAuthToken.add(static_cast<uint64_t>(authToken.authenticatorType));
-    hwAuthToken.add(authToken.timestamp.milliSeconds);
+    hwAuthToken.add(static_cast<uint64_t>(authToken.timestamp.milliSeconds));
     hwAuthToken.add((std::vector<uint8_t>(authToken.mac)));
     array.add(std::move(hwAuthToken));
     return true;
@@ -354,27 +354,39 @@ bool CborConverter::addHardwareAuthToken(Array& array, const HardwareAuthToken& 
 bool CborConverter::getHardwareAuthToken(const unique_ptr<Item>& item, const uint32_t pos,
                                          HardwareAuthToken& token) {
     uint64_t authType;
+    uint64_t challenge;
+    uint64_t userId;
+    uint64_t authenticatorId;
+    uint64_t timestampMillis;
     // challenge, userId, AuthenticatorId, AuthType, Timestamp, MAC
-    if (!getUint64<int64_t>(item, pos, token.challenge) ||
-        !getUint64<int64_t>(item, pos + 1, token.userId) ||
-        !getUint64<int64_t>(item, pos + 2, token.authenticatorId) ||
+    if (!getUint64<uint64_t>(item, pos, challenge) ||
+        !getUint64<uint64_t>(item, pos + 1, userId) ||
+        !getUint64<uint64_t>(item, pos + 2, authenticatorId) ||
         !getUint64<uint64_t>(item, pos + 3, authType) ||
-        !getUint64<int64_t>(item, pos + 4, token.timestamp.milliSeconds) ||
+        !getUint64<uint64_t>(item, pos + 4, timestampMillis) ||
         !getBinaryArray(item, pos + 5, token.mac)) {
         return false;
     }
+    token.challenge = static_cast<long>(challenge);
+    token.userId = static_cast<long>(userId);
+    token.authenticatorId = static_cast<long>(authenticatorId);
     token.authenticatorType = static_cast<HardwareAuthenticatorType>(authType);
+    token.timestamp.milliSeconds = static_cast<long>(timestampMillis);
     return true;
 }
 
 bool CborConverter::getTimeStampToken(const unique_ptr<Item>& item, const uint32_t pos,
                                       TimeStampToken& token) {
     // {challenge, timestamp, Mac}
-    if (!getUint64<int64_t>(item, pos, token.challenge) ||
-        !getUint64<int64_t>(item, pos + 1, token.timestamp.milliSeconds) ||
-        !getBinaryArray(item, pos + 4, token.mac)) {
+    uint64_t challenge;
+    uint64_t timestampMillis;
+    if (!getUint64<uint64_t>(item, pos, challenge) ||
+        !getUint64<uint64_t>(item, pos + 1, timestampMillis) ||
+        !getBinaryArray(item, pos + 2, token.mac)) {
         return false;
     }
+    token.challenge = static_cast<long>(challenge);
+    token.timestamp.milliSeconds = static_cast<long>(timestampMillis);
     return true;
 }
 
