@@ -2042,8 +2042,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // hmac the data
     ptr = KMVerificationToken.cast(verToken).getMac();
     short key = repository.getComputedHmacKey();
-    byte[] dummykey = new byte[32];
-    key = KMByteBlob.instance(dummykey, (short) 0, (short) 32);
     return seProvider.hmacVerify(
         KMByteBlob.cast(key).getBuffer(),
         KMByteBlob.cast(key).getStartOff(),
@@ -2952,8 +2950,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
     short key = repository.getComputedHmacKey();
-    byte[] dummykey = new byte[32];
-    key = KMByteBlob.instance(dummykey, (short) 0, (short) 32);
     return seProvider.hmacVerify(
         KMByteBlob.cast(key).getBuffer(),
         KMByteBlob.cast(key).getStartOff(),
@@ -2997,8 +2993,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
     short key = repository.getComputedHmacKey();
-    byte[] dummykey = new byte[32];
-    key = KMByteBlob.instance(dummykey, (short) 0, (short) 32);
     return seProvider.hmacVerify(
         KMByteBlob.cast(key).getBuffer(),
         KMByteBlob.cast(key).getStartOff(),
