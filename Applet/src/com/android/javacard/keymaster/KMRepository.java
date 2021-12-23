@@ -53,9 +53,9 @@ public class KMRepository implements KMUpgradable {
   public static final byte DEVICE_LOCKED_PASSWORD_ONLY = 7;
   // Total 8 auth tags, so the next offset is AUTH_TAG_1 + 8
   public static final byte AUTH_TAG_1 = 8;
+  public static final byte BOOT_ENDED_FLAG = 15;
   public static final byte EARLY_BOOT_ENDED_FLAG = 16;
-
-
+  
   // Data Item sizes
   public static final short HMAC_SEED_NONCE_SIZE = 32;
   public static final short COMPUTED_HMAC_KEY_SIZE = 32;
@@ -96,13 +96,6 @@ public class KMRepository implements KMUpgradable {
     repository = this;
   }
 
-  public void initComputedHmac(byte[] key, short start, short len) {
-    if (len != COMPUTED_HMAC_KEY_SIZE) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    writeDataEntry(COMPUTED_HMAC_KEY, key, start, len);
-  }
-
   public void initHmacNonce(byte[] nonce, short offset, short len) {
     if (len != HMAC_SEED_NONCE_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
@@ -112,10 +105,6 @@ public class KMRepository implements KMUpgradable {
 
   public void clearHmacNonce() {
     clearDataEntry(HMAC_NONCE);
-  }
-
-  public void clearComputedHmac() {
-    clearDataEntry(COMPUTED_HMAC_KEY);
   }
 
   public void onUninstall() {
@@ -253,10 +242,6 @@ public class KMRepository implements KMUpgradable {
     return readData(HMAC_NONCE);
   }
 
-  public short getComputedHmacKey() {
-    return readData(COMPUTED_HMAC_KEY);
-  }
-
   public short readData(short id) {
     short len = dataLength(id);
     if (len != 0) {
@@ -319,6 +304,10 @@ public class KMRepository implements KMUpgradable {
     return readBoolean(EARLY_BOOT_ENDED_FLAG);
   }
 
+  public boolean getBootEndedStatus() {
+    return readBoolean(BOOT_ENDED_FLAG);
+  }
+
   public short getDeviceTimeStamp() {
     short blob = readData(DEVICE_LOCKED_TIME);
     if (blob != KMType.INVALID_VALUE) {
@@ -370,6 +359,10 @@ public class KMRepository implements KMUpgradable {
 
   public void setEarlyBootEndedStatus(boolean flag) {
     writeBoolean(EARLY_BOOT_ENDED_FLAG, flag);
+  }
+ 
+  public void setBootEndedStatus(boolean flag) {
+    writeBoolean(BOOT_ENDED_FLAG, flag);
   }
 
   public void clearDeviceLockTimeStamp() {

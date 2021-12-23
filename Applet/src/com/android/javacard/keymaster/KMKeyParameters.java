@@ -134,9 +134,7 @@ public class KMKeyParameters extends KMType {
   public static boolean hasUnsupportedTags(short keyParamsPtr) {
     final short[] tagArr = {
         // Unsupported tags.
-        KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
         KMType.BOOL_TAG, KMType.TRUSTED_USER_PRESENCE_REQUIRED,
-        KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY,
         KMType.UINT_TAG, KMType.MIN_SEC_BETWEEN_OPS
     };
     byte index = 0;
@@ -188,7 +186,9 @@ public class KMKeyParameters extends KMType {
         KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
         KMType.BOOL_TAG, KMType.RESET_SINCE_ID_ROTATION,
         KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
+        KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
         KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,
+        KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
     };
     byte index = 0;
     short tagInd;
@@ -263,6 +263,8 @@ public class KMKeyParameters extends KMType {
         KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
         KMType.BOOL_TAG, KMType.RESET_SINCE_ID_ROTATION,
         KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
+        KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
+        KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
     };
     byte index = 0;
     short tagInd;
@@ -328,7 +330,8 @@ public class KMKeyParameters extends KMType {
         KMType.DATE_TAG, KMType.USAGE_EXPIRE_DATETIME,
         KMType.UINT_TAG, KMType.USERID,
         KMType.DATE_TAG, KMType.CREATION_DATETIME,
-        KMType.UINT_TAG, KMType.USAGE_COUNT_LIMIT
+        KMType.UINT_TAG, KMType.USAGE_COUNT_LIMIT,
+        KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY
     };
     byte index = 0;
     short tagInd;
@@ -438,7 +441,6 @@ public class KMKeyParameters extends KMType {
         KMType.BYTES_TAG, KMType.ASSOCIATED_DATA,
         KMType.BYTES_TAG, KMType.UNIQUE_ID,
         KMType.UINT_TAG, KMType.MAC_LENGTH,
-        KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY
     };
     short index = 0;
     if (tagKey == KMType.INVALID_TAG) {

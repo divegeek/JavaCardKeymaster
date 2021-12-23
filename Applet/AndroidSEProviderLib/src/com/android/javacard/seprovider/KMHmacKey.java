@@ -19,7 +19,7 @@ import org.globalplatform.upgrade.Element;
 
 import javacard.security.HMACKey;
 
-public class KMHmacKey implements KMPreSharedKey {
+public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey  {
 
   private HMACKey hmacKey;
 
@@ -34,7 +34,11 @@ public class KMHmacKey implements KMPreSharedKey {
   public byte getKey(byte[] keyData, short kOff) {
     return hmacKey.getKey(keyData, kOff);
   }
-
+  
+  public HMACKey getKey() {
+    return hmacKey;
+  }
+  
   public short getKeySizeBits() {
     return hmacKey.getSize();
   }
