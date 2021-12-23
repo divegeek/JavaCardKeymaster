@@ -98,7 +98,7 @@ class JavacardKeyMintOperation : public BnKeyMintOperation {
 
     keymaster_error_t sendFinish(const vector<uint8_t>& data, const vector<uint8_t>& signature,
                                  const HardwareAuthToken& authToken,
-                                 const TimeStampToken& timestampToken, vector<uint8_t>& output);
+                                 const TimeStampToken& timestampToken, const vector<uint8_t>& confToken, vector<uint8_t>& output);
 
     keymaster_error_t sendUpdate(const vector<uint8_t>& data, const HardwareAuthToken& authToken,
                                  const TimeStampToken& timestampToken, vector<uint8_t>& output);
