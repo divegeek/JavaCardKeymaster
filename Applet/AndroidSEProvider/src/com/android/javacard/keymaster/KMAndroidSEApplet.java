@@ -47,6 +47,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       INS_KEYMINT_PROVIDER_APDU_START + 6;
   private static final byte INS_PROVISION_ADDITIONAL_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 7;
+  private static final byte INS_SET_BOOT_ENDED_CMD = 
+		  INS_KEYMINT_PROVIDER_APDU_START + 8;
 
   private static final byte INS_KEYMINT_PROVIDER_APDU_END = 0x1F;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
@@ -100,6 +102,13 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           case INS_SET_BOOT_PARAMS_CMD:
             processSetBootParamsCmd(apdu);
             break;
+            
+          case INS_SET_BOOT_ENDED_CMD:
+            //set the flag to mark boot ended
+            repository.setBootEndedStatus(true);
+            sendError(apdu, KMError.OK);
+            break;   
+
           default:
             super.process(apdu);
             break;
@@ -308,7 +317,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private void processSetBootParamsCmd(APDU apdu) {
     short argsProto = KMArray.instance((short) 5);
-
+    
+    byte[] scratchPad = apdu.getBuffer();
     // Array of 4 expected arguments
     // Argument 0 Boot Patch level
     KMArray.cast(argsProto).add((short) 0, KMInteger.exp());
@@ -353,6 +363,11 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     enumVal = KMEnum.cast(bootParam).getVal();
     ((KMAndroidSEProvider) seProvider).setDeviceLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
 
+    
+    // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, KMRepository.COMPUTED_HMAC_KEY_SIZE, (byte) 0);
+    seProvider.createComputedHmacKey(scratchPad, (short) 0, KMRepository.COMPUTED_HMAC_KEY_SIZE);
+    
     super.reboot();
     sendError(apdu, KMError.OK);
   }

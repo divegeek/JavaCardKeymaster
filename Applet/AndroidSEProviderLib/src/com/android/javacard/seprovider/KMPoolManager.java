@@ -26,6 +26,7 @@ import javacardx.crypto.Cipher;
 public class KMPoolManager {
 
   public static final short MAX_OPERATION_INSTANCES = 4;
+  private static final short HMAC_MAX_OPERATION_INSTANCES = 8;
   // Cipher pool
   private Object[] cipherPool;
   // Signature pool
@@ -34,6 +35,8 @@ public class KMPoolManager {
   private Object[] keyAgreementPool;
   // KMOperationImpl pool
   private Object[] operationPool;
+  // Hmac signer pool which is used to support TRUSTED_CONFIRMATION_REQUIRED tag.
+  private Object[] hmacSignOperationPool;
 
   final byte[] CIPHER_ALGS = {
       Cipher.ALG_AES_BLOCK_128_CBC_NOPAD,
@@ -70,11 +73,14 @@ public class KMPoolManager {
 
   private KMPoolManager() {
     cipherPool = new Object[(short) (CIPHER_ALGS.length * 4)];
-    signerPool = new Object[(short) (SIG_ALGS.length * 4)];
+ // Extra 4 algorithms are used to support TRUSTED_CONFIRMATION_REQUIRED feature.
+    signerPool = new Object[(short) ((SIG_ALGS.length * 4) + 4)];
     keyAgreementPool = new Object[(short) (KEY_AGREE_ALGS.length * 4)];
     operationPool = new Object[4];
+    hmacSignOperationPool = new Object[4];
     /* Initialize pools */
     initializeOperationPool();
+    initializeHmacSignOperationPool();
     initializeSignerPool();
     initializeCipherPool();
     initializeKeyAgreementPool();
@@ -88,6 +94,14 @@ public class KMPoolManager {
     }
   }
 
+  private void initializeHmacSignOperationPool() {
+    short index = 0;
+    while (index < MAX_OPERATION_INSTANCES) {
+      hmacSignOperationPool[index] = new KMOperationImpl();
+      index++;
+    }
+  }
+  
   // Create a signature instance of each algorithm once.
   private void initializeSignerPool() {
     short index = 0;
@@ -181,11 +195,17 @@ public class KMPoolManager {
    *
    * @return instance of the available resource or null if no resource is available.
    */
-  public KMOperation getResourceFromOperationPool() {
+  public KMOperation getResourceFromOperationPool(boolean isTrustedConfOpr) {
     short index = 0;
     KMOperationImpl impl;
-    while (index < operationPool.length) {
-      impl = (KMOperationImpl) operationPool[index];
+    Object[] oprPool;
+    if(isTrustedConfOpr) {
+    	oprPool = hmacSignOperationPool;
+    } else {
+    	oprPool = operationPool;
+    }
+    while (index < oprPool.length) {
+      impl = (KMOperationImpl) oprPool[index];
       // Mode is always set. so compare using mode value.
       if (impl.getPurpose() == KMType.INVALID_VALUE) {
         return impl;
@@ -217,7 +237,8 @@ public class KMPoolManager {
   private boolean isResourceBusy(Object obj) {
     short index = 0;
     while (index < MAX_OPERATION_INSTANCES) {
-      if (((KMOperationImpl) operationPool[index]).isResourceMatches(obj)) {
+      if (((KMOperationImpl) operationPool[index]).isResourceMatches(obj)
+    		  || ((KMOperationImpl) hmacSignOperationPool[index]).isResourceMatches(obj)) {
         return true;
       }
       index++;
@@ -256,19 +277,23 @@ public class KMPoolManager {
 
   public KMOperation getOperationImpl(short purpose, short alg, short strongboxAlgType,
       short padding,
-      short blockMode, short macLength) {
+      short blockMode, short macLength, boolean isTrustedConfOpr) {
     KMOperation operation;
     // Throw exception if no resource from operation pool is available.
-    if (null == (operation = getResourceFromOperationPool())) {
+    if (null == (operation = getResourceFromOperationPool(isTrustedConfOpr))) {
       KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
     }
     // Get one of the pool instances (cipher / signer / keyAgreement) based on purpose.
     Object[] pool = getCryptoPoolInstance(purpose);
     short index = 0;
     short usageCount = 0;
+    short maxOperations = MAX_OPERATION_INSTANCES;
+    if (Signature.ALG_HMAC_SHA_256 == alg) {
+      maxOperations = HMAC_MAX_OPERATION_INSTANCES;
+    }
 
     while (index < pool.length) {
-      if (usageCount >= MAX_OPERATION_INSTANCES) {
+      if (usageCount >= maxOperations) {
         KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
       }
       if (pool[index] == null) {
@@ -298,6 +323,7 @@ public class KMPoolManager {
     short index = 0;
     while (index < operationPool.length) {
       ((KMOperationImpl) operationPool[index]).abort();
+      ((KMOperationImpl) hmacSignOperationPool[index]).abort();
       index++;
     }
   }

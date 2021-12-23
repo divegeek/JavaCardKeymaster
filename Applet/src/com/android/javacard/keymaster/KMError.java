@@ -71,6 +71,7 @@ public class KMError {
   public static final short CANNOT_ATTEST_IDS = 66;
   public static final short ROLLBACK_RESISTANCE_UNAVAILABLE = 67;
 
+  public static final short NO_USER_CONFIRMATION = 71;
   public static final short DEVICE_LOCKED = 72;
   public static final short EARLY_BOOT_ENDED = 73;
   public static final short ATTESTATION_KEYS_NOT_PROVISIONED =74;

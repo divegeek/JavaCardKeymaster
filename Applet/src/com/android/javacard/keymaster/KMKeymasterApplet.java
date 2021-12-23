@@ -17,8 +17,10 @@
 package com.android.javacard.keymaster;
 
 import com.android.javacard.seprovider.KMAttestationCert;
+import com.android.javacard.seprovider.KMComputedHmacKey;
 import com.android.javacard.seprovider.KMDeviceUniqueKey;
 import com.android.javacard.seprovider.KMException;
+import com.android.javacard.seprovider.KMHmacKey;
 import com.android.javacard.seprovider.KMSEProvider;
 import javacard.framework.APDU;
 import javacard.framework.Applet;
@@ -28,6 +30,8 @@ import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
+import javacard.security.HMACKey;
+import javacard.security.KeyBuilder;
 import javacardx.apdu.ExtendedLength;
 
 /**
@@ -96,6 +100,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       0x41, 0x75, 0x74, 0x68, 0x20, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x63, 0x61, 0x74, 0x69,
       0x6F,
       0x6E
+  };
+
+  // "confirmation token"
+  public static final byte[] confirmationToken = {
+      0x63, 0x6F, 0x6E, 0x66, 0x69, 0x72, 0x6D, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x20, 0x74, 0x6F,
+      0x6B,
+      0x65, 0x6E
   };
 
   public static final short MAX_COSE_BUF_SIZE = (short) 1024;
@@ -181,6 +192,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte PLAIN_SECRET = 33;
   public static final byte TEE_PARAMETERS = 34;
   public static final byte SB_PARAMETERS = 35;
+  public static final byte CONFIRMATION_TOKEN = 36;
   // Constant
 
   // AddRngEntropy
@@ -494,7 +506,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       resetWrappingKey();
       sendError(apdu, mapCryptoErrorToKMError(e.getReason()));
     } catch (Exception e) {
-      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
       freeOperations();
       resetWrappingKey();
       sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
@@ -869,9 +880,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             bufferIndex,
             scratchPad,
             (short) 0);
-    // persist the computed hmac key.
-    repository.initComputedHmac(scratchPad, (short) 0, keyLen);
 
+    // persist the computed hmac key.
+    seProvider.createComputedHmacKey(scratchPad, (short) 0, keyLen);
     // Generate sharingKey verification signature and store that in scratch pad.
     //tmpVariables[5]
     short signLen =
@@ -961,6 +972,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (isKeyUpgradeRequired) {
       // copy origin
       data[ORIGIN] = KMEnumTag.getValue(KMType.ORIGIN, data[HW_PARAMETERS]);
+      makeKeyCharacteristics(scratchPad);
       // create new key blob with current os version etc.
       createEncryptedKeyBlob(scratchPad);
     } else {
@@ -1673,7 +1685,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private short finishOperationCmd(APDU apdu){
-    short cmd = KMArray.instance((short) 5);
+    short cmd = KMArray.instance((short) 6);
     KMArray.cast(cmd).add((short) 0, KMInteger.exp());//op handle
     KMArray.cast(cmd).add((short) 1, KMByteBlob.exp());// input data
     KMArray.cast(cmd).add((short) 2, KMByteBlob.exp()); // signature
@@ -1681,6 +1693,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(cmd).add((short) 3, authToken); // auth token
     short verToken = KMVerificationToken.exp();
     KMArray.cast(cmd).add((short) 4, verToken); // time stamp token
+    KMArray.cast(cmd).add((short) 5, KMByteBlob.exp()); //confirmation token
     return receiveIncoming(apdu, cmd);
   }
 
@@ -1692,6 +1705,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[SIGNATURE] = KMArray.cast(cmd).get((short) 2);
     data[HW_TOKEN] = KMArray.cast(cmd).get((short) 3);
     data[VERIFICATION_TOKEN] = KMArray.cast(cmd).get((short) 4);
+    data[CONFIRMATION_TOKEN] = KMArray.cast(cmd).get((short) 5);
     // Check Operation Handle
     KMOperationState op = findOperation(data[OP_HANDLE]);
     if (op == null) {
@@ -1701,6 +1715,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeUpdateFinishOperation(op, scratchPad);
     switch (op.getPurpose()) {
       case KMType.SIGN:
+    	  finishTrustedConfirmationOperation(op);
       case KMType.VERIFY:
         finishSigningVerifyingOperation(op, scratchPad);
         break;
@@ -2041,11 +2056,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += 4;
     // hmac the data
     ptr = KMVerificationToken.cast(verToken).getMac();
-    short key = repository.getComputedHmacKey();
+
     return seProvider.hmacVerify(
-        KMByteBlob.cast(key).getBuffer(),
-        KMByteBlob.cast(key).getStartOff(),
-        KMByteBlob.cast(key).length(),
+        seProvider.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -2107,6 +2120,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
               KMByteBlob.cast(data[INPUT_DATA]).getStartOff(),
               KMByteBlob.cast(data[INPUT_DATA]).length());
+      // update trusted confirmation operation
+      updateTrustedConfirmationOperation(op);
+      
       data[OUTPUT_DATA] = KMType.INVALID_VALUE;
     } else if (op.getPurpose() == KMType.ENCRYPT || op.getPurpose() == KMType.DECRYPT) {
       // Update for encrypt/decrypt using RSA will not be supported because to do this op state
@@ -2255,7 +2271,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     // Parse the encrypted blob and decrypt it.
     parseEncryptedKeyBlob(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad);
-    KMTag.assertAbsence(data[SB_PARAMETERS],KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, KMError.EARLY_BOOT_ENDED);
     KMTag.assertPresence(data[SB_PARAMETERS],KMType.ENUM_TAG,KMType.ALGORITHM,KMError.UNSUPPORTED_ALGORITHM);
     short algorithm = KMEnumTag.getValue(KMType.ALGORITHM,data[SB_PARAMETERS]);
     // If Blob usage tag is present in key characteristics then it should be standalone.
@@ -2286,6 +2301,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeAndBeginOperation(op, scratchPad);
     switch (op.getPurpose()) {
       case KMType.SIGN:
+    	beginTrustedConfirmationOperation(op);
       case KMType.VERIFY:
         beginSignVerifyOperation(op);
         break;
@@ -2605,7 +2621,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
           KMError.INVALID_KEY_BLOB);
     }
-
+ 
+    //Validate bootloader only 
+    if (repository.getBootEndedStatus()) {
+      KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
+    	  KMError.INVALID_KEY_BLOB);
+    }
+      
     // Authorize Caller Nonce - if caller nonce absent in key char and nonce present in
     // key params then fail if it is not a Decrypt operation
     data[IV] = KMType.INVALID_VALUE;
@@ -2741,6 +2763,22 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
+  private void beginTrustedConfirmationOperation(KMOperationState op) {
+	    // Check for trusted confirmation - if required then set the signer in op state.
+    if (KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
+        data[HW_PARAMETERS]) != KMType.INVALID_VALUE) {
+
+      op.setTrustedConfirmationSigner(
+          seProvider.initTrustedConfirmationSymmetricOperation(seProvider.getComputedHmacKey()));
+
+      op.getTrustedConfirmationSigner().update(
+          confirmationToken,
+          (short) 0,
+          (short) confirmationToken.length);   
+    }
+    
+  }
+  
   private void beginSignVerifyOperation(KMOperationState op) {
     switch (op.getAlgorithm()) {
       case KMType.RSA:
@@ -2949,11 +2987,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += 8;
 
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
-    short key = repository.getComputedHmacKey();
+
     return seProvider.hmacVerify(
-        KMByteBlob.cast(key).getBuffer(),
-        KMByteBlob.cast(key).getStartOff(),
-        KMByteBlob.cast(key).length(),
+        seProvider.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -2992,11 +3028,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     len += 8;
 
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
-    short key = repository.getComputedHmacKey();
+
     return seProvider.hmacVerify(
-        KMByteBlob.cast(key).getBuffer(),
-        KMByteBlob.cast(key).getStartOff(),
-        KMByteBlob.cast(key).length(),
+        seProvider.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -3054,8 +3088,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // As per specification, Early boot keys may not be imported at all, if Tag::EARLY_BOOT_ONLY is
     // provided to IKeyMintDevice::importKey
     KMTag.assertAbsence(params, KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, KMError.EARLY_BOOT_ENDED);
-    // Importing Bootloader only keys not supported.
-    KMTag.assertAbsence(params, KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, KMError.INVALID_KEY_BLOB);
+    
     // Algorithm must be present
     KMTag.assertPresence(params, KMType.ENUM_TAG, KMType.ALGORITHM, KMError.INVALID_ARGUMENT);
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, params);
@@ -3409,17 +3442,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   public void reboot() {
-    // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
-    repository.clearComputedHmac();
     repository.clearHmacNonce();
+    //flag to maintain the boot state
+    repository.setBootEndedStatus(false);
+    //flag to maintain early boot ended state
+    repository.setEarlyBootEndedStatus(false);  
     //Clear all the operation state.
     releaseAllOperations();
     // Hmac is cleared, so generate a new Hmac nonce.
     initHmacNonceAndSeed();
     // Clear all auth tags.
     repository.removeAllAuthTags();
-    // clear early boot ended status.
-    repository.setEarlyBootEndedStatus(false);
   }
 
   protected void initSystemBootParams(short osVersion,
@@ -3477,8 +3510,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[CERTIFICATE] = KMArray.instance((short)0); //by default the cert is empty.
     // ROLLBACK_RESISTANCE not supported.
     KMTag.assertAbsence(data[KEY_PARAMETERS], KMType.BOOL_TAG,KMType.ROLLBACK_RESISTANCE, KMError.ROLLBACK_RESISTANCE_UNAVAILABLE);
-    // BOOTLOADER_ONLY keys not supported.
-    KMTag.assertAbsence(data[KEY_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, KMError.INVALID_KEY_BLOB);
+    
     // As per specification Early boot keys may be created after early boot ended.
     // Algorithm must be present
     KMTag.assertPresence(data[KEY_PARAMETERS], KMType.ENUM_TAG, KMType.ALGORITHM, KMError.INVALID_ARGUMENT);
@@ -4009,31 +4041,36 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private static void makeAuthData(byte[] scratchPad) {
-    short len =
-        addPtrToAAD(KMKeyParameters.cast(data[HW_PARAMETERS]).getVals(), scratchPad, (short) 0);
-    len +=
-        addPtrToAAD(
-            KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals(), scratchPad, len);
-    short authData;
+    short arrayLen = 2;
     if (KMArray.cast(data[KEY_BLOB]).length() == 5) {
-      authData = KMArray.instance((short) (len + 1));
-    } else {
-      authData = KMArray.instance(len);
+      arrayLen = 3;
     }
-    // convert scratch pad to KMArray
+    short params = KMArray.instance((short) arrayLen);
+    KMArray.cast(params).add((short) 0, KMKeyParameters.cast(data[HW_PARAMETERS]).getVals());
+   // KMArray.cast(params).add((short) 1, KMKeyParameters.cast(data[SW_PARAMETERS]).getVals());
+    KMArray.cast(params).add((short) 1, KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals());
+    if (3 == arrayLen) {
+      KMArray.cast(params).add((short) 2, data[PUB_KEY]);
+    }
+
+    short authIndex = repository.alloc(MAX_AUTH_DATA_SIZE);
     short index = 0;
-    short objPtr;
-    while (index < len) {
-      objPtr = Util.getShort(scratchPad, (short) (index * 2));
-      KMArray.cast(authData).add(index, objPtr);
+    short len = 0;
+    short paramsLen = KMArray.cast(params).length();
+    Util.arrayFillNonAtomic(repository.getHeap(), authIndex, (short) MAX_AUTH_DATA_SIZE, (byte) 0);
+    while (index < paramsLen) {
+      short tag = KMArray.cast(params).get(index);
+      len = encoder.encode(tag, repository.getHeap(), (short) (authIndex + 32));
+      Util.arrayCopyNonAtomic(repository.getHeap(), (short) authIndex, repository.getHeap(),
+          (short) (authIndex + len + 32), (short) 32);
+      len = seProvider.messageDigest256(repository.getHeap(),
+          (short) (authIndex + 32), (short) (len + 32), repository.getHeap(), (short) authIndex);
+      if (len != 32) {
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
+      }
       index++;
     }
-    //TODO change the code below - implicitly adds the pub key.
-    if (KMArray.cast(data[KEY_BLOB]).length() == 5) {
-      KMArray.cast(authData).add(index, data[PUB_KEY]);
-    }
-    data[AUTH_DATA] = repository.alloc(MAX_AUTH_DATA_SIZE);
-    len = encoder.encode(authData, repository.getHeap(), data[AUTH_DATA]);
+    data[AUTH_DATA] = authIndex;
     data[AUTH_DATA_LENGTH] = len;
   }
 
@@ -4052,45 +4089,24 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private static short deriveKey(byte[] scratchPad) {
-    short hiddenParams = KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals();
-    short derivationData = repository.alloc(DERIVE_KEY_INPUT_SIZE);
-    // generate derivation material from hidden parameters
-    short len = encoder.encode(hiddenParams, repository.getHeap(), derivationData);
-    if (DERIVE_KEY_INPUT_SIZE > len) {
-      short start = (short)(derivationData+len);
-      len = (short)(DERIVE_KEY_INPUT_SIZE - len);
-      // Copy KeyCharacteristics in the remaining space of DERIVE_KEY_INPUT_SIZE
-      // if the data[AUTH_DATA] length is less then DERIVE_KEY_INPUT_SIZE - len
-      // then add complete key characteristics.
-      if(data[AUTH_DATA_LENGTH] < len){
-        len = data[AUTH_DATA_LENGTH];
-      }
-      Util.arrayCopyNonAtomic(repository.getHeap(), data[AUTH_DATA],
-          repository.getHeap(), start, len);
-    }
     // KeyDerivation:
-    // 1. Do HMAC Sign, with below input parameters.
-    //    Key - 128 bit master key
-    //    Input data - HIDDEN_PARAMETERS + KeyCharacateristics
-    //               - Truncate beyond 256 bytes.
+    // 1. Do HMAC Sign, Auth data.
     // 2. HMAC Sign generates an output of 32 bytes length.
-    //    Consume only first 16 bytes as derived key.
+    // Consume only first 16 bytes as derived key.
     // Hmac sign.
-    short signLen  = seProvider.hmacKDF(
+    short len = seProvider.hmacKDF(
         seProvider.getMasterKey(),
         repository.getHeap(),
-        derivationData,
-        DERIVE_KEY_INPUT_SIZE,
+        data[AUTH_DATA],
+        data[AUTH_DATA_LENGTH],
         scratchPad,
         (short) 0);
-    if (signLen < 16) {
+    if (len < 16) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
-    signLen = 16;
-    // store the derived secret in data dictionary
-    data[DERIVED_KEY] = KMByteBlob.instance(scratchPad, (short)0, signLen);
-    //TODO do we need to return this len?
-    return signLen;
+    len = 16;
+    data[DERIVED_KEY] = KMByteBlob.instance(scratchPad, (short)0, len);
+    return len;
   }
 
   public static void sendError(APDU apdu, short err) {
@@ -4340,5 +4356,30 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(bcc).add((short) 0, coseKey);
     KMArray.cast(bcc).add((short) 1, coseSign1);
     return bcc;
+  }
+
+  private void updateTrustedConfirmationOperation(KMOperationState op) {
+	if (op.isTrustedConfirmationRequired()) {
+		op.getTrustedConfirmationSigner().update(KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+				KMByteBlob.cast(data[INPUT_DATA]).getStartOff(), KMByteBlob.cast(data[INPUT_DATA]).length());
+	}
+  }
+
+  private void finishTrustedConfirmationOperation(KMOperationState op) {
+	// Perform trusted confirmation if required
+	if (op.isTrustedConfirmationRequired()) {
+  	  if (0 == KMByteBlob.cast(data[CONFIRMATION_TOKEN]).length()) {
+		  KMException.throwIt(KMError.NO_USER_CONFIRMATION);
+	  }
+
+	  boolean verified = op.getTrustedConfirmationSigner().verify(KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
+	    KMByteBlob.cast(data[INPUT_DATA]).getStartOff(), KMByteBlob.cast(data[INPUT_DATA]).length(),
+		KMByteBlob.cast(data[CONFIRMATION_TOKEN]).getBuffer(),
+		KMByteBlob.cast(data[CONFIRMATION_TOKEN]).getStartOff(),
+		KMByteBlob.cast(data[CONFIRMATION_TOKEN]).length());
+	  if (!verified) {
+		KMException.throwIt(KMError.NO_USER_CONFIRMATION);
+	  }
+	}
   }
 }

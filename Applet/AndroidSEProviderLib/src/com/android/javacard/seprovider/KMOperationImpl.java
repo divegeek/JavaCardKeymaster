@@ -35,6 +35,7 @@ public class KMOperationImpl implements KMOperation {
   private static final short PURPOSE_OFFSET = 0x02;
   private static final short BLOCK_MODE_OFFSET = 0x03;
   private static final short MAC_LENGTH_OFFSET = 0x04;
+  private final byte[] EMPTY = {};
   //This will hold the length of the buffer stored inside the
   //Java Card after the GCM update operation.
   private static final short AES_GCM_UPDATE_LEN_OFFSET = 0x05;
@@ -340,6 +341,24 @@ public class KMOperationImpl implements KMOperation {
 
   @Override
   public void abort() {
+    // Few simulators does not reset the Hmac signer instance on init so as
+    // a workaround to reset the hmac signer instance in case of abort/failure of the operation
+    // the corresponding sign / verify function is called.
+    if (operationInst[0] != null) {
+      if ((parameters[PURPOSE_OFFSET] == KMType.SIGN || parameters[PURPOSE_OFFSET] == KMType.VERIFY) &&
+          (((Signature) operationInst[0]).getAlgorithm() == Signature.ALG_HMAC_SHA_256)) {
+        Signature signer = (Signature) operationInst[0];
+        try {
+          if (parameters[PURPOSE_OFFSET] == KMType.SIGN) {
+            signer.sign(EMPTY, (short) 0, (short) 0, EMPTY, (short) 0);
+          } else {
+            signer.verify(EMPTY, (short) 0, (short) 0, EMPTY, (short) 0, (short) 0);
+          }
+        } catch(Exception e) {
+          // Ignore.
+        }
+      }
+    }
     reset();
   }
 

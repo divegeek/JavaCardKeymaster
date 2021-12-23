@@ -48,6 +48,8 @@ public class KMOperationState {
   // First two bytes are reserved to store number of secure ids. So total 42 bytes.
   public static final byte USER_SECURE_IDS_SIZE = 42;
 
+  private static final byte OPERATION = 0;
+  private static final byte HMAC_SIGNER_OPERATION = 1;
   // Flag masks
   private static final short AUTH_PER_OP_REQD = 1;
   private static final short SECURE_USER_ID_REQD = 2;
@@ -61,14 +63,14 @@ public class KMOperationState {
   private byte[] authTime;
   private byte[] userSecureIds;
   private short[] data;
-  private Object[] operation;
+  private Object[] operations;
 
 
   public KMOperationState() {
     opHandle = JCSystem.makeTransientByteArray(OPERATION_HANDLE_SIZE, JCSystem.CLEAR_ON_RESET);
     authTime = JCSystem.makeTransientByteArray(AUTH_TIME_SIZE, JCSystem.CLEAR_ON_RESET);
     data = JCSystem.makeTransientShortArray(DATA_SIZE, JCSystem.CLEAR_ON_RESET);
-    operation = JCSystem.makeTransientObjectArray((short) 1, JCSystem.CLEAR_ON_RESET);
+    operations = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
     userSecureIds = JCSystem.makeTransientByteArray(USER_SECURE_IDS_SIZE, JCSystem.CLEAR_ON_RESET);
     reset();
   }
@@ -81,16 +83,18 @@ public class KMOperationState {
     }
     Util.arrayFillNonAtomic(opHandle, (short) 0, OPERATION_HANDLE_SIZE, (byte) 0);
     Util.arrayFillNonAtomic(authTime, (short) 0, AUTH_TIME_SIZE, (byte) 0);
-
-    if (null != operation[0]) {
-      ((KMOperation) operation[0]).abort();
-    }
-
-    operation[0] = null;
+    
+    if(null != operations[OPERATION])
+    	((KMOperation)operations[OPERATION]).abort();
+    operations[OPERATION] = null;
+    
+    if(null != operations[HMAC_SIGNER_OPERATION])
+    	((KMOperation)operations[HMAC_SIGNER_OPERATION]).abort();
+    operations[HMAC_SIGNER_OPERATION] = null;
   }
 
-  public short compare(byte[] handle, short start, short len) {
-    return Util.arrayCompare(handle, start, opHandle, (short) 0, (short) opHandle.length);
+  public short compare(byte[] handle, short start, short len){
+    return Util.arrayCompare(handle, start, opHandle, (short)0, (short)opHandle.length);
   }
 
   public void setKeySize(short keySize) {
@@ -118,11 +122,11 @@ public class KMOperationState {
   }
 
   public void setOperation(KMOperation op) {
-    operation[0] = op;
+    operations[OPERATION] = op;
   }
 
   public KMOperation getOperation() {
-    return (KMOperation) operation[0];
+    return (KMOperation) operations[OPERATION];
   }
 
   public boolean isAuthPerOperationReqd() {
@@ -311,5 +315,17 @@ public class KMOperationState {
         }
     }
     return KMType.BUF_NONE;
+  }
+  
+  public void setTrustedConfirmationSigner(KMOperation hmacSignerOp) {
+    operations[HMAC_SIGNER_OPERATION] = hmacSignerOp;
+  }
+
+  public KMOperation getTrustedConfirmationSigner() {
+    return (KMOperation)operations[HMAC_SIGNER_OPERATION];
+  }
+
+  public boolean isTrustedConfirmationRequired() {
+    return operations[HMAC_SIGNER_OPERATION] != null;
   }
 }
