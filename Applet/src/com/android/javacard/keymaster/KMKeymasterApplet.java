@@ -17,7 +17,6 @@
 package com.android.javacard.keymaster;
 
 import com.android.javacard.seprovider.KMAttestationCert;
-import com.android.javacard.seprovider.KMComputedHmacKey;
 import com.android.javacard.seprovider.KMDeviceUniqueKey;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMHmacKey;

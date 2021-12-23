@@ -36,4 +36,8 @@ public class KMHmacKey implements KMPreSharedKey {
   public short getKeySizeBits() {
     return hmacKey.getSize();
   }
+  
+  public HMACKey getKey() {
+	    return hmacKey;
+  }
 }
