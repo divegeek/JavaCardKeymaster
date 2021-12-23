@@ -78,6 +78,7 @@ ScopedAStatus JavacardKeyMintOperation::finish(
     const optional<vector<uint8_t>>& /*confirmationToken*/, vector<uint8_t>* output) {
     HardwareAuthToken aToken = authToken.value_or(HardwareAuthToken());
     TimeStampToken tToken = timestampToken.value_or(TimeStampToken());
+    const vector<uint8_t> confToken = confirmationToken.value_or(vector<uint8_t>());
     const vector<uint8_t> inData = input.value_or(vector<uint8_t>());
     DataView view = {.buffer = {}, .data = inData, .start = 0, .length = inData.size()};
     const vector<uint8_t> sign = signature.value_or(vector<uint8_t>());
@@ -92,7 +93,7 @@ ScopedAStatus JavacardKeyMintOperation::finish(
         }
     }
     vector<uint8_t> remaining = popNextChunk(view, view.length);
-    return km_utils::kmError2ScopedAStatus(sendFinish(remaining, sign, aToken, tToken, *output));
+    return km_utils::kmError2ScopedAStatus(sendFinish(remaining, sign, aToken, tToken, confToken, *output));
 }
 
 ScopedAStatus JavacardKeyMintOperation::abort() {
@@ -262,6 +263,7 @@ keymaster_error_t JavacardKeyMintOperation::sendFinish(const vector<uint8_t>& da
                                                        const vector<uint8_t>& sign,
                                                        const HardwareAuthToken& authToken,
                                                        const TimeStampToken& timestampToken,
+                                                       const vector<uint8_t>& confToken,
                                                        vector<uint8_t>& output) {
     cppbor::Array request;
     request.add(Uint(opHandle_));
@@ -269,6 +271,8 @@ keymaster_error_t JavacardKeyMintOperation::sendFinish(const vector<uint8_t>& da
     request.add(Bstr(sign));
     cbor_.addHardwareAuthToken(request, authToken);
     cbor_.addTimeStampToken(request, timestampToken);
+    request.add(Bstr(confToken));
+    
     auto [item, err] = card_->sendRequest(Instruction::INS_FINISH_OPERATION_CMD, request);
     if (err != KM_ERROR_OK) {
         return err;
