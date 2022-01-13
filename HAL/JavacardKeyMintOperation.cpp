@@ -75,7 +75,7 @@ ScopedAStatus JavacardKeyMintOperation::update(const vector<uint8_t>& input,
 ScopedAStatus JavacardKeyMintOperation::finish(
     const optional<vector<uint8_t>>& input, const optional<vector<uint8_t>>& signature,
     const optional<HardwareAuthToken>& authToken, const optional<TimeStampToken>& timestampToken,
-    const optional<vector<uint8_t>>& /*confirmationToken*/, vector<uint8_t>* output) {
+    const optional<vector<uint8_t>>& confirmationToken, vector<uint8_t>* output) {
     HardwareAuthToken aToken = authToken.value_or(HardwareAuthToken());
     TimeStampToken tToken = timestampToken.value_or(TimeStampToken());
     const vector<uint8_t> confToken = confirmationToken.value_or(vector<uint8_t>());
