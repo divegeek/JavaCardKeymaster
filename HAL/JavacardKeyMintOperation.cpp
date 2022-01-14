@@ -75,9 +75,10 @@ ScopedAStatus JavacardKeyMintOperation::update(const vector<uint8_t>& input,
 ScopedAStatus JavacardKeyMintOperation::finish(
     const optional<vector<uint8_t>>& input, const optional<vector<uint8_t>>& signature,
     const optional<HardwareAuthToken>& authToken, const optional<TimeStampToken>& timestampToken,
-    const optional<vector<uint8_t>>& /*confirmationToken*/, vector<uint8_t>* output) {
+    const optional<vector<uint8_t>>& confirmationToken, vector<uint8_t>* output) {
     HardwareAuthToken aToken = authToken.value_or(HardwareAuthToken());
     TimeStampToken tToken = timestampToken.value_or(TimeStampToken());
+    const vector<uint8_t> confToken = confirmationToken.value_or(vector<uint8_t>());
     const vector<uint8_t> inData = input.value_or(vector<uint8_t>());
     DataView view = {.buffer = {}, .data = inData, .start = 0, .length = inData.size()};
     const vector<uint8_t> sign = signature.value_or(vector<uint8_t>());
@@ -92,7 +93,7 @@ ScopedAStatus JavacardKeyMintOperation::finish(
         }
     }
     vector<uint8_t> remaining = popNextChunk(view, view.length);
-    return km_utils::kmError2ScopedAStatus(sendFinish(remaining, sign, aToken, tToken, *output));
+    return km_utils::kmError2ScopedAStatus(sendFinish(remaining, sign, aToken, tToken, confToken, *output));
 }
 
 ScopedAStatus JavacardKeyMintOperation::abort() {
@@ -130,17 +131,17 @@ uint16_t JavacardKeyMintOperation::getDataViewOffset(DataView& view, uint16_t bl
     uint16_t offset = 0;
     uint16_t remaining = 0;
     switch(bufferingMode_) {
-        case BufferingMode::BUF_AES_BLOCK_ALIGNED:
-        case BufferingMode::BUF_DES_BLOCK_ALIGNED:
-        offset = ((view.length / blockSize)) * blockSize;
-        break;
-    case BufferingMode::BUF_AES_DECRYPT_PKCS7_BLOCK_ALIGNED:
     case BufferingMode::BUF_DES_DECRYPT_PKCS7_BLOCK_ALIGNED:
+    case BufferingMode::BUF_AES_DECRYPT_PKCS7_BLOCK_ALIGNED:
         offset = ((view.length / blockSize)) * blockSize;
         remaining = (view.length % blockSize);
         if (offset >= blockSize && remaining == 0) {
             offset -= blockSize;
         }
+        break;
+    case BufferingMode::BUF_DES_ENCRYPT_PKCS7_BLOCK_ALIGNED:
+    case BufferingMode::BUF_AES_ENCRYPT_PKCS7_BLOCK_ALIGNED:
+        offset = ((view.length / blockSize)) * blockSize;
         break;
     case BufferingMode::BUF_AES_GCM_DECRYPT_BLOCK_ALIGNED:
         if (view.length > macLength_) {
@@ -176,14 +177,14 @@ keymaster_error_t JavacardKeyMintOperation::bufferData(DataView& view) {
         view.start = 0;
         view.length = 0;
         break;
-    case BufferingMode::BUF_AES_BLOCK_ALIGNED:
+    case BufferingMode::BUF_AES_ENCRYPT_PKCS7_BLOCK_ALIGNED:
     case BufferingMode::BUF_AES_DECRYPT_PKCS7_BLOCK_ALIGNED:
         blockAlign(view, AES_BLOCK_SIZE);
         break;
     case BufferingMode::BUF_AES_GCM_DECRYPT_BLOCK_ALIGNED:
         blockAlign(view, macLength_);
         break;
-    case BufferingMode::BUF_DES_BLOCK_ALIGNED:
+    case BufferingMode::BUF_DES_ENCRYPT_PKCS7_BLOCK_ALIGNED:
     case BufferingMode::BUF_DES_DECRYPT_PKCS7_BLOCK_ALIGNED:
         blockAlign(view, DES_BLOCK_SIZE);
         break;
@@ -193,7 +194,7 @@ keymaster_error_t JavacardKeyMintOperation::bufferData(DataView& view) {
     return KM_ERROR_OK;
 }
 
-// Incermentally send the request using multiple updates.
+// Incrementally send the request using multiple updates.
 keymaster_error_t JavacardKeyMintOperation::updateInChunks(DataView& view,
                                                            HardwareAuthToken& authToken,
                                                            TimeStampToken& timestampToken,
@@ -262,6 +263,7 @@ keymaster_error_t JavacardKeyMintOperation::sendFinish(const vector<uint8_t>& da
                                                        const vector<uint8_t>& sign,
                                                        const HardwareAuthToken& authToken,
                                                        const TimeStampToken& timestampToken,
+                                                       const vector<uint8_t>& confToken,
                                                        vector<uint8_t>& output) {
     cppbor::Array request;
     request.add(Uint(opHandle_));
@@ -269,6 +271,8 @@ keymaster_error_t JavacardKeyMintOperation::sendFinish(const vector<uint8_t>& da
     request.add(Bstr(sign));
     cbor_.addHardwareAuthToken(request, authToken);
     cbor_.addTimeStampToken(request, timestampToken);
+    request.add(Bstr(confToken));
+    
     auto [item, err] = card_->sendRequest(Instruction::INS_FINISH_OPERATION_CMD, request);
     if (err != KM_ERROR_OK) {
         return err;

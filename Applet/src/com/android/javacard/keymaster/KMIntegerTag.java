@@ -53,6 +53,8 @@ public class KMIntegerTag extends KMTag {
       CERTIFICATE_NOT_BEFORE,
       CERTIFICATE_NOT_AFTER,
       USAGE_COUNT_LIMIT,
+      // custom tag
+      AUTH_TIMEOUT_MILLIS,
   };
 
   private KMIntegerTag() {

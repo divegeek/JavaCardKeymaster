@@ -64,6 +64,14 @@ public interface KMSEProvider extends KMUpgradable {
       short[] lengths);
 
   /**
+   * Initializes the trusted confirmation operation.
+   *
+   * @param computedHmacKey Instance of the computed Hmac key.
+   * @return instance of KMOperation.
+   */
+  KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey);
+  
+  /**
    * Verify that the imported key is valid. If the algorithm and/or keysize are not supported then
    * it should throw a CryptoException.
    *
@@ -301,9 +309,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @return true if the signature matches.
    */
   boolean hmacVerify(
-      byte[] keyBuf,
-      short keyStart,
-      short keyLength,
+      KMComputedHmacKey hmacKey,
       byte[] data,
       short dataStart,
       short dataLength,
@@ -577,6 +583,16 @@ public interface KMSEProvider extends KMUpgradable {
   KMMasterKey createMasterKey(short keySizeBits);
 
   /**
+   * This function creates an HMACKey and initializes the key with the provided input key data.
+   *
+   * @param keyData buffer containing the key data.
+   * @param offset start of the buffer.
+   * @param length length of the buffer.
+   * @return An instance of the KMComputedHmacKey.
+   */
+  KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length);
+  
+  /**
    * Returns the master key.
    *
    * @return Instance of the KMMasterKey
@@ -696,6 +712,26 @@ public interface KMSEProvider extends KMUpgradable {
    * @return boot certificate chain.
    */
   byte[] getBootCertificateChain();
+  
+  /**
+   * Returns the computed Hmac key.
+   *
+   * @return Instance of the computed hmac key.
+   */
+  KMComputedHmacKey getComputedHmacKey();
+  
+  /**
+   * This is a one-shot operation the does digest of the input mesage.
+   *
+   * @param inBuff input buffer to be digested.
+   * @param inOffset start offset of the input buffer.
+   * @param inLength length of the input buffer.
+   * @param outBuff is the output buffer that contains the digested data.
+   * @param outOffset start offset of the digested output buffer.
+   * @return length of the digested data.
+   */
+  short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
+      short outOffset);
   
   public boolean isProvisionLocked();
 

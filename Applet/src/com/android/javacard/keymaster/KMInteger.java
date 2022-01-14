@@ -147,6 +147,14 @@ public class KMInteger extends KMType {
     Util.arrayCopyNonAtomic(heap, getStartOff(), dest, destOff, length());
     return length();
   }
+  public short toLittleEndian(byte[] dest, short destOff) {
+    short index = (short) (length() - 1);
+    while (index >= 0) {
+      dest[destOff++] = heap[(short) (instanceTable[KM_INTEGER_OFFSET] + TLV_HEADER_SIZE + index)];
+      index--;
+    }
+    return length();
+  }
 
   public short getShort() {
     return Util.getShort(heap, (short) (getStartOff() + 2));

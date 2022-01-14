@@ -64,6 +64,14 @@ public interface KMSEProvider extends KMUpgradable {
       short[] lengths);
 
   /**
+   * Initializes the trusted confirmation operation.
+   *
+   * @param computedHmacKey Instance of the computed Hmac key.
+   * @return instance of KMOperation.
+   */
+  KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey);
+  
+  /**
    * Verify that the imported key is valid. If the algorithm and/or keysize are not supported then
    * it should throw a CryptoException.
    *
@@ -289,9 +297,7 @@ public interface KMSEProvider extends KMUpgradable {
   /**
    * This is a oneshot operation that verifies the signature using hmac algorithm.
    *
-   * @param keyBuf is the buffer with hmac key.
-   * @param keyStart is the start of the buffer.
-   * @param keyLength is the length of the buffer which will be in bytes from 8 to 64.
+   * @param hmacKey is the computed hmac key.
    * @param data is the buffer containing data.
    * @param dataStart is the start of the data.
    * @param dataLength is the length of the data.
@@ -301,9 +307,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @return true if the signature matches.
    */
   boolean hmacVerify(
-      byte[] keyBuf,
-      short keyStart,
-      short keyLength,
+      KMComputedHmacKey hmacKey,
       byte[] data,
       short dataStart,
       short dataLength,
@@ -556,6 +560,16 @@ public interface KMSEProvider extends KMUpgradable {
   boolean isUpgrading();
 
   /**
+   * This function creates an HMACKey and initializes the key with the provided input key data.
+   *
+   * @param keyData buffer containing the key data.
+   * @param offset start of the buffer.
+   * @param length length of the buffer.
+   * @return An instance of the KMComputedHmacKey.
+   */
+  KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length);
+  
+  /**
    * This function generates an AES Key of keySizeBits, which is used as an master key. This
    * generated key is maintained by the SEProvider. This function should be called only once at the
    * time of installation.
@@ -685,6 +699,26 @@ public interface KMSEProvider extends KMUpgradable {
    * @return boot certificate chain.
    */
   byte[] getBootCertificateChain();
+  
+  /**
+   * Returns the computed Hmac key.
+   *
+   * @return Instance of the computed hmac key.
+   */
+  KMComputedHmacKey getComputedHmacKey();
+  
+  /**
+   * This is a one-shot operation the does digest of the input mesage.
+   *
+   * @param inBuff input buffer to be digested.
+   * @param inOffset start offset of the input buffer.
+   * @param inLength length of the input buffer.
+   * @param outBuff is the output buffer that contains the digested data.
+   * @param outOffset start offset of the digested output buffer.
+   * @return length of the digested data.
+   */
+  short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
+      short outOffset);
 
   public boolean isProvisionLocked();
 

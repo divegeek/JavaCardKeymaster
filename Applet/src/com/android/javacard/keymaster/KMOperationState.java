@@ -16,6 +16,7 @@
 
 package com.android.javacard.keymaster;
 
+import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMOperation;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
@@ -28,10 +29,6 @@ import javacard.framework.Util;
  */
 public class KMOperationState {
 
-  public static final byte MAX_DATA = 20;
-  public static final byte MAX_REFS = 1;
-  private static final byte DATA = 0;
-  private static final byte REFS = 1;
   // byte type
   private static final byte ALG = 0;
   private static final byte PURPOSE = 1;
@@ -40,175 +37,96 @@ public class KMOperationState {
   private static final byte DIGEST = 4;
   private static final byte FLAGS = 5;
   private static final byte KEY_SIZE = 6;
-  private static final byte MAC_LENGTH = 7 ;
+  private static final byte MAC_LENGTH = 7;
   private static final byte MGF_DIGEST = 8;
+  private static final byte AUTH_TYPE = 9;
+  // sizes
   public static final byte OPERATION_HANDLE_SIZE = 8;
-  public static final byte DATA_SIZE = 9;
+  public static final byte DATA_SIZE = 10;
   public static final byte AUTH_TIME_SIZE = 8;
+  // Secure user ids 5 * 8 = 40 bytes ( Considering Maximum 5 SECURE USER IDs)
+  // First two bytes are reserved to store number of secure ids. So total 42 bytes.
+  public static final byte USER_SECURE_IDS_SIZE = 42;
 
-  // short type
-
-  //private static final byte KEY_SIZE = 6;
-  //private static final byte MAC_LENGTH = 8;
-  // Handle - currently this is short
-  private static final byte OP_HANDLE = 10;
-  // Auth time 64 bits
-  private static final byte AUTH_TIME = 12;
-
+  private static final byte OPERATION = 0;
+  private static final byte HMAC_SIGNER_OPERATION = 1;
   // Flag masks
   private static final short AUTH_PER_OP_REQD = 1;
   private static final short SECURE_USER_ID_REQD = 2;
   private static final short AUTH_TIMEOUT_VALIDATED = 4;
   private static final short AES_GCM_UPDATE_ALLOWED = 8;
-  private static final byte ACTIVE = 1;
-  private static final byte INACTIVE = 0;
+  // Max user secure ids.
+  private static final byte MAX_SECURE_USER_IDS = 5;
 
   // Object References
   private byte[] opHandle;
   private byte[] authTime;
+  private byte[] userSecureIds;
   private short[] data;
-  private Object[] operation;
+  private Object[] operations;
 
-  /*
-  private static final byte OPERATION = 0;
-  private static KMOperation op;
-  private static Object[] slot;
-  private static KMOperationState prototype;
-  private static boolean dFlag;
-*/
 
   public KMOperationState() {
-  //  data = JCSystem.makeTransientByteArray(MAX_DATA, JCSystem.CLEAR_ON_RESET);
     opHandle = JCSystem.makeTransientByteArray(OPERATION_HANDLE_SIZE, JCSystem.CLEAR_ON_RESET);
     authTime = JCSystem.makeTransientByteArray(AUTH_TIME_SIZE, JCSystem.CLEAR_ON_RESET);
     data = JCSystem.makeTransientShortArray(DATA_SIZE, JCSystem.CLEAR_ON_RESET);
-    operation = JCSystem.makeTransientObjectArray((short)1, JCSystem.CLEAR_ON_RESET);
-    reset();
-  }
-/*
-  private static KMOperationState proto() {
-    if (prototype == null) {
-      prototype = new KMOperationState();
-    }
-    return prototype;
-  }
-
-  public static KMOperationState instance(short opHandle, Object[] slot) {
-    KMOperationState opState = proto();
-    opState.reset();
-    Util.setShort(data, OP_HANDLE, opHandle);
-    KMOperationState.slot = slot;
-    return opState;
-  }
-
-  public static KMOperationState read(byte[] oprHandle, short off, Object[] slot) {
-    KMOperationState opState = proto();
-    opState.reset();
-    Util.arrayCopy((byte[]) slot[DATA], (short) 0, data, (short) 0, (short) data.length);
-    Object[] ops = ((Object[]) slot[REFS]);
-    op = (KMOperation) ops[OPERATION];
-    Util.setShort(data, OP_HANDLE, KMInteger.uint_64(oprHandle, off));
-    KMOperationState.slot = slot;
-    return opState;
-  }
-
-  public void persist() {
-    if (!dFlag) {
-      return;
-    }
-    KMRepository.instance().persistOperation(data, Util.getShort(data, OP_HANDLE), op);
-    dFlag = false;
-  }
-
-  private void dataUpdated() {
-    dFlag = true;
-  }
-
- public void release() {
-    Object[] ops = ((Object[]) slot[REFS]);
-    ((KMOperation) ops[OPERATION]).abort();
-    JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(
-        (byte[]) slot[0], (short) 0, (short) ((byte[]) slot[0]).length, (byte) 0);
-    ops[OPERATION] = null;
-    JCSystem.commitTransaction();
+    operations = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
+    userSecureIds = JCSystem.makeTransientByteArray(USER_SECURE_IDS_SIZE, JCSystem.CLEAR_ON_RESET);
     reset();
   }
 
-*/
   public void reset() {
     byte index = 0;
-    while(index < DATA_SIZE){
+    while (index < DATA_SIZE) {
       data[index] = KMType.INVALID_VALUE;
       index++;
     }
     Util.arrayFillNonAtomic(opHandle, (short) 0, OPERATION_HANDLE_SIZE, (byte) 0);
     Util.arrayFillNonAtomic(authTime, (short) 0, AUTH_TIME_SIZE, (byte) 0);
     
-    if(null != operation[0])
-    	((KMOperation)operation[0]).abort();
+    if(null != operations[OPERATION])
+    	((KMOperation)operations[OPERATION]).abort();
+    operations[OPERATION] = null;
     
-    operation[0] = null;
-    /*
-    dFlag = false;
-    op = null;
-    slot = null;
+    if(null != operations[HMAC_SIGNER_OPERATION])
+    	((KMOperation)operations[HMAC_SIGNER_OPERATION]).abort();
+    operations[HMAC_SIGNER_OPERATION] = null;
+  }
 
-    Util.arrayFillNonAtomic(
-        data, (short) 0, (short) data.length, (byte) 0);
-
-     */
-}
   public short compare(byte[] handle, short start, short len){
     return Util.arrayCompare(handle, start, opHandle, (short)0, (short)opHandle.length);
   }
+
   public void setKeySize(short keySize) {
-  //  Util.setShort(data, KEY_SIZE, keySize);
     data[KEY_SIZE] = keySize;
   }
 
   public short getKeySize() {
-  //  return Util.getShort(data, KEY_SIZE);
     return data[KEY_SIZE];
   }
 
-  public short getHandle(){
-    return KMInteger.uint_64(opHandle,(short)0);
-  }
-  public void setHandle(short handle){
-    setHandle(KMInteger.cast(handle).getBuffer(),
-        KMInteger.cast(handle).getStartOff(),
-        KMInteger.cast(handle).length());
-  }
-  public short getHandle(byte[] buf, short start) {
-    //return Util.getShort(KMOperationState.data, OP_HANDLE);
-    Util.arrayCopyNonAtomic(opHandle,(short)0, buf, start, (short)opHandle.length);
-    return (short) opHandle.length;
+  public short getHandle() {
+    return KMInteger.uint_64(opHandle, (short) 0);
   }
 
   public void setHandle(byte[] buf, short start, short len) {
-    Util.arrayCopyNonAtomic(buf,start, opHandle, (short)0, (short) opHandle.length);
-    //return KMByteBlob.instance(opHandle,(short)0, (short)8);
+    Util.arrayCopyNonAtomic(buf, start, opHandle, (short) 0, (short) opHandle.length);
   }
+
   public short getPurpose() {
     return data[PURPOSE];
   }
 
   public void setPurpose(short purpose) {
     data[PURPOSE] = purpose;
-//    dataUpdated();
   }
 
   public void setOperation(KMOperation op) {
-    operation[0] = op;
-    /*(op = operation;
-    dataUpdated();
-    persist();
-     */
+    operations[OPERATION] = op;
   }
 
   public KMOperation getOperation() {
-    return (KMOperation) operation[0];
+    return (KMOperation) operations[OPERATION];
   }
 
   public boolean isAuthPerOperationReqd() {
@@ -224,18 +142,11 @@ public class KMOperationState {
   }
 
   public short getAuthTime() {
-    return KMInteger.uint_64(authTime,(short) 0);
-   // return KMInteger.uint_64(data, (short) AUTH_TIME);
+    return KMInteger.uint_64(authTime, (short) 0);
   }
 
-  public void setAuthTime(short time){
-    setAuthTime(KMInteger.cast(time).getBuffer(), KMInteger.cast(time).getStartOff());
-  }
   public void setAuthTime(byte[] timeBuf, short start) {
-    Util.arrayCopyNonAtomic(timeBuf,start,authTime,(short)0, AUTH_TIME_SIZE);
-    /*Util.arrayCopy(timeBuf, start, data, (short) AUTH_TIME, (short) 8);
-    dataUpdated();
-     */
+    Util.arrayCopyNonAtomic(timeBuf, start, authTime, (short) 0, AUTH_TIME_SIZE);
   }
 
   public void setOneTimeAuthReqd(boolean flag) {
@@ -244,7 +155,6 @@ public class KMOperationState {
     } else {
       data[FLAGS] = (short) (data[FLAGS] & (~SECURE_USER_ID_REQD));
     }
-   // dataUpdated();
   }
 
   public void setAuthTimeoutValidated(boolean flag) {
@@ -253,7 +163,55 @@ public class KMOperationState {
     } else {
       data[FLAGS] = (byte) (data[FLAGS] & (~AUTH_TIMEOUT_VALIDATED));
     }
-    //dataUpdated();
+  }
+
+  public void setAuthType(byte authType) {
+    data[AUTH_TYPE] = authType;
+  }
+
+  public short getAuthType() {
+    return data[AUTH_TYPE];
+  }
+
+  public short getUserSecureId() {
+    short offset = 0;
+    short length = Util.getShort(userSecureIds, offset);
+    offset += 2;
+    if (length == 0) {
+      return KMType.INVALID_VALUE;
+    }
+    short arrObj = KMArray.instance(length);
+    short index = 0;
+    short obj;
+    while (index < length) {
+      obj = KMInteger.instance(userSecureIds, (short) (offset + index * 8), (short) 8);
+      KMArray.cast(arrObj).add(index, obj);
+      index++;
+    }
+    return KMIntegerArrayTag.instance(KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID, arrObj);
+  }
+
+  public void setUserSecureId(short integerArrayPtr) {
+    short length = KMIntegerArrayTag.cast(integerArrayPtr).length();
+    if (length > MAX_SECURE_USER_IDS) {
+      KMException.throwIt(KMError.INVALID_KEY_BLOB);
+    }
+    Util.arrayFillNonAtomic(userSecureIds, (short) 0, USER_SECURE_IDS_SIZE, (byte) 0);
+    short index = 0;
+    short obj;
+    short offset = 0;
+    offset = Util.setShort(userSecureIds, offset, length);
+    while (index < length) {
+      obj = KMIntegerArrayTag.cast(integerArrayPtr).get(index);
+      Util.arrayCopyNonAtomic(
+          KMInteger.cast(obj).getBuffer(),
+          KMInteger.cast(obj).getStartOff(),
+          userSecureIds,
+          (short) (8 - KMInteger.cast(obj).length() + offset + 8 * index),
+          KMInteger.cast(obj).length()
+      );
+      index++;
+    }
   }
 
   public void setAuthPerOperationReqd(boolean flag) {
@@ -262,7 +220,6 @@ public class KMOperationState {
     } else {
       data[FLAGS] = (short) (data[FLAGS] & (~AUTH_PER_OP_REQD));
     }
-    //dataUpdated();
   }
 
   public short getAlgorithm() {
@@ -271,7 +228,6 @@ public class KMOperationState {
 
   public void setAlgorithm(short algorithm) {
     data[ALG] = algorithm;
-    //dataUpdated();
   }
 
   public short getPadding() {
@@ -280,7 +236,6 @@ public class KMOperationState {
 
   public void setPadding(short padding) {
     data[PADDING] = padding;
-    //dataUpdated();
   }
 
   public short getBlockMode() {
@@ -289,7 +244,6 @@ public class KMOperationState {
 
   public void setBlockMode(short blockMode) {
     data[BLOCK_MODE] = blockMode;
-   // dataUpdated();
   }
 
   public short getDigest() {
@@ -302,7 +256,6 @@ public class KMOperationState {
 
   public void setDigest(byte digest) {
     data[DIGEST] = digest;
-   // dataUpdated();
   }
 
   public void setMgfDigest(byte mgfDigest) {
@@ -315,56 +268,64 @@ public class KMOperationState {
 
   public void setAesGcmUpdateComplete() {
     data[FLAGS] = (byte) (data[FLAGS] & (~AES_GCM_UPDATE_ALLOWED));
-    //dataUpdated();
   }
 
   public void setAesGcmUpdateStart() {
     data[FLAGS] = (byte) (data[FLAGS] | AES_GCM_UPDATE_ALLOWED);
-    //dataUpdated();
   }
 
   public void setMacLength(short length) {
     data[MAC_LENGTH] = length;
-    //Util.setShort(data, MAC_LENGTH, length);
-    //dataUpdated();
   }
 
   public short getMacLength() {
     return data[MAC_LENGTH];
-    //return Util.getShort(data, MAC_LENGTH);
   }
-  public byte getBufferingMode(){
+
+  public byte getBufferingMode() {
     short alg = getAlgorithm();
     short purpose = getPurpose();
     short digest = getDigest();
     short padding = getPadding();
     short blockMode = getBlockMode();
 
-    if(alg == KMType.RSA && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN){
+    if (alg == KMType.RSA && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN) {
       return KMType.BUF_RSA_NO_DIGEST;
     }
 
-    if(alg == KMType.EC && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN){
+    if (alg == KMType.EC && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN) {
       return KMType.BUF_EC_NO_DIGEST;
     }
 
-    switch(alg) {
-    case KMType.AES:
-      if (purpose == KMType.DECRYPT && padding == KMType.PKCS7) {
-        return KMType.BUF_AES_PKCS7_DECRYPT_BLOCK_ALIGN;
-      } else if (purpose == KMType.DECRYPT && blockMode == KMType.GCM) {
-        return KMType.BUF_AES_GCM_DECRYPT_BLOCK_ALIGN;
-      } else if (blockMode == KMType.CBC || blockMode == KMType.ECB) {
-        return KMType.BUF_AES_BLOCK_ALIGN;
-      }
-      break;
-    case KMType.DES:
-      if (purpose == KMType.DECRYPT && padding == KMType.PKCS7) {
-        return KMType.BUF_DES_PKCS7_DECRYPT_BLOCK_ALIGN;
-      } else {
-        return KMType.BUF_DES_BLOCK_ALIGN;
-      }
+    switch (alg) {
+      case KMType.AES:
+        if (purpose == KMType.ENCRYPT && padding == KMType.PKCS7) {
+          return KMType.BUF_AES_ENCRYPT_PKCS7_BLOCK_ALIGN;
+        } else if (purpose == KMType.DECRYPT && padding == KMType.PKCS7) {
+          return KMType.BUF_AES_DECRYPT_PKCS7_BLOCK_ALIGN;
+        } else if (purpose == KMType.DECRYPT && blockMode == KMType.GCM) {
+          return KMType.BUF_AES_GCM_DECRYPT_BLOCK_ALIGN;
+        }
+        break;
+      case KMType.DES:
+        if (purpose == KMType.ENCRYPT && padding == KMType.PKCS7) {
+          return KMType.BUF_DES_ENCRYPT_PKCS7_BLOCK_ALIGN;
+        } else if (purpose == KMType.DECRYPT && padding == KMType.PKCS7) {
+          return KMType.BUF_DES_DECRYPT_PKCS7_BLOCK_ALIGN;
+        }
     }
     return KMType.BUF_NONE;
+  }
+  
+  public void setTrustedConfirmationSigner(KMOperation hmacSignerOp) {
+    operations[HMAC_SIGNER_OPERATION] = hmacSignerOp;
+  }
+
+  public KMOperation getTrustedConfirmationSigner() {
+    return (KMOperation)operations[HMAC_SIGNER_OPERATION];
+  }
+
+  public boolean isTrustedConfirmationRequired() {
+    return operations[HMAC_SIGNER_OPERATION] != null;
   }
 }

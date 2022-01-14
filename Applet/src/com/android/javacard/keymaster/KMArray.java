@@ -141,4 +141,9 @@ public class KMArray extends KMType {
     return heap;
   }
 
+  public void deleteLastEntry() {
+    short len = length();
+    Util.setShort(heap, (short) (instanceTable[KM_ARRAY_OFFSET] + TLV_HEADER_SIZE + 2),
+        (short) (len - 1));
+  }
 }
