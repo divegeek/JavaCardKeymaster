@@ -3082,6 +3082,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void validateImportKey(short params, short keyFmt){
+    short attKeyPurpose =
+            KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, params);
+    // ATTEST_KEY cannot be combined with any other purpose.
+    if (attKeyPurpose != KMType.INVALID_VALUE
+    	    && KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY) 
+            && KMEnumArrayTag.cast(attKeyPurpose).length() > 1) {
+      KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+    }
     // Rollback protection not supported
     KMTag.assertAbsence(params, KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE, KMError.ROLLBACK_RESISTANCE_UNAVAILABLE);
     // As per specification, Early boot keys may not be imported at all, if Tag::EARLY_BOOT_ONLY is
@@ -3513,6 +3521,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // As per specification Early boot keys may be created after early boot ended.
     // Algorithm must be present
     KMTag.assertPresence(data[KEY_PARAMETERS], KMType.ENUM_TAG, KMType.ALGORITHM, KMError.INVALID_ARGUMENT);
+   
+    short attKeyPurpose =
+            KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, data[KEY_PARAMETERS]);
+    // ATTEST_KEY cannot be combined with any other purpose.
+    if (attKeyPurpose != KMType.INVALID_VALUE
+    		&& KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY) 
+    		&& KMEnumArrayTag.cast(attKeyPurpose).length() > 1) {
+      KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+    }
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
     // Check algorithm and dispatch to appropriate handler.
     switch (alg) {
