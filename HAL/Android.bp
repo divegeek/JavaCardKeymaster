@@ -52,7 +52,6 @@ cc_library {
 
 cc_library {
     name: "libjc_keymint_transport",
-    host_supported: true,
     vendor_available: true,
     srcs: [
         "SocketTransport.cpp",
