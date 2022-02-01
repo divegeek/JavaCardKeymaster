@@ -15,18 +15,36 @@ import com.sun.javacard.apduio.CadTransportException;
  */
 public class JCProxyMain {
 
+  public static final String KEYMASTER = "keymaster";
+  public static final String KEYMINT = "keymint";
+  public static final byte KEYMASTER_INSTALL_PARAM = 0x01;
+  public static final byte KEYMINT_INSTALL_PARAM = 0x02;
+
+  public static byte getKMInstallationParamter(String kmSpecificVersion) {
+    if (kmSpecificVersion.equals(KEYMASTER)) {
+      return KEYMASTER_INSTALL_PARAM;
+    } else {
+      return KEYMINT_INSTALL_PARAM;
+    }
+  }
+
   public static void main(String[] args) {
-    if (args.length < 1) {
+    if (args.length < 2) {
       System.out.println("Port no is expected as argument.");
       return;
     }
 
     int port = Integer.parseInt(args[0]);
+    String specificationImpl = args[1];
+    if (!(specificationImpl.equals("keymaster") || specificationImpl.equals("keymint"))) {
+      System.out.println("Specification string should be either keymaster or keymint.");
+      return;
+    }
     Simulator simulator = new JCardSimulator();
 
     try (ServerSocket serverSocket = new ServerSocket(port)) {
       simulator.initaliseSimulator();
-      if (!simulator.setupKeymasterOnSimulator()) {
+      if (!simulator.setupKeymasterOnSimulator(getKMInstallationParamter(specificationImpl))) {
         System.out.println("Failed to setup Java card keymaster simulator.");
         System.exit(-1);
       }
@@ -35,7 +53,7 @@ public class JCProxyMain {
       while (true) {
         try {
           Socket socket = serverSocket.accept();
-          System.out.println("\n\n\n\n\n");
+          System.out.println("\n");
           System.out.println("------------------------New client connected on "
                   + socket.getPort() + "--------------------");
           OutputStream output = null;
