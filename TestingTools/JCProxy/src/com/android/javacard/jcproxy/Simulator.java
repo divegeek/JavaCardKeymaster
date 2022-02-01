@@ -7,7 +7,7 @@ public interface Simulator {
 
   void disconnectSimulator() throws Exception;
 
-  public boolean setupKeymasterOnSimulator() throws Exception;
+  public boolean setupKeymasterOnSimulator(byte applicationSpecificParam) throws Exception;
 
   byte[] executeApdu(byte[] apdu) throws Exception;
 

@@ -1,4 +1,6 @@
-# JavaCardKeymaster
-JavaCard implementation of the [Android Keymaster 4.1 HAL](https://android.googlesource.com/platform/hardware/interfaces/+/master/keymaster/4.1/IKeymasterDevice.hal) (most of the specification is in the [Android Keymaster 4.0 HAL](https://android.googlesource.com/platform/hardware/interfaces/+/master/keymaster/4.0/IKeymasterDevice.hal)), intended for creation of StrongBox Keymaster instances to support the [Android Hardware-backed Keystore](https://source.android.com/security/keystore).
+**JavaCardKeymaster**
+JavaCard implementation of the following:
+1) [Android Keymint HAL](https://cs.android.com/android/platform/superproject/+/master:hardware/interfaces/security/keymint/aidl/android/hardware/security/keymint/)
+2) [Android SharedSecret HAL](https://cs.android.com/android/platform/superproject/+/master:hardware/interfaces/security/sharedsecret/aidl/android/hardware/security/sharedsecret/)
+3) [Remote Key Provisiong HAL](https://cs.android.com/android/platform/superproject/+/master:hardware/interfaces/security/keymint/aidl/android/hardware/security/keymint/IRemotelyProvisionedComponent.aidl)
 
-Here is the [JavaCard Applet design doc](https://docs.google.com/document/d/1bTAmhDqCNq1HYzChNDv8kLJEi64cwTIZ2PfdMMz3o8U/edit#heading=h.gjdgxs) and the [HAL design doc](https://docs.google.com/document/d/1-1MLJ781wAPJ2YxCdCtHMepld8F8KVAxpPtCw9J3b3o/edit#heading=h.gjdgxs) (the content will move here when it stablizes, for now these are a limited-access links).

@@ -30,9 +30,12 @@ public class JCardSimulator implements Simulator {
   }
 
   @Override
-  public boolean setupKeymasterOnSimulator() throws Exception {
+  public boolean setupKeymasterOnSimulator(byte applicationSpecificParam) throws Exception {
     AID appletAID1 = AIDUtil.create("A000000062");
-    simulator.installApplet(appletAID1, KMJCardSimApplet.class);
+    byte[] data = new byte[2];
+    data[0] = 0x01; // length
+    data[1] = applicationSpecificParam;
+    simulator.installApplet(appletAID1, KMJCardSimApplet.class, data, (short) 0, (byte) data.length);
     // Select applet
     simulator.selectApplet(appletAID1);
     return true;

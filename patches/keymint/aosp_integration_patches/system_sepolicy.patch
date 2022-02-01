@@ -1,0 +1,20 @@
+diff --git a/public/hal_neverallows.te b/public/hal_neverallows.te
+index e77ea9df0..74f799681 100644
+--- a/public/hal_neverallows.te
++++ b/public/hal_neverallows.te
+@@ -2,6 +2,7 @@
+ # network capabilities
+ neverallow {
+   halserverdomain
++  -hal_keymint_server
+   -hal_bluetooth_server
+   -hal_can_controller_server
+   -hal_wifi_server
+@@ -37,6 +38,7 @@ neverallow {
+ 
+ neverallow {
+   halserverdomain
++  -hal_keymint_server
+   -hal_automotive_socket_exemption
+   -hal_can_controller_server
+   -hal_tetheroffload_server
