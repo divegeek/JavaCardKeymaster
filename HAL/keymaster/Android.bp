@@ -47,6 +47,10 @@ cc_binary {
         "libjc_transport",
         "libjc_common",
         "libcrypto",
+	"libbinder_ndk",
+    ],
+    static_libs: [
+	"android.system.omapi-V1-ndk_platform",
     ],
     required: [
         "android.hardware.strongbox_keystore.xml",
@@ -100,6 +104,10 @@ cc_library {
         "libbinder",
         "libbase",
         "liblog",
+        "libbinder_ndk",
+    ],
+    static_libs: [
+        "android.system.omapi-V1-ndk_platform",
     ],
 }
 
