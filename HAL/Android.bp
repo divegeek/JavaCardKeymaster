@@ -17,6 +17,7 @@ cc_library {
     name: "libjc_keymint",
     defaults: [
     	"keymaster_defaults",
+        "keymint_use_latest_hal_aidl_ndk_shared",
     ],
     srcs: [
         "JavacardKeyMintDevice.cpp",
@@ -27,7 +28,6 @@ cc_library {
     ],
     cflags:["-O0",],
     shared_libs: [
-        "android.hardware.security.keymint-V1-ndk",
         "android.hardware.security.secureclock-V1-ndk",
         "android.hardware.security.sharedsecret-V1-ndk",
         "lib_android_keymaster_keymint_utils",
@@ -73,6 +73,7 @@ cc_library {
         "libcrypto",
         "libcutils",
         "libjc_km_transport",
+	"android.se.omapi-V1-ndk",
         "libbinder_ndk",
     ],
     export_include_dirs: [
@@ -85,14 +86,18 @@ cc_library {
     name: "libjc_km_transport",
     vendor_available: true,
     srcs: [
+	"OmapiTransport.cpp",
         "SocketTransport.cpp",
     ],
     export_include_dirs: [
         "."
     ],
     shared_libs: [
+        "libbinder",
         "libbase",
         "liblog",
+	"libbinder_ndk",
+	"android.se.omapi-V1-ndk",
     ],
 }
 
@@ -164,6 +169,7 @@ cc_binary {
         "libcrypto",
         "libjc_keymaster",
         "libjc_keymaster_portable",
+	"android.se.omapi-V1-ndk",
     ],
     required: [
         "android.hardware.keymaster_strongbox_keystore.xml",
@@ -183,8 +189,10 @@ cc_binary {
         "-Wall",
         "-Wextra",
     ],
+    defaults: [
+        "keymint_use_latest_hal_aidl_ndk_shared",
+    ],
     shared_libs: [
-        "android.hardware.security.keymint-V1-ndk",
         "android.hardware.security.sharedsecret-V1-ndk",
         "libbase",
         "libbinder_ndk",
@@ -196,6 +204,7 @@ cc_binary {
         "liblog",
         "libutils",
         "libjc_keymaster_portable",
+	"android.se.omapi-V1-ndk",
     ],
     srcs: [
         "keymintService.cpp",

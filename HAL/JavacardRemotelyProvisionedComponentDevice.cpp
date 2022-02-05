@@ -86,15 +86,18 @@ ScopedAStatus JavacardRemotelyProvisionedComponentDevice::getHardwareInfo(RpcHar
     auto [item, err] = card_->sendRequest(Instruction::INS_GET_RKP_HARDWARE_INFO);
     uint32_t versionNumber;
     uint32_t supportedEekCurve;
+    std::string uniqueId;
     if (err != KM_ERROR_OK || !cbor_.getUint64<uint32_t>(item, 1, versionNumber) ||
         !cbor_.getBinaryArray(item, 2, info->rpcAuthorName) ||
-        !cbor_.getUint64<uint32_t>(item, 3, supportedEekCurve)) {
+        !cbor_.getUint64<uint32_t>(item, 3, supportedEekCurve) ||
+        !cbor_.getBinaryArray(item, 4, uniqueId)) {
         LOG(ERROR) << "Error in response of getHardwareInfo.";
         LOG(INFO) << "Returning defaultHwInfo in getHardwareInfo.";
         return defaultHwInfo(info);
     }
     info->versionNumber = static_cast<int32_t>(versionNumber);
     info->supportedEekCurve = static_cast<int32_t>(supportedEekCurve);
+    info->uniqueId = uniqueId;
     return ScopedAStatus::ok();
 }
 
