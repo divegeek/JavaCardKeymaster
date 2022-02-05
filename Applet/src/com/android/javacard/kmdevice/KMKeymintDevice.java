@@ -501,6 +501,10 @@ public class KMKeymintDevice extends KMKeymasterDevice {
     // do sign
     short len = seProvider.ecSign256(deviceUniqueKey, scratchPad, (short) 0, temp, scratchPad,
         temp);
+    len = 
+        KMPKCS8Decoder.instance().
+        decodeEcdsa256Signature(KMByteBlob.instance(scratchPad, temp, len), scratchPad, temp);
+    
     coseSignStructure = KMByteBlob.instance(scratchPad, temp, len);
 
     // construct cose_sign1
@@ -581,11 +585,17 @@ public class KMKeymintDevice extends KMKeymasterDevice {
               KMArray.get(ptr1, KMCose.COSE_SIGN1_PAYLOAD_OFFSET));
       encodedLen = encodeToApduBuffer(signStructure, scratchPad,
           keySize, RemotelyProvisionedComponentDevice.MAX_COSE_BUF_SIZE);
+      
+      short signatureLen =
+          rkp.encodeES256CoseSignSignature(
+              KMByteBlob.getBuffer(KMArray.get(ptr1, KMCose.COSE_SIGN1_SIGNATURE_OFFSET)),
+              KMByteBlob.getStartOff(KMArray.get(ptr1, KMCose.COSE_SIGN1_SIGNATURE_OFFSET)),
+              KMByteBlob.length(KMArray.get(ptr1, KMCose.COSE_SIGN1_SIGNATURE_OFFSET)),
+              scratchPad,
+              (short) (keySize + encodedLen));
 
       if (!seProvider.ecVerify256(scratchPad, (short) 0, keySize, scratchPad, keySize, encodedLen,
-          KMByteBlob.getBuffer(KMArray.get(ptr1, KMCose.COSE_SIGN1_SIGNATURE_OFFSET)),
-          KMByteBlob.getStartOff(KMArray.get(ptr1, KMCose.COSE_SIGN1_SIGNATURE_OFFSET)),
-          KMByteBlob.length(KMArray.get(ptr1, KMCose.COSE_SIGN1_SIGNATURE_OFFSET)))) {
+          scratchPad, (short) (keySize + encodedLen), signatureLen)) {
         KMException.throwIt(KMError.STATUS_FAILED);
       }
       prevCoseKey = ptr2;

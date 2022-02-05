@@ -118,6 +118,34 @@ public class KMPKCS8Decoder {
       KMByteBlob.setLength(blob, --len);
     }
   }
+  
+  private short readEcdsa256SigIntegerHeader() {
+    short len = header(ASN1_INTEGER);
+    if (len == 33) {
+      if (0 != getByte()) {
+        KMException.throwIt(KMError.INVALID_DATA);
+      }
+      len--;
+    } else if (len > 33) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    return len;
+  }
+  
+  // Seq [Int, Int]
+  public short decodeEcdsa256Signature(short blob, byte[] scratchPad, short scratchPadOff) {
+    init(blob);
+    short len = header(ASN1_SEQUENCE);
+    len = readEcdsa256SigIntegerHeader();
+    // concatenate r and s in the buffer (r||s)
+    Util.arrayFillNonAtomic(scratchPad, scratchPadOff, (short) 64, (byte) 0);
+    // read r
+    getBytes(scratchPad, (short) (scratchPadOff + 32 - len), len);
+    len = readEcdsa256SigIntegerHeader();
+    // read s 
+    getBytes(scratchPad, (short) (scratchPadOff + 64 - len), len);
+    return (short) 64;
+  }
 
   // Seq [Int, Blob]
   public void decodeCommon(short version, byte[] alg) {
@@ -215,6 +243,11 @@ public class KMPKCS8Decoder {
     short len = KMByteBlob.length(blob);
     Util.arrayCopyNonAtomic(data, cur, KMByteBlob.getBuffer(blob),
         KMByteBlob.getStartOff(blob), len);
+    incrementCursor(len);
+  }
+  
+  private void getBytes(byte[] buffer, short offset, short len) {
+    Util.arrayCopyNonAtomic(data, cur, buffer, offset, len);
     incrementCursor(len);
   }
 

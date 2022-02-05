@@ -36,6 +36,8 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte FALSE = 0x00;
   // RKP Version
   private static final short RKP_VERSION = (short) 0x01;
+  private static byte[] GOOGLE;
+  private static byte[] RKP_UNIQUE_ID;
   // Boot params
   private static final byte OS_VERSION_ID = 0x00;
   private static final byte SYSTEM_PATCH_LEVEL_ID = 0x01;
@@ -150,6 +152,9 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   public static void initStatics() {
+    GOOGLE = new byte[]{0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
+    RKP_UNIQUE_ID = new byte[]{0x73, 0x74, 0x72, 0x6f, 0x6e, 0x67, 0x62, 0x6f,
+        0x78, 0x20, 0x6b, 0x65, 0x79, 0x6d, 0x69, 0x6e, 0x74};
     // Device Info labels
     BRAND = new byte[]{0x62, 0x72, 0x61, 0x6E, 0x64};
     MANUFACTURER = new byte[]{0x6D, 0x61, 0x6E, 0x75, 0x66, 0x61, 0x63, 0x74, 0x75,
@@ -267,12 +272,12 @@ public class RemotelyProvisionedComponentDevice {
   private void processGetRkpHwInfoCmd(APDU apdu) {
     // Make the response
     // Author name - Google.
-    final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
-    short respPtr = KMArray.instance((short) 4);
+    short respPtr = KMArray.instance((short) 5);
     KMArray.add(respPtr, (short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.add(respPtr, (short) 1, KMInteger.uint_16(RKP_VERSION));
-    KMArray.add(respPtr, (short) 2, KMByteBlob.instance(google, (short) 0, (short) google.length));
+    KMArray.add(respPtr, (short) 2, KMByteBlob.instance(GOOGLE, (short) 0, (short) GOOGLE.length));
     KMArray.add(respPtr, (short) 3, KMInteger.uint_8(KMType.RKP_CURVE_P256));
+    KMArray.add(respPtr, (short) 4, KMByteBlob.instance(RKP_UNIQUE_ID, (short) 0, (short) RKP_UNIQUE_ID.length));
     KMAppletInst.sendOutgoing(apdu, respPtr);
   }
 
@@ -847,6 +852,9 @@ public class RemotelyProvisionedComponentDevice {
             scratchPad,
             signStructure
         );
+    len = 
+        KMPKCS8Decoder.instance().
+        decodeEcdsa256Signature(KMByteBlob.instance(scratchPad, signStructure, len), scratchPad, signStructure);
     signStructure = KMByteBlob.instance(scratchPad, signStructure, len);
 
     /* Construct unprotected headers */
@@ -1447,4 +1455,71 @@ public class RemotelyProvisionedComponentDevice {
     KMArray.add(arrPtr, tagIndex, KMBoolTag.instance(KMType.NO_AUTH_REQUIRED));
     return KMKeyParameters.instance(arrPtr);
   }
+
+  private boolean isSignedByte(byte b) {
+    return ((b & 0x0080) != 0);
+  }
+
+  private short writeIntegerHeader(short valueLen, byte[] data, short offset) {
+    // write length
+    data[offset] = (byte) valueLen;
+    // write INTEGER tag
+    offset--;
+    data[offset] = 0x02;
+    return offset;
+  }
+
+  private short writeSequenceHeader(short valueLen, byte[] data, short offset) {
+    // write length
+    data[offset] = (byte) valueLen;
+    // write INTEGER tag
+    offset--;
+    data[offset] = 0x30;
+    return offset;
+  }
+
+  private short writeSignatureData(byte[] input, short inputOff, short inputlen, byte[] output, short offset) {
+    Util.arrayCopyNonAtomic(input, inputOff, output, offset, inputlen);
+    if (isSignedByte(input[inputOff])) {
+      offset--;
+      output[offset] = (byte) 0;
+    }
+    return offset;
+  }
+
+  public short encodeES256CoseSignSignature(byte[] input, short offset, short len, byte[] scratchPad, short scratchPadOff) {
+    // SEQ [ INTEGER(r), INTEGER(s)]
+    // write from bottom to the top
+    if (len != 64) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    short maxTotalLen = 72;
+    short end = (short) (scratchPadOff + maxTotalLen);
+    // write s.
+    short start = (short) (end - 32);
+    start = writeSignatureData(input, (short) (offset + 32), (short) 32, scratchPad, start);
+    // write length and header
+    short length = (short) (end - start);
+    start--;
+    start = writeIntegerHeader(length, scratchPad, start);
+    // write r
+    short rEnd = start;
+    start = (short) (start - 32);
+    start = writeSignatureData(input, offset, (short) 32, scratchPad, start);
+    // write length and header
+    length = (short) (rEnd - start);
+    start--;
+    start = writeIntegerHeader(length, scratchPad, start);
+    // write length and sequence header
+    length = (short) (end - start);
+    start--;
+    start = writeSequenceHeader(length, scratchPad, start);
+    length = (short) (end - start);
+    if (start > scratchPadOff) {
+      // re adjust the buffer
+      Util.arrayCopyNonAtomic(scratchPad, start, scratchPad, scratchPadOff, length);
+    }
+    return length;
+  }
+
 }
