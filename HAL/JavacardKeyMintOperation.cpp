@@ -17,7 +17,7 @@
 #define LOG_TAG "javacard.strongbox.keymint.operation-impl"
 
 #include "JavacardKeyMintOperation.h"
-#include <KeyMintUtils.h>
+#include <JavacardKeyMintUtils.h>
 #include <aidl/android/hardware/security/keymint/ErrorCode.h>
 #include <aidl/android/hardware/security/secureclock/ISecureClock.h>
 #include <android-base/logging.h>
