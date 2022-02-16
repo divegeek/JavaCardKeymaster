@@ -18,7 +18,6 @@
 
 #include "JavacardKeyMintOperation.h"
 #include <JavacardKeyMintUtils.h>
-#include <KeyMintUtils.h>
 #include <aidl/android/hardware/security/keymint/ErrorCode.h>
 #include <aidl/android/hardware/security/secureclock/ISecureClock.h>
 #include <android-base/logging.h>
@@ -35,8 +34,8 @@ ScopedAStatus JavacardKeyMintOperation::updateAad(const vector<uint8_t>& input,
     vector<uint8_t> encodedTimestampToken;
     HardwareAuthToken aToken = authToken.value_or(HardwareAuthToken());
     TimeStampToken tToken = timestampToken.value_or(TimeStampToken());
-    legacyHardwareAuthToken(aToken, &legacyToken);
-    encodeTimestampToken(tToken, &encodedTimestampToken);
+    km_utils::legacyHardwareAuthToken(aToken, &legacyToken);
+    km_utils::encodeTimestampToken(tToken, &encodedTimestampToken);
     auto err = jcKmOprImpl_->updateAad(input, legacyToken, encodedTimestampToken);
     return km_utils::kmError2ScopedAStatus(err);
 }
@@ -49,8 +48,8 @@ ScopedAStatus JavacardKeyMintOperation::update(const vector<uint8_t>& input,
     vector<uint8_t> encodedTimestampToken;
     HardwareAuthToken aToken = authToken.value_or(HardwareAuthToken());
     TimeStampToken tToken = timestampToken.value_or(TimeStampToken());
-    legacyHardwareAuthToken(aToken, &legacyToken);
-    encodeTimestampToken(tToken, &encodedTimestampToken);
+    km_utils::legacyHardwareAuthToken(aToken, &legacyToken);
+    km_utils::encodeTimestampToken(tToken, &encodedTimestampToken);
     auto err = jcKmOprImpl_->update(input, nullopt, legacyToken, encodedTimestampToken, nullptr,
                                     nullptr, output);
     return km_utils::kmError2ScopedAStatus(err);
@@ -71,8 +70,8 @@ ScopedAStatus JavacardKeyMintOperation::finish(const optional<vector<uint8_t>>& 
     // If confirmation token is empty, then create empty vector. This is to
     // differentiate between the keymaster and keymint.
     std::optional<vector<uint8_t>> confToken = confirmationToken.value_or(vector<uint8_t>());
-    legacyHardwareAuthToken(aToken, &legacyToken);
-    encodeTimestampToken(tToken, &encodedTimestampToken);
+    km_utils::legacyHardwareAuthToken(aToken, &legacyToken);
+    km_utils::encodeTimestampToken(tToken, &encodedTimestampToken);
     auto err = jcKmOprImpl_->finish(inputData, nullopt, signatureData, legacyToken,
                                     encodedTimestampToken, confToken, nullptr, output);
     return km_utils::kmError2ScopedAStatus(err);

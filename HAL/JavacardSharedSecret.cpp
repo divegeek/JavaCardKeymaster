@@ -16,7 +16,7 @@
  */
 #define LOG_TAG "javacard.strongbox.keymint.operation-impl"
 #include "JavacardSharedSecret.h"
-#include <KeyMintUtils.h>
+#include <JavacardKeyMintUtils.h>
 #include <android-base/logging.h>
 
 namespace aidl::android::hardware::security::sharedsecret {

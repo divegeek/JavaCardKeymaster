@@ -20,7 +20,6 @@
 #include <JavacardKeyMintUtils.h>
 #include <JavacardKeymaster.h>
 #include <KMUtils.h>
-#include <KeyMintUtils.h>
 #include <algorithm>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
@@ -266,7 +265,7 @@ ScopedAStatus JavacardKeyMintDevice::begin(KeyPurpose purpose, const std::vector
     paramSet.Reinitialize(KmParamSet(params));
     ::keymaster::HardwareAuthToken legacyToken;
     std::unique_ptr<JavacardKeymasterOperation> operation;
-    legacyHardwareAuthToken(aToken, &legacyToken);
+    km_utils::legacyHardwareAuthToken(aToken, &legacyToken);
     auto err = jcImpl_->begin(static_cast<keymaster_purpose_t>(purpose), keyBlob, paramSet,
                               legacyToken, &outParams, operation);
     if (err != KM_ERROR_OK) {
@@ -284,7 +283,7 @@ JavacardKeyMintDevice::deviceLocked(bool passwordOnly,
                                     const std::optional<TimeStampToken>& timestampToken) {
     TimeStampToken tToken = timestampToken.value_or(TimeStampToken());
     vector<uint8_t> encodedTimestampToken;
-    auto err = encodeTimestampToken(tToken, &encodedTimestampToken);
+    auto err = km_utils::encodeTimestampToken(tToken, &encodedTimestampToken);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "In deviceLocked failed to encode TimeStampToken" << (int32_t)err;
         return km_utils::kmError2ScopedAStatus(err);

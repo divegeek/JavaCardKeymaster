@@ -37,7 +37,6 @@ public class RemotelyProvisionedComponentDevice {
   // RKP Version
   private static final short RKP_VERSION = (short) 0x01;
   private static byte[] GOOGLE;
-  private static byte[] RKP_UNIQUE_ID;
   // Boot params
   private static final byte OS_VERSION_ID = 0x00;
   private static final byte SYSTEM_PATCH_LEVEL_ID = 0x01;
@@ -153,8 +152,6 @@ public class RemotelyProvisionedComponentDevice {
 
   public static void initStatics() {
     GOOGLE = new byte[]{0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
-    RKP_UNIQUE_ID = new byte[]{0x73, 0x74, 0x72, 0x6f, 0x6e, 0x67, 0x62, 0x6f,
-        0x78, 0x20, 0x6b, 0x65, 0x79, 0x6d, 0x69, 0x6e, 0x74};
     // Device Info labels
     BRAND = new byte[]{0x62, 0x72, 0x61, 0x6E, 0x64};
     MANUFACTURER = new byte[]{0x6D, 0x61, 0x6E, 0x75, 0x66, 0x61, 0x63, 0x74, 0x75,
@@ -272,12 +269,11 @@ public class RemotelyProvisionedComponentDevice {
   private void processGetRkpHwInfoCmd(APDU apdu) {
     // Make the response
     // Author name - Google.
-    short respPtr = KMArray.instance((short) 5);
+    short respPtr = KMArray.instance((short) 4);
     KMArray.add(respPtr, (short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.add(respPtr, (short) 1, KMInteger.uint_16(RKP_VERSION));
     KMArray.add(respPtr, (short) 2, KMByteBlob.instance(GOOGLE, (short) 0, (short) GOOGLE.length));
     KMArray.add(respPtr, (short) 3, KMInteger.uint_8(KMType.RKP_CURVE_P256));
-    KMArray.add(respPtr, (short) 4, KMByteBlob.instance(RKP_UNIQUE_ID, (short) 0, (short) RKP_UNIQUE_ID.length));
     KMAppletInst.sendOutgoing(apdu, respPtr);
   }
 
@@ -1089,6 +1085,11 @@ public class RemotelyProvisionedComponentDevice {
             pubKeyBLen, scratchPad, (short) 0);
     key = KMByteBlob.instance(scratchPad, (short) 0, key);
 
+    // ignore 0x04 for ephemerical public key as kdfContext should not include 0x04.
+    pubKeyAOff += 1;
+    pubKeyALen -= 1;
+    pubKeyBOff += 1;
+    pubKeyBLen -= 1;
     short kdfContext =
         kmCoseInst.constructKdfContext(pubKeyA, pubKeyAOff, pubKeyALen, pubKeyB, pubKeyBOff,
             pubKeyBLen,
