@@ -18,7 +18,7 @@
 #include "JavacardKeyMintDevice.h"
 #include "JavacardKeyMintOperation.h"
 #include "JavacardSharedSecret.h"
-#include <KeyMintUtils.h>
+#include <JavacardKeyMintUtils.h>
 #include <algorithm>
 #include <android-base/logging.h>
 #include <android-base/properties.h>

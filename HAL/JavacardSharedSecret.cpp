@@ -2,7 +2,7 @@
 #include <android-base/logging.h>
 
 #include "JavacardSharedSecret.h"
-#include <KeyMintUtils.h>
+#include <JavacardKeyMintUtils.h>
 
 namespace aidl::android::hardware::security::sharedsecret {
 using namespace ::keymint::javacard;

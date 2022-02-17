@@ -17,7 +17,7 @@
 #define LOG_TAG "javacard.keymint.device.rkp.strongbox-impl"
 #include <JavacardRemotelyProvisionedComponentDevice.h>
 #include <android-base/logging.h>
-#include <KeyMintUtils.h>
+#include <JavacardKeyMintUtils.h>
 #include <aidl/android/hardware/security/keymint/MacedPublicKey.h>
 #include <keymaster/cppcose/cppcose.h>
 #include <keymaster/remote_provisioning_utils.h>

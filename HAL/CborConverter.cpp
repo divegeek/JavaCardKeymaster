@@ -16,7 +16,7 @@
  */
 
 #include "CborConverter.h"
-#include <KeyMintUtils.h>
+#include <JavacardKeyMintUtils.h>
 #include <aidl/android/hardware/security/keymint/IKeyMintDevice.h>
 #include <cppbor.h>
 #include <map>
