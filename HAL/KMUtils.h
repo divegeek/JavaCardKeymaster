@@ -19,8 +19,8 @@
 #include <hardware/keymaster_defs.h>
 #include <keymaster/authorization_set.h>
 #include <keymaster/serializable.h>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace javacard_keymaster {
 using namespace ::keymaster;

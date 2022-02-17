@@ -15,17 +15,32 @@
  */
 
 #pragma once
+#include <aidl/android/hardware/security/keymint/KeyParameter.h>
+#include <aidl/android/hardware/security/keymint/Tag.h>
 #include <aidl/android/hardware/security/keymint/HardwareAuthToken.h>
 #include <aidl/android/hardware/security/secureclock/ISecureClock.h>
 #include <keymaster/android_keymaster_messages.h>
 #include <keymaster/android_keymaster_utils.h>
 #include <vector>
 
-namespace aidl::android::hardware::security::keymint {
+namespace aidl::android::hardware::security::keymint::km_utils {
 using namespace ::keymaster;
 using secureclock::TimeStampToken;
+using ::ndk::ScopedAStatus;
 using std::vector;
 using LegacyHardwareAuthToken = ::keymaster::HardwareAuthToken;
+
+inline keymaster_tag_t legacy_enum_conversion(const Tag value) {
+    return static_cast<keymaster_tag_t>(value);
+}
+
+inline Tag legacy_enum_conversion(const keymaster_tag_t value) {
+    return static_cast<Tag>(value);
+}
+
+inline keymaster_tag_type_t typeFromTag(const keymaster_tag_t tag) {
+    return keymaster_tag_get_type(tag);
+}
 
 inline void Vec2KmBlob(const vector<uint8_t>& input, KeymasterBlob* blob) {
     blob->Reset(input.size());
@@ -37,5 +52,29 @@ keymaster_error_t legacyHardwareAuthToken(const HardwareAuthToken& aidlToken,
 
 keymaster_error_t encodeTimestampToken(const TimeStampToken& timestampToken,
                                        vector<uint8_t>* encodedToken);
+
+inline ScopedAStatus kmError2ScopedAStatus(const keymaster_error_t value) {
+    return (value == KM_ERROR_OK
+                ? ScopedAStatus::ok()
+                : ScopedAStatus(AStatus_fromServiceSpecificError(static_cast<int32_t>(value))));
+}
+
+KeyParameter kmParam2Aidl(const keymaster_key_param_t& param);
+vector<KeyParameter> kmParamSet2Aidl(const keymaster_key_param_set_t& set);
+keymaster_key_param_set_t aidlKeyParams2Km(const vector<KeyParameter>& keyParams);
+
+class KmParamSet : public keymaster_key_param_set_t {
+  public:
+    explicit KmParamSet(const vector<KeyParameter>& keyParams)
+        : keymaster_key_param_set_t(aidlKeyParams2Km(keyParams)) {}
+
+    KmParamSet(KmParamSet&& other) : keymaster_key_param_set_t{other.params, other.length} {
+        other.length = 0;
+        other.params = nullptr;
+    }
+
+    KmParamSet(const KmParamSet&) = delete;
+    ~KmParamSet() { keymaster_free_param_set(this); }
+};
 
 }  // namespace aidl::android::hardware::security::keymint

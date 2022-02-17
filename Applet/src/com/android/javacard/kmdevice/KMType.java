@@ -92,6 +92,7 @@ public abstract class KMType {
   public static final byte P_256 = 0x01;
   public static final byte P_384 = 0x02;
   public static final byte P_521 = 0x03;
+  public static final byte CURVE_25519 = 0x04;
 
   // KeyBlobUsageRequirements Enum Tag key and values.
   public static final short BLOB_USAGE_REQ = 0x012D;
@@ -233,7 +234,6 @@ public abstract class KMType {
   public static final short ORIGINATION_EXPIRE_DATETIME = 0x0191;
   public static final short USAGE_EXPIRE_DATETIME = 0x0192;
   public static final short CREATION_DATETIME = 0x02BD;
-  ;
   public static final short CERTIFICATE_NOT_BEFORE = 0x03F0;
   public static final short CERTIFICATE_NOT_AFTER = 0x03F1;
   // Integer Array Tags - ULONG_REP and UINT_REP.
