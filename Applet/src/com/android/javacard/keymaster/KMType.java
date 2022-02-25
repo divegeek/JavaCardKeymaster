@@ -92,6 +92,7 @@ public abstract class KMType {
   public static final byte P_256 = 0x01;
   public static final byte P_384 = 0x02;
   public static final byte P_521 = 0x03;
+  public static final byte CURVE_25519 = 0x04;
 
   // KeyBlobUsageRequirements Enum Tag key and values.
   public static final short BLOB_USAGE_REQ = 0x012D;

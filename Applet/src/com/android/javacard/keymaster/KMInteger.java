@@ -147,6 +147,7 @@ public class KMInteger extends KMType {
     Util.arrayCopyNonAtomic(heap, getStartOff(), dest, destOff, length());
     return length();
   }
+
   public short toLittleEndian(byte[] dest, short destOff) {
     short index = (short) (length() - 1);
     while (index >= 0) {

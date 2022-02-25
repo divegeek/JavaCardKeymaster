@@ -195,7 +195,7 @@ public class KMIntegerTag extends KMTag {
         }
         break;
       case KMType.DES:
-        if (val == 192 || val == 168) {
+        if (val == 168) {
           return true;
         }
         break;

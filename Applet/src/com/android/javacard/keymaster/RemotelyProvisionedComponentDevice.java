@@ -763,33 +763,6 @@ public class RemotelyProvisionedComponentDevice {
     ((KMOperation) operation[0]).update(scratchPad, (short) 0, (short) (len + partialPayloadLen));
   }
 
-  private static short getAttestKeyParameters() {
-    short tagIndex = 0;
-    short arrPtr = KMArray.instance((short) 6);
-    // Key size - 256
-    short keySize = KMIntegerTag
-        .instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short) 256));
-    // Digest - SHA256
-    short byteBlob = KMByteBlob.instance((short) 1);
-    KMByteBlob.cast(byteBlob).add((short) 0, KMType.SHA2_256);
-    short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
-    // Purpose - Attest
-    byteBlob = KMByteBlob.instance((short) 1);
-    KMByteBlob.cast(byteBlob).add((short) 0, KMType.ATTEST_KEY);
-    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
-
-    KMArray.cast(arrPtr).add(tagIndex++, purpose);
-    // Algorithm - EC
-    KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, KMType.EC));
-    KMArray.cast(arrPtr).add(tagIndex++, keySize);
-    KMArray.cast(arrPtr).add(tagIndex++, digest);
-    // Curve - P256
-    KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ECCURVE, KMType.P_256));
-    // No Authentication is required to use this key.
-    KMArray.cast(arrPtr).add(tagIndex, KMBoolTag.instance(KMType.NO_AUTH_REQUIRED));
-    return KMKeyParameters.instance(arrPtr);
-  }
-
   private short createSignedMac(KMDeviceUniqueKey deviceUniqueKey, byte[] scratchPad,
       short deviceMapPtr, short pubKeysToSign) {
     // Challenge
@@ -833,6 +806,8 @@ public class RemotelyProvisionedComponentDevice {
             scratchPad,
             signStructure
         );
+    len = KMPKCS8Decoder.instance().
+            decodeEcdsa256Signature(KMByteBlob.instance(scratchPad, signStructure, len), scratchPad, signStructure);
     signStructure = KMByteBlob.instance(scratchPad, signStructure, len);
 
     /* Construct unprotected headers */
@@ -926,7 +901,9 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(deviceIds, out, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(deviceIds, out, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
-    //TODO Add attest_id_state
+    byte[] attestIdState = seProvider.isProvisionLocked() ? ATTEST_ID_LOCKED : ATTEST_ID_OPEN;
+    updateItem(deviceIds, out, ATTEST_ID_STATE,
+            KMTextString.instance(attestIdState, (short) 0, (short) attestIdState.length));
     // Create device info map.
     short map = KMMap.instance(out[1]);
     short mapIndex = 0;
@@ -1043,6 +1020,11 @@ public class RemotelyProvisionedComponentDevice {
             pubKeyBLen, scratchPad, (short) 0);
     key = KMByteBlob.instance(scratchPad, (short) 0, key);
 
+    // ignore 0x04 for ephemerical public key as kdfContext should not include 0x04.
+    pubKeyAOff += 1;
+    pubKeyALen -= 1;
+    pubKeyBOff += 1;
+    pubKeyBLen -= 1;
     short kdfContext =
         KMCose.constructKdfContext(pubKeyA, pubKeyAOff, pubKeyALen, pubKeyB, pubKeyBOff, pubKeyBLen,
             true);
@@ -1329,27 +1311,6 @@ public class RemotelyProvisionedComponentDevice {
         .constructHeaders(KMType.INVALID_VALUE, KMType.INVALID_VALUE, nonce, KMType.INVALID_VALUE);
   }
 
-  private short constructCoseEncryptHeaders(byte[] scratchPad, short nonce) {
-    // CoseEncrypt protected headers.
-    short protectedHeader = KMCose.constructHeaders(
-        KMInteger.uint_8(KMCose.COSE_ALG_AES_GCM_256),
-        KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE);
-    // Encode the protected header as byte blob.
-    protectedHeader = KMKeymasterApplet.encodeToApduBuffer(protectedHeader, scratchPad, (short) 0,
-        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-    protectedHeader = KMByteBlob.instance(scratchPad, (short) 0, protectedHeader);
-    /* CoseEncrypt unprotected headers */
-    short unprotectedHeader =
-        KMCose.constructHeaders(KMType.INVALID_VALUE, KMType.INVALID_VALUE, nonce,
-            KMType.INVALID_VALUE);
-    // Construct partial CoseEncrypt
-    return KMCose.constructCoseEncrypt(protectedHeader, unprotectedHeader, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE);
-  }
-
-
   private short constructCoseMacForRkpKey(boolean testMode, byte[] scratchPad, short pubKey) {
     // prepare cosekey
     short coseKey =
@@ -1427,4 +1388,71 @@ public class RemotelyProvisionedComponentDevice {
     KMArray.cast(arrPtr).add(tagIndex, KMBoolTag.instance(KMType.NO_AUTH_REQUIRED));
     return KMKeyParameters.instance(arrPtr);
   }
+  
+  private boolean isSignedByte(byte b) {
+    return ((b & 0x0080) != 0);
+  }
+
+  private short writeIntegerHeader(short valueLen, byte[] data, short offset) {
+    // write length
+    data[offset] = (byte) valueLen;
+    // write INTEGER tag
+    offset--;
+    data[offset] = 0x02;
+    return offset;
+  }
+
+  private short writeSequenceHeader(short valueLen, byte[] data, short offset) {
+    // write length
+    data[offset] = (byte) valueLen;
+    // write INTEGER tag
+    offset--;
+    data[offset] = 0x30;
+    return offset;
+  }
+
+  private short writeSignatureData(byte[] input, short inputOff, short inputlen, byte[] output, short offset) {
+    Util.arrayCopyNonAtomic(input, inputOff, output, offset, inputlen);
+    if (isSignedByte(input[inputOff])) {
+      offset--;
+      output[offset] = (byte) 0;
+    }
+    return offset;
+  }
+
+  public short encodeES256CoseSignSignature(byte[] input, short offset, short len, byte[] scratchPad, short scratchPadOff) {
+    // SEQ [ INTEGER(r), INTEGER(s)]
+    // write from bottom to the top
+    if (len != 64) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    short maxTotalLen = 72;
+    short end = (short) (scratchPadOff + maxTotalLen);
+    // write s.
+    short start = (short) (end - 32);
+    start = writeSignatureData(input, (short) (offset + 32), (short) 32, scratchPad, start);
+    // write length and header
+    short length = (short) (end - start);
+    start--;
+    start = writeIntegerHeader(length, scratchPad, start);
+    // write r
+    short rEnd = start;
+    start = (short) (start - 32);
+    start = writeSignatureData(input, offset, (short) 32, scratchPad, start);
+    // write length and header
+    length = (short) (rEnd - start);
+    start--;
+    start = writeIntegerHeader(length, scratchPad, start);
+    // write length and sequence header
+    length = (short) (end - start);
+    start--;
+    start = writeSequenceHeader(length, scratchPad, start);
+    length = (short) (end - start);
+    if (start > scratchPadOff) {
+      // re adjust the buffer
+      Util.arrayCopyNonAtomic(scratchPad, start, scratchPad, scratchPadOff, length);
+    }
+    return length;
+  }
+  
 }

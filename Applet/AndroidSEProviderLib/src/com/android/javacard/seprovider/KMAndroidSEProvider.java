@@ -134,12 +134,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
-        KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
+        KeyBuilder.TYPE_AES_TRANSIENT_RESET, KeyBuilder.LENGTH_AES_128, false);
     aesKeys[KEYSIZE_256_OFFSET] = (AESKey) KeyBuilder.buildKey(
-        KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
-    triDesKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
+        KeyBuilder.TYPE_AES_TRANSIENT_RESET, KeyBuilder.LENGTH_AES_256, false);
+    triDesKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES_TRANSIENT_RESET,
         KeyBuilder.LENGTH_DES3_3KEY, false);
-    hmacKey = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) 512,
+    hmacKey = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_RESET, (short) 512,
         false);
     rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
     ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
@@ -936,6 +936,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public void onSave(Element element) {
     element.write(certificateChain);
+    element.write(additionalCertChain);
+    element.write(bcc);
     KMAESKey.onSave(element, masterKey);
     KMECPrivateKey.onSave(element, attestationKey);
     KMHmacKey.onSave(element, preSharedKey);
@@ -944,6 +946,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public void onRestore(Element element) {
     certificateChain = (byte[]) element.readObject();
+    additionalCertChain = (byte[]) element.readObject();
+    bcc = (byte[]) element.readObject();
     masterKey = KMAESKey.onRestore(element);
     attestationKey = KMECPrivateKey.onRestore(element);
     preSharedKey = KMHmacKey.onRestore(element);
@@ -1315,7 +1319,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     if (length > 4 || length < 0) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
-    Util.arrayCopyNonAtomic(buffer, start, bootPatchLevel, (short) 0, (short) 4);
+    Util.arrayCopyNonAtomic(buffer, start, bootPatchLevel, (short) 0, (short) length);
   }
 
   @Override
@@ -1468,7 +1472,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     //            // self-signed cert, leaf contains DK_pu b
     //    ]
     //    Certificate = COSE_Sign1 of a public key
-    if ((short) (len + 2) >= ADDITIONAL_CERT_CHAIN_MAX_SIZE) {
+    if ((short) (len + 2) > ADDITIONAL_CERT_CHAIN_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     JCSystem.beginTransaction();
