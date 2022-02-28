@@ -27,8 +27,29 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <constants.h>
+#include <openssl/ecdsa.h>
 
 namespace cppcose {
+
+ErrMsgOr<bytevec> ecdsaDerSignatureToCose(const bytevec& ecdsaSignature) {
+    const unsigned char* p = ecdsaSignature.data();
+    ECDSA_SIG *sig = d2i_ECDSA_SIG(nullptr, &p, ecdsaSignature.size());
+    if (sig == nullptr) {
+        return "Error decoding DER signature";
+    }
+
+    bytevec ecdsaCoseSignature(64, 0);
+    if (BN_bn2binpad(ECDSA_SIG_get0_r(sig), ecdsaCoseSignature.data(), 32) != 32) {
+        ECDSA_SIG_free(sig);
+        return "Error encoding r";
+    }
+    if (BN_bn2binpad(ECDSA_SIG_get0_s(sig), ecdsaCoseSignature.data() + 32, 32) != 32) {
+        ECDSA_SIG_free(sig);
+        return "Error encoding s";
+    }
+    ECDSA_SIG_free(sig);
+    return ecdsaCoseSignature;
+}
 
 ErrMsgOr<bytevec> ECDSA_sign(const bytevec& key, bytevec& input) {
     EVP_PKEY_CTX* pkeyCtx = NULL;
@@ -132,7 +153,7 @@ ErrMsgOr<bytevec> createCoseSign1Signature(const bytevec& key, const bytevec& pr
         .encode();
     auto signature = ECDSA_sign(key, signatureInput);
     if (!signature) return "Signing failed";
-    return signature;
+    return ecdsaDerSignatureToCose(*signature);
 }
 
 ErrMsgOr<cppbor::Array> constructCoseSign1(const bytevec& key, cppbor::Map protectedParams,

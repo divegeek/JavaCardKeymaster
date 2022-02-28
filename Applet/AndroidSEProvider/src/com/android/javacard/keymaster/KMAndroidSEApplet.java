@@ -27,7 +27,9 @@ import com.android.javacard.seprovider.KMType;
 
 import javacard.framework.APDU;
 import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
+import javacard.security.CryptoException;
 
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
 
@@ -157,6 +159,14 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           super.process(apdu);
           break;
       }
+    } catch (KMException exception) {
+      sendError(apdu, KMException.reason());
+    } catch (ISOException exp) {
+      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
+    } catch (CryptoException e) {
+      sendError(apdu, mapCryptoErrorToKMError(e.getReason()));
+    } catch (Exception e) {
+      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
     } finally {
       repository.clean();
     }

@@ -40,8 +40,8 @@ enum ProvisionStatus {
 };
 
 // TODO keymint provision status and lock
-std::string provisionStatusApdu = hex2str("80084000000000");
-std::string lockProvisionApdu = hex2str("80074000000000");
+std::string provisionStatusApdu = hex2str("80045000000000");
+std::string lockProvisionApdu = hex2str("80035000000000");
 
 Json::Value root;
 static std::string inputFileName;
