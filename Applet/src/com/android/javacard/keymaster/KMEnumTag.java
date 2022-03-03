@@ -103,10 +103,9 @@ public class KMEnumTag extends KMTag {
       enums =
           new Object[]{
               new byte[]{RSA, DES, EC, AES, HMAC},
-              new byte[]{P_224, P_256, P_384, P_521},
+              new byte[]{P_224, P_256, P_384, P_521, CURVE_25519},
               new byte[]{STANDALONE, REQUIRES_FILE_SYSTEM},
-              new byte[]{USER_AUTH_NONE, PASSWORD, FINGERPRINT, (byte) (PASSWORD & FINGERPRINT),
-                  ANY},
+              new byte[]{USER_AUTH_NONE, PASSWORD, FINGERPRINT, BOTH, ANY},
               new byte[]{GENERATED, DERIVED, IMPORTED, UNKNOWN, SECURELY_IMPORTED},
               new byte[]{SOFTWARE, TRUSTED_ENVIRONMENT, STRONGBOX}
           };

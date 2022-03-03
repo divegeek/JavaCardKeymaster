@@ -46,9 +46,9 @@ enum class BufferingMode : int32_t {
                         // will further check according to exact key size and crypto provider.
     EC_NO_DIGEST = 2,   // Buffer upto 65 bytes and then truncate. Javacard will further truncate
                         // upto exact keysize.
-    BUF_AES_BLOCK_ALIGNED = 3,  // Buffer 15 bytes and reminder to make input data block aligned.
+    BUF_AES_ENCRYPT_PKCS7_BLOCK_ALIGNED = 3, // Buffer 16 bytes.
     BUF_AES_DECRYPT_PKCS7_BLOCK_ALIGNED = 4, // Buffer 16 bytes.
-    BUF_DES_BLOCK_ALIGNED = 5, // Buffer 7 bytes and reminder to make input data block aligned.
+    BUF_DES_ENCRYPT_PKCS7_BLOCK_ALIGNED = 5, // Buffer 8 bytes.
     BUF_DES_DECRYPT_PKCS7_BLOCK_ALIGNED = 6, // Buffer 8 bytes.
     BUF_AES_GCM_DECRYPT_BLOCK_ALIGNED = 7, // Buffer 16 bytes.
 
@@ -98,7 +98,7 @@ class JavacardKeyMintOperation : public BnKeyMintOperation {
 
     keymaster_error_t sendFinish(const vector<uint8_t>& data, const vector<uint8_t>& signature,
                                  const HardwareAuthToken& authToken,
-                                 const TimeStampToken& timestampToken, vector<uint8_t>& output);
+                                 const TimeStampToken& timestampToken, const vector<uint8_t>& confToken, vector<uint8_t>& output);
 
     keymaster_error_t sendUpdate(const vector<uint8_t>& data, const HardwareAuthToken& authToken,
                                  const TimeStampToken& timestampToken, vector<uint8_t>& output);

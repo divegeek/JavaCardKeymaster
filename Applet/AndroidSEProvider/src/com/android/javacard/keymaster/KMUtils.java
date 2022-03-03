@@ -34,6 +34,8 @@ public class KMUtils {
       0, 0, 0, 0, (byte) 0x9C, (byte) 0xBE, (byte) 0xBD, 0x50}; // 2629746000 msec
   public static final byte[] leapYearMsec = {
       0, 0, 0, 0x07, (byte) 0x5C, (byte) 0xD7, (byte) 0x88, 0x00}; //31622400000;
+  public static byte[] thirtyDaysMsec = {
+          0, 0, 0, 0, (byte) 0x9A, (byte) 0x7E, (byte) 0xC8, 0}; //2592000000 msec
   public static final byte[] yearMsec = {
       0, 0, 0, 0x07, 0x57, (byte) 0xB1, 0x2C, 0x00}; //31536000000
   //Leap year(366) + 3 * 365
@@ -41,8 +43,8 @@ public class KMUtils {
       0, 0, 0, 0x1D, 0x63, (byte) 0xEB, 0x0C, 0x00};//126230400000
   public static final byte[] firstJan2020 = {
       0, 0, 0x01, 0x6F, 0x5E, 0x66, (byte) 0xE8, 0x00}; // 1577836800000 msec
-  public static final byte[] firstJan2051 = {
-      0, 0, 0x02, 0x53, 0x26, (byte) 0x0E, (byte) 0x1C, 0x00}; // 2556144000000
+  public static final byte[] firstJan2050 = {
+	        0, 0, 0x02, 0x4b, (byte) 0xCE, 0x5C, (byte)0xF0, 0x00}; //2524608000000 
   // msec
   public static final byte[] febMonthLeapMSec = {
       0, 0, 0, 0, (byte) 0x95, 0x58, 0x6C, 0x00}; //2505600000
@@ -54,6 +56,8 @@ public class KMUtils {
       0, 0, 0, 0, (byte) 0x9A, 0x7E, (byte) 0xC8, 0x00};//2592000000
   public static final short year2051 = 2051;
   public static final short year2020 = 2020;
+  // Convert to milliseconds constants
+  public static final byte[] SEC_TO_MILLIS_SHIFT_POS = {9, 8, 7, 6, 5, 3};
 
   // --------------------------------------
   public static short convertToDate(short time, byte[] scratchPad,
@@ -78,12 +82,12 @@ public class KMUtils {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     if (utcFlag
-        && KMInteger.unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2051,
+        && KMInteger.unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2050,
         (short) 0, (short) 8) >= 0) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
 
-    if (KMInteger.unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2051, (short) 0,
+    if (KMInteger.unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2050, (short) 0,
         (short) 8) < 0) {
       Util.arrayCopyNonAtomic(firstJan2020, (short) 0, scratchPad, (short) 8,
           (short) 8);
@@ -92,7 +96,7 @@ public class KMUtils {
           (short) 8);
     } else {
       from2020 = false;
-      Util.arrayCopyNonAtomic(firstJan2051, (short) 0, scratchPad, (short) 8,
+      Util.arrayCopyNonAtomic(firstJan2050, (short) 0, scratchPad, (short) 8,
           (short) 8);
       subtract(scratchPad, (short) 0, (short) 8, (short) 16, (byte) 8);
       Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
@@ -103,10 +107,8 @@ public class KMUtils {
         (short) 8) >= 0) {
       Util.arrayCopyNonAtomic(fourYrsMsec, (short) 0, scratchPad, (short) 8,
           (short) 8);
-      yrsCount = divide(scratchPad, (short) 0, (short) 8, (short) 16); // quotient
-      // is
-      // multiple
-      // of 4
+      // quotient is multiple of 4
+      yrsCount = divide(scratchPad, (short) 0, (short) 8, (short) 16);
       yrsCount = (short) (yrsCount * 4); // number of yrs.
       // copy reminder as new dividend
       Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
@@ -305,6 +307,14 @@ public class KMUtils {
     return KMInteger.unsignedByteArrayCompare(buf, lhs, buf, rhs, (short) 8);
   }
 
+  public static void shiftLeft(byte[] buf, short start, short count) {
+    short index = 0;
+    while (index < count) {
+      shiftLeft(buf, start);
+      index++;
+    }
+  }
+
   public static void shiftLeft(byte[] buf, short start) {
     byte index = 7;
     byte carry = 0;
@@ -416,6 +426,22 @@ public class KMUtils {
     // Compute 1s compliment
     while (index < (short) (len + offset)) {
       buf[index] = (byte) ~buf[index];
+      index++;
+    }
+  }
+
+  // i * 1000 = (i << 9) + (i << 8) + (i << 7) + (i << 6) + (i << 5) + ( i << 3)
+  public static void convertToMilliseconds(byte[] buf, short inputOff, short outputOff,
+      short scratchPadOff) {
+    short index = 0;
+    short length = (short) SEC_TO_MILLIS_SHIFT_POS.length;
+    while (index < length) {
+      Util.arrayCopyNonAtomic(buf, inputOff, buf, scratchPadOff, (short) 8);
+      shiftLeft(buf, scratchPadOff, SEC_TO_MILLIS_SHIFT_POS[index]);
+      Util.arrayCopyNonAtomic(buf, outputOff, buf, (short) (scratchPadOff + 8), (short) 8);
+      add(buf, scratchPadOff, (short) (8 + scratchPadOff), (short) (16 + scratchPadOff));
+      Util.arrayCopyNonAtomic(buf, (short) (scratchPadOff + 16), buf, outputOff, (short) 8);
+      Util.arrayFillNonAtomic(buf, scratchPadOff, (short) 24, (byte) 0);
       index++;
     }
   }

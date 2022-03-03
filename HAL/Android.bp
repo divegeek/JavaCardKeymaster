@@ -25,14 +25,14 @@ cc_library {
 	"JavacardRemotelyProvisionedComponentDevice.cpp",
         "JavacardSecureElement.cpp",
         "JavacardSharedSecret.cpp",
+	"JavacardKeyMintUtils.cpp",
         "keymint_utils.cpp",
     ],
     cflags:["-O0",],
     shared_libs: [
-        "android.hardware.security.keymint-V1-ndk_platform",
-        "android.hardware.security.secureclock-V1-ndk_platform",
-        "android.hardware.security.sharedsecret-V1-ndk_platform",
-        "lib_android_keymaster_keymint_utils",
+        "android.hardware.security.keymint-V1-ndk",
+        "android.hardware.security.secureclock-V1-ndk",
+        "android.hardware.security.sharedsecret-V1-ndk",
     	"libbase",
         "libcppbor_external",
         "libkeymaster_portable",
@@ -52,7 +52,6 @@ cc_library {
 
 cc_library {
     name: "libjc_keymint_transport",
-    host_supported: true,
     vendor_available: true,
     srcs: [
         "SocketTransport.cpp",
@@ -80,8 +79,8 @@ cc_binary {
         "-Wextra",
     ],
     shared_libs: [
-        "android.hardware.security.keymint-V1-ndk_platform",
-        "android.hardware.security.sharedsecret-V1-ndk_platform",
+        "android.hardware.security.keymint-V1-ndk",
+        "android.hardware.security.sharedsecret-V1-ndk",
         "libbase",
         "libbinder_ndk",
         "libcppbor_external",

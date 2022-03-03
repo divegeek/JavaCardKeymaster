@@ -345,6 +345,7 @@ public class KMDecoder {
     short tagClass;
     short allowedType;
     short obj;
+    short arrPos = 0;
     // For each tag in payload ...
     while (index < payloadLength) {
       tagFound = false;
@@ -360,13 +361,14 @@ public class KMDecoder {
           try {
             tagFound = true;
             obj = decode(tagClass);
-            KMArray.cast(vals).add(index, obj);
+            KMArray.cast(vals).add(arrPos++, obj);
             break;
           }catch(KMException e){
             if(KMException.reason() == KMError.INVALID_TAG &&
             !ignoreInvalidTags){
               KMException.throwIt(KMError.INVALID_TAG);
             }
+            break;
           }
         }
         tagInd++;
@@ -377,6 +379,7 @@ public class KMDecoder {
         index++;
       }
     }
+    KMArray.cast(vals).setLength(arrPos);
     return KMKeyParameters.instance(vals);
   }
 

@@ -39,6 +39,7 @@ import javacard.security.HMACKey;
 import javacard.security.Key;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
+import javacard.security.MessageDigest;
 import javacard.security.RSAPrivateKey;
 import javacard.security.KeyAgreement;
 import javacard.security.RandomData;
@@ -75,6 +76,7 @@ public class KMJCardSimulator implements KMSEProvider {
   public static final byte POWER_RESET_FALSE = (byte)0xAA;
   public static final byte POWER_RESET_TRUE = (byte)0x00;
   public static final byte AES_BLOCK_SIZE = 16;
+  private static final short COMPUTED_HMAC_KEY_SIZE = 32;
 
   public static byte[] resetFlag;
   public static boolean jcardSim = false;
@@ -95,6 +97,7 @@ public class KMJCardSimulator implements KMSEProvider {
   private KMECDeviceUniqueKey testKey;
   private KMECDeviceUniqueKey deviceUniqueKey;
   private KMHmacKey preSharedKey;
+  private KMHmacKey computedHmacKey;
   private boolean deviceReboot;
 
   // Data - originally was in repository
@@ -571,12 +574,6 @@ public class KMJCardSimulator implements KMSEProvider {
     return hmacSignature.sign(data, dataStart, dataLength, mac, macStart);
   }
 
-  public boolean hmacVerify(HMACKey key, byte[] data, short dataStart, short dataLength,
-      byte[] mac, short macStart, short macLength) {
-    hmacSignature.init(key, Signature.MODE_VERIFY);
-    return hmacSignature.verify(data, dataStart, dataLength, mac, macStart, macLength);
-  }
-
   @Override
   public short hmacKDF(KMMasterKey masterkey, byte[] data, short dataStart,
       short dataLength, byte[] signature, short signatureStart) {
@@ -651,10 +648,11 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public boolean hmacVerify(byte[] keyBuf, short keyStart, short keyLength, byte[] data,
-      short dataStart, short dataLength, byte[] mac, short macStart, short macLength) {
-    HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
-    return hmacVerify(key, data, dataStart, dataLength, mac, macStart, macLength);
+  public boolean hmacVerify(KMComputedHmacKey key, byte[] data, short dataStart, 
+    short dataLength, byte[] mac, short macStart, short macLength) {
+      KMHmacKey hmacKey = (KMHmacKey) key;
+      hmacSignature.init(hmacKey.getKey(), Signature.MODE_VERIFY);
+      return hmacSignature.verify(data, dataStart, dataLength, mac, macStart, macLength);
   }
 
   @Override
@@ -697,6 +695,14 @@ public class KMJCardSimulator implements KMSEProvider {
     return null;
   }
 
+  @Override
+  public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {
+    KMOperationImpl opr = null;
+    KMHmacKey key = (KMHmacKey) computedHmacKey;
+    Signature signerVerifier = createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, key.getKey());
+    return new KMOperationImpl(signerVerifier);
+  }
+  
   @Override
   public KMOperation initAsymmetricOperation(byte purpose, byte alg, byte padding, byte digest,
       byte mgfDigest, byte[] privKeyBuf, short privKeyStart, short privKeyLength,
@@ -1120,6 +1126,15 @@ public class KMJCardSimulator implements KMSEProvider {
     return hmacSignerVerifier;
   }
 
+  private Signature createHmacSignerVerifier(short purpose, short digest, HMACKey key) {
+    byte alg = Signature.ALG_HMAC_SHA_256;
+    if (digest != KMType.SHA2_256) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    Signature hmacSignerVerifier = Signature.getInstance((byte) alg, false);
+    hmacSignerVerifier.init(key, (byte) purpose);
+    return hmacSignerVerifier;
+  }
 
   public KMCipher createAesGcmCipher(short mode, short tagLen, byte[] secret, short secretStart,
       short secretLength,
@@ -1467,6 +1482,20 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
+  public KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length) {
+    if (length != COMPUTED_HMAC_KEY_SIZE) {
+      CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+    }
+    if (computedHmacKey == null) {
+      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) (length * 8),
+          false);
+      computedHmacKey = new KMHmacKey(key);
+    }
+    computedHmacKey.setKey(keyData, offset, length);
+    return (KMComputedHmacKey) computedHmacKey;
+  }
+  
+  @Override
   public KMMasterKey createMasterKey(short keySizeBits) {
     if (masterKey == null) {
       AESKey key = (AESKey) KeyBuilder.buildKey(
@@ -1759,6 +1788,25 @@ public class KMJCardSimulator implements KMSEProvider {
 
   public boolean isProvisionLocked() {
     return isProvisionLocked;
+  }
+  
+  @Override
+  public short messageDigest256(byte[] inBuff, short inOffset,
+      short inLength, byte[] outBuff, short outOffset) {
+    MessageDigest mDigest = null;
+    short len = 0;
+    try {
+      mDigest = MessageDigest.getInitializedMessageDigestInstance(MessageDigest.ALG_SHA_256, false);
+      len = mDigest.doFinal(inBuff, inOffset, inLength, outBuff, outOffset);
+    } catch (Exception e) {
+
+    }
+    return len;
+  }
+  
+  @Override
+  public KMComputedHmacKey getComputedHmacKey() {
+    return (KMComputedHmacKey) computedHmacKey;
   }
 
 }

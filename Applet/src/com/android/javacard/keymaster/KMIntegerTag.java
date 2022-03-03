@@ -53,6 +53,8 @@ public class KMIntegerTag extends KMTag {
       CERTIFICATE_NOT_BEFORE,
       CERTIFICATE_NOT_AFTER,
       USAGE_COUNT_LIMIT,
+      // custom tag
+      AUTH_TIMEOUT_MILLIS,
   };
 
   private KMIntegerTag() {
@@ -193,7 +195,7 @@ public class KMIntegerTag extends KMTag {
         }
         break;
       case KMType.DES:
-        if (val == 192 || val == 168) {
+        if (val == 168) {
           return true;
         }
         break;

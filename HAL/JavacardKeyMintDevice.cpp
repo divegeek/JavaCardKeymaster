@@ -18,7 +18,7 @@
 #include "JavacardKeyMintDevice.h"
 #include "JavacardKeyMintOperation.h"
 #include "JavacardSharedSecret.h"
-#include <KeyMintUtils.h>
+#include <JavacardKeyMintUtils.h>
 #include <algorithm>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
@@ -116,7 +116,6 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
 
     cppbor::Array request;
     vector<KeyParameter> updatedParams(keyParams);
-
     // Add CREATION_DATETIME if required, as secure element is not having clock.
     if (!findTag(keyParams, Tag::CREATION_DATETIME) && !findTag(keyParams, Tag::ACTIVE_DATETIME)) {
         updatedParams.push_back(km_utils::kmParam2Aidl(
@@ -164,7 +163,6 @@ ScopedAStatus JavacardKeyMintDevice::importWrappedKey(const vector<uint8_t>& wra
     vector<KeyParameter> authList;
     KeyFormat keyFormat;
     std::vector<uint8_t> wrappedKeyDescription;
-
     keymaster_error_t errorCode = parseWrappedKey(wrappedKeyData, iv, transitKey, secureKey, tag,
                                                   authList, keyFormat, wrappedKeyDescription);
     if (errorCode != KM_ERROR_OK) {
@@ -288,6 +286,10 @@ ScopedAStatus JavacardKeyMintDevice::begin(KeyPurpose purpose, const std::vector
     cbor_.addKeyparameters(array, params);
     HardwareAuthToken token = authToken.value_or(HardwareAuthToken());
     cbor_.addHardwareAuthToken(array, token);
+
+    // Send earlyBootEnded if there is any pending earlybootEnded event.
+    handleSendEarlyBootEndedEvent();
+
     auto [item, err] = card_->sendRequest(Instruction::INS_BEGIN_OPERATION_CMD, array);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in sending in begin.";
@@ -329,9 +331,20 @@ JavacardKeyMintDevice::deviceLocked(bool passwordOnly,
     return ScopedAStatus::ok();
 }
 
+void JavacardKeyMintDevice::handleSendEarlyBootEndedEvent() {
+    if (isEarlyBootEventPending) {
+        LOG(INFO) << "JavacardKeyMintDevice::handleSendEarlyBootEndedEvent send earlyBootEnded Event.";
+        if (earlyBootEnded().isOk()) {
+            isEarlyBootEventPending = false;
+        }
+    }
+}
+
 ScopedAStatus JavacardKeyMintDevice::earlyBootEnded() {
     auto [item, err] = card_->sendRequest(Instruction::INS_EARLY_BOOT_ENDED_CMD);
     if (err != KM_ERROR_OK) {
+        // Incase of failure cache the event and send in the next immediate request to Applet.
+        isEarlyBootEventPending = true;
         return km_utils::kmError2ScopedAStatus(err);
     }
     return ScopedAStatus::ok();

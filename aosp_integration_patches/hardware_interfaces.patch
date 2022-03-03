@@ -1,38 +1,17 @@
 diff --git a/compatibility_matrices/compatibility_matrix.current.xml b/compatibility_matrices/compatibility_matrix.current.xml
-index 0b779eee4..33bd0d97d 100644
+index c39db36ae..39cce859b 100644
 --- a/compatibility_matrices/compatibility_matrix.current.xml
 +++ b/compatibility_matrices/compatibility_matrix.current.xml
-@@ -330,6 +330,13 @@
+@@ -355,6 +355,7 @@
+         <interface>
+             <name>IRemotelyProvisionedComponent</name>
              <instance>default</instance>
++            <instance>strongbox</instance>
          </interface>
      </hal>
-+    <hal format="aidl" optional="true">
-+        <name>android.hardware.security.keymint</name>
-+        <interface>
-+            <name>IRemotelyProvisionedComponent</name>
-+            <instance>strongbox</instance>
-+        </interface>
-+    </hal>
      <hal format="aidl" optional="true">
-         <name>android.hardware.light</name>
-         <version>1</version>
-@@ -491,6 +498,14 @@
-             <instance>default</instance>
-         </interface>
-     </hal>
-+    <hal format="aidl" optional="true">
-+        <name>android.hardware.security.sharedsecret</name>
-+        <version>1</version>
-+        <interface>
-+            <name>ISharedSecret</name>
-+            <instance>strongbox</instance>
-+        </interface>
-+    </hal>
-     <hal format="hidl" optional="true">
-         <name>android.hardware.sensors</name>
-         <version>1.0</version>
 diff --git a/security/keymint/aidl/vts/functional/AttestKeyTest.cpp b/security/keymint/aidl/vts/functional/AttestKeyTest.cpp
-index 26ed34427..2d5bc9575 100644
+index 64550eff2..49283e8e3 100644
 --- a/security/keymint/aidl/vts/functional/AttestKeyTest.cpp
 +++ b/security/keymint/aidl/vts/functional/AttestKeyTest.cpp
 @@ -198,7 +198,7 @@ TEST_P(AttestKeyTest, RsaAttestedAttestKeys) {
@@ -42,9 +21,9 @@ index 26ed34427..2d5bc9575 100644
 -    ASSERT_EQ(ErrorCode::OK,
 +    auto result =
                GenerateKey(AuthorizationSetBuilder()
-                                   .RsaSigningKey(2048, 65537)
+                                   .RsaKey(2048, 65537)
                                    .AttestKey()
-@@ -209,7 +209,13 @@ TEST_P(AttestKeyTest, RsaAttestedAttestKeys) {
+@@ -209,7 +209,14 @@ TEST_P(AttestKeyTest, RsaAttestedAttestKeys) {
                                    .Authorization(TAG_NO_AUTH_REQUIRED)
                                    .SetDefaultValidity(),
                            {} /* attestation signing key */, &attest_key.keyBlob,
@@ -56,24 +35,24 @@ index 26ed34427..2d5bc9575 100644
 +        return;
 +    }
 +    ASSERT_EQ(ErrorCode::OK, result);
++
  
      EXPECT_GT(attest_key_cert_chain.size(), 1);
      verify_subject_and_serial(attest_key_cert_chain[0], serial_int, subject, false);
-@@ -297,7 +303,7 @@ TEST_P(AttestKeyTest, RsaAttestKeyChaining) {
+@@ -297,7 +304,7 @@ TEST_P(AttestKeyTest, RsaAttestKeyChaining) {
              attest_key_opt = attest_key;
          }
  
 -        EXPECT_EQ(ErrorCode::OK,
 +        auto result =
                    GenerateKey(AuthorizationSetBuilder()
-                                       .RsaSigningKey(2048, 65537)
+                                       .RsaKey(2048, 65537)
                                        .AttestKey()
-@@ -308,8 +314,13 @@ TEST_P(AttestKeyTest, RsaAttestKeyChaining) {
+@@ -308,7 +315,14 @@ TEST_P(AttestKeyTest, RsaAttestKeyChaining) {
                                        .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
                                        .SetDefaultValidity(),
                                attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
 -                              &cert_chain_list[i]));
--
 +                              &cert_chain_list[i]);
 +        // Strongbox does not support Factory provisioned attestation key.
 +        if (SecLevel() == SecurityLevel::STRONGBOX) {
@@ -81,106 +60,78 @@ index 26ed34427..2d5bc9575 100644
 +            return;
 +        }
 +        ASSERT_EQ(ErrorCode::OK, result);
++
+ 
          AuthorizationSet hw_enforced = HwEnforcedAuthorizations(attested_key_characteristics);
          AuthorizationSet sw_enforced = SwEnforcedAuthorizations(attested_key_characteristics);
-         ASSERT_GT(cert_chain_list[i].size(), 0);
-@@ -369,7 +380,7 @@ TEST_P(AttestKeyTest, EcAttestKeyChaining) {
+@@ -369,7 +383,7 @@ TEST_P(AttestKeyTest, EcAttestKeyChaining) {
              attest_key_opt = attest_key;
          }
  
 -        EXPECT_EQ(ErrorCode::OK,
 +        auto result =
                    GenerateKey(AuthorizationSetBuilder()
-                                       .EcdsaSigningKey(EcCurve::P_256)
+                                       .EcdsaKey(EcCurve::P_256)
                                        .AttestKey()
-@@ -380,8 +391,13 @@ TEST_P(AttestKeyTest, EcAttestKeyChaining) {
+@@ -380,7 +394,13 @@ TEST_P(AttestKeyTest, EcAttestKeyChaining) {
                                        .Authorization(TAG_NO_AUTH_REQUIRED)
                                        .SetDefaultValidity(),
                                attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
 -                              &cert_chain_list[i]));
--
 +                              &cert_chain_list[i]);
-+        // Strongbox does not support Factory provisioned attestation key.
++         // Strongbox does not support Factory provisioned attestation key.
 +        if (SecLevel() == SecurityLevel::STRONGBOX) {
 +            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
 +            return;
 +        }
 +        ASSERT_EQ(ErrorCode::OK, result);
+ 
          AuthorizationSet hw_enforced = HwEnforcedAuthorizations(attested_key_characteristics);
          AuthorizationSet sw_enforced = SwEnforcedAuthorizations(attested_key_characteristics);
-         ASSERT_GT(cert_chain_list[i].size(), 0);
-@@ -442,35 +458,40 @@ TEST_P(AttestKeyTest, AlternateAttestKeyChaining) {
-             attest_key.keyBlob = key_blob_list[i - 1];
+@@ -443,8 +463,9 @@ TEST_P(AttestKeyTest, AlternateAttestKeyChaining) {
              attest_key_opt = attest_key;
          }
--
+ 
 +        ErrorCode result;
          if ((i & 0x1) == 1) {
 -            EXPECT_EQ(ErrorCode::OK,
--                      GenerateKey(AuthorizationSetBuilder()
--                                          .EcdsaSigningKey(EcCurve::P_256)
--                                          .AttestKey()
--                                          .AttestationChallenge("foo")
--                                          .AttestationApplicationId("bar")
--                                          .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
--                                          .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
--                                          .Authorization(TAG_NO_AUTH_REQUIRED)
--                                          .SetDefaultValidity(),
--                                  attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
--                                  &cert_chain_list[i]));
 +            result =
-+                GenerateKey(AuthorizationSetBuilder()
-+                                    .EcdsaSigningKey(EcCurve::P_256)
-+                                    .AttestKey()
-+                                    .AttestationChallenge("foo")
-+                                    .AttestationApplicationId("bar")
-+                                    .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
-+                                    .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
-+                                    .Authorization(TAG_NO_AUTH_REQUIRED)
-+                                    .SetDefaultValidity(),
-+                              attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
-+                              &cert_chain_list[i]);
+                       GenerateKey(AuthorizationSetBuilder()
+                                           .EcdsaKey(EcCurve::P_256)
+                                           .AttestKey()
+@@ -455,9 +476,9 @@ TEST_P(AttestKeyTest, AlternateAttestKeyChaining) {
+                                           .Authorization(TAG_NO_AUTH_REQUIRED)
+                                           .SetDefaultValidity(),
+                                   attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
+-                                  &cert_chain_list[i]));
++                                  &cert_chain_list[i]);
          } else {
 -            EXPECT_EQ(ErrorCode::OK,
--                      GenerateKey(AuthorizationSetBuilder()
--                                          .RsaSigningKey(2048, 65537)
--                                          .AttestKey()
--                                          .AttestationChallenge("foo")
--                                          .AttestationApplicationId("bar")
--                                          .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
--                                          .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
--                                          .Authorization(TAG_NO_AUTH_REQUIRED)
--                                          .SetDefaultValidity(),
--                                  attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
--                                  &cert_chain_list[i]));
 +            result =
-+                GenerateKey(AuthorizationSetBuilder()
-+                                     .RsaSigningKey(2048, 65537)
-+                                     .AttestKey()
-+                                     .AttestationChallenge("foo")
-+                                     .AttestationApplicationId("bar")
-+                                     .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
-+                                     .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
-+                                     .Authorization(TAG_NO_AUTH_REQUIRED)
-+                                     .SetDefaultValidity(),
-+                              attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
-+                              &cert_chain_list[i]);
-         }
--
+                       GenerateKey(AuthorizationSetBuilder()
+                                           .RsaKey(2048, 65537)
+                                           .AttestKey()
+@@ -468,8 +489,14 @@ TEST_P(AttestKeyTest, AlternateAttestKeyChaining) {
+                                           .Authorization(TAG_NO_AUTH_REQUIRED)
+                                           .SetDefaultValidity(),
+                                   attest_key_opt, &key_blob_list[i], &attested_key_characteristics,
+-                                  &cert_chain_list[i]));
++                                  &cert_chain_list[i]);
++        }
 +        // Strongbox does not support Factory provisioned attestation key.
 +        if (SecLevel() == SecurityLevel::STRONGBOX) {
 +            ASSERT_EQ(ErrorCode::ATTESTATION_KEYS_NOT_PROVISIONED, result);
 +            return;
-+        }
+         }
 +        ASSERT_EQ(ErrorCode::OK, result);
+ 
          AuthorizationSet hw_enforced = HwEnforcedAuthorizations(attested_key_characteristics);
          AuthorizationSet sw_enforced = SwEnforcedAuthorizations(attested_key_characteristics);
-         ASSERT_GT(cert_chain_list[i].size(), 0);
 diff --git a/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.cpp b/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.cpp
-index 20324117b..741bcf8f6 100644
+index 6140df135..b73d325c6 100644
 --- a/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.cpp
 +++ b/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.cpp
-@@ -1145,6 +1145,15 @@ vector<EcCurve> KeyMintAidlTestBase::InvalidCurves() {
+@@ -1156,6 +1156,15 @@ vector<EcCurve> KeyMintAidlTestBase::InvalidCurves() {
      }
  }
  
@@ -197,7 +148,7 @@ index 20324117b..741bcf8f6 100644
      switch (SecLevel()) {
          case SecurityLevel::SOFTWARE:
 diff --git a/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.h b/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.h
-index ec3fcf6a3..0561a9b94 100644
+index 7b3b9d4b4..c564d509a 100644
 --- a/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.h
 +++ b/security/keymint/aidl/vts/functional/KeyMintAidlTestBase.h
 @@ -250,7 +250,9 @@ class KeyMintAidlTestBase : public ::testing::TestWithParam<string> {
@@ -232,10 +183,10 @@ index ec3fcf6a3..0561a9b94 100644
      static vector<string> build_params() {
          auto params = ::android::getAidlHalInstanceNames(IKeyMintDevice::descriptor);
 diff --git a/security/keymint/aidl/vts/functional/KeyMintTest.cpp b/security/keymint/aidl/vts/functional/KeyMintTest.cpp
-index 651b21f19..0e6e882d3 100644
+index 2a7911cc3..639b2a5dc 100644
 --- a/security/keymint/aidl/vts/functional/KeyMintTest.cpp
 +++ b/security/keymint/aidl/vts/functional/KeyMintTest.cpp
-@@ -908,8 +908,8 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestation) {
+@@ -912,8 +912,8 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestation) {
      for (auto key_size : ValidKeySizes(Algorithm::RSA)) {
          vector<uint8_t> key_blob;
          vector<KeyCharacteristics> key_characteristics;
@@ -246,7 +197,7 @@ index 651b21f19..0e6e882d3 100644
                                        .RsaSigningKey(key_size, 65537)
                                        .Digest(Digest::NONE)
                                        .Padding(PaddingMode::NONE)
-@@ -919,8 +919,14 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestation) {
+@@ -923,8 +923,14 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestation) {
                                        .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
                                        .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
                                        .SetDefaultValidity(),
@@ -262,7 +213,7 @@ index 651b21f19..0e6e882d3 100644
          ASSERT_GT(key_blob.size(), 0U);
          CheckBaseParams(key_characteristics);
          CheckCharacteristics(key_blob, key_characteristics);
-@@ -1037,8 +1043,7 @@ TEST_P(NewKeyGenerationTest, RsaEncryptionWithAttestation) {
+@@ -1045,8 +1051,7 @@ TEST_P(NewKeyGenerationTest, RsaEncryptionWithAttestation) {
  
      vector<uint8_t> key_blob;
      vector<KeyCharacteristics> key_characteristics;
@@ -272,7 +223,7 @@ index 651b21f19..0e6e882d3 100644
                                    .RsaEncryptionKey(key_size, 65537)
                                    .Padding(PaddingMode::NONE)
                                    .AttestationChallenge(challenge)
-@@ -1047,8 +1052,14 @@ TEST_P(NewKeyGenerationTest, RsaEncryptionWithAttestation) {
+@@ -1055,8 +1060,14 @@ TEST_P(NewKeyGenerationTest, RsaEncryptionWithAttestation) {
                                    .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
                                    .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
                                    .SetDefaultValidity(),
@@ -288,7 +239,7 @@ index 651b21f19..0e6e882d3 100644
      ASSERT_GT(key_blob.size(), 0U);
      AuthorizationSet auths;
      for (auto& entry : key_characteristics) {
-@@ -1149,15 +1160,21 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestationMissAppId) {
+@@ -1157,15 +1168,21 @@ TEST_P(NewKeyGenerationTest, RsaWithAttestationMissAppId) {
      vector<uint8_t> key_blob;
      vector<KeyCharacteristics> key_characteristics;
  
@@ -313,7 +264,7 @@ index 651b21f19..0e6e882d3 100644
  }
  
  /*
-@@ -1267,8 +1284,8 @@ TEST_P(NewKeyGenerationTest, LimitedUsageRsaWithAttestation) {
+@@ -1275,8 +1292,8 @@ TEST_P(NewKeyGenerationTest, LimitedUsageRsaWithAttestation) {
      for (auto key_size : ValidKeySizes(Algorithm::RSA)) {
          vector<uint8_t> key_blob;
          vector<KeyCharacteristics> key_characteristics;
@@ -324,7 +275,7 @@ index 651b21f19..0e6e882d3 100644
                                        .RsaSigningKey(key_size, 65537)
                                        .Digest(Digest::NONE)
                                        .Padding(PaddingMode::NONE)
-@@ -1279,7 +1296,14 @@ TEST_P(NewKeyGenerationTest, LimitedUsageRsaWithAttestation) {
+@@ -1287,7 +1304,14 @@ TEST_P(NewKeyGenerationTest, LimitedUsageRsaWithAttestation) {
                                        .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
                                        .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
                                        .SetDefaultValidity(),
@@ -340,7 +291,7 @@ index 651b21f19..0e6e882d3 100644
  
          ASSERT_GT(key_blob.size(), 0U);
          CheckBaseParams(key_characteristics);
-@@ -1410,8 +1434,8 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestation) {
+@@ -1418,8 +1442,8 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestation) {
      for (auto curve : ValidCurves()) {
          vector<uint8_t> key_blob;
          vector<KeyCharacteristics> key_characteristics;
@@ -351,7 +302,7 @@ index 651b21f19..0e6e882d3 100644
                                        .Authorization(TAG_NO_AUTH_REQUIRED)
                                        .EcdsaSigningKey(curve)
                                        .Digest(Digest::NONE)
-@@ -1420,7 +1444,15 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestation) {
+@@ -1428,7 +1452,15 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestation) {
                                        .Authorization(TAG_CERTIFICATE_SERIAL, serial_blob)
                                        .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
                                        .SetDefaultValidity(),
@@ -368,7 +319,7 @@ index 651b21f19..0e6e882d3 100644
          ASSERT_GT(key_blob.size(), 0U);
          CheckBaseParams(key_characteristics);
          CheckCharacteristics(key_blob, key_characteristics);
-@@ -1497,6 +1529,12 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTags) {
+@@ -1506,6 +1538,12 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTags) {
              // Tag not required to be supported by all KeyMint implementations.
              continue;
          }
@@ -381,7 +332,7 @@ index 651b21f19..0e6e882d3 100644
          ASSERT_EQ(result, ErrorCode::OK);
          ASSERT_GT(key_blob.size(), 0U);
  
-@@ -1546,8 +1584,14 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTags) {
+@@ -1555,8 +1593,14 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTags) {
                          .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
                          .SetDefaultValidity();
          builder.push_back(tag);
@@ -398,7 +349,7 @@ index 651b21f19..0e6e882d3 100644
      }
  }
  
-@@ -1583,6 +1627,13 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTagNoApplicationId) {
+@@ -1756,6 +1800,13 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationTagNoApplicationId) {
                                        .Authorization(TAG_CERTIFICATE_SUBJECT, subject_der)
                                        .SetDefaultValidity(),
                                &key_blob, &key_characteristics);
@@ -412,7 +363,7 @@ index 651b21f19..0e6e882d3 100644
      ASSERT_EQ(result, ErrorCode::OK);
      ASSERT_GT(key_blob.size(), 0U);
  
-@@ -1661,13 +1712,19 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationRequireAppId) {
+@@ -1834,13 +1885,19 @@ TEST_P(NewKeyGenerationTest, EcdsaAttestationRequireAppId) {
      vector<uint8_t> key_blob;
      vector<KeyCharacteristics> key_characteristics;
  
@@ -435,7 +386,7 @@ index 651b21f19..0e6e882d3 100644
  }
  
  /*
-@@ -1724,14 +1781,21 @@ TEST_P(NewKeyGenerationTest, AttestationApplicationIDLengthProperlyEncoded) {
+@@ -1897,14 +1954,21 @@ TEST_P(NewKeyGenerationTest, AttestationApplicationIDLengthProperlyEncoded) {
          const string app_id(length, 'a');
          vector<uint8_t> key_blob;
          vector<KeyCharacteristics> key_characteristics;
@@ -459,7 +410,7 @@ index 651b21f19..0e6e882d3 100644
          ASSERT_GT(key_blob.size(), 0U);
          CheckBaseParams(key_characteristics);
          CheckCharacteristics(key_blob, key_characteristics);
-@@ -3762,25 +3826,27 @@ typedef KeyMintAidlTestBase EncryptionOperationsTest;
+@@ -3945,25 +4009,27 @@ typedef KeyMintAidlTestBase EncryptionOperationsTest;
   * Verifies that raw RSA decryption works.
   */
  TEST_P(EncryptionOperationsTest, RsaNoPaddingSuccess) {
@@ -502,7 +453,7 @@ index 651b21f19..0e6e882d3 100644
      }
  }
  
-@@ -6297,7 +6363,7 @@ TEST_P(ClearOperationsTest, TooManyOperations) {
+@@ -6503,7 +6569,7 @@ TEST_P(ClearOperationsTest, TooManyOperations) {
      size_t i;
  
      for (i = 0; i < max_operations; i++) {
@@ -511,7 +462,7 @@ index 651b21f19..0e6e882d3 100644
          if (ErrorCode::OK != result) {
              break;
          }
-@@ -6305,12 +6371,12 @@ TEST_P(ClearOperationsTest, TooManyOperations) {
+@@ -6511,12 +6577,12 @@ TEST_P(ClearOperationsTest, TooManyOperations) {
      EXPECT_EQ(ErrorCode::TOO_MANY_OPERATIONS, result);
      // Try again just in case there's a weird overflow bug
      EXPECT_EQ(ErrorCode::TOO_MANY_OPERATIONS,
@@ -526,7 +477,7 @@ index 651b21f19..0e6e882d3 100644
      AbortIfNeeded();
  }
  
-@@ -6409,7 +6475,6 @@ TEST_P(KeyAgreementTest, Ecdh) {
+@@ -6615,7 +6681,6 @@ TEST_P(KeyAgreementTest, Ecdh) {
              OPENSSL_free(p);
  
              // Generate EC key in KeyMint (only access to public key material)
@@ -534,7 +485,7 @@ index 651b21f19..0e6e882d3 100644
              EXPECT_EQ(
                      ErrorCode::OK,
                      GenerateKey(AuthorizationSetBuilder()
-@@ -6418,7 +6483,6 @@ TEST_P(KeyAgreementTest, Ecdh) {
+@@ -6624,7 +6689,6 @@ TEST_P(KeyAgreementTest, Ecdh) {
                                          .Authorization(TAG_PURPOSE, KeyPurpose::AGREE_KEY)
                                          .Authorization(TAG_ALGORITHM, Algorithm::EC)
                                          .Authorization(TAG_ATTESTATION_APPLICATION_ID, {0x61, 0x62})
@@ -542,7 +493,7 @@ index 651b21f19..0e6e882d3 100644
                                          .SetDefaultValidity()))
                      << "Failed to generate key";
              ASSERT_GT(cert_chain_.size(), 0);
-@@ -6498,14 +6562,24 @@ TEST_P(EarlyBootKeyTest, CreateEarlyBootKeys) {
+@@ -6704,14 +6768,24 @@ TEST_P(EarlyBootKeyTest, CreateEarlyBootKeys) {
              CreateTestKeys(TAG_EARLY_BOOT_ONLY, ErrorCode::OK);
  
      for (const auto& keyData : {aesKeyData, hmacKeyData, rsaKeyData, ecdsaKeyData}) {
@@ -569,7 +520,7 @@ index 651b21f19..0e6e882d3 100644
  }
  
  /*
-@@ -6521,14 +6595,21 @@ TEST_P(EarlyBootKeyTest, CreateAttestedEarlyBootKey) {
+@@ -6727,14 +6801,21 @@ TEST_P(EarlyBootKeyTest, CreateAttestedEarlyBootKey) {
              });
  
      for (const auto& keyData : {aesKeyData, hmacKeyData, rsaKeyData, ecdsaKeyData}) {
@@ -594,7 +545,7 @@ index 651b21f19..0e6e882d3 100644
  
  /*
 diff --git a/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp b/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
-index 38f358686..74e44c7b4 100644
+index 76fb79b61..6e57d913b 100644
 --- a/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
 +++ b/security/keymint/aidl/vts/functional/VtsRemotelyProvisionedComponentTests.cpp
 @@ -164,6 +164,7 @@ class VtsRemotelyProvisionedComponentTests : public testing::TestWithParam<std::
@@ -742,10 +693,10 @@ index 38f358686..74e44c7b4 100644
              false /* testMode */, keysToSign_, testEekChain_.chain, challenge_, &deviceInfo,
              &protectedData, &keysToSignMac);
 diff --git a/security/keymint/support/Android.bp b/security/keymint/support/Android.bp
-index bdb4cdfea..e1ca68809 100644
+index 36969bbdb..b3552d38b 100644
 --- a/security/keymint/support/Android.bp
 +++ b/security/keymint/support/Android.bp
-@@ -62,6 +62,7 @@ cc_library {
+@@ -66,6 +66,7 @@ cc_library {
          "libcppcose_rkp",
          "libcrypto",
          "libjsoncpp",

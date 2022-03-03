@@ -35,7 +35,8 @@ using std::vector;
 class JavacardKeyMintDevice : public BnKeyMintDevice {
   public:
     explicit JavacardKeyMintDevice(shared_ptr<JavacardSecureElement> card)
-        : securitylevel_(SecurityLevel::STRONGBOX), card_(card) {
+        : securitylevel_(SecurityLevel::STRONGBOX), card_(card),
+          isEarlyBootEventPending(false) {
         card_->initializeJavacard();
     }
     virtual ~JavacardKeyMintDevice() {}
@@ -106,9 +107,12 @@ class JavacardKeyMintDevice : public BnKeyMintDevice {
 
     ScopedAStatus defaultHwInfo(KeyMintHardwareInfo* info);
 
+    void handleSendEarlyBootEndedEvent();
+
     const SecurityLevel securitylevel_;
     const shared_ptr<JavacardSecureElement> card_;
     CborConverter cbor_;
+    bool isEarlyBootEventPending;
 };
 
 }  // namespace aidl::android::hardware::security::keymint
