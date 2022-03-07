@@ -19,7 +19,7 @@ import org.globalplatform.upgrade.Element;
 
 import javacard.security.HMACKey;
 
-public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey  {
+public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey, KMRkpMacKey {
 
   private HMACKey hmacKey;
 
@@ -47,10 +47,11 @@ public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey  {
     element.write(kmKey.hmacKey);
   }
 
-  public static KMHmacKey onRestore(Element element) {
-    HMACKey hmacKey = (HMACKey) element.readObject();
-    KMHmacKey kmKey = new KMHmacKey(hmacKey);
-    return kmKey;
+  public static KMHmacKey onRestore(HMACKey hmacKey) {
+    if (hmacKey == null) {
+      return null;
+    }
+    return new KMHmacKey(hmacKey);
   }
 
   public static short getBackupPrimitiveByteCount() {

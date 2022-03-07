@@ -32,6 +32,10 @@ import javacard.framework.Util;
 import javacard.security.CryptoException;
 
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
+  // Magic number version
+  private static final byte KM_MAGIC_NUMBER = (byte) 0x82;
+  // MSB byte is for Major version and LSB byte is for Minor version.
+  private static final short CURRENT_PACKAGE_VERSION = 0x0009; // 0.9
 
   private static final byte KM_BEGIN_STATE = 0x00;
   private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
@@ -69,9 +73,14 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private static byte keymasterState = ILLEGAL_STATE;
   private static byte provisionStatus = NOT_PROVISIONED;
+  // Package version.
+  protected short packageVersion;
 
   KMAndroidSEApplet() {
     super(new KMAndroidSEProvider());
+    if (!UpgradeManager.isUpgrading()) {
+        packageVersion = CURRENT_PACKAGE_VERSION;
+    }
   }
 
   /**
@@ -107,7 +116,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             
           case INS_SET_BOOT_ENDED_CMD:
             //set the flag to mark boot ended
-            repository.setBootEndedStatus(true);
+            kmDataStore.setBootEndedStatus(true);
             sendError(apdu, KMError.OK);
             break;   
 
@@ -184,12 +193,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     short pubKeyLen = KMCoseKey.cast(coseKey).getEcdsa256PublicKey(scratchPad, (short) 0);
     short privKeyLen = KMCoseKey.cast(coseKey).getPrivateKey(scratchPad, pubKeyLen);
     //Store the Device unique Key.
-    seProvider.createDeviceUniqueKey(false, scratchPad, (short) 0, pubKeyLen, scratchPad,
+    kmDataStore.createDeviceUniqueKey(scratchPad, (short) 0, pubKeyLen, scratchPad,
         pubKeyLen, privKeyLen);
     short bcc = generateBcc(false, scratchPad);
     short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
         MAX_COSE_BUF_SIZE);
-    ((KMAndroidSEProvider) seProvider).persistBootCertificateChain(scratchPad, (short) 0, len);
+    kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
     sendError(apdu, KMError.OK);
   }
 
@@ -226,7 +235,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             srcBuffer, null);
     // Compare the DK_Pub.
     short pubKeyLen = KMCoseKey.cast(leafCoseKey).getEcdsa256PublicKey(srcBuffer, (short) 0);
-    KMDeviceUniqueKey uniqueKey = seProvider.getDeviceUniqueKey(false);
+    KMDeviceUniqueKey uniqueKey = kmDataStore.getDeviceUniqueKey(false);
     if (uniqueKey == null) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
@@ -235,7 +244,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         (0 != Util.arrayCompare(srcBuffer, (short) 0, srcBuffer, pubKeyLen, pubKeyLen))) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
-    seProvider.persistAdditionalCertChain(buffer, bufferStartOffset, bufferLength);
+    kmDataStore.persistAdditionalCertChain(buffer, bufferStartOffset, bufferLength);
     //reclaim memory
     repository.reclaimMemory(bufferLength);
     sendError(apdu, KMError.OK);
@@ -269,7 +278,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         KMException.throwIt(KMError.INVALID_ARGUMENT);
       }
       obj = KMByteTag.cast(obj).getValue();
-      ((KMAndroidSEProvider) seProvider).setAttestationId(key, KMByteBlob.cast(obj).getBuffer(),
+      kmDataStore.setAttestationId(key, KMByteBlob.cast(obj).getBuffer(),
           KMByteBlob.cast(obj).getStartOff(), KMByteBlob.cast(obj).length());
       index++;
     }
@@ -288,7 +297,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     // Persist shared Hmac.
-    ((KMAndroidSEProvider) seProvider).createPresharedKey(
+    kmDataStore.createPresharedKey(
         KMByteBlob.cast(val).getBuffer(),
         KMByteBlob.cast(val).getStartOff(),
         KMByteBlob.cast(val).length());
@@ -345,7 +354,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
     short bootParam = KMArray.cast(args).get((short) 0);
 
-    ((KMAndroidSEProvider) seProvider).setBootPatchLevel(KMInteger.cast(bootParam).getBuffer(),
+    kmDataStore.setBootPatchLevel(KMInteger.cast(bootParam).getBuffer(),
         KMInteger.cast(bootParam).getStartOff(),
         KMInteger.cast(bootParam).length());
 
@@ -353,7 +362,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     if (KMByteBlob.cast(bootParam).length() > BOOT_KEY_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    ((KMAndroidSEProvider) seProvider).setBootKey(KMByteBlob.cast(bootParam).getBuffer(),
+    kmDataStore.setBootKey(KMByteBlob.cast(bootParam).getBuffer(),
         KMByteBlob.cast(bootParam).getStartOff(),
         KMByteBlob.cast(bootParam).length());
 
@@ -361,22 +370,22 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     if (KMByteBlob.cast(bootParam).length() > BOOT_HASH_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
-    ((KMAndroidSEProvider) seProvider).setVerifiedBootHash(KMByteBlob.cast(bootParam).getBuffer(),
+    kmDataStore.setVerifiedBootHash(KMByteBlob.cast(bootParam).getBuffer(),
         KMByteBlob.cast(bootParam).getStartOff(),
         KMByteBlob.cast(bootParam).length());
 
     bootParam = KMArray.cast(args).get((short) 3);
     byte enumVal = KMEnum.cast(bootParam).getVal();
-    ((KMAndroidSEProvider) seProvider).setBootState(enumVal);
+    kmDataStore.setBootState(enumVal);
 
     bootParam = KMArray.cast(args).get((short) 4);
     enumVal = KMEnum.cast(bootParam).getVal();
-    ((KMAndroidSEProvider) seProvider).setDeviceLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
+    kmDataStore.setDeviceLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
 
     
     // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
-    Util.arrayFillNonAtomic(scratchPad, (short) 0, KMRepository.COMPUTED_HMAC_KEY_SIZE, (byte) 0);
-    seProvider.createComputedHmacKey(scratchPad, (short) 0, KMRepository.COMPUTED_HMAC_KEY_SIZE);
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE, (byte) 0);
+    kmDataStore.createComputedHmacKey(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE);
     
     super.reboot();
     sendError(apdu, KMError.OK);
@@ -394,36 +403,55 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   @Override
   public void onConsolidate() {
   }
+  
+  private boolean isUpgradeAllowed(short version) {
+    boolean upgradeAllowed = false;
+    short oldMajorVersion = (short) ((version >> 8) & 0x00FF);
+    short oldMinorVersion = (short) (version & 0x00FF);
+    short currentMajorVersion = (short) (CURRENT_PACKAGE_VERSION >> 8 & 0x00FF);
+    short currentMinorVersion = (short) (CURRENT_PACKAGE_VERSION & 0x00FF);
+    // Downgrade of the Applet is not allowed.
+    // Upgrade is not allowed to a next version which is not immediate.
+    if ((short) (currentMajorVersion - oldMajorVersion) == 1) {
+      if (currentMinorVersion == 0) {
+        upgradeAllowed = true;
+      }
+    } else if ((short) (currentMajorVersion - oldMajorVersion) == 0) {
+      if (currentMinorVersion >= oldMinorVersion) {
+        upgradeAllowed = true;
+      }
+    }
+    return upgradeAllowed;
+  }
 
   @Override
   public void onRestore(Element element) {
     element.initRead();
-    provisionStatus = element.readByte();
-    keymasterState = element.readByte();
-    repository.onRestore(element);
-    seProvider.onRestore(element);
+    byte magicNumber = element.readByte();
+    if (magicNumber != KM_MAGIC_NUMBER) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    short packageVersion = element.readShort();
+    // Validate version.
+    if (0 != packageVersion && !isUpgradeAllowed(packageVersion)) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    kmDataStore.onRestore(element); 
   }
 
   @Override
   public Element onSave() {
-    // SEProvider count
-    short primitiveCount = seProvider.getBackupPrimitiveByteCount();
-    short objectCount = seProvider.getBackupObjectCount();
-    //Repository count
-    primitiveCount += repository.getBackupPrimitiveByteCount();
-    objectCount += repository.getBackupObjectCount();
-    //KMKeymasterApplet count
-    primitiveCount += computePrimitveDataSize();
-    objectCount += computeObjectCount();
-
-    // Create element.
+	short primitiveCount = 3;
+	primitiveCount += kmDataStore.getBackupPrimitiveByteCount();
+	short objectCount = kmDataStore.getBackupObjectCount();
+	// Create element.
     Element element = UpgradeManager.createElement(Element.TYPE_SIMPLE,
         primitiveCount, objectCount);
-    element.write(provisionStatus);
-    element.write(keymasterState);
-    repository.onSave(element);
-    seProvider.onSave(element);
-    return element;
+	
+    element.write(KM_MAGIC_NUMBER);
+    element.write(packageVersion);
+    kmDataStore.onSave(element);
+    return element;	
   }
 
   private short computePrimitveDataSize() {
