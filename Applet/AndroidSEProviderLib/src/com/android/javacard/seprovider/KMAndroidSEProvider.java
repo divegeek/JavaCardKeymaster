@@ -18,6 +18,8 @@ package com.android.javacard.seprovider;
 import org.globalplatform.upgrade.Element;
 import org.globalplatform.upgrade.UpgradeManager;
 
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -60,8 +62,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final short TMP_ARRAY_SIZE = 300;
   private static final short RSA_KEY_SIZE = 256;
   public static final short CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
-  private static final short ADDITIONAL_CERT_CHAIN_MAX_SIZE = 512;//First 2 bytes for length.
-  private static final short BCC_MAX_SIZE = 512;
   public static final short SHARED_SECRET_KEY_SIZE = 32;
   public static final byte POWER_RESET_FALSE = (byte) 0xAA;
   public static final byte POWER_RESET_TRUE = (byte) 0x00;
@@ -92,35 +92,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private KMRsaOAEPEncoding rsaOaepDecipher;
   private KMPoolManager poolMgr;
 
-  // Data - originally was in repository
-  private byte[] attIdBrand;
-  private byte[] attIdDevice;
-  private byte[] attIdProduct;
-  private byte[] attIdSerial;
-  private byte[] attIdImei;
-  private byte[] attIdMeId;
-  private byte[] attIdManufacturer;
-  private byte[] attIdModel;
-
-  // Boot parameters
-  private byte[] verifiedHash;
-  private byte[] bootKey;
-  private byte[] bootPatchLevel;
-  private boolean deviceBootLocked;
-  private short bootState;
-
   // Entropy
   private RandomData rng;
-  //For storing root certificate and intermediate certificates.
-  private byte[] certificateChain;
-  private KMAESKey masterKey;
-  private KMECPrivateKey attestationKey;
-  private KMECDeviceUniqueKey testKey;
-  private KMECDeviceUniqueKey deviceUniqueKey;
-  private KMHmacKey preSharedKey;
-  private KMHmacKey computedHmacKey;
-  private byte[] additionalCertChain;
-  private byte[] bcc;
+
   private boolean isProvisionLocked;
 
   private static KMAndroidSEProvider androidSEProvider = null;
@@ -155,23 +129,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // Temporary transient array created to use locally inside functions.
     tmpArray = JCSystem.makeTransientByteArray(TMP_ARRAY_SIZE,
         JCSystem.CLEAR_ON_DESELECT);
-
+    Util.arrayFillNonAtomic(tmpArray, (short) 0, TMP_ARRAY_SIZE, (byte) 0);
     // Random number generator initialisation.
     rng = RandomData.getInstance(RandomData.ALG_KEYGENERATION);
-    //Allocate buffer for certificate chain.
-    if (!isUpgrading()) {
-      certificateChain = new byte[CERT_CHAIN_MAX_SIZE];
-      additionalCertChain = new byte[ADDITIONAL_CERT_CHAIN_MAX_SIZE];
-      bcc = new byte[BCC_MAX_SIZE];
-      // Initialize attestationKey and preShared key with zeros.
-      Util.arrayFillNonAtomic(tmpArray, (short) 0, TMP_ARRAY_SIZE, (byte) 0);
-      // Create attestation key of P-256 curve.
-      createAttestationKey(tmpArray, (short) 0, (short) 32);
-      // Pre-shared secret key length is 32 bytes.
-      createPresharedKey(tmpArray, (short) 0, (short) SHARED_SECRET_KEY_SIZE);
-      // Initialize the Computed Hmac Key object.
-      createComputedHmacKey(tmpArray, (short)0, (short) 32);
-    }
     androidSEProvider = this;
     resetFlag = JCSystem.makeTransientByteArray((short) 1,
         JCSystem.CLEAR_ON_DESELECT);
@@ -603,6 +563,16 @@ public class KMAndroidSEProvider implements KMSEProvider {
     HMACKey key = createHMACKey(keyBuf, keyStart, keyLength);
     return hmacSign(key, data, dataStart, dataLength, mac, macStart);
   }
+  
+  @Override
+  public short hmacSign(Object key,
+      byte[] data, short dataStart, short dataLength, byte[] mac, short macStart) {
+	if(!(key instanceof KMHmacKey)) {
+	  KMException.throwIt(KMError.INVALID_ARGUMENT);
+	}
+	KMHmacKey hmacKey = (KMHmacKey) key;
+    return hmacSign(hmacKey.getKey(), data, dataStart, dataLength, mac, macStart);
+  }
 
   @Override
   public short hmacKDF(KMMasterKey masterkey, byte[] data, short dataStart,
@@ -894,91 +864,13 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return key.getKey(keyBuf, keyStart);
   }
 
-  public void clearCertificateChain() {
-    JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(certificateChain, (short) 0, CERT_CHAIN_MAX_SIZE, (byte) 0);
-    JCSystem.commitTransaction();
-  }
-
-  //This function supports multi-part request data.
-  public void persistPartialCertificateChain(byte[] buf, short offset, short len, short totalLen) {
-    //  _____________________________________________________
-    // | 2 Bytes | 1 Byte | 3 Bytes | Cert1 |  Cert2 |...
-    // |_________|________|_________|_______|________|_______
-    // First two bytes holds the length of the total buffer.
-    // CBOR format:
-    // Next single byte holds the byte string header.
-    // Next 3 bytes holds the total length of the certificate chain.
-    if (totalLen > (short) (CERT_CHAIN_MAX_SIZE - 2)) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    short persistedLen = Util.getShort(certificateChain, (short) 0);
-    if (persistedLen > totalLen) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    JCSystem.beginTransaction();
-    Util.setShort(certificateChain, (short) 0, (short) (len + persistedLen));
-    Util.arrayCopyNonAtomic(buf, offset, certificateChain,
-        (short) (persistedLen + 2), len);
-    JCSystem.commitTransaction();
-  }
-
-  public short readCertificateChain(byte[] buf, short offset) {
-    short len = Util.getShort(certificateChain, (short) 0);
-    Util.arrayCopyNonAtomic(certificateChain, (short) 2, buf, offset, len);
-    return len;
-  }
-
-  public short getCertificateChainLength() {
-    return Util.getShort(certificateChain, (short) 0);
-  }
-
-  @Override
-  public void onSave(Element element) {
-    element.write(certificateChain);
-    element.write(additionalCertChain);
-    element.write(bcc);
-    KMAESKey.onSave(element, masterKey);
-    KMECPrivateKey.onSave(element, attestationKey);
-    KMHmacKey.onSave(element, preSharedKey);
-  }
-
-  @Override
-  public void onRestore(Element element) {
-    certificateChain = (byte[]) element.readObject();
-    additionalCertChain = (byte[]) element.readObject();
-    bcc = (byte[]) element.readObject();
-    masterKey = KMAESKey.onRestore(element);
-    attestationKey = KMECPrivateKey.onRestore(element);
-    preSharedKey = KMHmacKey.onRestore(element);
-  }
-
-  @Override
-  public short getBackupPrimitiveByteCount() {
-    short count =
-        (short) (KMAESKey.getBackupPrimitiveByteCount() +
-            KMECPrivateKey.getBackupPrimitiveByteCount() +
-            KMHmacKey.getBackupPrimitiveByteCount());
-    return count;
-  }
-
-  @Override
-  public short getBackupObjectCount() {
-    short count =
-        (short) (1 /*Certificate chain */ +
-            KMAESKey.getBackupObjectCount() +
-            KMECPrivateKey.getBackupObjectCount() +
-            KMHmacKey.getBackupObjectCount());
-    return count;
-  }
-
   @Override
   public boolean isUpgrading() {
     return UpgradeManager.isUpgrading();
   }
 
   @Override
-  public KMMasterKey createMasterKey(short keySizeBits) {
+  public KMMasterKey createMasterKey(KMMasterKey masterKey, short keySizeBits) {
     try {
       if (masterKey == null) {
         AESKey key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES,
@@ -986,7 +878,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         masterKey = new KMAESKey(key);
         short keyLen = (short) (keySizeBits / 8);
         getTrueRandomNumber(tmpArray, (short) 0, keyLen);
-        masterKey.setKey(tmpArray, (short) 0);
+        ((KMAESKey)masterKey).setKey(tmpArray, (short) 0);
       }
       return (KMMasterKey) masterKey;
     } finally {
@@ -994,7 +886,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
   }
 
-  public KMAttestationKey createAttestationKey(byte[] keyData, short offset,
+  @Override
+  public KMAttestationKey createAttestationKey(KMAttestationKey attestationKey, byte[] keyData, short offset,
       short length) {
     if (attestationKey == null) {
       // Strongbox supports only P-256 curve for EC key.
@@ -1002,11 +895,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
       initECKey(ecKeyPair);
       attestationKey = new KMECPrivateKey(ecKeyPair);
     }
-    attestationKey.setS(keyData, offset, length);
+    ((KMECPrivateKey) attestationKey).setS(keyData, offset, length);
     return (KMAttestationKey) attestationKey;
   }
 
-  public KMPreSharedKey createPresharedKey(byte[] keyData, short offset, short length) {
+  @Override
+  public KMPreSharedKey createPreSharedKey(KMPreSharedKey preSharedKey, byte[] keyData, short offset, short length) {
     short lengthInBits = (short) (length * 8);
     if ((lengthInBits % 8 != 0) || !(lengthInBits >= 64 && lengthInBits <= 512)) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
@@ -1016,12 +910,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
           false);
       preSharedKey = new KMHmacKey(key);
     }
-    preSharedKey.setKey(keyData, offset, length);
+    ((KMHmacKey)preSharedKey).setKey(keyData, offset, length);
     return (KMPreSharedKey) preSharedKey;
   }
 
   @Override
-  public KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length) {
+  public KMComputedHmacKey createComputedHmacKey(KMComputedHmacKey computedHmacKey, byte[] keyData, short offset, short length) {
     if (length != COMPUTED_HMAC_KEY_SIZE) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
@@ -1030,23 +924,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
           false);
       computedHmacKey = new KMHmacKey(key);
     }
-    computedHmacKey.setKey(keyData, offset, length);
+    ((KMHmacKey)computedHmacKey).setKey(keyData, offset, length);
     return (KMComputedHmacKey) computedHmacKey;
   }  
-  
-  @Override
-  public KMMasterKey getMasterKey() {
-    return (KMMasterKey) masterKey;
-  }
-
-  public KMAttestationKey getAttestationKey() {
-    return (KMAttestationKey) attestationKey;
-  }
-
-  @Override
-  public KMPreSharedKey getPresharedKey() {
-    return (KMPreSharedKey) preSharedKey;
-  }
 
   @Override
   public short ecSign256(byte[] secret, short secretStart, short secretLength,
@@ -1129,198 +1009,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return KMType.INVALID_VALUE;
   }
 
-  @Override
-  public short getAttestationId(short tag, byte[] buffer, short start) {
-    switch (tag) {
-      // Attestation Id Brand
-      case KMType.ATTESTATION_ID_BRAND:
-        Util.arrayCopyNonAtomic(attIdBrand, (short) 0, buffer, start, (short) attIdBrand.length);
-        return (short) attIdBrand.length;
-      // Attestation Id Device
-      case KMType.ATTESTATION_ID_DEVICE:
-        Util.arrayCopyNonAtomic(attIdDevice, (short) 0, buffer, start, (short) attIdDevice.length);
-        return (short) attIdDevice.length;
-      // Attestation Id Product
-      case KMType.ATTESTATION_ID_PRODUCT:
-        Util.arrayCopyNonAtomic(attIdProduct, (short) 0, buffer, start,
-            (short) attIdProduct.length);
-        return (short) attIdProduct.length;
-      // Attestation Id Serial
-      case KMType.ATTESTATION_ID_SERIAL:
-        Util.arrayCopyNonAtomic(attIdSerial, (short) 0, buffer, start, (short) attIdSerial.length);
-        return (short) attIdSerial.length;
-      // Attestation Id IMEI
-      case KMType.ATTESTATION_ID_IMEI:
-        Util.arrayCopyNonAtomic(attIdImei, (short) 0, buffer, start, (short) attIdImei.length);
-        return (short) attIdImei.length;
-      // Attestation Id MEID
-      case KMType.ATTESTATION_ID_MEID:
-        Util.arrayCopyNonAtomic(attIdMeId, (short) 0, buffer, start, (short) attIdMeId.length);
-        return (short) attIdMeId.length;
-      // Attestation Id Manufacturer
-      case KMType.ATTESTATION_ID_MANUFACTURER:
-        Util.arrayCopyNonAtomic(attIdManufacturer, (short) 0, buffer, start,
-            (short) attIdManufacturer.length);
-        return (short) attIdManufacturer.length;
-      // Attestation Id Model
-      case KMType.ATTESTATION_ID_MODEL:
-        Util.arrayCopyNonAtomic(attIdModel, (short) 0, buffer, start, (short) attIdModel.length);
-        return (short) attIdModel.length;
-    }
-    return (short) 0;
-  }
-
-  public void setAttestationId(short tag, byte[] buffer, short start, short length) {
-    switch (tag) {
-      // Attestation Id Brand
-      case KMType.ATTESTATION_ID_BRAND:
-        JCSystem.beginTransaction();
-        attIdBrand = new byte[length];
-        Util.arrayCopyNonAtomic(buffer, (short) start, attIdBrand, (short) 0, length);
-        JCSystem.commitTransaction();
-        break;
-      // Attestation Id Device
-      case KMType.ATTESTATION_ID_DEVICE:
-        JCSystem.beginTransaction();
-        attIdDevice = new byte[length];
-        Util.arrayCopyNonAtomic(buffer, (short) start, attIdDevice, (short) 0, length);
-        JCSystem.commitTransaction();
-        break;
-      // Attestation Id Product
-      case KMType.ATTESTATION_ID_PRODUCT:
-        JCSystem.beginTransaction();
-        attIdProduct = new byte[length];
-        Util.arrayCopyNonAtomic(buffer, (short) start, attIdProduct, (short) 0, length);
-        JCSystem.commitTransaction();
-        break;
-      // Attestation Id Serial
-      case KMType.ATTESTATION_ID_SERIAL:
-        JCSystem.beginTransaction();
-        attIdSerial = new byte[length];
-        Util.arrayCopyNonAtomic(buffer, (short) start, attIdSerial, (short) 0, length);
-        JCSystem.commitTransaction();
-        break;
-      // Attestation Id IMEI
-      case KMType.ATTESTATION_ID_IMEI:
-        JCSystem.beginTransaction();
-        attIdImei = new byte[length];
-        Util.arrayCopyNonAtomic(buffer, (short) start, attIdImei, (short) 0, length);
-        JCSystem.commitTransaction();
-        break;
-      // Attestation Id MEID
-      case KMType.ATTESTATION_ID_MEID:
-        JCSystem.beginTransaction();
-        attIdMeId = new byte[length];
-        Util.arrayCopyNonAtomic(buffer, (short) start, attIdMeId, (short) 0, length);
-        JCSystem.commitTransaction();
-        break;
-      // Attestation Id Manufacturer
-      case KMType.ATTESTATION_ID_MANUFACTURER:
-        JCSystem.beginTransaction();
-        attIdManufacturer = new byte[length];
-        Util.arrayCopyNonAtomic(buffer, (short) start, attIdManufacturer, (short) 0, length);
-        JCSystem.commitTransaction();
-        break;
-      // Attestation Id Model
-      case KMType.ATTESTATION_ID_MODEL:
-        JCSystem.beginTransaction();
-        attIdModel = new byte[length];
-        Util.arrayCopyNonAtomic(buffer, (short) start, attIdModel, (short) 0, length);
-        JCSystem.commitTransaction();
-        break;
-    }
-  }
-
-  @Override
-  public void deleteAttestationIds() {
-    attIdBrand = null;
-    attIdDevice = null;
-    attIdProduct = null;
-    attIdSerial = null;
-    attIdImei = null;
-    attIdMeId = null;
-    attIdManufacturer = null;
-    attIdModel = null;
-  }
-
-  public boolean isPowerReset() {
-    boolean flag = false;
-    if (resetFlag[0] == POWER_RESET_TRUE) {
-      resetFlag[0] = POWER_RESET_FALSE;
-      flag = true;
-      if (poolMgr != null) {
-        poolMgr.powerReset();
-      }
-    }
-    return flag;
-  }
-
-  @Override
-  public short getVerifiedBootHash(byte[] buffer, short start) {
-    Util.arrayCopyNonAtomic(verifiedHash, (short) 0, buffer, start, (short) verifiedHash.length);
-    return (short) verifiedHash.length;
-  }
-
-  @Override
-  public short getBootKey(byte[] buffer, short start) {
-    Util.arrayCopyNonAtomic(bootKey, (short) 0, buffer, start, (short) bootKey.length);
-    return (short) bootKey.length;
-  }
-
-  @Override
-  public short getBootState() {
-    return bootState;
-  }
-
-  @Override
-  public boolean isDeviceBootLocked() {
-    return deviceBootLocked;
-  }
-
-  @Override
-  public short getBootPatchLevel(byte[] buffer, short start) {
-    Util.arrayCopyNonAtomic(bootPatchLevel, (short) 0, buffer, start,
-        (short) bootPatchLevel.length);
-    return (short) bootPatchLevel.length;
-  }
-
-  public void setVerifiedBootHash(byte[] buffer, short start, short length) {
-    if (verifiedHash == null) {
-      verifiedHash = new byte[32];
-    }
-    if (length != 32) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
-    Util.arrayCopyNonAtomic(buffer, start, verifiedHash, (short) 0, (short) 32);
-  }
-
-  public void setBootKey(byte[] buffer, short start, short length) {
-    if (bootKey == null) {
-      bootKey = new byte[32];
-    }
-    if (length != 32) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
-    Util.arrayCopyNonAtomic(buffer, start, bootKey, (short) 0, (short) 32);
-  }
-
-  public void setBootState(short state) {
-    bootState = state;
-  }
-
-  public void setDeviceLocked(boolean state) {
-    deviceBootLocked = state;
-  }
-
-  public void setBootPatchLevel(byte[] buffer, short start, short length) {
-    if (bootPatchLevel == null) {
-      bootPatchLevel = new byte[4];
-    }
-    if (length > 4 || length < 0) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
-    Util.arrayCopyNonAtomic(buffer, start, bootPatchLevel, (short) 0, (short) length);
-  }
 
   @Override
   public short hkdf(byte[] ikm, short ikmOff, short ikmLen, byte[] salt,
@@ -1420,8 +1108,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
       }
     }
   }
-
-  private KMDeviceUniqueKey createDeviceUniqueKey(KMECDeviceUniqueKey key,
+  
+  @Override
+  public KMDeviceUniqueKey createDeviceUniqueKey(KMDeviceUniqueKey key,
       byte[] pubKey, short pubKeyOff, short pubKeyLen, byte[] privKey,
       short privKeyOff, short privKeyLen) {
     if (key == null) {
@@ -1429,87 +1118,23 @@ public class KMAndroidSEProvider implements KMSEProvider {
       initECKey(ecKeyPair);
       key = new KMECDeviceUniqueKey(ecKeyPair);
     }
-    key.setS(privKey, privKeyOff, privKeyLen);
-    key.setW(pubKey, pubKeyOff, pubKeyLen);
+    ((KMECDeviceUniqueKey) key).setS(privKey, privKeyOff, privKeyLen);
+    ((KMECDeviceUniqueKey) key).setW(pubKey, pubKeyOff, pubKeyLen);
     return (KMDeviceUniqueKey) key;
   }
 
   @Override
-  public KMDeviceUniqueKey createDeviceUniqueKey(boolean testMode,
-      byte[] pubKey, short pubKeyOff, short pubKeyLen, byte[] privKey,
-      short privKeyOff, short privKeyLen) {
-    KMDeviceUniqueKey key;
-    if (testMode) {
-      key = createDeviceUniqueKey(testKey, pubKey, pubKeyOff,
-          pubKeyLen, privKey, privKeyOff, privKeyLen);
-      if (testKey == null) {
-        testKey = (KMECDeviceUniqueKey) key;
-      }
-    } else {
-      key = createDeviceUniqueKey(deviceUniqueKey, pubKey, pubKeyOff,
-          pubKeyLen, privKey, privKeyOff, privKeyLen);
-      if (deviceUniqueKey == null) {
-        deviceUniqueKey = (KMECDeviceUniqueKey) key;
-      }
+  public KMRkpMacKey createRkpMacKey(KMRkpMacKey rkpMacKey, byte[] keyData,
+      short offset, short length) {
+    if (rkpMacKey == null) {
+      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) (length * 8),
+          false);
+      rkpMacKey = new KMHmacKey(key);
     }
-    return key;
+    ((KMHmacKey) rkpMacKey).setKey(keyData, offset, length);
+    return rkpMacKey;
   }
-
-  @Override
-  public KMDeviceUniqueKey getDeviceUniqueKey(boolean testMode) {
-    return ((KMDeviceUniqueKey) (testMode ? testKey : deviceUniqueKey));
-  }
-
-  @Override
-  public void persistAdditionalCertChain(byte[] buf, short offset, short len) {
-    // Input buffer contains encoded additional certificate chain as shown below.
-    //    AdditionalDKSignatures = {
-    //      + SignerName => DKCertChain
-    //    }
-    //    SignerName = tstr
-    //    DKCertChain = [
-    //      2* Certificate // Root -> Leaf. Root is the vendo r
-    //            // self-signed cert, leaf contains DK_pu b
-    //    ]
-    //    Certificate = COSE_Sign1 of a public key
-    if ((short) (len + 2) > ADDITIONAL_CERT_CHAIN_MAX_SIZE) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    JCSystem.beginTransaction();
-    Util.setShort(additionalCertChain, (short) 0, (short) len);
-    Util.arrayCopyNonAtomic(buf, offset, additionalCertChain,
-        (short) 2, len);
-    JCSystem.commitTransaction();
-
-  }
-
-  @Override
-  public short getAdditionalCertChainLength() {
-    return Util.getShort(additionalCertChain, (short) 0);
-  }
-
-  @Override
-  public byte[] getAdditionalCertChain() {
-    return additionalCertChain;
-  }
-
-
-  @Override
-  public byte[] getBootCertificateChain() {
-    return bcc;
-  }
-
-  public void persistBootCertificateChain(byte[] buf, short offset, short len) {
-    if ((short) (len + 2) > BCC_MAX_SIZE) {
-      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-    }
-    JCSystem.beginTransaction();
-    Util.setShort(bcc, (short) 0, (short) len);
-    Util.arrayCopyNonAtomic(buf, offset, bcc,
-        (short) 2, len);
-    JCSystem.commitTransaction();
-  }
-
+  
   public void setProvisionLocked(boolean locked) {
     JCSystem.beginTransaction();
     isProvisionLocked = locked;
@@ -1537,9 +1162,16 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return len;
   }
   
-  @Override
-  public KMComputedHmacKey getComputedHmacKey() {
-    return computedHmacKey;
+  public boolean isPowerReset() {
+    boolean flag = false;
+    if (resetFlag[0] == POWER_RESET_TRUE) {
+      resetFlag[0] = POWER_RESET_FALSE;
+      flag = true;
+      if (poolMgr != null) {
+        poolMgr.powerReset();
+      }
+    }
+    return flag;
   }
   
   private byte mapPurpose(short purpose) {
@@ -1555,4 +1187,103 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     return -1;
   }
+  
+  @Override
+  public void onSave(Element element, byte interfaceType, Object object) {
+    element.write(interfaceType);
+    if (object == null) {
+      element.write(null);
+      return;
+    }
+    switch (interfaceType) {
+      case KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY:
+        KMHmacKey.onSave(element, (KMHmacKey) object);
+        break;
+      case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
+        KMAESKey.onSave(element, (KMAESKey) object);
+        break;
+      case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
+        KMHmacKey.onSave(element, (KMHmacKey) object);
+        break;
+      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
+        KMECPrivateKey.onSave(element, (KMECPrivateKey) object);
+        break;
+      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
+        KMECDeviceUniqueKey.onSave(element, (KMECDeviceUniqueKey) object);
+        break;
+      case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
+          KMHmacKey.onSave(element, (KMHmacKey) object);
+          break;
+      default:
+        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+  }
+  
+  @Override
+  public Object onResore(Element element) {
+    if (element == null) {
+      return null;
+    }
+    byte interfaceType = element.readByte();
+    switch (interfaceType) {
+      case KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY:
+        return KMHmacKey.onRestore((HMACKey) element.readObject());
+      case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
+        return KMAESKey.onRestore((AESKey) element.readObject());
+      case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
+        return KMHmacKey.onRestore((HMACKey) element.readObject());
+      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
+        return KMECPrivateKey.onRestore((KeyPair) element.readObject());
+      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
+        return KMECDeviceUniqueKey.onRestore((KeyPair) element.readObject());
+      case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
+          return KMHmacKey.onRestore((HMACKey) element.readObject());  
+      default:
+        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return null;
+  }
+  
+  @Override
+  public short getBackupPrimitiveByteCount(byte interfaceType) {
+    switch (interfaceType) {
+      case KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY:
+        return KMHmacKey.getBackupPrimitiveByteCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
+        return KMAESKey.getBackupPrimitiveByteCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
+        return KMHmacKey.getBackupPrimitiveByteCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
+        return KMECPrivateKey.getBackupPrimitiveByteCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
+        return KMECDeviceUniqueKey.getBackupPrimitiveByteCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
+          return KMHmacKey.getBackupPrimitiveByteCount();  
+      default:
+        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return 0;
+  }
+
+  @Override
+  public short getBackupObjectCount(byte interfaceType) {
+    switch (interfaceType) {
+      case KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY:
+        return KMHmacKey.getBackupObjectCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
+        return KMAESKey.getBackupObjectCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
+        return KMHmacKey.getBackupObjectCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
+        return KMECPrivateKey.getBackupObjectCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
+        return KMECDeviceUniqueKey.getBackupObjectCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
+          return KMHmacKey.getBackupObjectCount();
+      default:
+        ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    return 0;
+  }
+  
 }

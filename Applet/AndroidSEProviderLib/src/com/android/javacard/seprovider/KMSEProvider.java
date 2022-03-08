@@ -15,13 +15,15 @@
  */
 package com.android.javacard.seprovider;
 
+import org.globalplatform.upgrade.Element;
+
 /**
  * KMSEProvider is facade to use SE specific methods. The main intention of this interface is to
  * abstract the cipher, signature and backup and restore related functions. The instance of this
  * interface is created by the singleton KMSEProviderImpl class for each provider. At a time there
  * can be only one provider in the applet package.
  */
-public interface KMSEProvider extends KMUpgradable {
+public interface KMSEProvider {
 
   /**
    * Create a symmetric key instance. If the algorithm and/or keysize are not supported then it
@@ -268,6 +270,25 @@ public interface KMSEProvider extends KMUpgradable {
       byte[] keyBuf,
       short keyStart,
       short keyLength,
+      byte[] data,
+      short dataStart,
+      short dataLength,
+      byte[] signature,
+      short signatureStart);
+  
+  /**
+   * This is a oneshot operation that signs the data using hmac algorithm.
+   *
+   * @param hmacKey is the KMHmacKey.
+   * @param data is the buffer containing data to be signed.
+   * @param dataStart is the start of the data.
+   * @param dataLength is the length of the data.
+   * @param signature is the output signature buffer
+   * @param signatureStart is the start of the signature
+   * @return length of the signature buffer in bytes.
+   */
+  short hmacSign(
+	  Object hmacKey,
       byte[] data,
       short dataStart,
       short dataLength,
@@ -555,17 +576,6 @@ public interface KMSEProvider extends KMUpgradable {
       short pubModLength);
 
   /**
-   * This operation creates the empty instance of KMAttestationCert for rsa or ec public key
-   * attestation certificate. It corresponds to attestKEy command from keymaster hal specifications.
-   * The attestation certificate implementation will comply keymaster hal specifications.
-   *
-   * @param rsaCert if true indicates that certificate will attest a rsa public key else if false it
-   * is for ec public key.
-   * @return An empty instance of KMAttestationCert implementation.
-   */
-  //KMAttestationCert getAttestationCert(boolean rsaCert);
-
-  /**
    * This function tells if applet is upgrading or not.
    *
    * @return true if upgrading, otherwise false.
@@ -577,10 +587,11 @@ public interface KMSEProvider extends KMUpgradable {
    * generated key is maintained by the SEProvider. This function should be called only once at the
    * time of installation.
    *
+   * @param instance of the masterkey.
    * @param keySizeBits key size in bits.
    * @return An instance of KMMasterKey.
    */
-  KMMasterKey createMasterKey(short keySizeBits);
+  KMMasterKey createMasterKey(KMMasterKey masterKey, short keySizeBits);
 
   /**
    * This function creates an HMACKey and initializes the key with the provided input key data.
@@ -590,14 +601,7 @@ public interface KMSEProvider extends KMUpgradable {
    * @param length length of the buffer.
    * @return An instance of the KMComputedHmacKey.
    */
-  KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length);
-  
-  /**
-   * Returns the master key.
-   *
-   * @return Instance of the KMMasterKey
-   */
-  KMMasterKey getMasterKey();
+  KMComputedHmacKey createComputedHmacKey(KMComputedHmacKey computedHmacKey, byte[] keyData, short offset, short length);
 
   /**
    * Returns true if factory provisioned attestation key is supported.
@@ -611,54 +615,6 @@ public interface KMSEProvider extends KMUpgradable {
   short getAttestationKeyAlgorithm();
 
   /**
-   * Returns the preshared key.
-   *
-   * @return Instance of the KMPreSharedKey.
-   */
-  KMPreSharedKey getPresharedKey();
-
-  /**
-   * Returns the value of the attestation id.
-   *
-   * @param tag - attestation id tag key as defined KMType.
-   * @param buffer - memorey buffer in which value of the id must be copied
-   * @param start - start offset in the buffer
-   * @return length - length of the returned attestation id value.
-   */
-  short getAttestationId(short tag, byte[] buffer, short start);
-
-  /**
-   * Delete the attestation ids permanently.
-   */
-  void deleteAttestationIds();
-
-  /**
-   * Get Verified Boot hash. Part of RoT. Part of data sent by the aosp bootloader.
-   */
-  short getVerifiedBootHash(byte[] buffer, short start);
-
-  /**
-   * Get Boot Key. Part of RoT. Part of data sent by the aosp bootloader.
-   */
-  short getBootKey(byte[] buffer, short start);
-
-  /**
-   * Get Boot state. Part of RoT. Part of data sent by the aosp bootloader.
-   */
-  short getBootState();
-
-  /**
-   * Returns true if device bootloader is locked. Part of RoT. Part of data sent by the aosp
-   * bootloader.
-   */
-  boolean isDeviceBootLocked();
-
-  /**
-   * Get Boot patch level. Part of data sent by the aosp bootloader.
-   */
-  short getBootPatchLevel(byte[] buffer, short start);
-
-  /**
    * Creates an ECKey instance and sets the public and private keys to it.
    *
    * @param testMode to indicate if current execution is for test or production.
@@ -670,55 +626,9 @@ public interface KMSEProvider extends KMUpgradable {
    * @param privKeyLen private key buffer length.
    * @return instance of KMDeviceUniqueKey.
    */
-  KMDeviceUniqueKey createDeviceUniqueKey(boolean testMode,
+  KMDeviceUniqueKey createDeviceUniqueKey(KMDeviceUniqueKey key,
       byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff, short privKeyLen);
-
-  /**
-   * Returns the instance KMDeviceUnique if it is created.
-   *
-   * @param testMode Indicates if current execution is for test or production.
-   * @return instance of KMDeviceUniqueKey if present; null otherwise.
-   */
-  KMDeviceUniqueKey getDeviceUniqueKey(boolean testMode);
-
-  /**
-   * Persists the additional certificate chain in persistent memory.
-   *
-   * @param buf buffer containing the cbor encoded additional certificate chain.
-   * @param offset start offset of the buffer.
-   * @param len length of the buffer.
-   */
-  void persistAdditionalCertChain(byte[] buf, short offset, short len);
-
-  /**
-   * Returns the additional certificate chain length.
-   *
-   * @return length of the encoded additional certificate chain.
-   */
-  short getAdditionalCertChainLength();
-
-  /**
-   * Returns the additional certificate chain.
-   *
-   * @return additional cert chain.
-   */
-  byte[] getAdditionalCertChain();
-
-
-  /**
-   * Returns the boot certificate chain.
-   *
-   * @return boot certificate chain.
-   */
-  byte[] getBootCertificateChain();
-  
-  /**
-   * Returns the computed Hmac key.
-   *
-   * @return Instance of the computed hmac key.
-   */
-  KMComputedHmacKey getComputedHmacKey();
   
   /**
    * This is a one-shot operation the does digest of the input mesage.
@@ -733,6 +643,81 @@ public interface KMSEProvider extends KMUpgradable {
   short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
       short outOffset);
   
+  /**
+   * This function creates an ECKey and initializes the ECPrivateKey with the provided input key
+   * data. The initialized Key is maintained by the SEProvider. This function should be called only
+   * while provisioning the attestation key.
+   *
+   * @param keyData buffer containing the ec private key.
+   * @param offset start of the buffer.
+   * @param length length of the buffer.
+   * @return An instance of KMAttestationKey.
+   */
+  KMAttestationKey createAttestationKey(KMAttestationKey attestationKey, byte[] keyData,
+      short offset,
+      short length);
+  
+  /**
+   * This function generates a HMAC key from the provided key buffers.
+   *
+   * @param presharedKey instance of the presharedkey.
+   * @param key buffer containing the key data.
+   * @param offset start offset of the buffer.
+   * @param length is the length of the key.
+   * @return instance of KMPresharedKey.
+   */
+  KMPreSharedKey createPreSharedKey(KMPreSharedKey presharedKey, byte[] key, short offset,
+      short length);
+  
+  /**
+   * This function saves the key objects while upgrade.
+   *
+   * @param element instance of the Element class where the objects to be stored.
+   * @param interfaceType the type interface of the parent object.
+   * @param object instance of the object to be saved.
+   */
+  void onSave(Element element, byte interfaceType, Object object);
+  
+  /**
+   * This function restores the the object from element instance.
+   * 
+   * @param element instance of the Element class.
+   * @return restored object.
+   */
+  Object onResore(Element element);
+  
+  /**
+   * This function returns the count of the primitive bytes required to
+   * be stored by the implementation of the interface type.
+   *
+   * @param interfaceType type interface of the parent object.
+   * @return count of the primitive bytes.
+   */
+  short getBackupPrimitiveByteCount(byte interfaceType);
+
+  /**
+   * This function returns the object count required to be stored by the
+   * implementation of the interface type.
+   *
+   * @param interfaceType type interface of the parent object.
+   * @return count of the objects.
+   */
+  short getBackupObjectCount(byte interfaceType);
+  
+  /**
+   * This function creates an HMACKey and initializes the key with the provided input key data.
+   *
+   * @param keyData buffer containing the key data.
+   * @param offset start of the buffer.
+   * @param length length of the buffer.
+   * @return An instance of the KMRkpMacKey.
+   */
+  KMRkpMacKey createRkpMacKey(KMRkpMacKey createComputedHmacKey, byte[] keyData,
+      short offset, short length);
+
+  /**
+   * Returns true if provision is locked.
+   */
   public boolean isProvisionLocked();
 
 
