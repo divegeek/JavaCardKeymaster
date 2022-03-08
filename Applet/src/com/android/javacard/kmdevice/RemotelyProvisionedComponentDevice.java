@@ -922,7 +922,9 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(deviceIds, out, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(deviceIds, out, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
-    //TODO Add attest_id_state
+    byte[] attestIdState = isProvisionLocked() ? ATTEST_ID_LOCKED : ATTEST_ID_OPEN;
+    updateItem(deviceIds, out, ATTEST_ID_STATE,
+            KMTextString.instance(attestIdState, (short) 0, (short) attestIdState.length));
     // Create device info map.
     short map = KMMap.instance(out[1]);
     short mapIndex = 0;
@@ -1552,6 +1554,16 @@ public class RemotelyProvisionedComponentDevice {
       Util.arrayCopyNonAtomic(scratchPad, start, scratchPad, scratchPadOff, length);
     }
     return length;
+  }
+  
+  private boolean isProvisionLocked() {
+    short offset = repository.alloc((short) 1);
+    short len = storeDataInst.getData(KMDataStoreConstants.PROVISIONED_LOCKED,
+        repository.getHeap(), offset);
+    if (len == 0) {
+      return false;
+    }
+    return ((byte[]) repository.getHeap())[offset] == 0x01;
   }
 
 }
