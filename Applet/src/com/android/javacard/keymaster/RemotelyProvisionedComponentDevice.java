@@ -979,6 +979,40 @@ public class RemotelyProvisionedComponentDevice {
     return vbState;
   }
 
+  private short converIntegerToTextString(short intPtr, byte[] scratchPad) {
+    // Prepare Hex Values
+    short index = 1;
+    scratchPad[0] = 0x30; // Ascii 0
+    while(index < 10) {
+      scratchPad[index] = (byte) (scratchPad[(short) (index - 1)] + 1);
+      index++;
+    }
+    scratchPad[index++] = 0x41; // Ascii 'A'
+    while(index < 16) {
+      scratchPad[index] = (byte) (scratchPad[(short) (index - 1)] + 1);
+      index++;
+    }
+    
+    
+    short intLen = KMInteger.cast(intPtr).length();
+    short intOffset = KMInteger.cast(intPtr).getStartOff();
+    byte[] buf = repository.getHeap();
+    short tsPtr = KMTextString.instance((short) (intLen * 2));
+    short tsStartOff = KMTextString.cast(tsPtr).getStartOff();
+    index = 0;
+    byte nibble;
+    while (index < intLen) {
+      nibble = (byte) ((byte) (buf[intOffset] >> 4) & (byte) 0x0F);
+      buf[tsStartOff] = scratchPad[nibble];
+      nibble = (byte) (buf[intOffset] & 0x0F);
+      buf[(short) (tsStartOff + 1)] = scratchPad[nibble];
+      index++;
+      intOffset++;
+      tsStartOff += 2;
+    }
+    return tsPtr;
+  }
+
   private short getBootParams(byte bootParam, byte[] scratchPad) {
     short value = KMType.INVALID_VALUE;
     switch (bootParam) {
@@ -1000,10 +1034,7 @@ public class RemotelyProvisionedComponentDevice {
     }
     // Convert Integer to Text String for OS_VERSION.
     if (bootParam == OS_VERSION_ID) {
-      value =
-          KMTextString
-              .instance(KMInteger.cast(value).getBuffer(), KMInteger.cast(value).getStartOff(),
-                  KMInteger.cast(value).length());
+      value = converIntegerToTextString(value, scratchPad);
     }
     return value;
   }
