@@ -497,7 +497,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       resetWrappingKey();
       sendError(apdu, KMException.reason());
     } catch (ISOException exp) {
-      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
       freeOperations();
       resetWrappingKey();
       sendError(apdu, mapISOErrorToKMError(exp.getReason()));
