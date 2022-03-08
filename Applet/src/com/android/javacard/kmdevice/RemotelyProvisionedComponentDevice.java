@@ -922,8 +922,6 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(deviceIds, out, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(deviceIds, out, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
-    updateItem(deviceIds, out, ATTEST_ID_STATE,
-        KMTextString.instance(ATTEST_ID_LOCKED, (short) 0, (short) ATTEST_ID_LOCKED.length));
     //TODO Add attest_id_state
     // Create device info map.
     short map = KMMap.instance(out[1]);
