@@ -922,6 +922,8 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(deviceIds, out, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(deviceIds, out, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
+    updateItem(deviceIds, out, ATTEST_ID_STATE,
+        KMTextString.instance(ATTEST_ID_LOCKED, (short) 0, (short) ATTEST_ID_LOCKED.length));
     //TODO Add attest_id_state
     // Create device info map.
     short map = KMMap.instance(out[1]);
@@ -1043,6 +1045,40 @@ public class RemotelyProvisionedComponentDevice {
     readData(storeDataId, scratchPad, offset);
     return KMInteger.uint_32(scratchPad, offset);
   }
+  
+  private short converIntegerToTextString(short intPtr, byte[] scratchPad) {
+    // Prepare Hex Values
+    short index = 1;
+    scratchPad[0] = 0x30; // Ascii 0
+    while(index < 10) {
+      scratchPad[index] = (byte) (scratchPad[(short) (index - 1)] + 1);
+      index++;
+    }
+    scratchPad[index++] = 0x41; // Ascii 'A'
+    while(index < 16) {
+      scratchPad[index] = (byte) (scratchPad[(short) (index - 1)] + 1);
+      index++;
+    }
+    
+    
+    short intLen = KMInteger.length(intPtr);
+    short intOffset = KMInteger.getStartOff(intPtr);
+    byte[] buf = repository.getHeap();
+    short tsPtr = KMTextString.instance((short) (intLen * 2));
+    short tsStartOff = KMTextString.getStartOff(tsPtr);
+    index = 0;
+    byte nibble;
+    while (index < intLen) {
+      nibble = (byte) ((byte) (buf[intOffset] >> 4) & (byte) 0x0F);
+      buf[tsStartOff] = scratchPad[nibble];
+      nibble = (byte) (buf[intOffset] & 0x0F);
+      buf[(short) (tsStartOff + 1)] = scratchPad[nibble];
+      index++;
+      intOffset++;
+      tsStartOff += 2;
+    }
+    return tsPtr;
+  }
 
   private short getBootParams(byte bootParam, byte[] scratchPad) {
     short value = KMType.INVALID_VALUE;
@@ -1065,10 +1101,7 @@ public class RemotelyProvisionedComponentDevice {
     }
     // Convert Integer to Text String for OS_VERSION.
     if (bootParam == OS_VERSION_ID) {
-      value =
-          KMTextString
-              .instance(KMInteger.getBuffer(value), KMInteger.getStartOff(value),
-                  KMInteger.length(value));
+      value = converIntegerToTextString(value, scratchPad);
     }
     return value;
   }
