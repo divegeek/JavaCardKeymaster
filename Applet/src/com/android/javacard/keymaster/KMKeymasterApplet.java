@@ -216,23 +216,26 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static KMRepository repository;
   protected static KMSEProvider seProvider;
   protected static KMOperationState[] opTable;
+  protected static  KMKeymintDataStore kmDataStore;
 
   protected static short[] tmpVariables;
   protected static short[] data;
   protected static byte[] wrappingKey;
 
+  public static void install(byte[] bArray, short bOffset, byte bLength) {
+	    new KMAndroidSEApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
+  }
+  
   /**
    * Registers this applet.
    */
   protected KMKeymasterApplet(KMSEProvider seImpl) {
     seProvider = seImpl;
     boolean isUpgrading = seProvider.isUpgrading();
-    if (!isUpgrading) {
-      seProvider.createMasterKey(MASTER_KEY_SIZE);
-    }
     repository = new KMRepository(isUpgrading);
     encoder = new KMEncoder();
     decoder = new KMDecoder();
+    kmDataStore = new KMKeymintDataStore(seProvider, repository);
     data = JCSystem.makeTransientShortArray(DATA_ARRAY_SIZE, JCSystem.CLEAR_ON_DESELECT);
     tmpVariables =
         JCSystem.makeTransientShortArray(TMP_VARIABLE_ARRAY_SIZE, JCSystem.CLEAR_ON_DESELECT);
@@ -244,18 +247,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       opTable[index] = new KMOperationState();
       index++;
     }
-    KMType.initialize();
-
-    // initialize default values
-    initHmacNonceAndSeed();
-    initSystemBootParams((short)0,(short)0,(short)0,(short)0);
-    rkp = new RemotelyProvisionedComponentDevice(encoder, decoder, repository, seProvider);
+   KMType.initialize();
+   if (!isUpgrading) {
+     kmDataStore.createMasterKey(MASTER_KEY_SIZE);
+     // initialize default values
+     initHmacNonceAndSeed();
+     initSystemBootParams((short)0,(short)0,(short)0,(short)0);
+   }
+   rkp = new RemotelyProvisionedComponentDevice(encoder, decoder, repository, seProvider, kmDataStore);
   }
 
   protected void initHmacNonceAndSeed(){
     short nonce = repository.alloc((short)32);
-    seProvider.newRandomNumber(repository.getHeap(), nonce, KMRepository.HMAC_SEED_NONCE_SIZE);
-    repository.initHmacNonce(repository.getHeap(), nonce, KMRepository.HMAC_SEED_NONCE_SIZE);
+    seProvider.newRandomNumber(repository.getHeap(), nonce, KMKeymintDataStore.HMAC_SEED_NONCE_SIZE);
+    kmDataStore.initHmacNonce(repository.getHeap(), nonce, KMKeymintDataStore.HMAC_SEED_NONCE_SIZE);
   }
 
   private void releaseAllOperations(){
@@ -530,7 +535,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processEarlyBootEndedCmd(APDU apdu) {
-    repository.setEarlyBootEndedStatus(true);
+    kmDataStore.setEarlyBootEndedStatus(true);
   }
 
   private short deviceLockedCmd(APDU apdu){
@@ -551,13 +556,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     passwordOnly = KMInteger.cast(passwordOnly).getByte();
     validateVerificationToken(verToken, scratchPad);
     short verTime = KMVerificationToken.cast(verToken).getTimestamp();
-    short lastDeviceLockedTime = repository.getDeviceTimeStamp();
+    short lastDeviceLockedTime = kmDataStore.getDeviceTimeStamp();
     if (KMInteger.compare(verTime, lastDeviceLockedTime) > 0) {
       Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 8, (byte) 0);
       KMInteger.cast(verTime).getValue(scratchPad, (short) 0, (short) 8);
-      repository.setDeviceLock(true);
-      repository.setDeviceLockPasswordOnly(passwordOnly == 0x01);
-      repository.setDeviceLockTimestamp(scratchPad, (short) 0, (short) 8);
+      kmDataStore.setDeviceLock(true);
+      kmDataStore.setDeviceLockPasswordOnly(passwordOnly == 0x01);
+      kmDataStore.setDeviceLockTimestamp(scratchPad, (short) 0, (short) 8);
     }
     sendError(apdu, KMError.OK);
   }
@@ -727,7 +732,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // No Arguments
     // Create HMAC Sharing Parameters
     short params = KMHmacSharingParameters.instance();
-    short nonce = repository.getHmacNonce();
+    short nonce = kmDataStore.getHmacNonce();
     short seed = KMByteBlob.instance((short) 0);
     KMHmacSharingParameters.cast(params).setNonce(nonce);
     KMHmacSharingParameters.cast(params).setSeed(seed);
@@ -808,7 +813,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //tmpVariables[7] = 0;
     short found = 0;
     //tmpVariables[9]
-    short nonce = repository.getHmacNonce();
+    short nonce = kmDataStore.getHmacNonce();
 
     while (paramIndex < paramsLen) {
       // read HmacSharingParam
@@ -873,7 +878,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //tmpVariables[6]
     short keyLen =
         seProvider.cmacKDF(
-            seProvider.getPresharedKey(),
+          kmDataStore.getPresharedKey(),
             ckdfLable,
             (short) 0,
             (short) ckdfLable.length,
@@ -884,11 +889,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             (short) 0);
 
     // persist the computed hmac key.
-    seProvider.createComputedHmacKey(scratchPad, (short) 0, keyLen);
+    kmDataStore.createComputedHmacKey(scratchPad, (short) 0, keyLen);
     // Generate sharingKey verification signature and store that in scratch pad.
     //tmpVariables[5]
     short signLen =
-        seProvider.hmacSign(
+    	seProvider.hmacSign(
             scratchPad,
             (short) 0,
             keyLen,
@@ -962,12 +967,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     parseEncryptedKeyBlob(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad);
     boolean isKeyUpgradeRequired = false;
     // Check if key requires upgrade.
-    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.OS_VERSION, repository.getOsVersion());
-    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.OS_PATCH_LEVEL, repository.getOsPatch());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.OS_VERSION, kmDataStore.getOsVersion());
+    isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.OS_PATCH_LEVEL, kmDataStore.getOsPatch());
     isKeyUpgradeRequired |=
-        isKeyUpgradeRequired(KMType.VENDOR_PATCH_LEVEL, repository.getVendorPatchLevel());
+        isKeyUpgradeRequired(KMType.VENDOR_PATCH_LEVEL, kmDataStore.getVendorPatchLevel());
     // Get boot patch level.
-    seProvider.getBootPatchLevel(scratchPad, (short) 0);
+    kmDataStore.getBootPatchLevel(scratchPad, (short) 0);
     isKeyUpgradeRequired |= isKeyUpgradeRequired(KMType.BOOT_PATCH_LEVEL,
         KMInteger.uint_32(scratchPad, (short) 0));
 
@@ -1308,11 +1313,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       addTags(hwParameters, true, cert);
       addTags(swParameters, false, cert);
       // Add Device Boot locked status
-      cert.deviceLocked(seProvider.isDeviceBootLocked());
+      cert.deviceLocked(kmDataStore.isDeviceBootLocked());
       // VB data
       cert.verifiedBootHash(getVerifiedBootHash(scratchPad));
       cert.verifiedBootKey(getBootKey(scratchPad));
-      cert.verifiedBootState((byte)seProvider.getBootState());
+      cert.verifiedBootState((byte)kmDataStore.getBootState());
 
     //TODO remove the following line
     makeKeyCharacteristics(scratchPad);
@@ -1554,7 +1559,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   protected short getBootKey(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_KEY_SIZE, (byte)0);
-    short len = seProvider.getBootKey(scratchPad, (short) 0);
+    short len = kmDataStore.getBootKey(scratchPad, (short) 0);
     if(len != VERIFIED_BOOT_KEY_SIZE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
@@ -1563,7 +1568,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   protected short getVerifiedBootHash(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_HASH_SIZE, (byte)0);
-    short len = seProvider.getVerifiedBootHash(scratchPad, (short) 0);
+    short len = kmDataStore.getVerifiedBootHash(scratchPad, (short) 0);
     if(len != VERIFIED_BOOT_HASH_SIZE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
@@ -1595,7 +1600,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       attIdTag = KMKeyParameters.findTag(KMType.BYTES_TAG, attTags[index], data[KEY_PARAMETERS]);
       if (attIdTag != KMType.INVALID_VALUE) {
         attIdTagValue = KMByteTag.cast(attIdTag).getValue();
-        storedAttIdLen = seProvider.getAttestationId(attTags[index],scratchPad, (short)0);
+        storedAttIdLen = kmDataStore.getAttestationId(attTags[index],scratchPad, (short)0);
         // Return CANNOT_ATTEST_IDS if Attestation IDs are not provisioned or
         // Attestation IDs are deleted.
         if (storedAttIdLen == 0) {
@@ -1656,11 +1661,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     cert.makeUniqueId(scratchPad, (short) 0, KMInteger.cast(time).getBuffer(),
         KMInteger.cast(time).getStartOff(), KMInteger.cast(time).length(),
         KMByteBlob.cast(appId).getBuffer(), KMByteBlob.cast(appId).getStartOff(), KMByteBlob.cast(appId).length(), resetAfterRotation,
-        seProvider.getMasterKey());
+        kmDataStore.getMasterKey());
   }
 
   private void processDestroyAttIdsCmd(APDU apdu) {
-    seProvider.deleteAttestationIds();
+    kmDataStore.deleteAttestationIds();
     sendError(apdu, KMError.OK);
   }
 
@@ -1974,9 +1979,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
 
-    if (repository.isAuthTagPersisted(data[AUTH_TAG])) {
+    if (kmDataStore.isAuthTagPersisted(data[AUTH_TAG])) {
       // Get current counter, update and increment it.
-      short len = repository
+      short len = kmDataStore
           .getRateLimitedKeyCount(data[AUTH_TAG], scratchPad, (short) (scratchPadOff + 4));
       if (len != 4) {
         KMException.throwIt(KMError.UNKNOWN_ERROR);
@@ -1991,12 +1996,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMUtils.add(scratchPad, scratchPadOff, (short) (scratchPadOff + len),
           (short) (scratchPadOff + len * 2));
 
-      repository
+      kmDataStore
           .setRateLimitedKeyCount(data[AUTH_TAG], scratchPad, (short) (scratchPadOff + len * 2),
               len);
     } else {
       // Persist auth tag.
-      if (!repository.persistAuthTag(data[AUTH_TAG])) {
+      if (!kmDataStore.persistAuthTag(data[AUTH_TAG])) {
         KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
       }
     }
@@ -2009,19 +2014,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMKeyParameters.findTag(
             KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED, data[HW_PARAMETERS]);
 
-    if (ptr != KMType.INVALID_VALUE && repository.getDeviceLock()) {
+    if (ptr != KMType.INVALID_VALUE && kmDataStore.getDeviceLock()) {
       if (!validateHwToken(data[HW_TOKEN], scratchPad)) {
         KMException.throwIt(KMError.DEVICE_LOCKED);
       }
       ptr = KMHardwareAuthToken.cast(data[HW_TOKEN]).getTimestamp();
       // Check if the current auth time stamp is greater than device locked time stamp
-      short ts = repository.getDeviceTimeStamp();
+      short ts = kmDataStore.getDeviceTimeStamp();
       if (KMInteger.compare(ptr, ts) <= 0) {
         KMException.throwIt(KMError.DEVICE_LOCKED);
       }
       // Now check if the device unlock requires password only authentication and whether
       // auth token is generated through password authentication or not.
-      if (repository.getDeviceLockPasswordOnly()) {
+      if (kmDataStore.getDeviceLockPasswordOnly()) {
         ptr = KMHardwareAuthToken.cast(data[HW_TOKEN]).getHwAuthenticatorType();
         ptr = KMEnum.cast(ptr).getVal();
         if (((byte) ptr & KMType.PASSWORD) == 0) {
@@ -2030,8 +2035,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       // Unlock the device
       // repository.deviceLockedFlag = false;
-      repository.setDeviceLock(false);
-      repository.clearDeviceLockTimeStamp();
+      kmDataStore.setDeviceLock(false);
+      kmDataStore.clearDeviceLockTimeStamp();
     }
   }
 
@@ -2060,7 +2065,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     ptr = KMVerificationToken.cast(verToken).getMac();
 
     return seProvider.hmacVerify(
-        seProvider.getComputedHmacKey(),
+    	kmDataStore.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -2615,13 +2620,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     //Validate early boot
     //VTS expects error code EARLY_BOOT_ONLY during begin operation if eary boot ended tag is present
-    if (repository.getEarlyBootEndedStatus()) {
+    if (kmDataStore.getEarlyBootEndedStatus()) {
       KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
           KMError.EARLY_BOOT_ENDED);
     }
  
     //Validate bootloader only 
-    if (repository.getBootEndedStatus()) {
+    if (kmDataStore.getBootEndedStatus()) {
       KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
     	  KMError.INVALID_KEY_BLOB);
     }
@@ -2767,7 +2772,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         data[HW_PARAMETERS]) != KMType.INVALID_VALUE) {
 
       op.setTrustedConfirmationSigner(
-          seProvider.initTrustedConfirmationSymmetricOperation(seProvider.getComputedHmacKey()));
+          seProvider.initTrustedConfirmationSymmetricOperation(kmDataStore.getComputedHmacKey()));
 
       op.getTrustedConfirmationSigner().update(
           confirmationToken,
@@ -2987,7 +2992,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
 
     return seProvider.hmacVerify(
-        seProvider.getComputedHmacKey(),
+    	kmDataStore.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -3028,7 +3033,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
 
     return seProvider.hmacVerify(
-        seProvider.getComputedHmacKey(),
+    	kmDataStore.getComputedHmacKey(),
         scratchPad,
         (short) 0,
         len,
@@ -3470,17 +3475,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   public void reboot() {
-    repository.clearHmacNonce();
+    kmDataStore.clearHmacNonce();
     //flag to maintain the boot state
-    repository.setBootEndedStatus(false);
+    kmDataStore.setBootEndedStatus(false);
     //flag to maintain early boot ended state
-    repository.setEarlyBootEndedStatus(false);  
+    kmDataStore.setEarlyBootEndedStatus(false);  
     //Clear all the operation state.
     releaseAllOperations();
     // Hmac is cleared, so generate a new Hmac nonce.
     initHmacNonceAndSeed();
     // Clear all auth tags.
-    repository.removeAllAuthTags();
+    kmDataStore.removeAllAuthTags();
   }
 
   protected void initSystemBootParams(short osVersion,
@@ -3494,21 +3499,21 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   protected void setOsVersion(short version){
-    repository.setOsVersion(
+    kmDataStore.setOsVersion(
         KMInteger.cast(version).getBuffer(),
         KMInteger.cast(version).getStartOff(),
         KMInteger.cast(version).length());
   }
 
   protected void setOsPatchLevel(short patch){
-    repository.setOsPatch(
+    kmDataStore.setOsPatch(
         KMInteger.cast(patch).getBuffer(),
         KMInteger.cast(patch).getStartOff(),
         KMInteger.cast(patch).length());
   }
 
   protected void setVendorPatchLevel(short patch){
-    repository.setVendorPatchLevel(
+    kmDataStore.setVendorPatchLevel(
         KMInteger.cast(patch).getBuffer(),
         KMInteger.cast(patch).getStartOff(),
         KMInteger.cast(patch).length());
@@ -3859,7 +3864,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMIntegerTag.getValue(
             scratchPad, (short) 0, KMType.UINT_TAG, KMType.OS_VERSION, data[HW_PARAMETERS]);
     if (len != KMType.INVALID_VALUE) {
-      short provOsVersion = repository.getOsVersion();
+      short provOsVersion = kmDataStore.getOsVersion();
       short status =
           KMInteger.unsignedByteArrayCompare(
               KMInteger.cast(provOsVersion).getBuffer(),
@@ -3878,7 +3883,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMIntegerTag.getValue(
             scratchPad, (short) 0, KMType.UINT_TAG, KMType.OS_PATCH_LEVEL, data[HW_PARAMETERS]);
     if (len != KMType.INVALID_VALUE) {
-      short osPatch = repository.getOsPatch();
+      short osPatch = kmDataStore.getOsPatch();
       short status =
           KMInteger.unsignedByteArrayCompare(
               KMInteger.cast(osPatch).getBuffer(),
@@ -3895,7 +3900,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
   protected static short getBootPatchLevel(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad,(short)0, BOOT_PATCH_LVL_SIZE, (byte)0);
-    short len = seProvider.getBootPatchLevel(scratchPad,(short)0);
+    short len = kmDataStore.getBootPatchLevel(scratchPad,(short)0);
     if(len != BOOT_PATCH_LVL_SIZE){
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
@@ -3903,9 +3908,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private static void makeKeyCharacteristics(byte[] scratchPad) {
-    short osVersion = repository.getOsVersion();
-    short osPatch = repository.getOsPatch();
-    short vendorPatch = repository.getVendorPatchLevel();
+    short osVersion = kmDataStore.getOsVersion();
+    short osPatch = kmDataStore.getOsPatch();
+    short vendorPatch = kmDataStore.getVendorPatchLevel();
     short bootPatch = getBootPatchLevel(scratchPad);
     data[SB_PARAMETERS] = KMKeyParameters.makeSbEnforced(
         data[KEY_PARAMETERS], (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
@@ -3998,11 +4003,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Read RoT
   public static short readROT(byte[] scratchPad) {
     Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256,(byte)0);
-    short len = seProvider.getBootKey(scratchPad, (short)0);
-    len += seProvider.getVerifiedBootHash(scratchPad, (short)len);
-    short bootState = seProvider.getBootState();
+    short len = kmDataStore.getBootKey(scratchPad, (short)0);
+    len += kmDataStore.getVerifiedBootHash(scratchPad, (short)len);
+    short bootState = kmDataStore.getBootState();
     len = Util.setShort(scratchPad, len, bootState);
-    if(seProvider.isDeviceBootLocked()){
+    if(kmDataStore.isDeviceBootLocked()){
       scratchPad[len] = (byte)1;
     }else{
       scratchPad[len] = (byte)0;
@@ -4118,7 +4123,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Consume only first 16 bytes as derived key.
     // Hmac sign.
     short len = seProvider.hmacKDF(
-        seProvider.getMasterKey(),
+    	kmDataStore.getMasterKey(),
         repository.getHeap(),
         data[AUTH_DATA],
         data[AUTH_DATA_LENGTH],
@@ -4307,7 +4312,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (!testMode && seProvider.isProvisionLocked()) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
-    KMDeviceUniqueKey deviceUniqueKey = seProvider.getDeviceUniqueKey(testMode);
+    KMDeviceUniqueKey deviceUniqueKey = kmDataStore.getDeviceUniqueKey(testMode);
     short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
     short coseKey =
         KMCose.constructCoseKey(

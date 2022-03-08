@@ -43,10 +43,11 @@ public class KMAESKey implements KMMasterKey {
     element.write(kmKey.aesKey);
   }
 
-  public static KMAESKey onRestore(Element element) {
-    AESKey aesKey = (AESKey) element.readObject();
-    KMAESKey kmKey = new KMAESKey(aesKey);
-    return kmKey;
+  public static KMAESKey onRestore(AESKey aesKey) {
+    if (aesKey == null) {
+      return null;
+    }
+    return new KMAESKey(aesKey);
   }
 
   public static short getBackupPrimitiveByteCount() {
