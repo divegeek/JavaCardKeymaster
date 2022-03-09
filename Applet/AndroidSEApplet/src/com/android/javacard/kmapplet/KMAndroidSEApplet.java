@@ -198,6 +198,10 @@ public class KMAndroidSEApplet extends Applet implements AppletEvent, OnUpgradeL
                 (short) 1);
             kmDeviceInst.sendError(apdu, KMError.OK);
             break;
+            
+          case INS_GET_PROVISION_STATUS_CMD:
+            seProvisionInst.processGetProvisionStatusCmd(apdu);
+            break;
 
           default:
             kmDeviceInst.process(apdu);
@@ -245,7 +249,12 @@ public class KMAndroidSEApplet extends Applet implements AppletEvent, OnUpgradeL
           break;
 
         default:
-          kmDeviceInst.process(apdu);
+          // Allow other commands only if provision is completed.
+          if (seProvisionInst.isProvisioningComplete(apdu.getBuffer())) {
+            kmDeviceInst.process(apdu);
+          } else {
+            ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+          }
           break;
       }
     } catch (KMException exception) {

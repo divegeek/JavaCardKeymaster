@@ -27,7 +27,6 @@
 #include <cppbor/cppbor_parse.h>
 
 #define SE_POWER_RESET_STATUS_FLAG (1 << 30)
-// TODO keymint provision status
 enum ProvisionStatus {
     NOT_PROVISIONED = 0x00,
     PROVISION_STATUS_ATTESTATION_KEY = 0x01,
@@ -35,13 +34,14 @@ enum ProvisionStatus {
     PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04,
     PROVISION_STATUS_ATTEST_IDS = 0x08,
     PROVISION_STATUS_PRESHARED_SECRET = 0x10,
-    PROVISION_STATUS_BOOT_PARAM = 0x20,
-    PROVISION_STATUS_PROVISIONING_LOCKED = 0x40,
+    PROVISION_STATUS_PROVISIONING_LOCKED = 0x20,
+    PROVISION_STATUS_DEVICE_UNIQUE_KEY = 0x40,
+    PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x80,
 };
 
 // TODO keymint provision status and lock
-std::string provisionStatusApdu = hex2str("80084000000000");
-std::string lockProvisionApdu = hex2str("80074000000000");
+std::string provisionStatusApdu = hex2str("80075000000000");
+std::string lockProvisionApdu = hex2str("80065000000000");
 
 Json::Value root;
 static std::string inputFileName;
@@ -234,33 +234,25 @@ int getProvisionStatus() {
             printf("\n Failed to get the provision status.\n");
             return FAILURE;
         }
-        // TODO Handle Keymint Provision status once added.
-        if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM))) {
-                printf("\n SE is provisioned \n");
+        if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_DEVICE_UNIQUE_KEY)) &&
+             (0 != (status & ProvisionStatus::PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)) &&
+             (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET))) {
+          printf("\n SE is provisioned \n");
         } else {
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_KEY)) {
-                printf("\n Attestation key is not provisioned \n");
-            }
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_CHAIN)) {
-                printf("\n Attestation certificate chain is not provisioned \n");
-            }
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_ATTESTATION_CERT_PARAMS)) {
-                printf("\n Attestation certificate params are not provisioned \n");
-            }
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) {
-                printf("\n Shared secret is not provisioned \n");
-            }
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_BOOT_PARAM)) {
-                printf("\n Boot params are not provisioned \n");
-            }
+          if (0 == (status & ProvisionStatus::PROVISION_STATUS_DEVICE_UNIQUE_KEY)) {
+            printf("\n Device Unique key is not provisioned \n");
+          }
+          if (0 == (status & ProvisionStatus::PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)) {
+            printf("\n Additional certificate chain is not provisioned \n");
+          }
+          if (0 == (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) {
+            printf("\n Shared secret is not provisioned \n");
+          }
         }
+
     } else {
-        printf("\n Fail to parse the response \n");
-        return FAILURE;
+      printf("\n Fail to parse the response \n");
+      return FAILURE;
     }
     return SUCCESS;
 }
@@ -285,7 +277,7 @@ int main(int argc, char* argv[]) {
     }
 
     /* getopt_long stores the option index here. */
-    while ((c = getopt_long(argc, argv, ":hls:i:", longOpts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, ":hlsi:", longOpts, NULL)) != -1) {
         switch(c) {
             case 'i':
                 // input file

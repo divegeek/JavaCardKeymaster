@@ -15,7 +15,6 @@
  */
 package com.android.javacard.seprovider;
 
-import org.globalplatform.upgrade.Element;
 
 import com.android.javacard.kmdevice.KMArray;
 import com.android.javacard.kmdevice.KMInteger;
@@ -35,6 +34,8 @@ import com.android.javacard.kmdevice.KMEnumTag;
 import com.android.javacard.kmdevice.KMException;
 
 import javacard.framework.APDU;
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 public class KMKeymasterProvision {
@@ -47,6 +48,9 @@ public class KMKeymasterProvision {
   private static final byte PROVISION_STATUS_ATTEST_IDS = 0x08;
   private static final byte PROVISION_STATUS_PRESHARED_SECRET = 0x10;
   private static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x20;
+  private static final byte PROVISION_STATUS_DEVICE_UNIQUE_KEY = 0x40;
+  private static final byte PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = (byte) 0x80;
+
 
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
 
@@ -243,14 +247,29 @@ public class KMKeymasterProvision {
         KMInteger.uint_16(getProvisionStatus(apdu.getBuffer(), (short) 0)));
     kmDeviceInst.sendOutgoing(apdu, resp);
   }
+  
+  public boolean isProvisioningComplete(byte[] scratchPad) {
+    kmStoreDataInst.getData(KMDataStoreConstants.PROVISIONED_STATUS, scratchPad, (short) 0);
+    if ((0 != (scratchPad[0] & PROVISION_STATUS_DEVICE_UNIQUE_KEY))
+        && (0 != (scratchPad[0] & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
+        && (0 != (scratchPad[0]  & PROVISION_STATUS_PRESHARED_SECRET))) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 
   public void processLockProvisioningCmd(APDU apdu) {
     byte[] buffer = apdu.getBuffer();
-    buffer[0] = 0x01;
-    kmStoreDataInst.storeData(KMDataStoreConstants.PROVISIONED_LOCKED, buffer, (short) 0,
-        (short) 1);
-    writeProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
-    kmDeviceInst.sendError(apdu, KMError.OK);
+    if (isProvisioningComplete(buffer)) {
+      buffer[0] = 0x01;
+      kmStoreDataInst.storeData(KMDataStoreConstants.PROVISIONED_LOCKED, buffer, (short) 0,
+          (short) 1);
+      writeProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
+      kmDeviceInst.sendError(apdu, KMError.OK); 
+    } else {
+      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+    }
   }
 
   public void processProvisionDeviceUniqueKey(APDU apdu) {
