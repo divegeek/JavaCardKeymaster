@@ -168,7 +168,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           break;
 
         default:
-          ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
+          // Allow other commands only if provision is completed.
+          if (isProvisioningComplete(apdu.getBuffer())) {
+            super.process(apdu);
+          } else {
+            ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+          }
           break;
       }
     } catch (KMException exception) {
