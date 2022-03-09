@@ -879,7 +879,7 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(deviceIds, out, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(deviceIds, out, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
-    byte[] attestIdState = seProvider.isProvisionLocked() ? ATTEST_ID_LOCKED : ATTEST_ID_OPEN;
+    byte[] attestIdState = storeDataInst.isProvisionLocked() ? ATTEST_ID_LOCKED : ATTEST_ID_OPEN;
     updateItem(deviceIds, out, ATTEST_ID_STATE,
             KMTextString.instance(attestIdState, (short) 0, (short) attestIdState.length));
     // Create device info map.

@@ -222,9 +222,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static short[] data;
   protected static byte[] wrappingKey;
 
-  public static void install(byte[] bArray, short bOffset, byte bLength) {
-	    new KMAndroidSEApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
-  }
   
   /**
    * Registers this applet.
@@ -4308,7 +4305,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
 
   public static short generateBcc(boolean testMode, byte[] scratchPad) {
-    if (!testMode && seProvider.isProvisionLocked()) {
+    if (!testMode && kmDataStore.isProvisionLocked()) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
     KMDeviceUniqueKey deviceUniqueKey = kmDataStore.getDeviceUniqueKey(testMode);
