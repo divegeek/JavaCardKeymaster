@@ -402,7 +402,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     super.reboot();
     sendError(apdu, KMError.OK);
   }
-  
+
   private boolean isProvisioningComplete() {
 	short dInex = repository.allocReclaimableMemory((short)1);
 	byte data[] = repository.getHeap();
