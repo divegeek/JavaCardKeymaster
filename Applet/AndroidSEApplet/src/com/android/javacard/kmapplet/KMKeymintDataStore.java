@@ -802,7 +802,7 @@ public class KMKeymintDataStore implements KMDataStore {
     // deviceLocked - 1 byte
     // deviceState = 2 bytes
     // interface types - 4 bytes
-    return (short) (12 +
+    return (short) (9 +
         seProvider.getBackupPrimitiveByteCount(KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY) +
         seProvider.getBackupPrimitiveByteCount(
             KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY) +
