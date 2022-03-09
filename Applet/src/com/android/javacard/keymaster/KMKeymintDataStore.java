@@ -32,7 +32,7 @@ import javacard.security.KeyPair;
 public class KMKeymintDataStore implements KMUpgradable {
 	
   // Data table configuration
-  public static final short DATA_INDEX_SIZE = 17;
+  public static final short DATA_INDEX_SIZE = 19;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
@@ -53,6 +53,8 @@ public class KMKeymintDataStore implements KMUpgradable {
   public static final byte AUTH_TAG_1 = 8;
   public static final byte BOOT_ENDED_FLAG = 15;
   public static final byte EARLY_BOOT_ENDED_FLAG = 16;
+  private static final byte PROVISIONED_LOCKED = 17;
+  private static final byte PROVISIONED_STATUS = 18;
   
   // Data Item sizes
   public static final short HMAC_SEED_NONCE_SIZE = 32;
@@ -746,7 +748,33 @@ public class KMKeymintDataStore implements KMUpgradable {
     Util.arrayCopyNonAtomic(buffer, start, bootPatchLevel, (short) 0, (short) length);
   }
   
+  public void setProvisionLocked() {
+    writeBoolean(PROVISIONED_LOCKED, true);
+  }
+
+  public boolean isProvisionLocked() {
+    try {
+    return readBoolean(PROVISIONED_LOCKED);
+    } catch (KMException e) {
+      if (KMException.reason() != KMError.INVALID_DATA)
+        KMException.throwIt(KMException.reason());
+    }
+    return false;
+  }
   
+  public void setProvisionStatus(byte provisionStatus) {
+    short offset = repository.alloc((short) 1);
+    byte[] buf = repository.getHeap();
+    getProvisionStatus(buf, offset);
+    buf[offset] |= provisionStatus;
+    writeDataEntry(PROVISIONED_STATUS, buf, offset, (short) 1);
+  }
+  
+  public void getProvisionStatus(byte[] scratchpad, short offset) {
+    scratchpad[offset] = 0;
+    readDataEntry(PROVISIONED_STATUS, scratchpad, offset);
+  }
+
   @Override
   public void onSave(Element element) {
     // Prmitives
@@ -755,7 +783,6 @@ public class KMKeymintDataStore implements KMUpgradable {
     element.write(bootState);
     // Objects
     element.write(dataTable);
- //   element.write(certificateData);
     element.write(attIdBrand);
     element.write(attIdDevice);
     element.write(attIdProduct);
@@ -786,7 +813,6 @@ public class KMKeymintDataStore implements KMUpgradable {
     bootState = element.readShort();
     // Read Objects
     dataTable = (byte[]) element.readObject();
-//    certificateData = (byte[]) element.readObject();
     attIdBrand = (byte[]) element.readObject();
     attIdDevice = (byte[]) element.readObject();
     attIdProduct = (byte[]) element.readObject();
@@ -810,13 +836,10 @@ public class KMKeymintDataStore implements KMUpgradable {
 
   @Override
   public short getBackupPrimitiveByteCount() {
-	// Magic Number - 1 byte
-    // Package Version - 2 bytes
     // dataIndex - 2 bytes
     // deviceLocked - 1 byte
     // deviceState = 2 bytes
-    // interface types - 4 bytes
-    return (short) (12 +
+    return (short) (5 +
         seProvider.getBackupPrimitiveByteCount(KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY) +
         seProvider.getBackupPrimitiveByteCount(
             KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY) +
