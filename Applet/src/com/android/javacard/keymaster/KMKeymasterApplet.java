@@ -1269,6 +1269,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //TODO remove following line
     short origBlob = data[KEY_BLOB];
     short pubKey = data[PUB_KEY];
+    short privKey = data[SECRET];
     short keyBlob = parseEncryptedKeyBlob(attKeyBlob, appId, appData, scratchPad);
     short attestationKeySecret = KMArray.cast(keyBlob).get(KEY_BLOB_SECRET);
     short attestParam = KMArray.cast(keyBlob).get(KEY_BLOB_PARAMS);
@@ -1294,7 +1295,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     cert.attestationChallenge(attChallenge);
     cert.issuer(issuer);
     //TODO remove following line
-    data[PUB_KEY] =pubKey;
+    data[PUB_KEY] = pubKey;
     cert.publicKey(data[PUB_KEY]);
 
     // Save attestation application id - must be present.
@@ -1321,6 +1322,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     //TODO remove the following line
     makeKeyCharacteristics(scratchPad);
+    data[SECRET] = privKey;
     data[KEY_BLOB] = origBlob;
 
     return cert;

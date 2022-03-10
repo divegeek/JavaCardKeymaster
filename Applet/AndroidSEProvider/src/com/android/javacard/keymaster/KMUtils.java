@@ -395,7 +395,7 @@ public class KMUtils {
         scratchPad,
         (short) (offset + 8 - timeLen),
         timeLen);
-    Util.arrayCopyNonAtomic(oneMonthMsec, (short) 0, scratchPad, (short) (offset + 8),
+    Util.arrayCopyNonAtomic(thirtyDaysMsec, (short) 0, scratchPad, (short) (offset + 8),
         (short) 8);
     return divide(scratchPad, (short) 0, (short) 8, (short) 16);
   }
