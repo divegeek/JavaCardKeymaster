@@ -95,8 +95,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
   // Entropy
   private RandomData rng;
 
-  private boolean isProvisionLocked;
-
   private static KMAndroidSEProvider androidSEProvider = null;
 
   public static KMAndroidSEProvider getInstance() {
@@ -1134,17 +1132,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     ((KMHmacKey) rkpMacKey).setKey(keyData, offset, length);
     return rkpMacKey;
   }
-  
-  public void setProvisionLocked(boolean locked) {
-    JCSystem.beginTransaction();
-    isProvisionLocked = locked;
-    JCSystem.commitTransaction();
-  }
 
-  public boolean isProvisionLocked() {
-    return isProvisionLocked;
-  }
-  
   @Override
   public short messageDigest256(byte[] inBuff, short inOffset,
       short inLength, byte[] outBuff, short outOffset) {
@@ -1173,21 +1161,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     return flag;
   }
-  
-  private byte mapPurpose(short purpose) {
-    switch (purpose) {
-      case KMType.ENCRYPT:
-        return Cipher.MODE_ENCRYPT;
-      case KMType.DECRYPT:
-        return Cipher.MODE_DECRYPT;
-      case KMType.SIGN:
-        return Signature.MODE_SIGN;
-      case KMType.VERIFY:
-        return Signature.MODE_VERIFY;
-    }
-    return -1;
-  }
-  
+
   @Override
   public void onSave(Element element, byte interfaceType, Object object) {
     element.write(interfaceType);
@@ -1237,7 +1211,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
         return KMECDeviceUniqueKey.onRestore((KeyPair) element.readObject());
       case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
-          return KMHmacKey.onRestore((HMACKey) element.readObject());  
+          return KMHmacKey.onRestore((HMACKey) element.readObject());
       default:
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
@@ -1246,23 +1220,30 @@ public class KMAndroidSEProvider implements KMSEProvider {
   
   @Override
   public short getBackupPrimitiveByteCount(byte interfaceType) {
+    short primitiveCount = 1; // interface type
     switch (interfaceType) {
       case KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY:
-        return KMHmacKey.getBackupPrimitiveByteCount();
+        primitiveCount += KMHmacKey.getBackupPrimitiveByteCount();
+        break;
       case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
-        return KMAESKey.getBackupPrimitiveByteCount();
+        primitiveCount += KMAESKey.getBackupPrimitiveByteCount();
+        break;
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
-        return KMHmacKey.getBackupPrimitiveByteCount();
+        primitiveCount += KMHmacKey.getBackupPrimitiveByteCount();
+        break;
       case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
-        return KMECPrivateKey.getBackupPrimitiveByteCount();
+        primitiveCount += KMECPrivateKey.getBackupPrimitiveByteCount();
+        break;
       case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
-        return KMECDeviceUniqueKey.getBackupPrimitiveByteCount();
+        primitiveCount += KMECDeviceUniqueKey.getBackupPrimitiveByteCount();
+        break;
       case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
-          return KMHmacKey.getBackupPrimitiveByteCount();  
+        primitiveCount += KMHmacKey.getBackupPrimitiveByteCount();
+        break;
       default:
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    return 0;
+    return primitiveCount;
   }
 
   @Override

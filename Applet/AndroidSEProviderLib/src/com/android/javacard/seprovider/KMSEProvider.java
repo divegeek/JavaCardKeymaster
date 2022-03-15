@@ -715,10 +715,4 @@ public interface KMSEProvider {
   KMRkpMacKey createRkpMacKey(KMRkpMacKey createComputedHmacKey, byte[] keyData,
       short offset, short length);
 
-  /**
-   * Returns true if provision is locked.
-   */
-  public boolean isProvisionLocked();
-
-
 }

@@ -68,11 +68,11 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private static final byte PROVISION_STATUS_ATTEST_IDS = 0x08;
   private static final byte PROVISION_STATUS_PRESHARED_SECRET = 0x10;
   private static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x20;
+  private static final byte PROVISION_STATUS_DEVICE_UNIQUE_KEY = 0x40;
+  private static final byte PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = (byte) 0x80;
 
   public static final short SHARED_SECRET_KEY_SIZE = 32;
 
-  private static byte keymasterState = ILLEGAL_STATE;
-  private static byte provisionStatus = NOT_PROVISIONED;
   // Package version.
   protected short packageVersion;
 
@@ -104,11 +104,14 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         }
       }
       short apduIns = validateApdu(apdu);
+      if (apduIns == KMType.INVALID_VALUE) {
+          return;
+      }
       if (((KMAndroidSEProvider) seProvider).isPowerReset()) {
         super.powerReset();
       }
 
-      if (((KMAndroidSEProvider) seProvider).isProvisionLocked()) {
+      if (kmDataStore.isProvisionLocked()) {
         switch (apduIns) {
           case INS_SET_BOOT_PARAMS_CMD:
             processSetBootParamsCmd(apdu);
@@ -118,7 +121,11 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             //set the flag to mark boot ended
             kmDataStore.setBootEndedStatus(true);
             sendError(apdu, KMError.OK);
-            break;   
+            break;
+          
+          case INS_GET_PROVISION_STATUS_CMD:
+            processGetProvisionStatusCmd(apdu);
+            break;
 
           default:
             super.process(apdu);
@@ -126,20 +133,17 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         }
         return;
       }
-
-      if (apduIns == KMType.INVALID_VALUE) {
-        return;
-      }
+      
       switch (apduIns) {
         case INS_PROVISION_ATTEST_IDS_CMD:
           processProvisionAttestIdsCmd(apdu);
-          provisionStatus |= PROVISION_STATUS_ATTEST_IDS;
+          kmDataStore.setProvisionStatus(PROVISION_STATUS_ATTEST_IDS);
           sendError(apdu, KMError.OK);
           break;
 
         case INS_PROVISION_PRESHARED_SECRET_CMD:
           processProvisionPreSharedSecretCmd(apdu);
-          provisionStatus |= PROVISION_STATUS_PRESHARED_SECRET;
+          kmDataStore.setProvisionStatus(PROVISION_STATUS_PRESHARED_SECRET);
           sendError(apdu, KMError.OK);
           break;
 
@@ -152,7 +156,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           break;
 
         case INS_SET_BOOT_PARAMS_CMD:
-
           processSetBootParamsCmd(apdu);
           break;
 
@@ -165,7 +168,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           break;
 
         default:
-          super.process(apdu);
+          // Allow other commands only if provision is completed.
+          if (isProvisioningComplete()) {
+            super.process(apdu);
+          } else {
+            ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+          }
           break;
       }
     } catch (KMException exception) {
@@ -199,6 +207,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
+    kmDataStore.setProvisionStatus(PROVISION_STATUS_DEVICE_UNIQUE_KEY);
     sendError(apdu, KMError.OK);
   }
 
@@ -245,6 +254,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       KMException.throwIt(KMError.STATUS_FAILED);
     }
     kmDataStore.persistAdditionalCertChain(buffer, bufferStartOffset, bufferLength);
+    kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
     //reclaim memory
     repository.reclaimMemory(bufferLength);
     sendError(apdu, KMError.OK);
@@ -328,9 +338,11 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   }
 
   private void processGetProvisionStatusCmd(APDU apdu) {
+    byte[] scratchpad = apdu.getBuffer();
+    kmDataStore.getProvisionStatus(scratchpad, (short) 0);
     short resp = KMArray.instance((short) 2);
     KMArray.cast(resp).add((short) 0, buildErrorStatus(KMError.OK));
-    KMArray.cast(resp).add((short) 1, KMInteger.uint_16(provisionStatus));
+    KMArray.cast(resp).add((short) 1, KMInteger.uint_8(scratchpad[0]));
     sendOutgoing(apdu, resp);
   }
 
@@ -390,10 +402,29 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     super.reboot();
     sendError(apdu, KMError.OK);
   }
+  
+  private boolean isProvisioningComplete() {
+	short dInex = repository.allocReclaimableMemory((short)1);
+	byte data[] = repository.getHeap();
+    kmDataStore.getProvisionStatus(data, dInex);
+    boolean result = false;
+    if ((0 != (data[dInex] & PROVISION_STATUS_DEVICE_UNIQUE_KEY))
+        && (0 != (data[dInex] & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
+        && (0 != (data[dInex]  & PROVISION_STATUS_PRESHARED_SECRET))) {
+    	result = true;
+    }
+    repository.reclaimMemory((short)1);
+    return result;
+  }
 
   private void processLockProvisioningCmd(APDU apdu) {
-    ((KMAndroidSEProvider) seProvider).setProvisionLocked(true);
-    sendError(apdu, KMError.OK);
+    if (isProvisioningComplete()) {
+      kmDataStore.setProvisionLocked();
+      kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
+      sendError(apdu, KMError.OK);
+    } else {
+      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+    }
   }
 
   @Override
@@ -452,15 +483,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     element.write(packageVersion);
     kmDataStore.onSave(element);
     return element;	
-  }
-
-  private short computePrimitveDataSize() {
-    // provisionStatus + keymasterState
-    return (short) 2;
-  }
-
-  private short computeObjectCount() {
-    return (short) 0;
   }
 
   private short validateApdu(APDU apdu) {
