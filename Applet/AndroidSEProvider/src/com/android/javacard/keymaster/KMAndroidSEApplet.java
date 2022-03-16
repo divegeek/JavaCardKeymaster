@@ -104,6 +104,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         }
       }
       short apduIns = validateApdu(apdu);
+      if (apduIns == KMType.INVALID_VALUE) {
+          return;
+      }
       if (((KMAndroidSEProvider) seProvider).isPowerReset()) {
         super.powerReset();
       }
@@ -130,10 +133,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         }
         return;
       }
-
-      if (apduIns == KMType.INVALID_VALUE) {
-        return;
-      }
+      
       switch (apduIns) {
         case INS_PROVISION_ATTEST_IDS_CMD:
           processProvisionAttestIdsCmd(apdu);
@@ -169,7 +169,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
         default:
           // Allow other commands only if provision is completed.
-          if (isProvisioningComplete(apdu.getBuffer())) {
+          if (isProvisioningComplete()) {
             super.process(apdu);
           } else {
             ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
@@ -402,21 +402,23 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     super.reboot();
     sendError(apdu, KMError.OK);
   }
-  
-  private boolean isProvisioningComplete(byte[] scratchPad) {
-    kmDataStore.getProvisionStatus(scratchPad, (short) 0);
-    if ((0 != (scratchPad[0] & PROVISION_STATUS_DEVICE_UNIQUE_KEY))
-        && (0 != (scratchPad[0] & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
-        && (0 != (scratchPad[0]  & PROVISION_STATUS_PRESHARED_SECRET))) {
-      return true;
-    } else {
-      return false;
+
+  private boolean isProvisioningComplete() {
+	short dInex = repository.allocReclaimableMemory((short)1);
+	byte data[] = repository.getHeap();
+    kmDataStore.getProvisionStatus(data, dInex);
+    boolean result = false;
+    if ((0 != (data[dInex] & PROVISION_STATUS_DEVICE_UNIQUE_KEY))
+        && (0 != (data[dInex] & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
+        && (0 != (data[dInex]  & PROVISION_STATUS_PRESHARED_SECRET))) {
+    	result = true;
     }
+    repository.reclaimMemory((short)1);
+    return result;
   }
 
   private void processLockProvisioningCmd(APDU apdu) {
-    byte[] scratchPad = apdu.getBuffer();
-    if (isProvisioningComplete(scratchPad)) {
+    if (isProvisioningComplete()) {
       kmDataStore.setProvisionLocked();
       kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
       sendError(apdu, KMError.OK);

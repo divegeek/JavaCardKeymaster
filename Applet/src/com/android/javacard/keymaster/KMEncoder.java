@@ -273,6 +273,9 @@ public class KMEncoder {
 
   private void encodeTag(short tagType, short exp) {
     switch (tagType) {
+      case KMType.BIGNUM_TAG:
+        encodeBignumTag(exp);
+      return;
       case KMType.BYTES_TAG:
         encodeBytesTag(exp);
         return;
@@ -379,6 +382,11 @@ public void encodeArrayOnlyLength(short arrLength, byte[] buffer, short offset, 
   private void encodeIntegerTag(short obj) {
     writeTag(KMIntegerTag.cast(obj).getTagType(), KMIntegerTag.cast(obj).getKey());
     encode(KMIntegerTag.cast(obj).getValue());
+  }
+  
+  private void encodeBignumTag(short obj) {
+    writeTag(KMBignumTag.getTagType(obj), KMBignumTag.getKey(obj));
+    encode(KMBignumTag.getValue(obj));
   }
 
   private void encodeBytesTag(short obj) {

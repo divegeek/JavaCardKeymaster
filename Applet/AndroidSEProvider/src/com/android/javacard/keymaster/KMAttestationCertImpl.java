@@ -95,10 +95,11 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final short[] swTagIds = {
       KMType.ATTESTATION_APPLICATION_ID,
       KMType.CREATION_DATETIME,
+      KMType.ALLOW_WHILE_ON_BODY,
+      KMType.USAGE_COUNT_LIMIT,
       KMType.USAGE_EXPIRE_DATETIME,
       KMType.ORIGINATION_EXPIRE_DATETIME,
       KMType.ACTIVE_DATETIME,
-      KMType.UNLOCKED_DEVICE_REQUIRED
   };
 
   // Below are the allowed hardwareEnforced Authorization tags inside the attestation certificate's extension.
@@ -109,11 +110,15 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
       KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
       KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
-      KMType.ORIGIN, KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE,
-      KMType.NO_AUTH_REQUIRED, KMType.USER_SECURE_ID,
-      KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE, KMType.MIN_MAC_LENGTH,
-      KMType.CALLER_NONCE, KMType.PADDING, KMType.DIGEST, KMType.BLOCK_MODE,
-      KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE};
+      KMType.ORIGIN,  KMType.UNLOCKED_DEVICE_REQUIRED, 
+      KMType.TRUSTED_CONFIRMATION_REQUIRED,
+      KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE,
+      KMType.NO_AUTH_REQUIRED, KMType.EARLY_BOOT_ONLY,
+      KMType.ROLLBACK_RESISTANCE, KMType.RSA_OAEP_MGF_DIGEST,
+      KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE,
+      KMType.PADDING, KMType.DIGEST,
+      KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE 
+   };
 
   // Validity is not fixed field
   // Subject is a fixed field with only CN= Android Keystore Key - same for all the keys
