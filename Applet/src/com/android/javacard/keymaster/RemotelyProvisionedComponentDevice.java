@@ -236,11 +236,12 @@ public class RemotelyProvisionedComponentDevice {
     // Make the response
     // Author name - Google.
     final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
-    short respPtr = KMArray.instance((short) 3);
+    short respPtr = KMArray.instance((short) 4);
     KMArray resp = KMArray.cast(respPtr);
-    resp.add((short) 0, KMInteger.uint_16(RKP_VERSION));
-    resp.add((short) 1, KMByteBlob.instance(google, (short) 0, (short) google.length));
-    resp.add((short) 2, KMInteger.uint_8(KMType.RKP_CURVE_P256));
+    resp.add((short) 0, KMInteger.uint_16(KMError.OK));
+    resp.add((short) 1, KMInteger.uint_16(RKP_VERSION));
+    resp.add((short) 2, KMByteBlob.instance(google, (short) 0, (short) google.length));
+    resp.add((short) 3, KMInteger.uint_8(KMType.RKP_CURVE_P256));
     KMKeymasterApplet.sendOutgoing(apdu, respPtr);
   }
 
