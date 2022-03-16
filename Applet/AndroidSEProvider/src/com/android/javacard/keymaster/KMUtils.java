@@ -34,8 +34,6 @@ public class KMUtils {
       0, 0, 0, 0, (byte) 0x9C, (byte) 0xBE, (byte) 0xBD, 0x50}; // 2629746000 msec
   public static final byte[] leapYearMsec = {
       0, 0, 0, 0x07, (byte) 0x5C, (byte) 0xD7, (byte) 0x88, 0x00}; //31622400000;
-  public static byte[] thirtyDaysMsec = {
-          0, 0, 0, 0, (byte) 0x9A, (byte) 0x7E, (byte) 0xC8, 0}; //2592000000 msec
   public static final byte[] yearMsec = {
       0, 0, 0, 0x07, 0x57, (byte) 0xB1, 0x2C, 0x00}; //31536000000
   //Leap year(366) + 3 * 365
@@ -395,7 +393,7 @@ public class KMUtils {
         scratchPad,
         (short) (offset + 8 - timeLen),
         timeLen);
-    Util.arrayCopyNonAtomic(oneMonthMsec, (short) 0, scratchPad, (short) (offset + 8),
+    Util.arrayCopyNonAtomic(ThirtDaysMonthMsec, (short) 0, scratchPad, (short) (offset + 8),
         (short) 8);
     return divide(scratchPad, (short) 0, (short) 8, (short) 16);
   }
