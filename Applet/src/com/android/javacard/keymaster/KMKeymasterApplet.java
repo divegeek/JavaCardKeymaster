@@ -2870,7 +2870,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // As per specification, Early boot keys may not be imported at all, if Tag::EARLY_BOOT_ONLY is
     // provided to IKeyMintDevice::importKey
     KMTag.assertAbsence(params, KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, KMError.EARLY_BOOT_ENDED);
-    
+    //Check if the tags are supported.
+    if (KMKeyParameters.hasUnsupportedTags(params)) {
+      KMException.throwIt(KMError.UNSUPPORTED_TAG);
+    }   
     // Algorithm must be present
     KMTag.assertPresence(params, KMType.ENUM_TAG, KMType.ALGORITHM, KMError.INVALID_ARGUMENT);
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, params);
@@ -3323,7 +3326,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // As per specification Early boot keys may be created after early boot ended.
     // Algorithm must be present
     KMTag.assertPresence(data[KEY_PARAMETERS], KMType.ENUM_TAG, KMType.ALGORITHM, KMError.INVALID_ARGUMENT);
-   
+    
+    //Check if the tags are supported.
+    if (KMKeyParameters.hasUnsupportedTags(data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.UNSUPPORTED_TAG);
+    }
+    
     short attKeyPurpose =
             KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, data[KEY_PARAMETERS]);
     // ATTEST_KEY cannot be combined with any other purpose.
