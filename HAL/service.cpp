@@ -22,17 +22,23 @@
 
 #include "JavacardKeyMintDevice.h"
 #include <aidl/android/hardware/security/keymint/SecurityLevel.h>
-
+#include <android-base/properties.h>
 #include "JavacardSecureElement.h"
 #include "JavacardSharedSecret.h"
 #include "keymint_utils.h"
 #include "JavacardRemotelyProvisionedComponentDevice.h"
 #include <SocketTransport.h>
+#include <OmapiTransport.h>
 
 using aidl::android::hardware::security::keymint::JavacardKeyMintDevice;
 using aidl::android::hardware::security::keymint::JavacardSharedSecret;
 using aidl::android::hardware::security::keymint::SecurityLevel;
 using namespace keymint::javacard;
+
+#define PROP_BUILD_QEMU              "ro.kernel.qemu"
+#define PROP_BUILD_FINGERPRINT       "ro.build.fingerprint"
+// Cuttlefish build fingerprint substring.
+#define CUTTLEFISH_FINGERPRINT_SS    "aosp_cf_"
 
 template <typename T, class... Args> std::shared_ptr<T> addService(Args&&... args) {
     std::shared_ptr<T> ser = ndk::SharedRefBase::make<T>(std::forward<Args>(args)...);
@@ -44,11 +50,31 @@ template <typename T, class... Args> std::shared_ptr<T> addService(Args&&... arg
     return ser;
 }
 
+std::shared_ptr<ITransport> getTransportInstance() {
+    bool isEmulator = false;
+    // Check if the current build is for emulator or device.
+    isEmulator = android::base::GetBoolProperty(PROP_BUILD_QEMU, false);
+    if (!isEmulator) {
+        std::string fingerprint = android::base::GetProperty(PROP_BUILD_FINGERPRINT, "");
+        if (!fingerprint.empty()) {
+            if (fingerprint.find(CUTTLEFISH_FINGERPRINT_SS, 0) != std::string::npos) {
+                isEmulator = true;
+            }
+        }
+    }
+
+    if (!isEmulator) {
+        return std::make_shared<OmapiTransport>();
+    } else {
+        return std::make_shared<SocketTransport>();
+    }
+}
+
 int main() {
     ABinderProcess_setThreadPoolMaxThreadCount(0);
     // Javacard Secure Element
     std::shared_ptr<JavacardSecureElement> card =
-        std::make_shared<JavacardSecureElement>(std::make_shared<SocketTransport>(), getOsVersion(),
+        std::make_shared<JavacardSecureElement>(getTransportInstance(), getOsVersion(),
                                                 getOsPatchlevel(), getVendorPatchlevel());
     // Add Keymint Service
     addService<JavacardKeyMintDevice>(card);

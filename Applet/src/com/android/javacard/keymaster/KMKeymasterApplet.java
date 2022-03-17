@@ -1220,7 +1220,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return cert;
   }
 
-//TODO remove hwParameters when this is refactored.
+
   private KMAttestationCert makeAttestationCert(short attKeyBlob, short attKeyParam,
       short attChallenge, short issuer, short hwParameters, short swParameters,  byte[] scratchPad) {
     KMAttestationCert cert = makeCommonCert(scratchPad);
@@ -3367,6 +3367,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     makeKeyCharacteristics(scratchPad);
     generateAttestation(data[ATTEST_KEY_BLOB], data[ATTEST_KEY_PARAMS],scratchPad);
     createEncryptedKeyBlob(scratchPad);
+    // Remove custom tags from key characteristics
+    short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
+    if(teeParams != KMType.INVALID_VALUE) {
+      KMKeyParameters.cast(teeParams).deleteCustomTags();
+    }
     // prepare the response
     short resp = KMArray.instance((short) 4);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
@@ -3420,7 +3425,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     switch (mode){
       case KMType.ATTESTATION_CERT:
-        cert = makeAttestationCert(attKeyBlob,attKeyParam, attChallenge, data[ATTEST_KEY_ISSUER],data[SB_PARAMETERS],
+        cert = makeAttestationCert(attKeyBlob,attKeyParam, attChallenge, data[ATTEST_KEY_ISSUER],data[HW_PARAMETERS],
             data[SW_PARAMETERS], scratchPad);
         break;
       case KMType.SELF_SIGNED_CERT:

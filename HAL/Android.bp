@@ -55,13 +55,17 @@ cc_library {
     vendor_available: true,
     srcs: [
         "SocketTransport.cpp",
+	"OmapiTransport.cpp"
     ],
     export_include_dirs: [
         "."
     ],
     shared_libs: [
+        "libbinder",
         "libbase",
         "liblog",
+        "libbinder_ndk",
+        "android.se.omapi-V1-ndk",
     ],
 }
 
@@ -90,6 +94,7 @@ cc_binary {
         "libjc_keymint_transport",
         "liblog",
         "libutils",
+        "android.se.omapi-V1-ndk",
     ],
     srcs: [
         "service.cpp",
