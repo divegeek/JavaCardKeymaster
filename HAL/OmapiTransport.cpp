@@ -38,7 +38,7 @@ bool OmapiTransport::initialize() {
     LOG(DEBUG) << "Initialize the secure element connection";
 
     // Get OMAPI vendor stable service handler
-    ::ndk::SpAIBinder ks2Binder(AServiceManager_getService(omapiServiceName));
+    ::ndk::SpAIBinder ks2Binder(AServiceManager_checkService(omapiServiceName));
     omapiSeService = aidl::android::se::omapi::ISecureElementService::fromBinder(ks2Binder);
 
     if (omapiSeService == nullptr) {
