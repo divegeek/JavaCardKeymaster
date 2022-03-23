@@ -33,6 +33,7 @@
 #include <vector>
 
 namespace aidl::android::hardware::security::keymint {
+using km_utils::KmParamSet;
 using namespace ::keymaster;
 using namespace ::keymint::javacard;
 
@@ -81,18 +82,36 @@ ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& key
     cppbor::Array array;
     // add key params
     cbor_.addKeyparameters(array, keyParams);
-    // add attestation key if any
-    cbor_.addAttestationKey(array, attestationKey);
     auto [item, err] = card_->sendRequest(Instruction::INS_GENERATE_KEY_CMD, array);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in sending generateKey.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
-        !cbor_.getKeyCharacteristics(item, 2, creationResult->keyCharacteristics) ||
-        !cbor_.getCertificateChain(item, 3, creationResult->certificateChain)) {
+        !cbor_.getKeyCharacteristics(item, 2, creationResult->keyCharacteristics)) {
         LOG(ERROR) << "Error in decoding og response in generateKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+    }
+    
+    AuthorizationSet paramSet;
+    paramSet.Reinitialize(KmParamSet(keyParams));
+    // Call attestKey only Asymmetric algorithms.
+    keymaster_algorithm_t algorithm;
+    paramSet.GetTagValue(TAG_ALGORITHM, &algorithm);
+    if (algorithm == KM_ALGORITHM_RSA || algorithm == KM_ALGORITHM_EC) { 
+        cppbor::Array attestKeyArray;
+        attestKeyArray.add(creationResult->keyBlob);
+        cbor_.addKeyparameters(attestKeyArray, keyParams);
+        cbor_.addAttestationKey(attestKeyArray, attestationKey);
+        auto [item, err] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
+        if (err != KM_ERROR_OK) {
+            LOG(ERROR) << "Failed in attestKey err: ";
+            return km_utils::kmError2ScopedAStatus(err);
+        }
+        if (!cbor_.getCertificateChain(item, 1, creationResult->certificateChain)) {
+            LOG(ERROR) << "Error in decoding og response in generateKey.";
+            return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+        }
     }
     return ScopedAStatus::ok();
 }
