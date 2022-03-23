@@ -479,7 +479,7 @@ public interface KMSEProvider {
    * @return length of the decrypted data.
    */
   short ecSign256(
-      KMDeviceUniqueKey ecPrivKey,
+      KMDeviceUniqueKeyPair ecPrivKey,
       byte[] inputDataBuf,
       short inputDataStart,
       short inputDataLength,
@@ -626,7 +626,7 @@ public interface KMSEProvider {
    * @param privKeyLen private key buffer length.
    * @return instance of KMDeviceUniqueKey.
    */
-  KMDeviceUniqueKey createDeviceUniqueKey(KMDeviceUniqueKey key,
+  KMDeviceUniqueKeyPair createDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
       byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff, short privKeyLen);
   

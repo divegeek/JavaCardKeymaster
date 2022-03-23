@@ -20,7 +20,7 @@ import org.globalplatform.upgrade.OnUpgradeListener;
 import org.globalplatform.upgrade.UpgradeManager;
 
 import com.android.javacard.seprovider.KMAndroidSEProvider;
-import com.android.javacard.seprovider.KMDeviceUniqueKey;
+import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMError;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMType;
@@ -49,7 +49,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private static final byte INS_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 4;
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5;
-  private static final byte INS_PROVISION_DEVICE_UNIQUE_KEY_CMD =
+  private static final byte INS_PROVISION_DEVICE_UNIQUE_KEY_PAIR_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 6;
   private static final byte INS_PROVISION_ADDITIONAL_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 7;
@@ -159,8 +159,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           processSetBootParamsCmd(apdu);
           break;
 
-        case INS_PROVISION_DEVICE_UNIQUE_KEY_CMD:
-          processProvisionDeviceUniqueKey(apdu);
+        case INS_PROVISION_DEVICE_UNIQUE_KEY_PAIR_CMD:
+          processProvisionDeviceUniqueKeyPair(apdu);
           break;
 
         case INS_PROVISION_ADDITIONAL_CERT_CHAIN_CMD:
@@ -189,7 +189,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     }
   }
 
-  private static void processProvisionDeviceUniqueKey(APDU apdu) {
+  private static void processProvisionDeviceUniqueKeyPair(APDU apdu) {
     // Re-purpose the apdu buffer as scratch pad.
     byte[] scratchPad = apdu.getBuffer();
     short arr = KMArray.instance((short) 1);
@@ -201,7 +201,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     short pubKeyLen = KMCoseKey.cast(coseKey).getEcdsa256PublicKey(scratchPad, (short) 0);
     short privKeyLen = KMCoseKey.cast(coseKey).getPrivateKey(scratchPad, pubKeyLen);
     //Store the Device unique Key.
-    kmDataStore.createDeviceUniqueKey(scratchPad, (short) 0, pubKeyLen, scratchPad,
+    kmDataStore.createDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
         pubKeyLen, privKeyLen);
     short bcc = generateBcc(false, scratchPad);
     short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
@@ -244,7 +244,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             srcBuffer, null);
     // Compare the DK_Pub.
     short pubKeyLen = KMCoseKey.cast(leafCoseKey).getEcdsa256PublicKey(srcBuffer, (short) 0);
-    KMDeviceUniqueKey uniqueKey = kmDataStore.getDeviceUniqueKey(false);
+    KMDeviceUniqueKeyPair uniqueKey = kmDataStore.getDeviceUniqueKeyPair(false);
     if (uniqueKey == null) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }

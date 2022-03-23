@@ -6,7 +6,7 @@ import com.android.javacard.seprovider.KMAESKey;
 import com.android.javacard.seprovider.KMAttestationKey;
 import com.android.javacard.seprovider.KMComputedHmacKey;
 import com.android.javacard.seprovider.KMDataStoreConstants;
-import com.android.javacard.seprovider.KMDeviceUniqueKey;
+import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMECDeviceUniqueKey;
 import com.android.javacard.seprovider.KMECPrivateKey;
 import com.android.javacard.seprovider.KMError;
@@ -97,8 +97,8 @@ public class KMKeymintDataStore implements KMUpgradable {
   private byte[] additionalCertChain;
   private byte[] bcc;
   private KMMasterKey masterKey;
-  private KMDeviceUniqueKey testDeviceUniqueKey;
-  private KMDeviceUniqueKey deviceUniqueKey;
+  private KMDeviceUniqueKeyPair testDeviceUniqueKeyPair;
+  private KMDeviceUniqueKeyPair deviceUniqueKeyPair;
   private KMPreSharedKey preSharedKey;
   private KMComputedHmacKey computedHmacKey;
   private KMRkpMacKey rkpMacKey;
@@ -530,36 +530,36 @@ public class KMKeymintDataStore implements KMUpgradable {
     return computedHmacKey;
   }
   
-  public KMDeviceUniqueKey createTestDeviceUniqueKey(byte[] pubKey, short pubKeyOff, short pubKeyLen,
+  public KMDeviceUniqueKeyPair createTestDeviceUniqueKeyPair(byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff, short privKeyLen) {
-    if (testDeviceUniqueKey == null) {
-      testDeviceUniqueKey = seProvider.createDeviceUniqueKey(testDeviceUniqueKey, pubKey, pubKeyOff,
+    if (testDeviceUniqueKeyPair == null) {
+      testDeviceUniqueKeyPair = seProvider.createDeviceUniqueKeyPair(testDeviceUniqueKeyPair, pubKey, pubKeyOff,
           pubKeyLen, privKey,
           privKeyOff, privKeyLen);
     } else {
-      seProvider.createDeviceUniqueKey(testDeviceUniqueKey, pubKey, pubKeyOff, pubKeyLen, privKey,
+      seProvider.createDeviceUniqueKeyPair(testDeviceUniqueKeyPair, pubKey, pubKeyOff, pubKeyLen, privKey,
           privKeyOff,
           privKeyLen);
     }
-    return testDeviceUniqueKey;
+    return testDeviceUniqueKeyPair;
   }
 
-  public KMDeviceUniqueKey createDeviceUniqueKey(byte[] pubKey, short pubKeyOff, short pubKeyLen,
+  public KMDeviceUniqueKeyPair createDeviceUniqueKeyPair(byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff,
       short privKeyLen) {
-    if (deviceUniqueKey == null) {
-      deviceUniqueKey = seProvider.createDeviceUniqueKey(deviceUniqueKey, pubKey, pubKeyOff,
+    if (deviceUniqueKeyPair == null) {
+      deviceUniqueKeyPair = seProvider.createDeviceUniqueKeyPair(deviceUniqueKeyPair, pubKey, pubKeyOff,
           pubKeyLen, privKey,
           privKeyOff, privKeyLen);
     } else {
-      seProvider.createDeviceUniqueKey(deviceUniqueKey, pubKey, pubKeyOff, pubKeyLen, privKey,
+      seProvider.createDeviceUniqueKeyPair(deviceUniqueKeyPair, pubKey, pubKeyOff, pubKeyLen, privKey,
           privKeyOff, privKeyLen);
     }
-    return deviceUniqueKey;
+    return deviceUniqueKeyPair;
   }
   
-  public KMDeviceUniqueKey getDeviceUniqueKey(boolean testMode) {
-    return ((KMDeviceUniqueKey) (testMode ? testDeviceUniqueKey : deviceUniqueKey));
+  public KMDeviceUniqueKeyPair getDeviceUniqueKeyPair(boolean testMode) {
+    return ((KMDeviceUniqueKeyPair) (testMode ? testDeviceUniqueKeyPair : deviceUniqueKeyPair));
   }
   
   public void createRkpMacKey(byte[] keydata, short offset, short length) {
@@ -801,7 +801,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     seProvider.onSave(element, KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY,
         computedHmacKey);
     seProvider.onSave(element, KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY, preSharedKey);
-    seProvider.onSave(element, KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY, deviceUniqueKey);
+    seProvider.onSave(element, KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR, deviceUniqueKeyPair);
     seProvider.onSave(element, KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY, rkpMacKey);
   }
 
@@ -830,7 +830,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     masterKey = (KMMasterKey) seProvider.onResore(element);
     computedHmacKey = (KMComputedHmacKey) seProvider.onResore(element);
     preSharedKey = (KMPreSharedKey) seProvider.onResore(element);
-    deviceUniqueKey = (KMDeviceUniqueKey) seProvider.onResore(element);
+    deviceUniqueKeyPair = (KMDeviceUniqueKeyPair) seProvider.onResore(element);
     rkpMacKey = (KMRkpMacKey) seProvider.onResore(element);
   }
 
@@ -844,7 +844,7 @@ public class KMKeymintDataStore implements KMUpgradable {
         seProvider.getBackupPrimitiveByteCount(
             KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY) +
         seProvider.getBackupPrimitiveByteCount(KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY) +
-        seProvider.getBackupPrimitiveByteCount( KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY) + 
+        seProvider.getBackupPrimitiveByteCount( KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR) + 
             		seProvider.getBackupPrimitiveByteCount(KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY));
   }
 
@@ -859,7 +859,7 @@ public class KMKeymintDataStore implements KMUpgradable {
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY) +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY) +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY) +
-        seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY) +
+        seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR) +
             		seProvider.getBackupObjectCount(
             		        KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY));
   }
