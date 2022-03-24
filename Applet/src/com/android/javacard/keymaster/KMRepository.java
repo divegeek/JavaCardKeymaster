@@ -32,7 +32,7 @@ import javacard.framework.Util;
  */
 public class KMRepository {
 
-  public static final short HEAP_SIZE = 13000;
+  public static final short HEAP_SIZE = 10000;
 
   // Class Attributes
   private byte[] heap;

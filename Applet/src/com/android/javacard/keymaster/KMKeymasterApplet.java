@@ -1288,7 +1288,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // Add Tags
     addTags(hwParameters, true, cert);
-    addTags(swParameters, false, cert);
+    short swParams = KMKeyParameters.makeKeystoreEnforced(data[KEY_PARAMETERS], scratchPad);
+    addTags(swParams, false, cert);
     // Add Device Boot locked status
     cert.deviceLocked(kmDataStore.isDeviceBootLocked());
     // VB data
@@ -3413,10 +3414,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[APP_DATA] =
         KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, data[KEY_PARAMETERS]);
     if (data[APP_ID] != KMTag.INVALID_VALUE) {
-      data[APP_ID] = KMByteTag.getValue(data[APP_ID]);
+      data[APP_ID] = KMByteTag.cast(data[APP_ID]).getValue();
     }
     if (data[APP_DATA] != KMTag.INVALID_VALUE) {
-      data[APP_DATA] = KMByteTag.getValue(data[APP_DATA]);
+      data[APP_DATA] = KMByteTag.cast(data[APP_DATA]).getValue();
     }
 	// parse key blob
     parseEncryptedKeyBlob(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad);
@@ -3478,7 +3479,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     switch (mode){
       case KMType.ATTESTATION_CERT:
-        cert = makeAttestationCert(attKeyBlob,attKeyParam, attChallenge, data[ATTEST_KEY_ISSUER],data[HW_PARAMETERS],
+        cert = makeAttestationCert(attKeyBlob, attKeyParam, attChallenge, data[ATTEST_KEY_ISSUER],data[HW_PARAMETERS],
             data[SW_PARAMETERS], scratchPad);
         break;
       case KMType.SELF_SIGNED_CERT:
@@ -3897,7 +3898,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMArray.cast(params).add((short) 2, data[PUB_KEY]);
     }
 
-    short authIndex = repository.alloc(MAX_AUTH_DATA_SIZE);
+    short authIndex = repository.allocReclaimableMemory(MAX_AUTH_DATA_SIZE);
     short index = 0;
     short len = 0;
     short paramsLen = KMArray.cast(params).length();
@@ -3914,7 +3915,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       index++;
     }
-    data[AUTH_DATA] = authIndex;
+    short authDataIndex = repository.alloc(len);
+    Util.arrayCopyNonAtomic(repository.getHeap(), authIndex, repository.getHeap(), authDataIndex, len);
+    repository.reclaimMemory(MAX_AUTH_DATA_SIZE);
+    data[AUTH_DATA] = authDataIndex;
     data[AUTH_DATA_LENGTH] = len;
   }
 
