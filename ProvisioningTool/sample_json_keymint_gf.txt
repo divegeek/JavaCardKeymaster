@@ -1,0 +1,28 @@
+{
+   "attest_ids": {
+      "brand": "Android",
+      "device": "generic_x86_64",
+      "product": "aosp_x86_64",
+      "serial": "",
+      "imei": "000000000000000",
+      "meid": "000000000000000",
+      "manufacturer": "unknown",
+      "model": "AOSP on x86_64"
+   },
+   "shared_secret": "0000000000000000000000000000000000000000000000000000000000000000",
+   "set_boot_params": {
+      "boot_patch_level": 20220101,
+      "verified_boot_key": "0000000000000000000000000000000000000000000000000000000000000000",
+      "verified_boot_key_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "boot_state": 0,
+      "device_locked": 1
+   },
+   "device_unique_key": "test_resources/batch_key.der",
+   "signer_info": {
+      "signer_name": "Google",
+      "signing_keys": [
+      "test_resources/ca_key.der",
+      "test_resources/intermediate_key.der"
+      ]
+   }
+}
