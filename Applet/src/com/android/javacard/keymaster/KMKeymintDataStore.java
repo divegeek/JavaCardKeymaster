@@ -530,35 +530,35 @@ public class KMKeymintDataStore implements KMUpgradable {
     return computedHmacKey;
   }
   
-  public KMDeviceUniqueKeyPair createTestDeviceUniqueKeyPair(byte[] pubKey, short pubKeyOff, short pubKeyLen,
+  public KMDeviceUniqueKeyPair createRkpTestDeviceUniqueKeyPair(byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff, short privKeyLen) {
     if (testDeviceUniqueKeyPair == null) {
-      testDeviceUniqueKeyPair = seProvider.createDeviceUniqueKeyPair(testDeviceUniqueKeyPair, pubKey, pubKeyOff,
+      testDeviceUniqueKeyPair = seProvider.createRkpDeviceUniqueKeyPair(testDeviceUniqueKeyPair, pubKey, pubKeyOff,
           pubKeyLen, privKey,
           privKeyOff, privKeyLen);
     } else {
-      seProvider.createDeviceUniqueKeyPair(testDeviceUniqueKeyPair, pubKey, pubKeyOff, pubKeyLen, privKey,
+      seProvider.createRkpDeviceUniqueKeyPair(testDeviceUniqueKeyPair, pubKey, pubKeyOff, pubKeyLen, privKey,
           privKeyOff,
           privKeyLen);
     }
     return testDeviceUniqueKeyPair;
   }
 
-  public KMDeviceUniqueKeyPair createDeviceUniqueKeyPair(byte[] pubKey, short pubKeyOff, short pubKeyLen,
+  public KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff,
       short privKeyLen) {
     if (deviceUniqueKeyPair == null) {
-      deviceUniqueKeyPair = seProvider.createDeviceUniqueKeyPair(deviceUniqueKeyPair, pubKey, pubKeyOff,
+      deviceUniqueKeyPair = seProvider.createRkpDeviceUniqueKeyPair(deviceUniqueKeyPair, pubKey, pubKeyOff,
           pubKeyLen, privKey,
           privKeyOff, privKeyLen);
     } else {
-      seProvider.createDeviceUniqueKeyPair(deviceUniqueKeyPair, pubKey, pubKeyOff, pubKeyLen, privKey,
+      seProvider.createRkpDeviceUniqueKeyPair(deviceUniqueKeyPair, pubKey, pubKeyOff, pubKeyLen, privKey,
           privKeyOff, privKeyLen);
     }
     return deviceUniqueKeyPair;
   }
   
-  public KMDeviceUniqueKeyPair getDeviceUniqueKeyPair(boolean testMode) {
+  public KMDeviceUniqueKeyPair getRkpDeviceUniqueKeyPair(boolean testMode) {
     return ((KMDeviceUniqueKeyPair) (testMode ? testDeviceUniqueKeyPair : deviceUniqueKeyPair));
   }
   

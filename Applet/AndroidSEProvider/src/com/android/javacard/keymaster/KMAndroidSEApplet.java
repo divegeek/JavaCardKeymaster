@@ -49,7 +49,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private static final byte INS_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 4;
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5;
-  private static final byte INS_PROVISION_RKP_UNIQUE_DEVICE_KEYPAIR_CMD =
+  private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 6;
   private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 7;
@@ -68,7 +68,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private static final byte PROVISION_STATUS_ATTEST_IDS = 0x08;
   private static final byte PROVISION_STATUS_PRESHARED_SECRET = 0x10;
   private static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x20;
-  private static final byte PROVISION_STATUS_UNIQUE_DEVICE_KEYPAIR = 0x40;
+  private static final byte PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR = 0x40;
   private static final byte PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = (byte) 0x80;
 
   public static final short SHARED_SECRET_KEY_SIZE = 32;
@@ -159,12 +159,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           processSetBootParamsCmd(apdu);
           break;
 
-        case INS_PROVISION_RKP_UNIQUE_DEVICE_KEYPAIR_CMD:
-          processProvisionDeviceUniqueKeyPair(apdu);
+        case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
+          processProvisionRkpDeviceUniqueKeyPair(apdu);
           break;
 
         case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
-          processProvisionAdditionalCertChain(apdu);
+          processProvisionRkpAdditionalCertChain(apdu);
           break;
 
         default:
@@ -189,7 +189,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     }
   }
 
-  private static void processProvisionDeviceUniqueKeyPair(APDU apdu) {
+  private static void processProvisionRkpDeviceUniqueKeyPair(APDU apdu) {
     // Re-purpose the apdu buffer as scratch pad.
     byte[] scratchPad = apdu.getBuffer();
     short arr = KMArray.instance((short) 1);
@@ -201,17 +201,17 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     short pubKeyLen = KMCoseKey.cast(coseKey).getEcdsa256PublicKey(scratchPad, (short) 0);
     short privKeyLen = KMCoseKey.cast(coseKey).getPrivateKey(scratchPad, pubKeyLen);
     //Store the Device unique Key.
-    kmDataStore.createDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
+    kmDataStore.createRkpDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
         pubKeyLen, privKeyLen);
     short bcc = generateBcc(false, scratchPad);
     short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
-    kmDataStore.setProvisionStatus(PROVISION_STATUS_UNIQUE_DEVICE_KEYPAIR);
+    kmDataStore.setProvisionStatus(PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR);
     sendError(apdu, KMError.OK);
   }
 
-  private static void processProvisionAdditionalCertChain(APDU apdu) {
+  private static void processProvisionRkpAdditionalCertChain(APDU apdu) {
     // Prepare the expression to decode
     short headers = KMCoseHeaders.exp();
     short arrInst = KMArray.instance((short) 4);
@@ -244,7 +244,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             srcBuffer, null);
     // Compare the DK_Pub.
     short pubKeyLen = KMCoseKey.cast(leafCoseKey).getEcdsa256PublicKey(srcBuffer, (short) 0);
-    KMDeviceUniqueKeyPair uniqueKey = kmDataStore.getDeviceUniqueKeyPair(false);
+    KMDeviceUniqueKeyPair uniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair(false);
     if (uniqueKey == null) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
@@ -408,7 +408,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 	byte data[] = repository.getHeap();
     kmDataStore.getProvisionStatus(data, dInex);
     boolean result = false;
-    if ((0 != (data[dInex] & PROVISION_STATUS_UNIQUE_DEVICE_KEYPAIR))
+    if ((0 != (data[dInex] & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
         && (0 != (data[dInex] & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
         && (0 != (data[dInex]  & PROVISION_STATUS_PRESHARED_SECRET))) {
     	result = true;
