@@ -1090,7 +1090,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public short ecSign256(KMDeviceUniqueKey ecPrivKey, byte[] inputDataBuf,
+  public short ecSign256(KMDeviceUniqueKeyPair ecPrivKey, byte[] inputDataBuf,
       short inputDataStart, short inputDataLength, byte[] outputDataBuf,
       short outputDataStart) {
     Signature.OneShot signer = null;
@@ -1108,7 +1108,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
   
   @Override
-  public KMDeviceUniqueKey createDeviceUniqueKey(KMDeviceUniqueKey key,
+  public KMDeviceUniqueKeyPair createDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
       byte[] pubKey, short pubKeyOff, short pubKeyLen, byte[] privKey,
       short privKeyOff, short privKeyLen) {
     if (key == null) {
@@ -1118,7 +1118,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     ((KMECDeviceUniqueKey) key).setS(privKey, privKeyOff, privKeyLen);
     ((KMECDeviceUniqueKey) key).setW(pubKey, pubKeyOff, pubKeyLen);
-    return (KMDeviceUniqueKey) key;
+    return (KMDeviceUniqueKeyPair) key;
   }
 
   @Override
@@ -1182,7 +1182,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
         KMECPrivateKey.onSave(element, (KMECPrivateKey) object);
         break;
-      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
+      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
         KMECDeviceUniqueKey.onSave(element, (KMECDeviceUniqueKey) object);
         break;
       case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
@@ -1208,7 +1208,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         return KMHmacKey.onRestore((HMACKey) element.readObject());
       case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
         return KMECPrivateKey.onRestore((KeyPair) element.readObject());
-      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
+      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
         return KMECDeviceUniqueKey.onRestore((KeyPair) element.readObject());
       case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
           return KMHmacKey.onRestore((HMACKey) element.readObject());
@@ -1234,7 +1234,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
         primitiveCount += KMECPrivateKey.getBackupPrimitiveByteCount();
         break;
-      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
+      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
         primitiveCount += KMECDeviceUniqueKey.getBackupPrimitiveByteCount();
         break;
       case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
@@ -1257,7 +1257,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         return KMHmacKey.getBackupObjectCount();
       case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
         return KMECPrivateKey.getBackupObjectCount();
-      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY:
+      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
         return KMECDeviceUniqueKey.getBackupObjectCount();
       case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
           return KMHmacKey.getBackupObjectCount();

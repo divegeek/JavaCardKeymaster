@@ -20,7 +20,7 @@ import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
 import javacard.security.KeyPair;
 
-public class KMECDeviceUniqueKey implements KMDeviceUniqueKey {
+public class KMECDeviceUniqueKey implements KMDeviceUniqueKeyPair {
 
   private KeyPair ecKeyPair;
 

@@ -17,7 +17,7 @@
 package com.android.javacard.keymaster;
 
 import com.android.javacard.seprovider.KMAttestationCert;
-import com.android.javacard.seprovider.KMDeviceUniqueKey;
+import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMHmacKey;
 import com.android.javacard.seprovider.KMSEProvider;
@@ -1221,26 +1221,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
 
-  private KMAttestationCert makeAttestationCert(short attKeyBlob, short attKeyParam,
-      short attChallenge, short issuer, short hwParameters, short swParameters,  byte[] scratchPad) {
+  private KMAttestationCert makeAttestationCert(short attKeyBlob, short attKeyParam, short attChallenge, short issuer,
+      short hwParameters, short swParameters, byte[] scratchPad) {
     KMAttestationCert cert = makeCommonCert(scratchPad);
 
     // App Id and App Data,
     short appId = KMType.INVALID_VALUE;
     short appData = KMType.INVALID_VALUE;
-    if(attKeyParam != KMType.INVALID_VALUE) {
-      appId =
-          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, attKeyParam);
+    if (attKeyParam != KMType.INVALID_VALUE) {
+      appId = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, attKeyParam);
       if (appId != KMTag.INVALID_VALUE) {
         appId = KMByteTag.cast(appId).getValue();
       }
-      appData =
-          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, attKeyParam);
+      appData = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, attKeyParam);
       if (appData != KMTag.INVALID_VALUE) {
         appData = KMByteTag.cast(appData).getValue();
       }
     }
-    //TODO remove following line
     short origBlob = data[KEY_BLOB];
     short pubKey = data[PUB_KEY];
     short privKey = data[SECRET];
@@ -1248,8 +1245,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short attestationKeySecret = KMArray.cast(keyBlob).get(KEY_BLOB_SECRET);
     short attestParam = KMArray.cast(keyBlob).get(KEY_BLOB_PARAMS);
     attestParam = KMKeyCharacteristics.cast(attestParam).getStrongboxEnforced();
-    short attKeyPurpose =
-        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, attestParam);
+    short attKeyPurpose = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, attestParam);
     // If the attest key's purpose is not "attest key" then error.
     if (!KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY)) {
       KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
@@ -1260,45 +1256,43 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, attestParam);
 
-    if(KMEnumTag.cast(alg).getValue() == KMType.RSA) {
+    if (KMEnumTag.cast(alg).getValue() == KMType.RSA) {
       short attestationKeyPublic = KMArray.cast(keyBlob).get(KEY_BLOB_PUB_KEY);
       cert.rsaAttestKey(attestationKeySecret, attestationKeyPublic, KMType.ATTESTATION_CERT);
-    }else{
+    } else {
       cert.ecAttestKey(attestationKeySecret, KMType.ATTESTATION_CERT);
     }
     cert.attestationChallenge(attChallenge);
     cert.issuer(issuer);
-    //TODO remove following line
     data[PUB_KEY] = pubKey;
+    data[SECRET] = privKey;
+    data[KEY_BLOB] = origBlob;
     cert.publicKey(data[PUB_KEY]);
 
     // Save attestation application id - must be present.
-      short attAppId =
-          KMKeyParameters.findTag( KMType.BYTES_TAG, KMType.ATTESTATION_APPLICATION_ID, data[KEY_PARAMETERS]);
-      if (attAppId == KMType.INVALID_VALUE) {
-        KMException.throwIt(KMError.ATTESTATION_APPLICATION_ID_MISSING);
-      }
-      cert.extensionTag(attAppId, false);
-      // unique id byte blob - uses application id and temporal month count of creation time.
-      setUniqueId(cert, scratchPad);
-      // Add Attestation Ids if present
-      addAttestationIds(cert, scratchPad);
+    short attAppId = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.ATTESTATION_APPLICATION_ID, data[KEY_PARAMETERS]);
+    if (attAppId == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.ATTESTATION_APPLICATION_ID_MISSING);
+    }
+    cert.extensionTag(attAppId, false);
+    // unique id byte blob - uses application id and temporal month count of
+    // creation time.
+    setUniqueId(cert, scratchPad);
+    // Add Attestation Ids if present
+    addAttestationIds(cert, scratchPad);
 
-        // Add Tags
-      addTags(hwParameters, true, cert);
-      addTags(swParameters, false, cert);
-      // Add Device Boot locked status
-      cert.deviceLocked(kmDataStore.isDeviceBootLocked());
-      // VB data
-      cert.verifiedBootHash(getVerifiedBootHash(scratchPad));
-      cert.verifiedBootKey(getBootKey(scratchPad));
-      cert.verifiedBootState((byte)kmDataStore.getBootState());
+    // Add Tags
+    addTags(hwParameters, true, cert);
+    addTags(swParameters, false, cert);
+    // Add Device Boot locked status
+    cert.deviceLocked(kmDataStore.isDeviceBootLocked());
+    // VB data
+    cert.verifiedBootHash(getVerifiedBootHash(scratchPad));
+    cert.verifiedBootKey(getBootKey(scratchPad));
+    cert.verifiedBootState((byte) kmDataStore.getBootState());
 
-    //TODO remove the following line
+    // TODO remove the following line
     makeKeyCharacteristics(scratchPad);
-    data[SECRET] = privKey;
-    data[KEY_BLOB] = origBlob;
-
     return cert;
   }
 
@@ -3455,45 +3449,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Initialize the certificate as array of blob
     data[CERTIFICATE] = KMArray.instance((short)1);
     KMArray.cast(data[CERTIFICATE]).add((short)0, certData);
-
-/*
-    boolean rsaCert = KMEnumTag.cast(alg).getValue() == KMType.EC;
-    short appId = KMType.INVALID_VALUE;
-    short appData = KMType.INVALID_VALUE;
-    if(attKeyParam != KMType.INVALID_VALUE) {
-      appId =
-          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, attKeyParam);
-      if (appId != KMTag.INVALID_VALUE) {
-        appId = KMByteTag.cast(appId).getValue();
-      }
-      appData =
-          KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, attKeyParam);
-      if (appData != KMTag.INVALID_VALUE) {
-        appData = KMByteTag.cast(appData).getValue();
-      }
-    }
-
-    KMAttestationCert cert = makeCert(attKeyBlob, appId, appData, scratchPad);
-    if(cert == null) {// No certificate
-      data[CERTIFICATE] = KMArray.instance((short)0);
-      return;
-    }
-
-    // Allocate memory
-    short certData = KMByteBlob.instance(MAX_CERT_SIZE);
-    cert.buffer(KMByteBlob.cast(certData).getBuffer(),
-          KMByteBlob.cast(certData).getStartOff(),
-          KMByteBlob.cast(certData).length());
-    // Build the certificate - this will sign the cert
-    cert.build();
-    // Adjust the start and length of the certificate in the blob
-    KMByteBlob.cast(certData).setStartOff(cert.getCertStart());
-    KMByteBlob.cast(certData).setLength(cert.getCertLength());
-
-    // Initialize the certificate as array of blob
-    data[CERTIFICATE] = KMArray.instance((short)1);
-    KMArray.cast(data[CERTIFICATE]).add((short)0, certData);
-    */
   }
 
   /**
@@ -4100,7 +4055,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (!testMode && kmDataStore.isProvisionLocked()) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
-    KMDeviceUniqueKey deviceUniqueKey = kmDataStore.getDeviceUniqueKey(testMode);
+    KMDeviceUniqueKeyPair deviceUniqueKey = kmDataStore.getDeviceUniqueKeyPair(testMode);
     short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
     short coseKey =
         KMCose.constructCoseKey(
