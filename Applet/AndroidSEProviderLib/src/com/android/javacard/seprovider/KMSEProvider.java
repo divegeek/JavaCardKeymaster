@@ -626,7 +626,7 @@ public interface KMSEProvider {
    * @param privKeyLen private key buffer length.
    * @return instance of KMDeviceUniqueKey.
    */
-  KMDeviceUniqueKeyPair createDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
+  KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
       byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff, short privKeyLen);
   

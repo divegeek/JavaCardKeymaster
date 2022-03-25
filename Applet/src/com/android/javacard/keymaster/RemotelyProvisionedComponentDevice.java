@@ -813,10 +813,10 @@ public class RemotelyProvisionedComponentDevice {
           (short) 128,
           lengths);
       deviceUniqueKeyPair =
-    		storeDataInst.createTestDeviceUniqueKeyPair(scratchPad, (short) 128, lengths[1],
+    		storeDataInst.createRkpTestDeviceUniqueKeyPair(scratchPad, (short) 128, lengths[1],
               scratchPad, (short) 0, lengths[0]);
     } else {
-      deviceUniqueKeyPair = storeDataInst.getDeviceUniqueKeyPair(false);
+      deviceUniqueKeyPair = storeDataInst.getRkpDeviceUniqueKeyPair(false);
     }
     return deviceUniqueKeyPair;
   }
