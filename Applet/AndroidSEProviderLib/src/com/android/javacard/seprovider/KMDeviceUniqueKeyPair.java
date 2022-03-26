@@ -15,7 +15,7 @@
  */
 package com.android.javacard.seprovider;
 
-public interface KMDeviceUniqueKey {
+public interface KMDeviceUniqueKeyPair {
 
   short getPublicKey(byte[] buf, short offset);
 }

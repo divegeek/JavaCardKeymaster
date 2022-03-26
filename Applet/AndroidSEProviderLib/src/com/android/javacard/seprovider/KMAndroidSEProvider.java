@@ -1108,7 +1108,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
   
   @Override
-  public KMDeviceUniqueKeyPair createDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
+  public KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
       byte[] pubKey, short pubKeyOff, short pubKeyLen, byte[] privKey,
       short privKeyOff, short privKeyLen) {
     if (key == null) {
