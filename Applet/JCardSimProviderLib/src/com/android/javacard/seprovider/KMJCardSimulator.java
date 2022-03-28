@@ -1253,8 +1253,8 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public com.android.javacard.seprovider.KMDeviceUniqueKey createDeviceUniqueKey(
-      com.android.javacard.seprovider.KMDeviceUniqueKey key, byte[] pubKey, short pubKeyOff,
+  public KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(
+      KMDeviceUniqueKeyPair key, byte[] pubKey, short pubKeyOff,
       short pubKeyLen, byte[] privKey, short privKeyOff, short privKeyLen) {
     if (key == null) {
       KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
@@ -1262,7 +1262,7 @@ public class KMJCardSimulator implements KMSEProvider {
     }
     ((KMECDeviceUniqueKey) key).setS(privKey, privKeyOff, privKeyLen);
     ((KMECDeviceUniqueKey) key).setW(pubKey, pubKeyOff, pubKeyLen);
-    return (KMDeviceUniqueKey) key;
+    return (KMDeviceUniqueKeyPair) key;
   }
 
   @Override
@@ -1307,7 +1307,7 @@ public class KMJCardSimulator implements KMSEProvider {
 
 
   @Override
-  public short ecSign256(KMDeviceUniqueKey deviceUniqueKey, byte[] inputDataBuf, short inputDataStart,
+  public short ecSign256(KMDeviceUniqueKeyPair deviceUniqueKey, byte[] inputDataBuf, short inputDataStart,
                          short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
     ECPrivateKey key = ((KMECDeviceUniqueKey) deviceUniqueKey).getPrivateKey();
     Signature signer = Signature
