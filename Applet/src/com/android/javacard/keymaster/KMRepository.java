@@ -90,6 +90,7 @@ public class KMRepository {
     if (reclaimIndex < heapIndex[0]) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
+    Util.arrayFillNonAtomic(heap, reclaimIndex, length, (byte) 0);
     reclaimIndex += length;
   }
 
