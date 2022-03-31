@@ -38,6 +38,8 @@ public class KMRepository {
   private byte[] heap;
   private short[] heapIndex;
   private short reclaimIndex;
+  //used for heap profiling
+  public static short[] maxHeapUsage;
 
   // Singleton instance
   private static KMRepository repository;
@@ -49,6 +51,7 @@ public class KMRepository {
   public KMRepository(boolean isUpgrading) {
     heap = JCSystem.makeTransientByteArray(HEAP_SIZE, JCSystem.CLEAR_ON_RESET);
     heapIndex = JCSystem.makeTransientShortArray((short)1, JCSystem.CLEAR_ON_RESET);
+    maxHeapUsage = JCSystem.makeTransientShortArray((short)1, JCSystem.CLEAR_ON_RESET);
     reclaimIndex = HEAP_SIZE;
     repository = this;
   }
@@ -114,5 +117,19 @@ public class KMRepository {
   public byte[] getHeap() {
     return heap;
   }
+  
+  public short getHeapIndex() {
+    return heapIndex[0];
+  }
 
+  public void updateHeapProfileData(short size) {
+    if(size > maxHeapUsage[0]) {
+    	maxHeapUsage[0] = size;
+    }
+  }
+  
+  public short getMaxHeapUsed() {
+	  return maxHeapUsage[0];
+  }
+  
 }
