@@ -750,21 +750,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processDeleteKeyCmd(APDU apdu) {
-    short cmd = deleteKeyCmd(apdu);
-    data[KEY_BLOB] = KMArray.cast(cmd).get((short) 0);
-    try {
-      data[KEY_BLOB] = decoder.decodeArray(keyBlob(),
-          KMByteBlob.cast(data[KEY_BLOB]).getBuffer(),
-          KMByteBlob.cast(data[KEY_BLOB]).getStartOff(),
-          KMByteBlob.cast(data[KEY_BLOB]).length());
-    } catch (ISOException e) {
-      // As per VTS, deleteKey should return KMError.OK but in case if
-      // input is empty then VTS accepts UNIMPLEMENTED errorCode as well.
-      KMException.throwIt(KMError.UNIMPLEMENTED);
-    }
-    if (KMArray.cast(data[KEY_BLOB]).length() < 4) {
-      KMException.throwIt(KMError.INVALID_KEY_BLOB);
-    }
     // Send ok
     sendError(apdu, KMError.OK);
   }
