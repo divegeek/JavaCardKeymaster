@@ -1,20 +1,20 @@
 {
    "attest_ids": {
-      "brand": "generic",
-      "device": "vsoc_x86_64",
-      "product": "aosp_cf_x86_64_phone",
+      "brand": "Android",
+      "device": "generic_x86_64",
+      "product": "aosp_x86_64",
       "serial": "",
       "imei": "000000000000000",
       "meid": "000000000000000",
-      "manufacturer": "Google",
-      "model": "Cuttlefish x86_64 phone"
+      "manufacturer": "unknown",
+      "model": "AOSP on x86_64"
    },
    "shared_secret": "0000000000000000000000000000000000000000000000000000000000000000",
    "set_boot_params": {
       "boot_patch_level": 20220101,
       "verified_boot_key": "0000000000000000000000000000000000000000000000000000000000000000",
       "verified_boot_key_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-      "boot_state": 2,
+      "boot_state": 0,
       "device_locked": 1
    },
    "device_unique_key": "test_resources/batch_key.der",

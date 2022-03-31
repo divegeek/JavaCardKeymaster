@@ -1,8 +1,22 @@
+From 873f771fec1e60fb45d5ccab449cdc859c656910 Mon Sep 17 00:00:00 2001
+From: subrahmanyaman <subrahmanyaman@google.com>
+Date: Mon, 21 Mar 2022 23:01:00 +0000
+Subject: [PATCH] javacard strongbox keymint
+
+Change-Id: Ic6b0dac4b5078fdfdbfa2b13e3260c62acf628cf
+---
+ shared/device.mk                                |  3 +++
+ shared/sepolicy/vendor/file_contexts            |  1 +
+ shared/sepolicy/vendor/hal_keymint_strongbox.te | 16 ++++++++++++++++
+ shared/sepolicy/vendor/service_contexts         |  3 +++
+ 4 files changed, 23 insertions(+)
+ create mode 100644 shared/sepolicy/vendor/hal_keymint_strongbox.te
+
 diff --git a/shared/device.mk b/shared/device.mk
-index 36c66ce18..2f6505d4f 100644
+index 904ddd6ca..3e48f3ac1 100644
 --- a/shared/device.mk
 +++ b/shared/device.mk
-@@ -622,6 +622,9 @@ endif
+@@ -623,6 +623,9 @@ endif
   PRODUCT_PACKAGES += \
      $(LOCAL_KEYMINT_PRODUCT_PACKAGE)
  
@@ -24,6 +38,28 @@ index 6c471b8b8..cc223bdc4 100644
  /vendor/bin/hw/android\.hardware\.keymaster@4\.1-service.remote  u:object_r:hal_keymaster_remote_exec:s0
  /vendor/bin/hw/android\.hardware\.gatekeeper@1\.0-service.remote  u:object_r:hal_gatekeeper_remote_exec:s0
  /vendor/bin/hw/android\.hardware\.confirmationui@1\.0-service.cuttlefish  u:object_r:hal_confirmationui_cuttlefish_exec:s0
+diff --git a/shared/sepolicy/vendor/hal_keymint_strongbox.te b/shared/sepolicy/vendor/hal_keymint_strongbox.te
+new file mode 100644
+index 000000000..4073d0790
+--- /dev/null
++++ b/shared/sepolicy/vendor/hal_keymint_strongbox.te
+@@ -0,0 +1,16 @@
++type hal_keymint_strongbox, domain;
++hal_server_domain(hal_keymint_strongbox, hal_keymint)
++
++type hal_keymint_strongbox_exec, exec_type, vendor_file_type, file_type;
++init_daemon_domain(hal_keymint_strongbox)
++
++vndbinder_use(hal_keymint_strongbox)
++get_prop(hal_keymint_strongbox, vendor_security_patch_level_prop);
++
++allow hal_keymint_strongbox secure_element_service:service_manager find;
++
++# Allow access to sockets
++allow hal_keymint_strongbox self:tcp_socket { connect create write read getattr getopt setopt };
++allow hal_keymint_strongbox port_type:tcp_socket name_connect;
++allow hal_keymint_strongbox port:tcp_socket { name_connect };
++allow hal_keymint_strongbox vendor_data_file:file { open read getattr };
 diff --git a/shared/sepolicy/vendor/service_contexts b/shared/sepolicy/vendor/service_contexts
 index c41503e3b..acd78e1ce 100644
 --- a/shared/sepolicy/vendor/service_contexts
@@ -38,23 +74,6 @@ index c41503e3b..acd78e1ce 100644
  
  # Binder service mappings
  gce                                       u:object_r:gce_service:s0
- diff --git a/shared/sepolicy/vendor/hal_keymint_strongbox.te b/shared/sepolicy/vendor/hal_keymint_strongbox.te
-new file mode 100644
-index 000000000..839fd1a6b
---- /dev/null
-+++ b/shared/sepolicy/vendor/hal_keymint_strongbox.te
-@@ -0,0 +1,14 @@
-+type hal_keymint_strongbox, domain;
-+hal_server_domain(hal_keymint_strongbox, hal_keymint)
-+
-+type hal_keymint_strongbox_exec, exec_type, vendor_file_type, file_type;
-+init_daemon_domain(hal_keymint_strongbox)
-+
-+vndbinder_use(hal_keymint_strongbox)
-+get_prop(hal_keymint_strongbox, vendor_security_patch_level_prop);
-+
-+# Allow access to sockets
-+allow hal_keymint_strongbox self:tcp_socket { connect create write read getattr getopt setopt };
-+allow hal_keymint_strongbox port_type:tcp_socket name_connect;
-+allow hal_keymint_strongbox port:tcp_socket { name_connect };
-+allow hal_keymint_strongbox vendor_data_file:file { open read getattr };
+-- 
+2.35.1.894.gb6a874cedc-goog
+

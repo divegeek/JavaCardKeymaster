@@ -1,0 +1,46 @@
+diff --git a/private/service_contexts b/private/service_contexts
+index c7f881136..6c3bfc06c 100644
+--- a/private/service_contexts
++++ b/private/service_contexts
+@@ -53,6 +53,9 @@ android.hardware.security.keymint.IKeyMintDevice/default             u:object_r:
+ android.hardware.security.keymint.IRemotelyProvisionedComponent/default u:object_r:hal_remotelyprovisionedcomponent_service:s0
+ android.hardware.security.secureclock.ISecureClock/default             u:object_r:hal_secureclock_service:s0
+ android.hardware.security.sharedsecret.ISharedSecret/default             u:object_r:hal_sharedsecret_service:s0
++android.hardware.security.keymint.IKeyMintDevice/strongbox      u:object_r:hal_keymint_service:s0
++android.hardware.security.sharedsecret.ISharedSecret/strongbox  u:object_r:hal_sharedsecret_service:s0
++android.hardware.security.keymint.IRemotelyProvisionedComponent/strongbox u:object_r:hal_keymint_service:s0
+ android.hardware.sensors.ISensors/default                            u:object_r:hal_sensors_service:s0
+ android.hardware.soundtrigger3.ISoundTriggerHw/default               u:object_r:hal_audio_service:s0
+ android.hardware.tv.tuner.ITuner/default                             u:object_r:hal_tv_tuner_service:s0
+diff --git a/vendor/file_contexts b/vendor/file_contexts
+index 0cfb7cf39..65b8a8205 100644
+--- a/vendor/file_contexts
++++ b/vendor/file_contexts
+@@ -84,6 +84,7 @@
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.secure_element@1\.0-service u:object_r:hal_secure_element_default_exec:s0
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.security\.dice-service\.non-secure-software   u:object_r:hal_dice_default_exec:s0
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.security\.keymint-service   u:object_r:hal_keymint_default_exec:s0
++/vendor/bin/hw/android\.hardware\.security\.keymint-service\.strongbox  u:object_r:hal_keymint_strongbox_exec:s0
+ /(vendor|system/vendor)/bin/hw/rild                                           u:object_r:rild_exec:s0
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.thermal@1\.[01]-service        u:object_r:hal_thermal_default_exec:s0
+ /(vendor|system/vendor)/bin/hw/android\.hardware\.tv\.cec@1\.[01]-service        u:object_r:hal_tv_cec_default_exec:s0
+diff --git a/vendor/hal_keymint_strongbox.te b/vendor/hal_keymint_strongbox.te
+new file mode 100644
+index 000000000..40cb82c3f
+--- /dev/null
++++ b/vendor/hal_keymint_strongbox.te
+@@ -0,0 +1,14 @@
++type hal_keymaster_strongbox, domain;
++hal_server_domain(hal_keymaster_strongbox, hal_keymaster)
++
++type hal_keymaster_strongbox_exec, exec_type, vendor_file_type, file_type;
++init_daemon_domain(hal_keymaster_strongbox)
++
++vndbinder_use(hal_keymaster_strongbox)
++get_prop(hal_keymaster_strongbox, vendor_security_patch_level_prop);
++
++# Allow access to sockets
++allow hal_keymaster_strongbox self:tcp_socket { connect create write read getattr getopt setopt };
++allow hal_keymaster_strongbox port_type:tcp_socket name_connect;
++allow hal_keymaster_strongbox port:tcp_socket { name_connect };
++allow hal_keymaster_strongbox vendor_data_file:file { open read getattr };

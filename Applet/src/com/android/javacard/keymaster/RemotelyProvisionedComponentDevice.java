@@ -15,7 +15,7 @@
  */
 package com.android.javacard.keymaster;
 
-import com.android.javacard.seprovider.KMDeviceUniqueKey;
+import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMOperation;
 import com.android.javacard.seprovider.KMSEProvider;
@@ -742,7 +742,7 @@ public class RemotelyProvisionedComponentDevice {
     ((KMOperation) operation[0]).update(scratchPad, (short) 0, (short) (len + partialPayloadLen));
   }
 
-  private short createSignedMac(KMDeviceUniqueKey deviceUniqueKey, byte[] scratchPad,
+  private short createSignedMac(KMDeviceUniqueKeyPair deviceUniqueKeyPair, byte[] scratchPad,
       short deviceMapPtr, short pubKeysToSign) {
     // Challenge
     short dataEntryIndex = getEntry(CHALLENGE);
@@ -778,7 +778,7 @@ public class RemotelyProvisionedComponentDevice {
         (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
     short len =
         seProvider.ecSign256(
-            deviceUniqueKey,
+            deviceUniqueKeyPair,
             scratchPad,
             (short) 0,
             signStructure,
@@ -799,8 +799,8 @@ public class RemotelyProvisionedComponentDevice {
   }
 
 
-  private KMDeviceUniqueKey createDeviceUniqueKey(boolean testMode, byte[] scratchPad) {
-    KMDeviceUniqueKey deviceUniqueKey;
+  private KMDeviceUniqueKeyPair createDeviceUniqueKeyPair(boolean testMode, byte[] scratchPad) {
+    KMDeviceUniqueKeyPair deviceUniqueKeyPair;
     short[] lengths = {0, 0};
     if (testMode) {
       seProvider.createAsymmetricKey(
@@ -812,13 +812,13 @@ public class RemotelyProvisionedComponentDevice {
           (short) 128,
           (short) 128,
           lengths);
-      deviceUniqueKey =
-    		storeDataInst.createTestDeviceUniqueKey(scratchPad, (short) 128, lengths[1],
+      deviceUniqueKeyPair =
+    		storeDataInst.createRkpTestDeviceUniqueKeyPair(scratchPad, (short) 128, lengths[1],
               scratchPad, (short) 0, lengths[0]);
     } else {
-      deviceUniqueKey = storeDataInst.getDeviceUniqueKey(false);
+      deviceUniqueKeyPair = storeDataInst.getRkpDeviceUniqueKeyPair(false);
     }
-    return deviceUniqueKey;
+    return deviceUniqueKeyPair;
   }
 
   /**
@@ -1276,10 +1276,10 @@ public class RemotelyProvisionedComponentDevice {
 
   private short processSignedMac(byte[] scratchPad, short pubKeysToSignMac, short deviceInfo) {
     // Construct SignedMac
-    KMDeviceUniqueKey deviceUniqueKey =
-        createDeviceUniqueKey((TRUE == data[getEntry(TEST_MODE)]) ? true : false, scratchPad);
+    KMDeviceUniqueKeyPair deviceUniqueKeyPair =
+        createDeviceUniqueKeyPair((TRUE == data[getEntry(TEST_MODE)]) ? true : false, scratchPad);
     // Create signedMac
-    short signedMac = createSignedMac(deviceUniqueKey, scratchPad, deviceInfo, pubKeysToSignMac);
+    short signedMac = createSignedMac(deviceUniqueKeyPair, scratchPad, deviceInfo, pubKeysToSignMac);
     //Prepare partial data for encryption.
     short arrLength = (short) (isAdditionalCertificateChainPresent() ? 3 : 2);
     short arr = KMArray.instance(arrLength);
