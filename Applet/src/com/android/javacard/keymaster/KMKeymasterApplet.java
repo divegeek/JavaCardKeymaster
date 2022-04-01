@@ -689,6 +689,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = KMArray.cast(cmd).get((short) 0);
     data[APP_ID] = KMArray.cast(cmd).get((short) 1);
     data[APP_DATA] = KMArray.cast(cmd).get((short) 2);
+    if (KMByteBlob.cast(data[APP_ID]).length() > KMByteTag.MAX_APP_ID_APP_DATA_SIZE 
+    		|| KMByteBlob.cast(data[APP_DATA]).length() > KMByteTag.MAX_APP_ID_APP_DATA_SIZE) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);	  
+    }
     if (!KMByteBlob.cast(data[APP_ID]).isValid()) {
       data[APP_ID] = KMType.INVALID_VALUE;
     }
