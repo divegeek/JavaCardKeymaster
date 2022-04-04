@@ -82,15 +82,21 @@ ScopedAStatus JavacardKeyMintOperation::finish(
     const vector<uint8_t> inData = input.value_or(vector<uint8_t>());
     DataView view = {.buffer = {}, .data = inData, .start = 0, .length = inData.size()};
     const vector<uint8_t> sign = signature.value_or(vector<uint8_t>());
-    appendBufferedData(view);
     if (!(bufferingMode_ == BufferingMode::EC_NO_DIGEST ||
           bufferingMode_ == BufferingMode::RSA_NO_DIGEST)) {
+        appendBufferedData(view);  
         if (view.length > MAX_CHUNK_SIZE) {
             auto err = updateInChunks(view, aToken, tToken, output);
             if (err != KM_ERROR_OK) {
                 return km_utils::kmError2ScopedAStatus(err);
             }
         }
+    } else {
+        keymaster_error_t err = bufferData(view);
+        if (err != KM_ERROR_OK) {
+            return km_utils::kmError2ScopedAStatus(err);
+        }
+        appendBufferedData(view);
     }
     vector<uint8_t> remaining = popNextChunk(view, view.length);
     return km_utils::kmError2ScopedAStatus(sendFinish(remaining, sign, aToken, tToken, confToken, *output));

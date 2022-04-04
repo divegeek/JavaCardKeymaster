@@ -30,6 +30,9 @@ public class KMByteTag extends KMTag {
 
   private static KMByteTag prototype;
 
+  // MAX ApplicationID or Application Data size
+  public static final short MAX_APP_ID_APP_DATA_SIZE = 64;
+
   // The allowed tag keys of type bool tag
   private static final short[] tags = {
       APPLICATION_ID,
@@ -76,15 +79,8 @@ public class KMByteTag extends KMTag {
     return ptr;
   }
 
-  public static short instance(short key) {
-    if (!validateKey(key)) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    return instance(key, KMByteBlob.exp());
-  }
-
   public static short instance(short key, short byteBlob) {
-    if (!validateKey(key)) {
+    if (!validateKey(key, byteBlob)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     if (heap[byteBlob] != BYTE_BLOB_TYPE) {
@@ -124,13 +120,20 @@ public class KMByteTag extends KMTag {
     return KMByteBlob.cast(blobPtr).length();
   }
 
-  private static boolean validateKey(short key) {
+  private static boolean validateKey(short key, short keyBlob) {
+	boolean result = false;  
     short index = (short) tags.length;
     while (--index >= 0) {
       if (tags[index] == key) {
-        return true;
+    	result = true;
+    	if(key == APPLICATION_ID || key == APPLICATION_DATA) {
+          if (KMByteBlob.cast(keyBlob).length() > MAX_APP_ID_APP_DATA_SIZE) {
+    		result = false;
+    	  } 
+    	}
+    	break;
       }
     }
-    return false;
+    return result;
   }
 }
