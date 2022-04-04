@@ -147,7 +147,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 32; //0x40
   public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
   public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34; //0x42
-  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 35; //0x43
+  private static final byte INS_GET_HEAP_PROFILE_DATA = KEYMINT_CMD_APDU_START + 35; //0x43
+  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 36; //0x44
 
   private static final byte INS_END_KM_CMD = 0x7F;
 
@@ -472,6 +473,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_GET_RKP_HARDWARE_INFO:
           rkp.process(apduIns, apdu);
           break;
+        case INS_GET_HEAP_PROFILE_DATA:
+          processGetHeapProfileData(apdu);
+          break;
         default:
           ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
@@ -585,6 +589,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    */
   public static void sendOutgoing(APDU apdu, short resp) {
     //TODO handle the extended buffer stuff. We can reuse this.
+    short usedHeap = repository.getHeapIndex();
     short bufferStartOffset = repository.allocAvailableMemory();
     byte[] buffer = repository.getHeap();
     // TODO we can change the following to incremental send.
@@ -593,6 +598,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         .getHeap().length)) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
+    repository.updateHeapProfileData((short)(usedHeap + bufferLength));
     // Send data
     apdu.setOutgoing();
     apdu.setOutgoingLength(bufferLength);
@@ -683,6 +689,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = KMArray.cast(cmd).get((short) 0);
     data[APP_ID] = KMArray.cast(cmd).get((short) 1);
     data[APP_DATA] = KMArray.cast(cmd).get((short) 2);
+    if (KMByteBlob.cast(data[APP_ID]).length() > KMByteTag.MAX_APP_ID_APP_DATA_SIZE 
+    		|| KMByteBlob.cast(data[APP_DATA]).length() > KMByteTag.MAX_APP_ID_APP_DATA_SIZE) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);	  
+    }
     if (!KMByteBlob.cast(data[APP_ID]).isValid()) {
       data[APP_ID] = KMType.INVALID_VALUE;
     }
@@ -744,21 +754,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processDeleteKeyCmd(APDU apdu) {
-    short cmd = deleteKeyCmd(apdu);
-    data[KEY_BLOB] = KMArray.cast(cmd).get((short) 0);
-    try {
-      data[KEY_BLOB] = decoder.decodeArray(keyBlob(),
-          KMByteBlob.cast(data[KEY_BLOB]).getBuffer(),
-          KMByteBlob.cast(data[KEY_BLOB]).getStartOff(),
-          KMByteBlob.cast(data[KEY_BLOB]).length());
-    } catch (ISOException e) {
-      // As per VTS, deleteKey should return KMError.OK but in case if
-      // input is empty then VTS accepts UNIMPLEMENTED errorCode as well.
-      KMException.throwIt(KMError.UNIMPLEMENTED);
-    }
-    if (KMArray.cast(data[KEY_BLOB]).length() < 4) {
-      KMException.throwIt(KMError.INVALID_KEY_BLOB);
-    }
     // Send ok
     sendError(apdu, KMError.OK);
   }
@@ -1223,7 +1218,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return cert;
   }
 
-
   private KMAttestationCert makeAttestationCert(short attKeyBlob, short attKeyParam, short attChallenge, short issuer,
       short hwParameters, short swParameters, byte[] scratchPad) {
     KMAttestationCert cert = makeCommonCert(scratchPad);
@@ -1294,7 +1288,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     cert.verifiedBootHash(getVerifiedBootHash(scratchPad));
     cert.verifiedBootKey(getBootKey(scratchPad));
     cert.verifiedBootState((byte) kmDataStore.getBootState());
-
     data[SECRET] = privKey;
     data[KEY_BLOB] = origBlob;
     return cert;
@@ -4221,5 +4214,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 		KMException.throwIt(KMError.NO_USER_CONFIRMATION);
 	  }
 	}
+  }
+  
+  private void processGetHeapProfileData(APDU apdu) {
+    // No Arguments
+    // prepare the response
+    short resp = KMArray.instance((short) 2);
+    KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
+    KMArray.cast(resp).add((short) 1, KMInteger.uint_16(repository.getMaxHeapUsed()));
+    sendOutgoing(apdu, resp);
   }
 }
