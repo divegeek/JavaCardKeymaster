@@ -55,7 +55,12 @@ public class JCardSimulator implements Simulator {
 
   @Override
   public byte[] decodeDataOut() {
-    return response.getData();
+    byte[] resp  = response.getData();
+    byte[] status = intToByteArray(response.getSW());
+    byte[] out = new byte[(resp.length + status.length)];
+    System.arraycopy(resp, 0, out, 0, resp.length);
+    System.arraycopy(status, 0, out, resp.length, status.length);
+    return out;
   }
 
 }
