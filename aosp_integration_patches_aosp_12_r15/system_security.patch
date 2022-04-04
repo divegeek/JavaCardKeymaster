@@ -1,5 +1,5 @@
 diff --git a/keystore2/src/km_compat/km_compat.cpp b/keystore2/src/km_compat/km_compat.cpp
-index 64849c1..40ca554 100644
+index 64849c16..40ca5547 100644
 --- a/keystore2/src/km_compat/km_compat.cpp
 +++ b/keystore2/src/km_compat/km_compat.cpp
 @@ -1314,7 +1314,7 @@ KeymasterDevices initializeKeymasters() {

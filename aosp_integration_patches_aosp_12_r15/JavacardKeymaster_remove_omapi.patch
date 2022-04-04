@@ -1,7 +1,20 @@
 diff --git a/HAL/Android.bp b/HAL/Android.bp
-index 557f204..69fead7 100644
+index 557f204..25f0e22 100644
 --- a/HAL/Android.bp
 +++ b/HAL/Android.bp
+@@ -30,9 +30,9 @@ cc_library {
+     ],
+     cflags:["-O0",],
+     shared_libs: [
+-        "android.hardware.security.keymint-V1-ndk",
+-        "android.hardware.security.secureclock-V1-ndk",
+-        "android.hardware.security.sharedsecret-V1-ndk",
++	"android.hardware.security.keymint-V1-ndk_platform",
++        "android.hardware.security.secureclock-V1-ndk_platform",
++        "android.hardware.security.sharedsecret-V1-ndk_platform",
+     	"libbase",
+         "libcppbor_external",
+         "libkeymaster_portable",
 @@ -55,17 +55,13 @@ cc_library {
      vendor_available: true,
      srcs: [
@@ -20,6 +33,17 @@ index 557f204..69fead7 100644
      ],
  }
  
+@@ -83,8 +79,8 @@ cc_binary {
+         "-Wextra",
+     ],
+     shared_libs: [
+-        "android.hardware.security.keymint-V1-ndk",
+-        "android.hardware.security.sharedsecret-V1-ndk",
++	"android.hardware.security.keymint-V1-ndk_platform",
++        "android.hardware.security.sharedsecret-V1-ndk_platform",
+         "libbase",
+         "libbinder_ndk",
+         "libcppbor_external",
 @@ -94,7 +90,6 @@ cc_binary {
          "libjc_keymint_transport",
          "liblog",
@@ -30,7 +54,7 @@ index 557f204..69fead7 100644
          "service.cpp",
 diff --git a/HAL/OmapiTransport.cpp b/HAL/OmapiTransport.cpp
 deleted file mode 100644
-index b7e1dc0..0000000
+index 7c353d8..0000000
 --- a/HAL/OmapiTransport.cpp
 +++ /dev/null
 @@ -1,221 +0,0 @@
@@ -74,7 +98,7 @@ index b7e1dc0..0000000
 -    LOG(DEBUG) << "Initialize the secure element connection";
 -
 -    // Get OMAPI vendor stable service handler
--    ::ndk::SpAIBinder ks2Binder(AServiceManager_getService(omapiServiceName));
+-    ::ndk::SpAIBinder ks2Binder(AServiceManager_checkService(omapiServiceName));
 -    omapiSeService = aidl::android::se::omapi::ISecureElementService::fromBinder(ks2Binder);
 -
 -    if (omapiSeService == nullptr) {
@@ -322,6 +346,15 @@ index 2a53787..0000000
 -};
 -
 -}
+diff --git a/HAL/android.hardware.security.keymint-service.strongbox.rc b/HAL/android.hardware.security.keymint-service.strongbox.rc
+index 7bb96f0..e81bc25 100644
+--- a/HAL/android.hardware.security.keymint-service.strongbox.rc
++++ b/HAL/android.hardware.security.keymint-service.strongbox.rc
+@@ -1,3 +1,3 @@
+ service vendor.keymint-strongbox /vendor/bin/hw/android.hardware.security.keymint-service.strongbox
+     class early_hal
+-    user jc_strongbox
++    user system
 diff --git a/HAL/service.cpp b/HAL/service.cpp
 index 14580f8..3d51877 100644
 --- a/HAL/service.cpp

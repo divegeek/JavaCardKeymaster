@@ -779,45 +779,82 @@ index 38f358686..74e44c7b4 100644
              false /* testMode */, keysToSign_, testEekChain_.chain, challenge_, &deviceInfo,
              &protectedData, &keysToSignMac);
 diff --git a/security/keymint/support/Android.bp b/security/keymint/support/Android.bp
-index 9e218b6a3..73fb8c277 100644
+index 9e218b6a3..71faee2a9 100644
 --- a/security/keymint/support/Android.bp
 +++ b/security/keymint/support/Android.bp
-@@ -62,6 +62,7 @@ cc_library {
+@@ -44,6 +44,7 @@ cc_library {
+         "libbase",
+         "libcrypto",
+         "libutils",
++        "libhardware",
+     ],
+ }
+ 
+@@ -61,7 +62,9 @@ cc_library {
+         "libcppbor_external",
          "libcppcose_rkp",
          "libcrypto",
++        "libkeymaster_portable",
          "libjsoncpp",
 +	"android.hardware.security.keymint-V1-ndk_platform",
      ],
  }
  
+@@ -79,6 +82,7 @@ cc_test {
+         "libcrypto",
+         "libjsoncpp",
+         "libkeymaster_portable",
++        "android.hardware.security.keymint-V1-ndk_platform",
+         "libkeymint_remote_prov_support",
+     ],
+ }
 diff --git a/security/keymint/support/include/remote_prov/remote_prov_utils.h b/security/keymint/support/include/remote_prov/remote_prov_utils.h
-index 406b7a9b7..4d9ed2b0c 100644
+index 406b7a9b7..1d3abe512 100644
 --- a/security/keymint/support/include/remote_prov/remote_prov_utils.h
 +++ b/security/keymint/support/include/remote_prov/remote_prov_utils.h
-@@ -52,6 +52,20 @@ inline constexpr uint8_t kCoseEncodedGeekCert[] = {
+@@ -52,6 +52,34 @@ inline constexpr uint8_t kCoseEncodedGeekCert[] = {
          0x31, 0xbf, 0x6b, 0xe8, 0x1e, 0x35, 0xe2, 0xf0, 0x2d, 0xce, 0x6c, 0x2f, 0x4f, 0xf2,
          0xf5, 0x4f, 0xa5, 0xd4, 0x83, 0xad, 0x96, 0xa2, 0xf1, 0x87, 0x58, 0x04};
  
-+// The Google ECDSA root key for the Endpoint Encryption Key chain, encoded as COSE_Sign1
-+inline constexpr uint8_t kCoseEncodedEcdsaRootCert[] = {
-+        0x84, 0x43, 0xa1, 0x01, 0x26, 0xa0, 0x58, 0x4d, 0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01,
-+        0x21, 0x58, 0x20, 0xf7, 0x14, 0x8a, 0xdb, 0x97, 0xf4, 0xcc, 0x53, 0xef, 0xd2, 0x64, 0x11,
-+        0xc4, 0xe3, 0x75, 0x1f, 0x66, 0x1f, 0xa4, 0x71, 0x0c, 0x6c, 0xcf, 0xfa, 0x09, 0x46, 0x80,
-+        0x74, 0x87, 0x54, 0xf2, 0xad, 0x22, 0x58, 0x20, 0x5e, 0x7f, 0x5b, 0xf6, 0xec, 0xe4, 0xf6,
-+        0x19, 0xcc, 0xff, 0x13, 0x37, 0xfd, 0x0f, 0xa1, 0xc8, 0x93, 0xdb, 0x18, 0x06, 0x76, 0xc4,
-+        0x5d, 0xe6, 0xd7, 0x6a, 0x77, 0x86, 0xc3, 0x2d, 0xaf, 0x8f, 0x58, 0x47, 0x30, 0x45, 0x02,
-+        0x20, 0x2f, 0x97, 0x8e, 0x42, 0xfb, 0xbe, 0x07, 0x2d, 0x95, 0x47, 0x85, 0x47, 0x93, 0x40,
-+        0xb0, 0x1f, 0xd4, 0x9b, 0x47, 0xa4, 0xc4, 0x44, 0xa9, 0xf2, 0xa1, 0x07, 0x87, 0x10, 0xc7,
-+        0x9f, 0xcb, 0x11, 0x02, 0x21, 0x00, 0xf4, 0xbf, 0x9f, 0xe8, 0x3b, 0xe0, 0xe7, 0x34, 0x4c,
-+        0x15, 0xfc, 0x7b, 0xc3, 0x7e, 0x33, 0x05, 0xf4, 0xd1, 0x34, 0x3c, 0xed, 0x02, 0x04, 0x60,
-+        0x7a, 0x15, 0xe0, 0x79, 0xd3, 0x8a, 0xff, 0x24};
++// The Google ECDSA P256 root key for the Endpoint Encryption Key chain, encoded as COSE_Sign1
++inline constexpr uint8_t kCoseEncodedEcdsa256RootCert[] = {
++    0x84, 0x43, 0xa1, 0x01, 0x26, 0xa0, 0x58, 0x4d, 0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21,
++    0x58, 0x20, 0xf7, 0x14, 0x8a, 0xdb, 0x97, 0xf4, 0xcc, 0x53, 0xef, 0xd2, 0x64, 0x11, 0xc4, 0xe3,
++    0x75, 0x1f, 0x66, 0x1f, 0xa4, 0x71, 0x0c, 0x6c, 0xcf, 0xfa, 0x09, 0x46, 0x80, 0x74, 0x87, 0x54,
++    0xf2, 0xad, 0x22, 0x58, 0x20, 0x5e, 0x7f, 0x5b, 0xf6, 0xec, 0xe4, 0xf6, 0x19, 0xcc, 0xff, 0x13,
++    0x37, 0xfd, 0x0f, 0xa1, 0xc8, 0x93, 0xdb, 0x18, 0x06, 0x76, 0xc4, 0x5d, 0xe6, 0xd7, 0x6a, 0x77,
++    0x86, 0xc3, 0x2d, 0xaf, 0x8f, 0x58, 0x40, 0x2f, 0x97, 0x8e, 0x42, 0xfb, 0xbe, 0x07, 0x2d, 0x95,
++    0x47, 0x85, 0x47, 0x93, 0x40, 0xb0, 0x1f, 0xd4, 0x9b, 0x47, 0xa4, 0xc4, 0x44, 0xa9, 0xf2, 0xa1,
++    0x07, 0x87, 0x10, 0xc7, 0x9f, 0xcb, 0x11, 0xf4, 0xbf, 0x9f, 0xe8, 0x3b, 0xe0, 0xe7, 0x34, 0x4c,
++    0x15, 0xfc, 0x7b, 0xc3, 0x7e, 0x33, 0x05, 0xf4, 0xd1, 0x34, 0x3c, 0xed, 0x02, 0x04, 0x60, 0x7a,
++    0x15, 0xe0, 0x79, 0xd3, 0x8a, 0xff, 0x24};
++
++// The Google ECDSA P256 Endpoint Encryption Key certificate, encoded as COSE_Sign1
++inline constexpr uint8_t kCoseEncodedEcdsa256GeekCert[] = {
++    0x84, 0x43, 0xa1, 0x01, 0x26, 0xa0, 0x58, 0x71, 0xa6, 0x01, 0x02, 0x02, 0x58, 0x20, 0x35, 0x73,
++    0xb7, 0x3f, 0xa0, 0x8a, 0x80, 0x89, 0xb1, 0x26, 0x67, 0xe9, 0xcb, 0x7c, 0x75, 0xa1, 0xaf, 0x02,
++    0x61, 0xfc, 0x6e, 0x65, 0x03, 0x91, 0x3b, 0xd3, 0x4b, 0x7d, 0x14, 0x94, 0x3e, 0x46, 0x03, 0x38,
++    0x18, 0x20, 0x01, 0x21, 0x58, 0x20, 0xe0, 0x41, 0xcf, 0x2f, 0x0f, 0x34, 0x0f, 0x1c, 0x33, 0x2c,
++    0x41, 0xb0, 0xcf, 0xd7, 0x0c, 0x30, 0x55, 0x35, 0xd2, 0x1e, 0x6a, 0x47, 0x13, 0x4b, 0x2e, 0xd1,
++    0x48, 0x96, 0x7e, 0x24, 0x9c, 0x68, 0x22, 0x58, 0x20, 0x1f, 0xce, 0x45, 0xc5, 0xfb, 0x61, 0xba,
++    0x81, 0x21, 0xf9, 0xe5, 0x05, 0x9b, 0x9b, 0x39, 0x0e, 0x76, 0x86, 0x86, 0x47, 0xb8, 0x1e, 0x2f,
++    0x45, 0xf1, 0xce, 0xaf, 0xda, 0x3f, 0x80, 0x68, 0xdb, 0x58, 0x40, 0x8c, 0xb3, 0xba, 0x7e, 0x20,
++    0x3e, 0x32, 0xb0, 0x68, 0xdf, 0x60, 0xd1, 0x1d, 0x7d, 0xf0, 0xac, 0x38, 0x8e, 0x51, 0xbc, 0xff,
++    0x6c, 0xe1, 0x67, 0x3b, 0x4a, 0x79, 0xbc, 0x56, 0x78, 0xb3, 0x99, 0xd8, 0x7c, 0x8a, 0x07, 0xd8,
++    0xda, 0xb5, 0xb5, 0x7f, 0x71, 0xf4, 0xd8, 0x6b, 0xdf, 0x33, 0x27, 0x34, 0x7b, 0x65, 0xd1, 0x2a,
++    0xeb, 0x86, 0x99, 0x98, 0xab, 0x3a, 0xb4, 0x80, 0xaa, 0xbd, 0x50};
 +
  /**
   * Generates random bytes.
   */
-@@ -67,12 +81,12 @@ struct EekChain {
-  * Generates an X25518 EEK with the specified eekId and an Ed25519 chain of the
-  * specified length. All keys are generated randomly.
+@@ -64,15 +92,15 @@ struct EekChain {
+ };
+ 
+ /**
+- * Generates an X25518 EEK with the specified eekId and an Ed25519 chain of the
+- * specified length. All keys are generated randomly.
++ * Based on the supportedEekCurve, Generates an X25519/ECDH with the specified eekId
++ * and an Ed25519/ECDSA chain of the specified length. All keys are generated randomly.
   */
 -ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId);
 +ErrMsgOr<EekChain> generateEekChain(int32_t supportedEekCurve, size_t length, const bytevec& eekId);
@@ -831,10 +868,10 @@ index 406b7a9b7..4d9ed2b0c 100644
  struct BccEntryData {
      bytevec pubKey;
 diff --git a/security/keymint/support/remote_prov_utils.cpp b/security/keymint/support/remote_prov_utils.cpp
-index 0cbee5104..ae5120f8b 100644
+index 0cbee5104..485f871b9 100644
 --- a/security/keymint/support/remote_prov_utils.cpp
 +++ b/security/keymint/support/remote_prov_utils.cpp
-@@ -17,15 +17,195 @@
+@@ -17,15 +17,186 @@
  #include <iterator>
  #include <tuple>
  
@@ -853,6 +890,10 @@ index 0cbee5104..ae5120f8b 100644
  
  namespace aidl::android::hardware::security::keymint::remote_prov {
  
++constexpr uint32_t kBccPayloadIssuer = 1;
++constexpr uint32_t kBccPayloadSubject = 2;
++constexpr int32_t kBccPayloadSubjPubKey = -4670552;
++constexpr int32_t kBccPayloadKeyUsage = -4670553;
 +constexpr int kP256AffinePointSize = 32;
 +
 +using EC_KEY_Ptr = bssl::UniquePtr<EC_KEY>;
@@ -865,10 +906,9 @@ index 0cbee5104..ae5120f8b 100644
 +    if (bignum == nullptr) {
 +        return "Error getting bignum from private key";
 +    }
-+    int size = BN_num_bytes(bignum);
-+    // Pad with zeros incase the length is lesser than 32.
++    // Pad with zeros in case the length is lesser than 32.
 +    bytevec privKey(32, 0);
-+    BN_bn2bin(bignum, privKey.data() + 32 - size);
++    BN_bn2binpad(bignum, privKey.data(), privKey.size());
 +    return privKey;
 +}
 +
@@ -881,31 +921,26 @@ index 0cbee5104..ae5120f8b 100644
 +    const EC_POINT* point = EC_KEY_get0_public_key(ecKey);
 +    if (point == nullptr) return "Error getting ecpoint from public key";
 +
-+    int size = EC_POINT_point2oct(group.get(), point,
-+                                  POINT_CONVERSION_UNCOMPRESSED, nullptr, 0,
-+                                  nullptr);
++    int size =
++        EC_POINT_point2oct(group.get(), point, POINT_CONVERSION_UNCOMPRESSED, nullptr, 0, nullptr);
 +    if (size == 0) {
 +        return "Error generating public key encoding";
 +    }
 +
 +    bytevec publicKey;
 +    publicKey.resize(size);
-+    EC_POINT_point2oct(group.get(), point,
-+                       POINT_CONVERSION_UNCOMPRESSED, publicKey.data(),
++    EC_POINT_point2oct(group.get(), point, POINT_CONVERSION_UNCOMPRESSED, publicKey.data(),
 +                       publicKey.size(), nullptr);
 +    return publicKey;
 +}
 +
-+ErrMsgOr<std::tuple<bytevec, bytevec>> getAffineCoordinates(
-+    const bytevec& pubKey) {
-+    auto group = EC_GROUP_Ptr(
-+        EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1));
++ErrMsgOr<std::tuple<bytevec, bytevec>> getAffineCoordinates(const bytevec& pubKey) {
++    auto group = EC_GROUP_Ptr(EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1));
 +    if (group.get() == nullptr) {
 +        return "Error creating EC group by curve name";
 +    }
 +    auto point = EC_POINT_Ptr(EC_POINT_new(group.get()));
-+    if (EC_POINT_oct2point(group.get(), point.get(), pubKey.data(),
-+                           pubKey.size(), nullptr) != 1) {
++    if (EC_POINT_oct2point(group.get(), point.get(), pubKey.data(), pubKey.size(), nullptr) != 1) {
 +        return "Error decoding publicKey";
 +    }
 +    BIGNUM_Ptr x(BN_new());
@@ -913,20 +948,17 @@ index 0cbee5104..ae5120f8b 100644
 +    BN_CTX_Ptr ctx(BN_CTX_new());
 +    if (!ctx.get()) return "Failed to create BN_CTX instance";
 +
-+    if (!EC_POINT_get_affine_coordinates_GFp(group.get(), point.get(),
-+                                             x.get(), y.get(),
++    if (!EC_POINT_get_affine_coordinates_GFp(group.get(), point.get(), x.get(), y.get(),
 +                                             ctx.get())) {
 +        return "Failed to get affine coordinates from ECPoint";
 +    }
 +    bytevec pubX(kP256AffinePointSize);
 +    bytevec pubY(kP256AffinePointSize);
-+    if (BN_bn2binpad(x.get(), pubX.data(), kP256AffinePointSize) !=
-+        kP256AffinePointSize) {
-+        return "Error in converting absolute value of x cordinate to big-endian";
++    if (BN_bn2binpad(x.get(), pubX.data(), kP256AffinePointSize) != kP256AffinePointSize) {
++        return "Error in converting absolute value of x coordinate to big-endian";
 +    }
-+    if (BN_bn2binpad(y.get(), pubY.data(), kP256AffinePointSize) !=
-+        kP256AffinePointSize) {
-+        return "Error in converting absolute value of y cordinate to big-endian";
++    if (BN_bn2binpad(y.get(), pubY.data(), kP256AffinePointSize) != kP256AffinePointSize) {
++        return "Error in converting absolute value of y coordinate to big-endian";
 +    }
 +    return std::make_tuple(std::move(pubX), std::move(pubY));
 +}
@@ -972,20 +1004,17 @@ index 0cbee5104..ae5120f8b 100644
 +    return std::make_tuple(std::move(pubKey), std::move(privKey));
 +}
 +
-+ErrMsgOr<std::tuple<bytevec, bytevec>> generateKeyPair(
-+    int32_t supportedEekCurve, bool isEek) {
-+
++ErrMsgOr<std::tuple<bytevec, bytevec>> generateKeyPair(int32_t supportedEekCurve, bool isEek) {
 +    switch (supportedEekCurve) {
-+        case RpcHardwareInfo::CURVE_NONE:
-+        case RpcHardwareInfo::CURVE_25519:
-+            if (isEek) {
-+                return generateX25519KeyPair();
-+            }
-+            return generateED25519KeyPair();
-+        case RpcHardwareInfo::CURVE_P256:
-+            return generateEc256KeyPair();
-+        default:
-+            return "Unknown EEK Curve.";
++    case RpcHardwareInfo::CURVE_25519:
++        if (isEek) {
++            return generateX25519KeyPair();
++        }
++        return generateED25519KeyPair();
++    case RpcHardwareInfo::CURVE_P256:
++        return generateEc256KeyPair();
++    default:
++        return "Unknown EEK Curve.";
 +    }
 +}
 +
@@ -997,7 +1026,6 @@ index 0cbee5104..ae5120f8b 100644
 +    bytevec pubX;
 +    bytevec pubY;
 +    switch (supportedEekCurve) {
-+    case RpcHardwareInfo::CURVE_NONE:
 +    case RpcHardwareInfo::CURVE_25519:
 +        keyType = OCTET_KEY_PAIR;
 +        algorithm = (eekId.empty()) ? EDDSA : ECDH_ES_HKDF_256;
@@ -1030,7 +1058,7 @@ index 0cbee5104..ae5120f8b 100644
  bytevec kTestMacKey(32 /* count */, 0 /* byte value */);
  
  bytevec randomBytes(size_t numBytes) {
-@@ -34,7 +214,17 @@ bytevec randomBytes(size_t numBytes) {
+@@ -34,7 +205,17 @@ bytevec randomBytes(size_t numBytes) {
      return retval;
  }
  
@@ -1049,7 +1077,7 @@ index 0cbee5104..ae5120f8b 100644
      if (length < 2) {
          return "EEK chain must contain at least 2 certs.";
      }
-@@ -43,42 +233,31 @@ ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId) {
+@@ -43,59 +224,74 @@ ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId) {
  
      bytevec prev_priv_key;
      for (size_t i = 0; i < length - 1; ++i) {
@@ -1058,7 +1086,7 @@ index 0cbee5104..ae5120f8b 100644
 -
 -        ED25519_keypair(pub_key.data(), priv_key.data());
 +        auto keyPair = generateKeyPair(supportedEekCurve, false);
-+        if (!keyPair) keyPair.moveMessage();
++        if (!keyPair) return keyPair.moveMessage();
 +        auto [pub_key, priv_key] = keyPair.moveValue();
  
          // The first signing key is self-signed.
@@ -1072,26 +1100,28 @@ index 0cbee5104..ae5120f8b 100644
 -                                                    .add(CoseKey::PUBKEY_X, pub_key)
 -                                                    .canonicalize()
 -                                                    .encode(),
+-                                            {} /* AAD */);
 +        auto coseKey = constructCoseKey(supportedEekCurve, {}, pub_key);
 +        if (!coseKey) return coseKey.moveMessage();
 +
-+        auto coseSign1 = constructCoseSign1(supportedEekCurve, prev_priv_key, coseKey.moveValue(),
-                                             {} /* AAD */);
++        auto coseSign1 =
++            constructCoseSign1(supportedEekCurve, prev_priv_key, coseKey.moveValue(), {} /* AAD */);
          if (!coseSign1) return coseSign1.moveMessage();
          eekChain.add(coseSign1.moveValue());
  
          prev_priv_key = priv_key;
      }
 +    auto keyPair = generateKeyPair(supportedEekCurve, true);
-+    if (!keyPair) keyPair.moveMessage();
++    if (!keyPair) return keyPair.moveMessage();
 +    auto [pub_key, priv_key] = keyPair.moveValue();
++
++    auto coseKey = constructCoseKey(supportedEekCurve, eekId, pub_key);
++    if (!coseKey) return coseKey.moveMessage();
  
 -    bytevec pub_key(X25519_PUBLIC_VALUE_LEN);
 -    bytevec priv_key(X25519_PRIVATE_KEY_LEN);
 -    X25519_keypair(pub_key.data(), priv_key.data());
-+    auto coseKey = constructCoseKey(supportedEekCurve, eekId, pub_key);
-+    if (!coseKey) return coseKey.moveMessage();
- 
+-
 -    auto coseSign1 = constructCoseSign1(prev_priv_key,
 -                                        cppbor::Map() /* payload CoseKey */
 -                                                .add(CoseKey::KEY_TYPE, OCTET_KEY_PAIR)
@@ -1101,11 +1131,22 @@ index 0cbee5104..ae5120f8b 100644
 -                                                .add(CoseKey::PUBKEY_X, pub_key)
 -                                                .canonicalize()
 -                                                .encode(),
-+    auto coseSign1 = constructCoseSign1(supportedEekCurve, prev_priv_key, coseKey.moveValue(),
-                                         {} /* AAD */);
+-                                        {} /* AAD */);
++    auto coseSign1 =
++        constructCoseSign1(supportedEekCurve, prev_priv_key, coseKey.moveValue(), {} /* AAD */);
      if (!coseSign1) return coseSign1.moveMessage();
      eekChain.add(coseSign1.moveValue());
-@@ -86,16 +265,15 @@ ErrMsgOr<EekChain> generateEekChain(size_t length, const bytevec& eekId) {
+ 
++    if (supportedEekCurve == RpcHardwareInfo::CURVE_P256) {
++        // convert ec public key to x and y co-ordinates.
++        auto affineCoordinates = getAffineCoordinates(pub_key);
++        if (!affineCoordinates) return affineCoordinates.moveMessage();
++        auto [pubX, pubY] = affineCoordinates.moveValue();
++        pub_key.clear();
++        pub_key.insert(pub_key.begin(), pubX.begin(), pubX.end());
++        pub_key.insert(pub_key.end(), pubY.begin(), pubY.end());
++    }
++
      return EekChain{eekChain.encode(), pub_key, priv_key};
  }
  
@@ -1117,45 +1158,70 @@ index 0cbee5104..ae5120f8b 100644
 -    prodEek.push_back(0x82);
 -    prodEek.insert(prodEek.end(), std::begin(kCoseEncodedRootCert), std::end(kCoseEncodedRootCert));
 -    prodEek.insert(prodEek.end(), std::begin(kCoseEncodedGeekCert), std::end(kCoseEncodedGeekCert));
--
--    return prodEek;
 +bytevec getProdEekChain(int32_t supportedEekCurve) {
 +    cppbor::Array chain;
 +    if (supportedEekCurve == RpcHardwareInfo::CURVE_P256) {
-+        chain.add(cppbor::EncodedItem(bytevec(std::begin(kCoseEncodedEcdsaRootCert), std::end(kCoseEncodedEcdsaRootCert))));
++        chain.add(cppbor::EncodedItem(bytevec(std::begin(kCoseEncodedEcdsa256RootCert),
++                                              std::end(kCoseEncodedEcdsa256RootCert))));
++        chain.add(cppbor::EncodedItem(bytevec(std::begin(kCoseEncodedEcdsa256GeekCert),
++                                              std::end(kCoseEncodedEcdsa256GeekCert))));
 +    } else {
-+        chain.add(cppbor::EncodedItem(bytevec(std::begin(kCoseEncodedRootCert), std::end(kCoseEncodedRootCert))));
-+        chain.add(cppbor::EncodedItem(bytevec(std::begin(kCoseEncodedGeekCert), std::end(kCoseEncodedGeekCert))));
++        chain.add(cppbor::EncodedItem(
++            bytevec(std::begin(kCoseEncodedRootCert), std::end(kCoseEncodedRootCert))));
++        chain.add(cppbor::EncodedItem(
++            bytevec(std::begin(kCoseEncodedGeekCert), std::end(kCoseEncodedGeekCert))));
 +    }
 +    return chain.encode();
++}
+ 
+-    return prodEek;
++ErrMsgOr<bytevec> validatePayloadAndFetchPubKey(const cppbor::Map* payload) {
++    const auto& issuer = payload->get(kBccPayloadIssuer);
++    if (!issuer || !issuer->asTstr()) return "Issuer is not present or not a tstr.";
++    const auto& subject = payload->get(kBccPayloadSubject);
++    if (!subject || !subject->asTstr()) return "Subject is not present or not a tstr.";
++    const auto& keyUsage = payload->get(kBccPayloadKeyUsage);
++    if (!keyUsage || !keyUsage->asBstr()) return "Key usage is not present or not a bstr.";
++    const auto& serializedKey = payload->get(kBccPayloadSubjPubKey);
++    if (!serializedKey || !serializedKey->asBstr()) return "Key is not present or not a bstr.";
++    return serializedKey->asBstr()->value();
  }
  
  ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
-@@ -122,7 +300,8 @@ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
+@@ -122,7 +318,8 @@ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
      }
  
      auto& algorithm = parsedProtParams->asMap()->get(ALGORITHM);
 -    if (!algorithm || !algorithm->asInt() || algorithm->asInt()->value() != EDDSA) {
-+    if (!algorithm || !algorithm->asInt() || (algorithm->asInt()->value() != EDDSA &&
-+        algorithm->asInt()->value() != ES256)) {
++    if (!algorithm || !algorithm->asInt() ||
++        (algorithm->asInt()->value() != EDDSA && algorithm->asInt()->value() != ES256)) {
          return "Unsupported signature algorithm";
      }
  
-@@ -136,16 +315,35 @@ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
-     if (!serializedKey || !serializedKey->asBstr()) return "Could not find key entry";
+@@ -132,23 +329,45 @@ ErrMsgOr<bytevec> verifyAndParseCoseSign1Cwt(const cppbor::Array* coseSign1,
+     auto [parsedPayload, __, payloadErrMsg] = cppbor::parse(payload);
+     if (!parsedPayload) return payloadErrMsg + " when parsing key";
+     if (!parsedPayload->asMap()) return "CWT must be a map";
+-    auto serializedKey = parsedPayload->asMap()->get(-4670552)->clone();
+-    if (!serializedKey || !serializedKey->asBstr()) return "Could not find key entry";
++    auto serializedKey = validatePayloadAndFetchPubKey(parsedPayload->asMap());
++    if (!serializedKey) {
++        return "CWT validation failed: " + serializedKey.moveMessage();
++    }
  
      bool selfSigned = signingCoseKey.empty();
 -    auto key =
-+    bytevec key;
-+    if (algorithm->asInt()->value() == EDDSA) {
-+        auto key =
-             CoseKey::parseEd25519(selfSigned ? serializedKey->asBstr()->value() : signingCoseKey);
+-            CoseKey::parseEd25519(selfSigned ? serializedKey->asBstr()->value() : signingCoseKey);
 -    if (!key) return "Bad signing key: " + key.moveMessage();
+-
+     bytevec signatureInput =
+-            cppbor::Array().add("Signature1").add(*protectedParams).add(aad).add(*payload).encode();
++        cppbor::Array().add("Signature1").add(*protectedParams).add(aad).add(*payload).encode();
++
++    if (algorithm->asInt()->value() == EDDSA) {
++        auto key = CoseKey::parseEd25519(selfSigned ? *serializedKey : signingCoseKey);
++
 +        if (!key) return "Bad signing key: " + key.moveMessage();
- 
--    bytevec signatureInput =
-+        bytevec signatureInput =
-             cppbor::Array().add("Signature1").add(*protectedParams).add(aad).add(*payload).encode();
  
 -    if (!ED25519_verify(signatureInput.data(), signatureInput.size(), signature->value().data(),
 -                        key->getBstrValue(CoseKey::PUBKEY_X)->data())) {
@@ -1164,9 +1230,8 @@ index 0cbee5104..ae5120f8b 100644
 +                            key->getBstrValue(CoseKey::PUBKEY_X)->data())) {
 +            return "Signature verification failed";
 +        }
-+    } else { // P256
-+        auto key =
-+            CoseKey::parseP256(selfSigned ? serializedKey->asBstr()->value() : signingCoseKey);
++    } else {  // P256
++        auto key = CoseKey::parseP256(selfSigned ? *serializedKey : signingCoseKey);
 +        if (!key || key->getBstrValue(CoseKey::PUBKEY_X)->empty() ||
 +            key->getBstrValue(CoseKey::PUBKEY_Y)->empty()) {
 +            return "Bad signing key: " + key.moveMessage();
@@ -1174,40 +1239,230 @@ index 0cbee5104..ae5120f8b 100644
 +        auto publicKey = key->getEcPublicKey();
 +        if (!publicKey) return publicKey.moveMessage();
 +
-+        bytevec signatureInput =
-+            cppbor::Array().add("Signature1").add(*protectedParams).add(aad).add(*payload).encode();
++        auto ecdsaDerSignature = ecdsaCoseSignatureToDer(signature->value());
++        if (!ecdsaDerSignature) return ecdsaDerSignature.moveMessage();
 +
-+        if (!verifyEcdsaDigest(publicKey.moveValue(), sha256(signatureInput), signature->value())) {
++        // convert public key to uncompressed form.
++        publicKey->insert(publicKey->begin(), 0x04);
++
++        if (!verifyEcdsaDigest(publicKey.moveValue(), sha256(signatureInput), *ecdsaDerSignature)) {
 +            return "Signature verification failed";
 +        }
      }
  
-     return serializedKey->asBstr()->value();
+-    return serializedKey->asBstr()->value();
++    return serializedKey.moveValue();
+ }
+ 
+ ErrMsgOr<std::vector<BccEntryData>> validateBcc(const cppbor::Array* bcc) {
 diff --git a/security/keymint/support/remote_prov_utils_test.cpp b/security/keymint/support/remote_prov_utils_test.cpp
-index 8697c5190..0009bf713 100644
+index 8697c5190..e1c4467a6 100644
 --- a/security/keymint/support/remote_prov_utils_test.cpp
 +++ b/security/keymint/support/remote_prov_utils_test.cpp
-@@ -14,6 +14,7 @@
+@@ -14,8 +14,12 @@
   * limitations under the License.
   */
  
++#include "cppbor.h"
++#include "keymaster/cppcose/cppcose.h"
 +#include <aidl/android/hardware/security/keymint/RpcHardwareInfo.h>
  #include <android-base/properties.h>
  #include <cppbor_parse.h>
++#include <cstdint>
  #include <gmock/gmock.h>
-@@ -35,13 +36,13 @@ using ::keymaster::validateAndExtractEekPubAndId;
+ #include <gtest/gtest.h>
+ #include <keymaster/android_keymaster_utils.h>
+@@ -23,25 +27,120 @@
+ #include <keymaster/remote_provisioning_utils.h>
+ #include <openssl/curve25519.h>
+ #include <remote_prov/remote_prov_utils.h>
+-#include <cstdint>
+-#include "cppbor.h"
+-#include "keymaster/cppcose/cppcose.h"
+ 
+ namespace aidl::android::hardware::security::keymint::remote_prov {
+ namespace {
+ 
+ using ::keymaster::KeymasterBlob;
+-using ::keymaster::validateAndExtractEekPubAndId;
++using ::keymaster::kStatusFailed;
++using ::keymaster::kStatusInvalidEek;
++using ::keymaster::StatusOr;
  using ::testing::ElementsAreArray;
++using byte_view = std::basic_string_view<uint8_t>;
++
++struct KeyInfoEcdsa {
++    CoseKeyCurve curve;
++    byte_view pubKeyX;
++    byte_view pubKeyY;
++
++    bool operator==(const KeyInfoEcdsa& other) const {
++        return curve == other.curve && pubKeyX == other.pubKeyX && pubKeyY == other.pubKeyY;
++    }
++};
++
++// The production root signing key for Google ECDSA P256 Endpoint Encryption Key cert chains.
++inline constexpr uint8_t kEcdsa256GeekRootX[] = {
++    0xf7, 0x14, 0x8a, 0xdb, 0x97, 0xf4, 0xcc, 0x53, 0xef, 0xd2, 0x64, 0x11, 0xc4, 0xe3, 0x75, 0x1f,
++    0x66, 0x1f, 0xa4, 0x71, 0x0c, 0x6c, 0xcf, 0xfa, 0x09, 0x46, 0x80, 0x74, 0x87, 0x54, 0xf2, 0xad};
++
++inline constexpr uint8_t kEcdsa256GeekRootY[] = {
++    0x5e, 0x7f, 0x5b, 0xf6, 0xec, 0xe4, 0xf6, 0x19, 0xcc, 0xff, 0x13, 0x37, 0xfd, 0x0f, 0xa1, 0xc8,
++    0x93, 0xdb, 0x18, 0x06, 0x76, 0xc4, 0x5d, 0xe6, 0xd7, 0x6a, 0x77, 0x86, 0xc3, 0x2d, 0xaf, 0x8f};
++
++// Hard-coded set of acceptable public COSE_Keys that can act as roots of EEK chains.
++inline constexpr KeyInfoEcdsa kAuthorizedEcdsa256EekRoots[] = {
++    {CoseKeyCurve::P256, byte_view(kEcdsa256GeekRootX, sizeof(kEcdsa256GeekRootX)),
++     byte_view(kEcdsa256GeekRootY, sizeof(kEcdsa256GeekRootY))},
++};
++
++static ErrMsgOr<CoseKey> parseEcdh256(const bytevec& coseKey) {
++    auto key = CoseKey::parse(coseKey, EC2, ECDH_ES_HKDF_256, P256);
++    if (!key) return key;
++
++    auto& pubkey_x = key->getMap().get(cppcose::CoseKey::PUBKEY_X);
++    auto& pubkey_y = key->getMap().get(cppcose::CoseKey::PUBKEY_Y);
++    if (!pubkey_x || !pubkey_y || !pubkey_x->asBstr() || !pubkey_y->asBstr() ||
++        pubkey_x->asBstr()->value().size() != 32 || pubkey_y->asBstr()->value().size() != 32) {
++        return "Invalid P256 public key";
++    }
++
++    return key;
++}
++
++StatusOr<std::tuple<std::vector<uint8_t> /* EEK pubX */, std::vector<uint8_t> /* EEK pubY */,
++                    std::vector<uint8_t> /* EEK ID */>>
++validateAndExtractEcdsa256EekPubAndId(bool testMode,
++                                      const KeymasterBlob& endpointEncryptionCertChain) {
++    auto [item, newPos, errMsg] =
++        cppbor::parse(endpointEncryptionCertChain.begin(), endpointEncryptionCertChain.end());
++    if (!item || !item->asArray()) {
++        return kStatusFailed;
++    }
++    const cppbor::Array* certArr = item->asArray();
++    std::vector<uint8_t> lastPubKey;
++    for (size_t i = 0; i < certArr->size(); ++i) {
++        auto cosePubKey =
++            verifyAndParseCoseSign1(certArr->get(i)->asArray(), lastPubKey, {} /* AAD */);
++        if (!cosePubKey) {
++            return kStatusInvalidEek;
++        }
++        lastPubKey = *std::move(cosePubKey);
++
++        // In prod mode the first pubkey should match a well-known Google public key.
++        if (!testMode && i == 0) {
++            auto parsedPubKey = CoseKey::parse(lastPubKey);
++            if (!parsedPubKey) {
++                return kStatusFailed;
++            }
++            auto curve = parsedPubKey->getIntValue(CoseKey::CURVE);
++            if (!curve) {
++                return kStatusInvalidEek;
++            }
++            auto rawPubX = parsedPubKey->getBstrValue(CoseKey::PUBKEY_X);
++            if (!rawPubX) {
++                return kStatusInvalidEek;
++            }
++            auto rawPubY = parsedPubKey->getBstrValue(CoseKey::PUBKEY_Y);
++            if (!rawPubY) {
++                return kStatusInvalidEek;
++            }
++            KeyInfoEcdsa matcher = {static_cast<CoseKeyCurve>(*curve),
++                                    byte_view(rawPubX->data(), rawPubX->size()),
++                                    byte_view(rawPubY->data(), rawPubY->size())};
++            if (std::find(std::begin(kAuthorizedEcdsa256EekRoots),
++                          std::end(kAuthorizedEcdsa256EekRoots),
++                          matcher) == std::end(kAuthorizedEcdsa256EekRoots)) {
++                return kStatusInvalidEek;
++            }
++        }
++    }
++    auto eek = parseEcdh256(lastPubKey);
++    if (!eek) {
++        return kStatusInvalidEek;
++    }
++    return std::make_tuple(eek->getBstrValue(CoseKey::PUBKEY_X).value(),
++                           eek->getBstrValue(CoseKey::PUBKEY_Y).value(),
++                           eek->getBstrValue(CoseKey::KEY_ID).value());
++}
  
  TEST(RemoteProvUtilsTest, GenerateEekChainInvalidLength) {
 -    ASSERT_FALSE(generateEekChain(1, /*eekId=*/{}));
-+    ASSERT_FALSE(generateEekChain(CURVE_25519, 1, /*eekId=*/{}));
++    ASSERT_FALSE(generateEekChain(RpcHardwareInfo::CURVE_25519, 1, /*eekId=*/{}));
  }
  
  TEST(RemoteProvUtilsTest, GenerateEekChain) {
      bytevec kTestEekId = {'t', 'e', 's', 't', 'I', 'd', 0};
      for (size_t length : {2, 3, 31}) {
 -        auto get_eek_result = generateEekChain(length, kTestEekId);
-+        auto get_eek_result = generateEekChain(CURVE_25519, length, kTestEekId);
++        auto get_eek_result = generateEekChain(RpcHardwareInfo::CURVE_25519, length, kTestEekId);
          ASSERT_TRUE(get_eek_result) << get_eek_result.message();
  
          auto& [chain, pubkey, privkey] = *get_eek_result;
+@@ -57,7 +156,7 @@ TEST(RemoteProvUtilsTest, GenerateEekChain) {
+ }
+ 
+ TEST(RemoteProvUtilsTest, GetProdEekChain) {
+-    auto chain = getProdEekChain();
++    auto chain = getProdEekChain(RpcHardwareInfo::CURVE_25519);
+ 
+     auto validation_result = validateAndExtractEekPubAndId(
+             /*testMode=*/false, KeymasterBlob(chain.data(), chain.size()));
+@@ -97,5 +196,57 @@ TEST(RemoteProvUtilsTest, JsonEncodeCsr) {
+     ASSERT_EQ(json, expected);
+ }
+ 
++TEST(RemoteProvUtilsTest, GenerateEcdsaEekChainInvalidLength) {
++    ASSERT_FALSE(generateEekChain(RpcHardwareInfo::CURVE_P256, 1, /*eekId=*/{}));
++}
++
++TEST(RemoteProvUtilsTest, GenerateEcdsaEekChain) {
++    bytevec kTestEekId = {'t', 'e', 's', 't', 'I', 'd', 0};
++    for (size_t length : {2, 3, 31}) {
++        auto get_eek_result = generateEekChain(RpcHardwareInfo::CURVE_P256, length, kTestEekId);
++        ASSERT_TRUE(get_eek_result) << get_eek_result.message();
++
++        auto& [chain, pubkey, privkey] = *get_eek_result;
++
++        auto validation_result = validateAndExtractEcdsa256EekPubAndId(
++            /*testMode=*/true, KeymasterBlob(chain.data(), chain.size()));
++        ASSERT_TRUE(validation_result.isOk());
++
++        auto& [eekPubX, eekPubY, eekId] = *validation_result;
++        bytevec eekPub;
++        eekPub.insert(eekPub.begin(), eekPubX.begin(), eekPubX.end());
++        eekPub.insert(eekPub.end(), eekPubY.begin(), eekPubY.end());
++        EXPECT_THAT(eekId, ElementsAreArray(kTestEekId));
++        EXPECT_THAT(eekPub, ElementsAreArray(pubkey));
++    }
++}
++
++TEST(RemoteProvUtilsTest, GetProdEcdsaEekChain) {
++    auto chain = getProdEekChain(RpcHardwareInfo::CURVE_P256);
++
++    auto validation_result = validateAndExtractEcdsa256EekPubAndId(
++        /*testMode=*/false, KeymasterBlob(chain.data(), chain.size()));
++    ASSERT_TRUE(validation_result.isOk()) << "Error: " << validation_result.moveError();
++
++    auto& [eekPubX, eekPubY, eekId] = *validation_result;
++
++    auto [geekCert, ignoredNewPos, error] =
++        cppbor::parse(kCoseEncodedEcdsa256GeekCert, sizeof(kCoseEncodedEcdsa256GeekCert));
++    ASSERT_NE(geekCert, nullptr) << "Error: " << error;
++    ASSERT_NE(geekCert->asArray(), nullptr);
++
++    auto& encodedGeekCoseKey = geekCert->asArray()->get(kCoseSign1Payload);
++    ASSERT_NE(encodedGeekCoseKey, nullptr);
++    ASSERT_NE(encodedGeekCoseKey->asBstr(), nullptr);
++
++    auto geek = CoseKey::parse(encodedGeekCoseKey->asBstr()->value());
++    ASSERT_TRUE(geek) << "Error: " << geek.message();
++
++    const std::vector<uint8_t> empty;
++    EXPECT_THAT(eekId, ElementsAreArray(geek->getBstrValue(CoseKey::KEY_ID).value_or(empty)));
++    EXPECT_THAT(eekPubX, ElementsAreArray(geek->getBstrValue(CoseKey::PUBKEY_X).value_or(empty)));
++    EXPECT_THAT(eekPubY, ElementsAreArray(geek->getBstrValue(CoseKey::PUBKEY_Y).value_or(empty)));
++}
++
+ }  // namespace
+ }  // namespace aidl::android::hardware::security::keymint::remote_prov
