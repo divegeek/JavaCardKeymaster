@@ -609,9 +609,13 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public short hmacSign(Object hmacKey, byte[] data, short dataStart, short dataLength,
+  public short hmacSign(Object key, byte[] data, short dataStart, short dataLength,
       byte[] signature, short signatureStart) {
-    return 0;
+    if(!(key instanceof KMHmacKey)) {
+      KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    KMHmacKey hmacKey = (KMHmacKey) key;
+    return hmacSign(hmacKey.getKey(), data, dataStart, dataLength, signature, signatureStart);
   }
 
   @Override
