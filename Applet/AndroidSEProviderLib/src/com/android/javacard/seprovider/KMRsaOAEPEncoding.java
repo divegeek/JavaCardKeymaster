@@ -69,7 +69,7 @@ public class KMRsaOAEPEncoding extends Cipher {
         return MessageDigest.LENGTH_SHA_256;
       case MessageDigest.ALG_SHA_384:
         return MessageDigest.LENGTH_SHA_384;
-      case MessageDigest.ALG_SHA3_512:
+      case MessageDigest.ALG_SHA_512:
         return MessageDigest.LENGTH_SHA_512;
       default:
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
