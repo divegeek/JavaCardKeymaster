@@ -44,6 +44,7 @@ public:
   bool isConnected();
 
 private:
+  bool readData(std::vector<uint8_t>& output);
   SocketTransport() : mSocket(-1), socketStatus(false) {}
   /**
      * Socket instance.

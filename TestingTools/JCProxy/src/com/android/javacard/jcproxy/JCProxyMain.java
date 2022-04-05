@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Date;
 
 import com.sun.javacard.apduio.CadTransportException;
+import javacard.framework.Util;
 
 /**
  * This program demonstrates a simple TCP/IP socket server.
@@ -47,33 +48,36 @@ public class JCProxyMain {
 
             byte[] inBytes = new byte[65536];
             int readLen = 0, index = 0;
-            System.out.println("Socket input buffer size: "
-                    + socket.getReceiveBufferSize());
+            short totalLen = 0;
+            short totalReadLen = 0;
+            System.out.println("Socket input buffer size: " + socket.getReceiveBufferSize());
             while ((readLen = isReader.read(inBytes, index, 1024 * 5)) > 0) {
               if (readLen > 0) {
-                System.out.println("Bytes read from index (" + index
-                        + ") socket: " + readLen + " Estimate read: "
-                        + isReader.available());
-                byte[] outBytes;
-
-                try {
-                  outBytes = simulator.executeApdu(
-                          Arrays.copyOfRange(inBytes, 0, index + readLen));
-                  outData = simulator.decodeDataOut();
-                  System.out.println(
-                          "Return Data " + Utils.byteArrayToHexString(outData));
-                  byte[] finalOutData = new byte[outData.length
-                          + outBytes.length];
-                  System.arraycopy(outData, 0, finalOutData, 0, outData.length);
-                  System.arraycopy(outBytes, 0, finalOutData, outData.length,
-                          outBytes.length);
-                  output.write(finalOutData);
-                  output.flush();
-                  index = 0;
-                } catch (IllegalArgumentException e) {
-                  e.printStackTrace();
-                  index = readLen;
+                System.out.println("Bytes read from index (" + index + ") socket: " + readLen + " Estimate read: "
+                    + isReader.available());
+                if (totalLen == 0) {
+                	// First two bytes holds the actual request length.
+                	totalLen = Util.getShort(inBytes, (short) 0);
+                	totalLen += 2;
                 }
+                totalReadLen += readLen;
+                if (totalReadLen < totalLen) {
+                	// Read from the socket till all the bytes are read.
+                	index += readLen;
+                	continue;
+                }
+                simulator.executeApdu(Arrays.copyOfRange(inBytes, (short) 2, totalReadLen));
+                outData = simulator.decodeDataOut();
+
+                byte[] finalOutData = new byte[outData.length + 2];
+                Util.setShort(finalOutData, (short) 0, (short) outData.length);
+                System.arraycopy(outData, 0, finalOutData, 2, outData.length);
+                output.write(finalOutData);
+                System.out.println("Return Data = " + Utils.byteArrayToHexString(finalOutData));
+                output.flush();
+                index = 0;
+                totalLen = 0;
+                totalReadLen = 0;
               }
             }
           } catch (IOException e) {
