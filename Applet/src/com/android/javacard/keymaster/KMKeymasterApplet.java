@@ -930,10 +930,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Check if the KeyBlob is compatible. If there is any change in the KeyBlob, the version
     // Parameter in the KeyBlob should be updated to the next version.
     short version = readKeyBlobVersion(keyBlob);
-    if (version > KEYBLOB_VERSION || version < 0) {
-      KMException.throwIt(KMError.INVALID_KEY_BLOB);
-    }
-    if (version == 0 || version < KEYBLOB_VERSION) {
+    if (version < KEYBLOB_VERSION) {
       return true;
     }
     parseEncryptedKeyBlob(keyBlob, appId, appData, scratchPad, version);
@@ -976,6 +973,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         } else if (KMInteger.compare(tagValue, systemParam) == 1) {
           KMException.throwIt(KMError.INVALID_ARGUMENT);
         }
+      } else {
+    	KMException.throwIt(KMError.UNKNOWN_ERROR);
       }
       index += 4;
     }
@@ -1006,15 +1005,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // function itself, but if there is a difference in the KeyBlob version isKeyUpgradeRequired()
     // does not parse the KeyBlob.
     boolean isKeyUpgradeRequired = isKeyUpgradeRequired(keyBlob, appId, appData, scratchPad);
-    // Check if KeyBlob is already parsed in isKeyUpgradeRequired() function, If not parsed
-    // parse the KeyBlob.
-    if (data[KEY_BLOB] == KMType.INVALID_VALUE) {
-      // Parse existing key blob
-      parseEncryptedKeyBlob(keyBlob, data[APP_ID], data[APP_DATA], scratchPad,
-          readKeyBlobVersion(keyBlob));
-    }
-
     if (isKeyUpgradeRequired) {
+      // Check if KeyBlob is already parsed in isKeyUpgradeRequired() function, If not parsed
+      // parse the KeyBlob.
+      if (data[KEY_BLOB] == KMType.INVALID_VALUE) {
+        // Parse existing key blob
+        parseEncryptedKeyBlob(keyBlob, data[APP_ID], data[APP_DATA], scratchPad,
+              readKeyBlobVersion(keyBlob));
+      }
       // copy origin
       data[ORIGIN] = KMEnumTag.getValue(KMType.ORIGIN, data[HW_PARAMETERS]);
       makeKeyCharacteristics(scratchPad);
@@ -3801,8 +3799,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         // If Version is not present. Then it is either an old KeyBlob or
         // corrupted KeyBlob.
         version = 0;
+      } else {
+        version = KMInteger.cast(version).getShort();
+        if (version > KEYBLOB_VERSION || version < 0) {
+          KMException.throwIt(KMError.INVALID_KEY_BLOB);
+        }
       }
-      version = KMInteger.cast(version).getShort();
     } catch(Exception e) {
       KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
@@ -3840,7 +3842,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
-  private short decodeKeyBlob(short version, short keyBlob) {
+  private void decodeKeyBlob(short version, short keyBlob) {
     // Decode KeyBlob and read the KeyBlob params based on the version.
     short parsedBlob = decoder.decodeArray(createKeyBlobExp(version),
         KMByteBlob.cast(keyBlob).getBuffer(),
@@ -3852,7 +3854,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
     readKeyBlobParams(version, parsedBlob);
-    return parsedBlob;
   }
 
   private void processDecryptSecret(short version, short appId, short appData, byte[] scratchPad) {
@@ -3870,21 +3871,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(data[KEY_BLOB]).add(keyBlobSecretOff, data[SECRET]);
   }
 
-  private short parseEncryptedKeyBlob(short keyBlob, short appId, short appData,
+  private void parseEncryptedKeyBlob(short keyBlob, short appId, short appData,
       byte[] scratchPad, short version) {
-    short parsedBlob = KMType.INVALID_VALUE;
     // make root of trust blob
     data[ROT] = readROT(scratchPad);
     if (data[ROT] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     try {
-      parsedBlob = decodeKeyBlob(version, keyBlob);
+      decodeKeyBlob(version, keyBlob);
       processDecryptSecret(version, appId, appData, scratchPad);
     } catch (Exception e) {
       KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
-    return parsedBlob;
   }
 
   // Read RoT
@@ -3963,6 +3962,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[SECRET] = KMByteBlob.instance(scratchPad, (short)0, len);
   }
 
+  private static boolean isAsymetricKeyBlob(short hardwareParams) {
+	short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, hardwareParams);
+	if(KMEnumTag.cast(alg).getValue() == KMType.RSA || KMEnumTag.cast(alg).getValue() == KMType.EC )
+	{
+	  return true; 
+	}
+	return false;	  
+  }
+
   private static void makeAuthData(short version, byte[] scratchPad) {
     // Auth Data includes HW_PARAMETERS, HIDDEN_PARAMETERS, VERSION and PUB_KEY.
     // VERSION is included only for KeyBlobs having version >= 1.
@@ -3970,12 +3978,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short index = 0;
     short arrayLen = 0;
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 8, (byte) 0);
+    boolean isAsymKeyBlob = isAsymetricKeyBlob(data[HW_PARAMETERS]);
     switch (version) {
       case (short) 0:
         // If the KeyBlob size is 5 then it contains an Asymmetric Key, otherwise
         // it contains a Symmetric Key. For Asymmetric Keys include the PUB_KEY.
         arrayLen = 2;
-        if (KMArray.cast(data[KEY_BLOB]).length() == ASYM_KEY_BLOB_SIZE_V0) {
+        if (isAsymKeyBlob) {
           arrayLen = 3;
           Util.setShort(scratchPad, (short) 4, data[PUB_KEY]);
         }
@@ -3986,7 +3995,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         // If the KeyBlob size is 6 then it contains an Asymmetric Key, otherwise
         // it contains a Symmetric Key. For Asymmetric Keys include the PUB_KEY.
         arrayLen = 3;
-        if (KMArray.cast(data[KEY_BLOB]).length() == ASYM_KEY_BLOB_SIZE_V1) {
+        if (isAsymKeyBlob) {
           arrayLen = 4;
           Util.setShort(scratchPad, (short) 6, data[PUB_KEY]);
         }
