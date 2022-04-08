@@ -753,7 +753,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return receiveIncoming(apdu, cmd);
   }
 
-  private short keyBlob(short version) {
+  private short createKeyBlobExp(short version) {
     short keyBlob = KMType.INVALID_VALUE;
     short keyBlobExp = KMByteBlob.exp();
     short keyChar = KMKeyCharacteristics.exp();
@@ -3842,7 +3842,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private short decodeKeyBlob(short version, short keyBlob) {
     // Decode KeyBlob and read the KeyBlob params based on the version.
-    short parsedBlob = decoder.decodeArray(keyBlob(version),
+    short parsedBlob = decoder.decodeArray(createKeyBlobExp(version),
         KMByteBlob.cast(keyBlob).getBuffer(),
         KMByteBlob.cast(keyBlob).getStartOff(),
         KMByteBlob.cast(keyBlob).length());
