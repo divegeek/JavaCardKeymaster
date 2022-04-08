@@ -220,6 +220,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte ASYM_KEY_BLOB_SIZE_V1 = 6;
   public static final byte SYM_KEY_BLOB_SIZE_V0 = 4;
   public static final byte ASYM_KEY_BLOB_SIZE_V0 = 5;
+  // Key type constants
+  public static final byte SYM_KEY_TYPE = 0;
+  public static final byte ASYM_KEY_TYPE = 1;
 
   protected static RemotelyProvisionedComponentDevice rkp;
   protected static KMEncoder encoder;
@@ -782,8 +785,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return keyBlob;
   }
 
-  private static short createKeyBlobInstance(boolean isSymmetricKey) {
-    byte arrayLen = isSymmetricKey ? SYM_KEY_BLOB_SIZE_V1 : ASYM_KEY_BLOB_SIZE_V1;
+  private static short createKeyBlobInstance(byte keyType) {
+    short arrayLen = 0;
+    switch (keyType) {
+      case ASYM_KEY_TYPE:
+        arrayLen = ASYM_KEY_BLOB_SIZE_V1;
+        break;
+      case SYM_KEY_TYPE:
+        arrayLen = SYM_KEY_BLOB_SIZE_V1;
+        break;
+      default:
+        KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+    }
     return KMArray.instance(arrayLen);
   }
 
@@ -3057,7 +3070,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // add scratch pad to key parameters
     updateKeyParameters(scratchPad, index);
-    data[KEY_BLOB] = createKeyBlobInstance(false /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(ASYM_KEY_TYPE);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_PUB_KEY, data[PUB_KEY]);
   }
 
@@ -3099,7 +3112,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     updateKeyParameters(scratchPad, index);
     // validate HMAC Key parameters
     validateHmacKey();
-    data[KEY_BLOB] = createKeyBlobInstance(true /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(SYM_KEY_TYPE);
   }
 
   private void importTDESKey(byte[] scratchPad) {
@@ -3139,7 +3152,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(data[SECRET]).length());
     // update the key parameters list
     updateKeyParameters(scratchPad, index);
-    data[KEY_BLOB] = createKeyBlobInstance(true /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(SYM_KEY_TYPE);
   }
 
   private void validateAesKeySize(short keySizeBits) {
@@ -3182,7 +3195,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     updateKeyParameters(scratchPad, index);
     // validate AES Key parameters
     validateAESKey();
-    data[KEY_BLOB] = createKeyBlobInstance(true /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(SYM_KEY_TYPE);
   }
 
   private void importRSAKey(byte[] scratchPad) {
@@ -3258,7 +3271,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     updateKeyParameters(scratchPad, index);
     // validate RSA Key parameters
     validateRSAKey(scratchPad);
-    data[KEY_BLOB] = createKeyBlobInstance(false /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(ASYM_KEY_TYPE);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_PUB_KEY, data[PUB_KEY]);
   }
 
@@ -3615,7 +3628,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(data[PUB_KEY]).length(),
         lengths);
 
-    data[KEY_BLOB] = createKeyBlobInstance(false /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(ASYM_KEY_TYPE);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_PUB_KEY, data[PUB_KEY]);
   }
 
@@ -3654,7 +3667,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short len  =
         seProvider.createSymmetricKey(KMType.AES, keysize, scratchPad, (short) 0);
     data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, len);
-    data[KEY_BLOB] = createKeyBlobInstance(true /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(SYM_KEY_TYPE);
   }
 
   private static void validateECKeys() {
@@ -3676,7 +3689,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         (short) 128, lengths);
     data[PUB_KEY] = KMByteBlob.instance(scratchPad, (short) 128, lengths[1]);
     data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, lengths[0]);
-    data[KEY_BLOB] = createKeyBlobInstance(false /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(ASYM_KEY_TYPE);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_PUB_KEY, data[PUB_KEY]);
   }
 
@@ -3692,7 +3705,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     validateTDESKey();
     short len = seProvider.createSymmetricKey(KMType.DES, (short) 168, scratchPad, (short) 0);
     data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, len);
-    data[KEY_BLOB] = createKeyBlobInstance(true /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(SYM_KEY_TYPE);
   }
 
   private static void validateHmacKey() {
@@ -3726,7 +3739,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // generate HMAC Key
     short len = seProvider.createSymmetricKey(KMType.HMAC, keysize, scratchPad, (short) 0);
     data[SECRET] = KMByteBlob.instance(scratchPad, (short) 0, len);
-    data[KEY_BLOB] = createKeyBlobInstance(true /* isSymmetricKey */);
+    data[KEY_BLOB] = createKeyBlobInstance(SYM_KEY_TYPE);
   }
 
   protected static short getBootPatchLevel(byte[] scratchPad){
@@ -3962,63 +3975,60 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[SECRET] = KMByteBlob.instance(scratchPad, (short)0, len);
   }
 
-  private static boolean isAsymetricKeyBlob(short hardwareParams) {
-	short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, hardwareParams);
-	if(KMEnumTag.cast(alg).getValue() == KMType.RSA || KMEnumTag.cast(alg).getValue() == KMType.EC )
-	{
-	  return true; 
-	}
-	return false;	  
+  private static byte getKeyType(short hardwareParams) {
+    short alg = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ALGORITHM, hardwareParams);
+    if (KMEnumTag.cast(alg).getValue() == KMType.RSA
+        || KMEnumTag.cast(alg).getValue() == KMType.EC) {
+      return ASYM_KEY_TYPE;
+    }
+    return SYM_KEY_TYPE;
   }
 
   private static void makeAuthData(short version, byte[] scratchPad) {
-    // Auth Data includes HW_PARAMETERS, HIDDEN_PARAMETERS, VERSION and PUB_KEY.
+    // For KeyBlob V1: Auth Data includes HW_PARAMETERS, HIDDEN_PARAMETERS, VERSION and PUB_KEY.
+    // For KeyBlob V0: Auth Data includes HW_PARAMETERS, HIDDEN_PARAMETERS and PUB_KEY.
     // VERSION is included only for KeyBlobs having version >= 1.
     // PUB_KEY is included for only ASYMMETRIC KeyBlobs.
     short index = 0;
-    short arrayLen = 0;
+    short numParams = 0;
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 8, (byte) 0);
-    boolean isAsymKeyBlob = isAsymetricKeyBlob(data[HW_PARAMETERS]);
+    byte keyType = getKeyType(data[HW_PARAMETERS]);
+    // Copy the relevant parameters in the scratchPad in the order
+    // 1. HW_PARAMETERS
+    // 2. HIDDEN_PARAMTERS
+    // 3. VERSION ( Only Version >= 1)
+    // 4. PUB_KEY ( Only for Asymmetric Keys)
     switch (version) {
       case (short) 0:
-        // If the KeyBlob size is 5 then it contains an Asymmetric Key, otherwise
-        // it contains a Symmetric Key. For Asymmetric Keys include the PUB_KEY.
-        arrayLen = 2;
-        if (isAsymKeyBlob) {
-          arrayLen = 3;
-          Util.setShort(scratchPad, (short) 4, data[PUB_KEY]);
-        }
+        numParams = 2;
         Util.setShort(scratchPad, (short) 0, KMKeyParameters.cast(data[HW_PARAMETERS]).getVals());
         Util.setShort(scratchPad, (short) 2, KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals());
+        // For Asymmetric Keys include the PUB_KEY.
+        if (keyType == ASYM_KEY_TYPE) {
+          numParams = 3;
+          Util.setShort(scratchPad, (short) 4, data[PUB_KEY]);
+        }
         break;
       case (short) 1:
-        // If the KeyBlob size is 6 then it contains an Asymmetric Key, otherwise
-        // it contains a Symmetric Key. For Asymmetric Keys include the PUB_KEY.
-        arrayLen = 3;
-        if (isAsymKeyBlob) {
-          arrayLen = 4;
-          Util.setShort(scratchPad, (short) 6, data[PUB_KEY]);
-        }
+        numParams = 3;
         Util.setShort(scratchPad, (short) 0, KMKeyParameters.cast(data[HW_PARAMETERS]).getVals());
         Util.setShort(scratchPad, (short) 2, KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals());
         Util.setShort(scratchPad, (short) 4, data[KEY_BLOB_VERSION_DATA_OFFSET]);
+        // For Asymmetric Keys include the PUB_KEY.
+        if (keyType == ASYM_KEY_TYPE) {
+          numParams = 4;
+          Util.setShort(scratchPad, (short) 6, data[PUB_KEY]);
+        }
         break;
       default:
         KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
-    short params = KMArray.instance(arrayLen);
-    while (index < arrayLen) {
-      KMArray.cast(params).add(index, Util.getShort(scratchPad, (short) (index * 2)));
-      index++;
-    }
-
     short authIndex = repository.allocReclaimableMemory(MAX_AUTH_DATA_SIZE);
     index = 0;
     short len = 0;
-    short paramsLen = KMArray.cast(params).length();
     Util.arrayFillNonAtomic(repository.getHeap(), authIndex, MAX_AUTH_DATA_SIZE, (byte) 0);
-    while (index < paramsLen) {
-      short tag = KMArray.cast(params).get(index);
+    while (index < numParams) {
+      short tag = Util.getShort(scratchPad, (short) (index * 2));
       len = encoder.encode(tag, repository.getHeap(), (short) (authIndex + 32));
       Util.arrayCopyNonAtomic(repository.getHeap(), authIndex, repository.getHeap(),
           (short) (authIndex + len + 32), (short) 32);
