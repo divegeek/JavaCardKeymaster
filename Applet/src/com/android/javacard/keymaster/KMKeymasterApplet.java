@@ -919,8 +919,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private boolean isKeyUpgradeRequired(short keyBlob, short appId, short appData, byte[] scratchPad) {
-    // Check if the KeyBlob is compatible. If there is any change in the KeyBlob the version
-    // Parameter in the KeyBlob has should be updated to the next version.
+    // Check if the KeyBlob is compatible. If there is any change in the KeyBlob, the version
+    // Parameter in the KeyBlob should be updated to the next version.
     short version = readKeyBlobVersion(keyBlob);
     if (version > KEYBLOB_VERSION || version < 0) {
       KMException.throwIt(KMError.INVALID_KEY_BLOB);
