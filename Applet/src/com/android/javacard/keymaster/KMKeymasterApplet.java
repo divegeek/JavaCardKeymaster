@@ -200,7 +200,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static final short MAX_SEED_SIZE = 2048;
 
   // Keyblob offsets.
-  public static final byte KEY_BLOB_VERSION = 0;
+  public static final byte KEY_BLOB_VERSION_OFFSET = 0;
   public static final byte KEY_BLOB_SECRET = 1;
   public static final byte KEY_BLOB_NONCE = 2;
   public static final byte KEY_BLOB_AUTH_TAG = 3;
@@ -769,7 +769,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         break;
       case (short) 1:
         keyBlob = KMArray.instance(ASYM_KEY_BLOB_SIZE_V1);
-        KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_VERSION, KMInteger.exp());
+        KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_VERSION_OFFSET, KMInteger.exp());
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_SECRET, keyBlobExp);
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, keyBlobExp);
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_NONCE, keyBlobExp);
@@ -3774,7 +3774,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_SECRET, data[SECRET]);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_AUTH_TAG, data[AUTH_TAG]);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_NONCE, data[NONCE]);
-    KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_VERSION, data[KEY_BLOB_VERSION_DATA_OFFSET]);
+    KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_VERSION_OFFSET, data[KEY_BLOB_VERSION_DATA_OFFSET]);
 
     short tempChar = KMKeyCharacteristics.instance();
     short emptyParam = KMArray.instance((short) 0);
@@ -3828,7 +3828,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         data[NONCE]= KMArray.cast(parsedKeyBlob).get(KEY_BLOB_NONCE);
         data[AUTH_TAG] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_AUTH_TAG);
         data[KEY_CHARACTERISTICS] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_PARAMS);
-        data[KEY_BLOB_VERSION_DATA_OFFSET] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_VERSION);
+        data[KEY_BLOB_VERSION_DATA_OFFSET] = KMArray.cast(parsedKeyBlob).get(
+            KEY_BLOB_VERSION_OFFSET);
         data[PUB_KEY] = KMType.INVALID_VALUE;
         if (KMArray.cast(parsedKeyBlob).length() == ASYM_KEY_BLOB_SIZE_V1) {
           data[PUB_KEY] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_PUB_KEY);
