@@ -167,7 +167,6 @@ public class KMKeyParameters extends KMType {
       short bootPatchObjPtr, byte[] scratchPad) {
     final short[] hwEnforcedTagArr = {
         // HW Enforced
-        KMType.ENUM_TAG, KMType.ORIGIN,
         KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,
         KMType.ENUM_TAG, KMType.ALGORITHM,
         KMType.UINT_TAG, KMType.KEYSIZE,
