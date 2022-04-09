@@ -1027,7 +1027,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         default:
           KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
       }
-      makeKeyCharacteristics(data[HW_PARAMETERS], scratchPad);
+      // Update the system properties to the latest values and also re-create the KeyBlob's
+      // KeyCharacteristics to make sure all the values are up-to-date with the latest applet
+      // changes.
+      upgradeKeyBlobKeyCharacteristics(data[HW_PARAMETERS], scratchPad);
       // create new key blob with current os version etc.
       createEncryptedKeyBlob(scratchPad);
     } else {
@@ -3748,24 +3751,41 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return KMInteger.uint_32(scratchPad, (short)0);
   }
 
-  private static void makeKeyCharacteristics(short params, byte[] scratchPad) {
+  // This function is only called from processUpgradeKey command.
+  // 1. Update the latest values of OSVersion, OSPatch, VendorPatch and BootPatch in the
+  //    KeyBlob's KeyCharacteristics.
+  // 2. Re-create KeyBlob's KeyCharacteristics from HW_PARAMS to make sure we don't miss
+  //    anything which happens in these functions makeSbEnforced and makeTeeEnforced in
+  //    the future. Like validations, addition of custom tags e.t.c.
+  // 3. No need to create Keystore Enforced list here as it is not required to be included in
+  //    the KeyBlob's KeyCharacteristics.
+  // 4. No need to create KeyCharacteristics as upgradeKey does not require to return any
+  //    KeyCharacteristics back.
+  private static void upgradeKeyBlobKeyCharacteristics(short hwParams, byte[] scratchPad) {
     short osVersion = kmDataStore.getOsVersion();
     short osPatch = kmDataStore.getOsPatch();
     short vendorPatch = kmDataStore.getVendorPatchLevel();
     short bootPatch = getBootPatchLevel(scratchPad);
     data[SB_PARAMETERS] = KMKeyParameters.makeSbEnforced(
-        params, (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
-    data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(params, scratchPad);
-    data[SW_PARAMETERS] = KMKeyParameters.makeKeystoreEnforced(params,scratchPad);
+        hwParams, (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
+    data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(hwParams, scratchPad);
+    data[HW_PARAMETERS] = KMKeyParameters.makeHwEnforced(data[SB_PARAMETERS], data[TEE_PARAMETERS]);
+  }
+
+  private static void makeKeyCharacteristics(byte[] scratchPad) {
+    short osVersion = kmDataStore.getOsVersion();
+    short osPatch = kmDataStore.getOsPatch();
+    short vendorPatch = kmDataStore.getVendorPatchLevel();
+    short bootPatch = getBootPatchLevel(scratchPad);
+    data[SB_PARAMETERS] = KMKeyParameters.makeSbEnforced(
+        data[KEY_PARAMETERS], (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
+    data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(data[KEY_PARAMETERS], scratchPad);
+    data[SW_PARAMETERS] = KMKeyParameters.makeKeystoreEnforced(data[KEY_PARAMETERS],scratchPad);
     data[HW_PARAMETERS] = KMKeyParameters.makeHwEnforced(data[SB_PARAMETERS], data[TEE_PARAMETERS]);
     data[KEY_CHARACTERISTICS] = KMKeyCharacteristics.instance();
     KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setStrongboxEnforced(data[SB_PARAMETERS]);
     KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setKeystoreEnforced(data[SW_PARAMETERS]);
     KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setTeeEnforced(data[TEE_PARAMETERS]);
-  }
-
-  private static void makeKeyCharacteristics(byte[] scratchPad) {
-    makeKeyCharacteristics(data[KEY_PARAMETERS], scratchPad);
   }
 
 
