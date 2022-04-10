@@ -44,7 +44,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte[] F4 = {0x01, 0x00, 0x01};
   public static final byte AES_BLOCK_SIZE = 16;
   public static final byte DES_BLOCK_SIZE = 8;
-  public static final short MAX_LENGTH = 15000;
+  public static final short MAX_LENGTH = 10000;
   public static final short MASTER_KEY_SIZE = 128;
   public static final short WRAPPING_KEY_SIZE = 32;
   public static final short MAX_OPERATIONS_COUNT = 4;
@@ -2909,17 +2909,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private short importKeyCmd(APDU apdu){
-    short cmd = KMArray.instance((short) 6);
+    short cmd = KMArray.instance((short) 3);
     // Arguments
     short params = KMKeyParameters.expAny();
     KMArray.cast(cmd).add((short) 0, params);
     KMArray.cast(cmd).add((short) 1, KMEnum.instance(KMType.KEY_FORMAT));
     KMArray.cast(cmd).add((short) 2, KMByteBlob.exp());
-    KMArray.cast(cmd).add((short) 3, KMByteBlob.exp()); //attest key
-    KMArray.cast(cmd).add((short) 4, params); //attest key params
-    KMArray.cast(cmd).add((short) 5, KMByteBlob.exp()); //issuer
     return receiveIncoming(apdu, cmd);
   }
+
   private void processImportKeyCmd(APDU apdu) {
     // Receive the incoming request fully from the master into buffer.
     short cmd = importKeyCmd(apdu);
@@ -2927,9 +2925,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMArray.cast(cmd).get((short) 0);
     short keyFmt = KMArray.cast(cmd).get((short) 1);
     data[IMPORTED_KEY_BLOB] = KMArray.cast(cmd).get((short) 2);
-    data[ATTEST_KEY_BLOB] = KMArray.cast(cmd).get((short) 3);
-    data[ATTEST_KEY_PARAMS] = KMArray.cast(cmd).get((short) 4);
-    data[ATTEST_KEY_ISSUER] = KMArray.cast(cmd).get((short) 5);
     keyFmt = KMEnum.cast(keyFmt).getVal();
 
     data[CERTIFICATE] = KMArray.instance((short)0); //by default the cert is empty.
@@ -2968,6 +2963,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void importKey(APDU apdu, short keyFmt, byte[] scratchPad) {
+    // Take backup of the KeyParams before they get updated. The original
+    // key params are required to generate MAC in macKeyParams() function.
+    short keyParams = data[KEY_PARAMETERS];
     validateImportKey(data[KEY_PARAMETERS], keyFmt);
     // Check algorithm and dispatch to appropriate handler.
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
@@ -2991,8 +2989,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
         break;
     }
+    // MAC the KeyParameters.
+    short keyParamsMac = macKeyParams(keyParams, scratchPad);
     makeKeyCharacteristics( scratchPad);
-    generateAttestation(data[ATTEST_KEY_BLOB], data[ATTEST_KEY_PARAMS],scratchPad);
     createEncryptedKeyBlob(scratchPad);
     // Remove custom tags from key characteristics
     short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
@@ -3004,7 +3003,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(resp).add((short) 1, data[KEY_BLOB]);
     KMArray.cast(resp).add((short) 2, data[KEY_CHARACTERISTICS]);
-    KMArray.cast(resp).add((short) 3, data[CERTIFICATE]);
+    KMArray.cast(resp).add((short) 3, keyParamsMac);
     sendOutgoing(apdu, resp);
   }
 
@@ -3434,6 +3433,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
         break;
     }
+    // MAC the KeyParameters.
+    short keyParamsMac = macKeyParams(data[KEY_PARAMETERS], scratchPad);
 
     // create key blob and associated attestation.
     data[ORIGIN] = KMType.GENERATED;
@@ -3445,10 +3446,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMKeyParameters.cast(teeParams).deleteCustomTags();
     }
     // prepare the response
-    short resp = KMArray.instance((short) 3);
+    short resp = KMArray.instance((short) 4);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(resp).add((short) 1, data[KEY_BLOB]);
     KMArray.cast(resp).add((short) 2, data[KEY_CHARACTERISTICS]);
+    KMArray.cast(resp).add((short) 3, keyParamsMac);
     sendOutgoing(apdu, resp);
   }
 
@@ -3456,12 +3458,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 	short params = KMKeyParameters.expAny();
 	short blob = KMByteBlob.exp();
 	    // Array of expected arguments
-    short cmd = KMArray.instance((short) 5);
+    short cmd = KMArray.instance((short) 6);
     KMArray.cast(cmd).add((short) 0, blob); // key blob
     KMArray.cast(cmd).add((short) 1, params); // keyparamters to be attested.
     KMArray.cast(cmd).add((short) 2, blob); // attest key blob
     KMArray.cast(cmd).add((short) 3, params); // attest key params
     KMArray.cast(cmd).add((short) 4, blob); // attest issuer
+    KMArray.cast(cmd).add((short) 5, blob); // keyparams mac.
 
     return receiveIncoming(apdu, cmd);
   }
@@ -3486,6 +3489,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[ATTEST_KEY_BLOB] = KMArray.cast(cmd).get((short) 2);
     data[ATTEST_KEY_PARAMS] = KMArray.cast(cmd).get((short) 3);
     data[ATTEST_KEY_ISSUER] = KMArray.cast(cmd).get((short) 4);
+    short keyParamsMac = KMArray.cast(cmd).get((short) 5);
 
     data[CERTIFICATE] = KMArray.instance((short) 0); // by default the cert is empty.
 
@@ -3501,14 +3505,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Check if key requires upgrade. The KeyBlob is parsed inside isKeyUpgradeRequired
     // function itself.
     parseEncryptedKeyBlob(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad, KEYBLOB_CURRENT_VERSION);
+    // Validate KeyParams Mac
+    if (!validateKeyParamsMac(data[KEY_PARAMETERS], keyParamsMac, scratchPad)) {
+      KMException.throwIt(KMError.INVALID_KEY_BLOB);
+    }
     // The key which is being attested should be asymmetric i.e. RSA or EC
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]);
-    if (alg != KMType.RSA && alg != KMType.EC) {
-      KMException.throwIt(KMError.INCOMPATIBLE_ALGORITHM);
+    if (alg == KMType.RSA || alg == KMType.EC) {
+      // Build certificate
+      generateAttestation(data[ATTEST_KEY_BLOB], data[ATTEST_KEY_PARAMS], scratchPad);
     }
-    // Build certificate
-    generateAttestation(data[ATTEST_KEY_BLOB], data[ATTEST_KEY_PARAMS], scratchPad);
-
     short resp = KMArray.instance((short) 2);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(resp).add((short) 1, data[CERTIFICATE]);
@@ -3788,6 +3794,46 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setTeeEnforced(data[TEE_PARAMETERS]);
   }
 
+  private short macKeyParams(short keyParams, byte[] scratchPad) {
+    // For Symmetric Keys no need to Mac the Key parameters. As for symmetric keys
+    // attestation is not done.
+    if (SYM_KEY_TYPE == getKeyType(keyParams)) {
+      return KMByteBlob.instance((short) 0);
+    }
+    short len = encodeToApduBuffer(keyParams, scratchPad, (short) 0, (short) 1024 /* Max Size */);
+
+    short derivedKeyLen = seProvider.hmacKDF(
+        kmDataStore.getMasterKey(),
+        KMByteBlob.cast(data[SECRET]).getBuffer(),
+        KMByteBlob.cast(data[SECRET]).getStartOff(),
+        KMByteBlob.cast(data[SECRET]).length(),
+        scratchPad,
+        len);
+    if (derivedKeyLen < 16) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    derivedKeyLen = 16;
+
+    short signLen = seProvider.hmacSign(scratchPad, len, derivedKeyLen,
+        scratchPad, (short) 0, len, scratchPad, (short) (derivedKeyLen + len));
+    return KMByteBlob.instance(scratchPad, (short) (derivedKeyLen + len), signLen);
+  }
+
+  private boolean validateKeyParamsMac(short keyParams, short keyParamsMac, byte[] scratchPad) {
+    short ptr = macKeyParams(keyParams, scratchPad);
+    if (KMByteBlob.cast(ptr).length() != KMByteBlob.cast(keyParamsMac).length()) {
+      return false;
+    }
+    if (0 != Util.arrayCompare(
+        KMByteBlob.cast(ptr).getBuffer(),
+        KMByteBlob.cast(ptr).getStartOff(),
+        KMByteBlob.cast(keyParamsMac).getBuffer(),
+        KMByteBlob.cast(keyParamsMac).getStartOff(),
+        KMByteBlob.cast(keyParamsMac).length())) {
+      return false;
+    }
+    return true;
+  }
 
   private static void createEncryptedKeyBlob(byte[] scratchPad) {
     // make root of trust blob

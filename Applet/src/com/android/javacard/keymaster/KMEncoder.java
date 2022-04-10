@@ -386,7 +386,7 @@ public void encodeArrayOnlyLength(short arrLength, byte[] buffer, short offset, 
   
   private void encodeBignumTag(short obj) {
     writeTag(KMBignumTag.getTagType(obj), KMBignumTag.getKey(obj));
-    encode(KMBignumTag.getValue(obj));
+    encode(KMBignumTag.cast(obj).getValue());
   }
 
   private void encodeBytesTag(short obj) {
