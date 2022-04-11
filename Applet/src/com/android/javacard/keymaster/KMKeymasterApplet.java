@@ -109,6 +109,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   };
 
   public static final short MAX_COSE_BUF_SIZE = (short) 1024;
+  // Maximum possible encoded keyparams size
+  public static final short MAX_KEY_PARAMS_BUF_SIZE = (short) 2048;
   // Top 32 commands are reserved for provisioning.
   private static final byte KEYMINT_CMD_APDU_START = 0x20;
 
@@ -2989,10 +2991,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
         break;
     }
-    // MAC the KeyParameters.
-    short keyParamsMac = macKeyParams(keyParams, scratchPad);
     makeKeyCharacteristics( scratchPad);
     createEncryptedKeyBlob(scratchPad);
+    // MAC the KeyParameters.
+    short keyParamsMac = macKeyParams(keyParams, scratchPad);
     // Remove custom tags from key characteristics
     short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
     if(teeParams != KMType.INVALID_VALUE) {
@@ -3433,13 +3435,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
         break;
     }
-    // MAC the KeyParameters.
-    short keyParamsMac = macKeyParams(data[KEY_PARAMETERS], scratchPad);
-
     // create key blob and associated attestation.
     data[ORIGIN] = KMType.GENERATED;
     makeKeyCharacteristics(scratchPad);
     createEncryptedKeyBlob(scratchPad);
+    // MAC the KeyParameters.
+    short keyParamsMac = macKeyParams(data[KEY_PARAMETERS], scratchPad);
     // Remove custom tags from key characteristics
     short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
     if(teeParams != KMType.INVALID_VALUE) {
@@ -3800,23 +3801,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (SYM_KEY_TYPE == getKeyType(keyParams)) {
       return KMByteBlob.instance((short) 0);
     }
-    short len = encodeToApduBuffer(keyParams, scratchPad, (short) 0, (short) 1024 /* Max Size */);
+    short len = encodeToApduBuffer(keyParams, scratchPad, (short) 0, MAX_KEY_PARAMS_BUF_SIZE);
 
-    short derivedKeyLen = seProvider.hmacKDF(
-        kmDataStore.getMasterKey(),
-        KMByteBlob.cast(data[SECRET]).getBuffer(),
-        KMByteBlob.cast(data[SECRET]).getStartOff(),
-        KMByteBlob.cast(data[SECRET]).length(),
+    short signLen = seProvider.hmacSign(
+        KMByteBlob.cast(data[AUTH_TAG]).getBuffer(),
+        KMByteBlob.cast(data[AUTH_TAG]).getStartOff(),
+        KMByteBlob.cast(data[AUTH_TAG]).length(),
+        scratchPad,
+        (short) 0,
+        len,
         scratchPad,
         len);
-    if (derivedKeyLen < 16) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
-    derivedKeyLen = 16;
-
-    short signLen = seProvider.hmacSign(scratchPad, len, derivedKeyLen,
-        scratchPad, (short) 0, len, scratchPad, (short) (derivedKeyLen + len));
-    return KMByteBlob.instance(scratchPad, (short) (derivedKeyLen + len), signLen);
+    return KMByteBlob.instance(scratchPad, len, signLen);
   }
 
   private boolean validateKeyParamsMac(short keyParams, short keyParamsMac, byte[] scratchPad) {
