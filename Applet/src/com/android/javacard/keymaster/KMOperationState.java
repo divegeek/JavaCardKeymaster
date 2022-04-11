@@ -40,9 +40,10 @@ public class KMOperationState {
   private static final byte MAC_LENGTH = 7;
   private static final byte MGF_DIGEST = 8;
   private static final byte AUTH_TYPE = 9;
+  private static final byte MIN_MAC_LENGTH = 10;
   // sizes
   public static final byte OPERATION_HANDLE_SIZE = 8;
-  public static final byte DATA_SIZE = 10;
+  public static final byte DATA_SIZE = 11;
   public static final byte AUTH_TIME_SIZE = 8;
   // Secure user ids 5 * 8 = 40 bytes ( Considering Maximum 5 SECURE USER IDs)
   // First two bytes are reserved to store number of secure ids. So total 42 bytes.
@@ -276,6 +277,14 @@ public class KMOperationState {
 
   public void setMacLength(short length) {
     data[MAC_LENGTH] = length;
+  }
+
+  public void setMinMacLength(short length) {
+    data[MIN_MAC_LENGTH] = length;
+  }
+
+  public short getMinMacLength() {
+    return data[MIN_MAC_LENGTH];
   }
 
   public short getMacLength() {

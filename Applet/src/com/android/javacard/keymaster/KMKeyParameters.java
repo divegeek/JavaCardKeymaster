@@ -425,6 +425,7 @@ public class KMKeyParameters extends KMType {
       index += 2;
     }
     if (appDataBlob != KMTag.INVALID_VALUE) {
+      KMByteBlob.cast(appDataBlob);
       Util.setShort(scratchPad, index, appDataBlob);
       index += 2;
     }
