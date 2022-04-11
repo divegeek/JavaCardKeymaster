@@ -1770,7 +1770,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               KMByteBlob.cast(data[SIGNATURE]).length() > (SHA256_DIGEST_LEN_BITS / 8)) {
             KMException.throwIt(KMError.UNSUPPORTED_MAC_LENGTH);
           }
-          if ((KMByteBlob.cast(data[SIGNATURE]).length() < (op.getMinMacLength() / 8))) {
+          if ((KMByteBlob.cast(data[SIGNATURE]).length() < (short)(op.getMinMacLength() / 8))) {
             KMException.throwIt(KMError.INVALID_MAC_LENGTH);
           }
 
@@ -2207,14 +2207,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } else {
       iv = KMArray.instance((short) 0);
     }
-
+    short macLen = 0;
+    if(op.getMacLength() !=  KMType.INVALID_VALUE) {
+    	macLen = (short) (op.getMacLength()/8) ;
+    }
     short params = KMKeyParameters.instance(iv);
     short resp  = KMArray.instance((short) 5);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(resp).add((short) 1, params);
     KMArray.cast(resp).add((short) 2, data[OP_HANDLE]);
     KMArray.cast(resp).add((short) 3, KMInteger.uint_8(op.getBufferingMode()));
-    KMArray.cast(resp).add((short) 4, KMInteger.uint_16((short) (op.getMacLength() / 8)));
+    KMArray.cast(resp).add((short) 4, KMInteger.uint_16(macLen));
     sendOutgoing(apdu, resp);
   }
 
