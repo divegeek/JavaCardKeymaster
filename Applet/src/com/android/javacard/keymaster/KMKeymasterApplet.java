@@ -1376,7 +1376,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       subject = KMByteTag.cast(subject).getValue();
     }
 
-    if (KMEnumTag.cast(alg).getValue() == KMType.RSA) {
+    if (alg == KMType.RSA) {
       cert.rsaAttestKey(attPrivKey, attPubKey, (byte) mode);
     } else {
       cert.ecAttestKey(attPrivKey, (byte) mode);
