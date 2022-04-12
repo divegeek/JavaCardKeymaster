@@ -41,7 +41,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte[] F4 = {0x01, 0x00, 0x01};
   public static final byte AES_BLOCK_SIZE = 16;
   public static final byte DES_BLOCK_SIZE = 8;
-  public static final short MAX_LENGTH = 10000;
   public static final short MASTER_KEY_SIZE = 128;
   public static final short WRAPPING_KEY_SIZE = 32;
   public static final short MAX_OPERATIONS_COUNT = 4;
@@ -3506,8 +3505,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[APP_DATA] = getApplicationData(data[KEY_PARAMETERS]);
     // Check if key requires upgrade. The KeyBlob is parsed inside isKeyUpgradeRequired
     // function itself.
-    parseEncryptedKeyBlob(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad,
-        KEYBLOB_CURRENT_VERSION);
+    if (isKeyUpgradeRequired(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad)) {
+      KMException.throwIt(KMError.KEY_REQUIRES_UPGRADE);
+    }
     // Validate KeyParams Mac
     if (!validateKeyParamsMac(data[KEY_PARAMETERS], keyParamsMac, scratchPad)) {
       KMException.throwIt(KMError.INVALID_KEY_BLOB);
