@@ -358,6 +358,14 @@ public abstract class KMType {
   public static final byte BUF_DES_DECRYPT_PKCS7_BLOCK_ALIGN = 6;
   public static final byte BUF_AES_GCM_DECRYPT_BLOCK_ALIGN = 7;
 
+  // MAX ApplicationID or Application Data size
+  public static final short MAX_APP_ID_APP_DATA_SIZE = 64;
+  // Max attestation challenge size.
+  public static final short MAX_ATTESTATION_CHALLENGE_SIZE = 128;
+  // Max certificate serial size.
+  public static final short MAX_CERTIFICATE_SERIAL_SIZE = 20;
+
+
   protected static KMRepository repository;
   protected static byte[] heap;
   // Instance table
