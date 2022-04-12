@@ -130,6 +130,6 @@ public class KMByteTag extends KMTag {
       default:
         return false;
     }
-    return result;
+    return true;
   }
 }
