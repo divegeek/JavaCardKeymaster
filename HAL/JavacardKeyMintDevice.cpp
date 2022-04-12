@@ -93,7 +93,7 @@ ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& key
     // Call attestKey only Asymmetric algorithms.
     keymaster_algorithm_t algorithm;
     paramSet.GetTagValue(TAG_ALGORITHM, &algorithm);
-    if (algorithm == KM_ALGORITHM_RSA || algorithm == KM_ALGORITHM_EC) { 
+    if (algorithm == KM_ALGORITHM_RSA || algorithm == KM_ALGORITHM_EC) {
         cppbor::Array attestKeyArray;
         attestKeyArray.add(creationResult->keyBlob);
         cbor_.addKeyparameters(attestKeyArray, keyParams);
@@ -101,12 +101,19 @@ ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& key
         attestKeyArray.add(keyParamsMac);
         auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
         if (error != KM_ERROR_OK) {
-	    LOG(ERROR) << "Failed in attestKey err: ";
-	    return km_utils::kmError2ScopedAStatus(error);
+            LOG(ERROR) << "Failed in attestKey err: " << error;
+            if (error == KM_ERROR_KEY_REQUIRES_UPGRADE) {
+                // This is rare scenario where either the applet gets upgraded or system propeties 
+                // like osVersion, OsPatch, VendorPatch and bootPatches values changes.
+                LOG(DEBUG) << "This error occurs in case if either the applets get upgraded or if any"
+                    "system properties like OsVersion, OsPatch, VendorPatch or bootPatch values changes";
+                error = KM_ERROR_UNKNOWN_ERROR;
+            }
+            return km_utils::kmError2ScopedAStatus(error);
         }
         if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
-	    LOG(ERROR) << "Error in decoding og response in generateKey.";
-	    return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+            LOG(ERROR) << "Error in decoding og response in generateKey.";
+            return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
         }
     }
     return ScopedAStatus::ok();
@@ -163,7 +170,14 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
         attestKeyArray.add(keyParamsMac);
         auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
         if (error != KM_ERROR_OK) {
-            LOG(ERROR) << "Failed in attestKey err: ";
+            LOG(ERROR) << "Failed in attestKey err: " << error;
+            if (error == KM_ERROR_KEY_REQUIRES_UPGRADE) {
+                // This is rare scenario where either the applet gets upgraded or system propeties 
+                // like osVersion, OsPatch, VendorPatch and bootPatches values changes.
+                LOG(DEBUG) << "This error occurs in case if either the applets get upgraded or if any"
+                    "system properties like OsVersion, OsPatch, VendorPatch or bootPatch values changes";
+                error = KM_ERROR_UNKNOWN_ERROR;
+            }
             return km_utils::kmError2ScopedAStatus(error);
         }
         if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
@@ -235,7 +249,14 @@ ScopedAStatus JavacardKeyMintDevice::importWrappedKey(const vector<uint8_t>& wra
         cbor_.addAttestationKey(attestKeyArray, std::nullopt);
         auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
         if (error != KM_ERROR_OK) {
-            LOG(ERROR) << "Failed in attestKey err: ";
+            LOG(ERROR) << "Failed in attestKey err: " << error;
+            if (error == KM_ERROR_KEY_REQUIRES_UPGRADE) {
+                // This is rare scenario where either the applet gets upgraded or system propeties 
+                // like osVersion, OsPatch, VendorPatch and bootPatches values changes.
+                LOG(DEBUG) << "This error occurs in case if either the applets get upgraded or if any"
+                    "system properties like OsVersion, OsPatch, VendorPatch or bootPatch values changes";
+                error = KM_ERROR_UNKNOWN_ERROR;
+            }
             return km_utils::kmError2ScopedAStatus(error);
         }
         if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
