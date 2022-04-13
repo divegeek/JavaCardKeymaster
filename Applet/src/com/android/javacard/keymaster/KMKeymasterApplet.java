@@ -105,8 +105,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   };
 
   public static final short MAX_COSE_BUF_SIZE = (short) 1024;
-  // Maximum possible encoded keyparams size
-  public static final short MAX_KEY_PARAMS_BUF_SIZE = (short) 2048;
+  // Maximum allowed buffer size for to encode the key parameters
+  // which is used while creating mac for key paramters.
+  public static final short MAX_KEY_PARAMS_BUF_SIZE = (short) 3072; // 3K
   // Top 32 commands are reserved for provisioning.
   private static final byte KEYMINT_CMD_APDU_START = 0x20;
 
@@ -3506,6 +3507,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Check if key requires upgrade. The KeyBlob is parsed inside isKeyUpgradeRequired
     // function itself.
     if (isKeyUpgradeRequired(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad)) {
+      // This condition occurs if either any of the system properties (OsVersion, OsPatchLevel,
+      // VendorPatchLevel or BootPatchLevel) changes or KeyBlob format changed. So return
+      // KEY_REQUIRES_UPGRADE error as this scenario is application to ATTEST_KEY_BLOB as well
+      // as ATTEST_KEY_BLOB got generated before the KEY_BLOB.
       KMException.throwIt(KMError.KEY_REQUIRES_UPGRADE);
     }
     // Validate KeyParams Mac
@@ -3801,18 +3806,26 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (SYM_KEY_TYPE == getKeyType(keyParams)) {
       return KMByteBlob.instance((short) 0);
     }
-    short len = encodeToApduBuffer(keyParams, scratchPad, (short) 0, MAX_KEY_PARAMS_BUF_SIZE);
+    short offset = repository.allocReclaimableMemory(MAX_KEY_PARAMS_BUF_SIZE);
+    short len = encoder.encode(keyParams, repository.getHeap(), offset);
+    if (len > MAX_KEY_PARAMS_BUF_SIZE) {
+      // KeyParamters exceeded the maximum allowed size.
+      KMException.throwIt(KMError.INSUFFICIENT_BUFFER_SPACE);
+    }
 
     short signLen = seProvider.hmacSign(
         KMByteBlob.cast(data[AUTH_TAG]).getBuffer(),
         KMByteBlob.cast(data[AUTH_TAG]).getStartOff(),
         KMByteBlob.cast(data[AUTH_TAG]).length(),
-        scratchPad,
-        (short) 0,
+        repository.getHeap(),
+        offset,
         len,
         scratchPad,
-        len);
-    return KMByteBlob.instance(scratchPad, len, signLen);
+        (short) 0);
+    //release memory
+    repository.reclaimMemory(MAX_KEY_PARAMS_BUF_SIZE);
+
+    return KMByteBlob.instance(scratchPad, (short) 0, signLen);
   }
 
   private boolean validateKeyParamsMac(short keyParams, short keyParamsMac, byte[] scratchPad) {

@@ -45,6 +45,7 @@ public class KMError {
 
   public static final short KEY_USER_NOT_AUTHENTICATED = 26;
   public static final short INVALID_OPERATION_HANDLE = 28;
+  public static final short INSUFFICIENT_BUFFER_SPACE = 29;
   public static final short VERIFICATION_FAILED = 30;
   public static final short TOO_MANY_OPERATIONS = 31;
   public static final short INVALID_KEY_BLOB = 33;

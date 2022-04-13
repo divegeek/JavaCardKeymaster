@@ -102,13 +102,6 @@ ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& key
         auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
         if (error != KM_ERROR_OK) {
             LOG(ERROR) << "Failed in attestKey err: " << error;
-            if (error == KM_ERROR_KEY_REQUIRES_UPGRADE) {
-                // This is rare scenario where either the applet gets upgraded or system propeties 
-                // like osVersion, OsPatch, VendorPatch and bootPatches values changes.
-                LOG(DEBUG) << "This error occurs in case if either the applets get upgraded or if any"
-                    "system properties like OsVersion, OsPatch, VendorPatch or bootPatch values changes";
-                error = KM_ERROR_UNKNOWN_ERROR;
-            }
             return km_utils::kmError2ScopedAStatus(error);
         }
         if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
@@ -171,13 +164,6 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
         auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
         if (error != KM_ERROR_OK) {
             LOG(ERROR) << "Failed in attestKey err: " << error;
-            if (error == KM_ERROR_KEY_REQUIRES_UPGRADE) {
-                // This is rare scenario where either the applet gets upgraded or system propeties 
-                // like osVersion, OsPatch, VendorPatch and bootPatches values changes.
-                LOG(DEBUG) << "This error occurs in case if either the applets get upgraded or if any"
-                    "system properties like OsVersion, OsPatch, VendorPatch or bootPatch values changes";
-                error = KM_ERROR_UNKNOWN_ERROR;
-            }
             return km_utils::kmError2ScopedAStatus(error);
         }
         if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
@@ -250,13 +236,6 @@ ScopedAStatus JavacardKeyMintDevice::importWrappedKey(const vector<uint8_t>& wra
         auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
         if (error != KM_ERROR_OK) {
             LOG(ERROR) << "Failed in attestKey err: " << error;
-            if (error == KM_ERROR_KEY_REQUIRES_UPGRADE) {
-                // This is rare scenario where either the applet gets upgraded or system propeties 
-                // like osVersion, OsPatch, VendorPatch and bootPatches values changes.
-                LOG(DEBUG) << "This error occurs in case if either the applets get upgraded or if any"
-                    "system properties like OsVersion, OsPatch, VendorPatch or bootPatch values changes";
-                error = KM_ERROR_UNKNOWN_ERROR;
-            }
             return km_utils::kmError2ScopedAStatus(error);
         }
         if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
