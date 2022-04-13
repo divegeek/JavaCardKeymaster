@@ -30,11 +30,6 @@ public class KMBignumTag extends KMTag {
 
   private static KMBignumTag prototype;
 
-  // The allowed tag keys of type bool tag
-  private static final short[] tags = {
-      CERTIFICATE_SERIAL_NUM,
-  };
-
   private KMBignumTag() {
   }
 
@@ -56,15 +51,8 @@ public class KMBignumTag extends KMTag {
     return ptr;
   }
 
-  public static short instance(short key) {
-    if (!validateKey(key)) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    return instance(key, KMByteBlob.exp());
-  }
-
   public static short instance(short key, short byteBlob) {
-    if (!validateKey(key)) {
+    if (!validateKey(key, byteBlob)) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     if (heap[byteBlob] != BYTE_BLOB_TYPE) {
@@ -104,13 +92,17 @@ public class KMBignumTag extends KMTag {
     return KMByteBlob.cast(blobPtr).length();
   }
 
-  private static boolean validateKey(short key) {
-    short index = (short) tags.length;
-    while (--index >= 0) {
-      if (tags[index] == key) {
-        return true;
-      }
+  private static boolean validateKey(short key, short byteBlob) {
+    short valueLen = KMByteBlob.cast(byteBlob).length();
+    switch (key) {
+      case CERTIFICATE_SERIAL_NUM:
+        if (valueLen > MAX_CERTIFICATE_SERIAL_SIZE) {
+          return false;
+        }
+        break;
+      default:
+        return false;
     }
-    return false;
+    return true;
   }
 }

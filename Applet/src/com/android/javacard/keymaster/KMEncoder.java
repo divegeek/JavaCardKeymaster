@@ -82,8 +82,8 @@ public class KMEncoder {
     bufferRef[0] = buffer;
     scratchBuf[START_OFFSET] = startOff;
     short len = (short) (buffer.length - startOff);
-    if ((len < 0) || len > KMKeymasterApplet.MAX_LENGTH) {
-      scratchBuf[LEN_OFFSET] = KMKeymasterApplet.MAX_LENGTH;
+    if ((len < 0) || len > KMRepository.HEAP_SIZE) {
+      scratchBuf[LEN_OFFSET] = KMRepository.HEAP_SIZE;
     } else {
       scratchBuf[LEN_OFFSET] = (short) buffer.length;
     }
@@ -386,7 +386,7 @@ public void encodeArrayOnlyLength(short arrLength, byte[] buffer, short offset, 
   
   private void encodeBignumTag(short obj) {
     writeTag(KMBignumTag.getTagType(obj), KMBignumTag.getKey(obj));
-    encode(KMBignumTag.getValue(obj));
+    encode(KMBignumTag.cast(obj).getValue());
   }
 
   private void encodeBytesTag(short obj) {
