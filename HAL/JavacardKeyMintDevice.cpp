@@ -72,10 +72,11 @@ ScopedAStatus JavacardKeyMintDevice::getHardwareInfo(KeyMintHardwareInfo* info) 
 ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& keyParams,
                                                  const optional<AttestationKey>& attestationKey,
                                                  KeyCreationResult* creationResult) {
-    vector<uint8_t> keyParamsMac;
     cppbor::Array array;
     // add key params
     cbor_.addKeyparameters(array, keyParams);
+    // add attestation key if any
+    cbor_.addAttestationKey(array, attestationKey);
     auto [item, err] = card_->sendRequest(Instruction::INS_GENERATE_KEY_CMD, array);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in sending generateKey.";
@@ -83,31 +84,9 @@ ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& key
     }
     if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
         !cbor_.getKeyCharacteristics(item, 2, creationResult->keyCharacteristics) ||
-        !cbor_.getBinaryArray(item, 3, keyParamsMac)) {
+        !cbor_.getCertificateChain(item, 3, creationResult->certificateChain)) {
         LOG(ERROR) << "Error in decoding og response in generateKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
-    }
-    
-    AuthorizationSet paramSet;
-    paramSet.Reinitialize(KmParamSet(keyParams));
-    // Call attestKey only Asymmetric algorithms.
-    keymaster_algorithm_t algorithm;
-    paramSet.GetTagValue(TAG_ALGORITHM, &algorithm);
-    if (algorithm == KM_ALGORITHM_RSA || algorithm == KM_ALGORITHM_EC) {
-        cppbor::Array attestKeyArray;
-        attestKeyArray.add(creationResult->keyBlob);
-        cbor_.addKeyparameters(attestKeyArray, keyParams);
-        cbor_.addAttestationKey(attestKeyArray, attestationKey);
-        attestKeyArray.add(keyParamsMac);
-        auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
-        if (error != KM_ERROR_OK) {
-            LOG(ERROR) << "Failed in attestKey err: " << error;
-            return km_utils::kmError2ScopedAStatus(error);
-        }
-        if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
-            LOG(ERROR) << "Error in decoding og response in generateKey.";
-            return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
-        }
     }
     return ScopedAStatus::ok();
 }
@@ -129,7 +108,6 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
                                                const optional<AttestationKey>& attestationKey,
                                                KeyCreationResult* creationResult) {
 
-    vector<uint8_t> keyParamsMac;
     cppbor::Array request;
     // add key params
     cbor_.addKeyparameters(request, keyParams);
@@ -137,6 +115,8 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
     request.add(Uint(static_cast<uint8_t>(keyFormat)));
     // add key data
     request.add(Bstr(keyData));
+    // add attestation key if any
+    cbor_.addAttestationKey(request, attestationKey);
 
     auto [item, err] = card_->sendRequest(Instruction::INS_IMPORT_KEY_CMD, request);
     if (err != KM_ERROR_OK) {
@@ -145,31 +125,9 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
     }
     if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
         !cbor_.getKeyCharacteristics(item, 2, creationResult->keyCharacteristics) ||
-        !cbor_.getBinaryArray(item, 3, keyParamsMac)) {
+        !cbor_.getCertificateChain(item, 3, creationResult->certificateChain)) {
         LOG(ERROR) << "Error in decoding response in importKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
-    }
-    
-    AuthorizationSet paramSet;
-    paramSet.Reinitialize(KmParamSet(keyParams));
-    // Call attestKey only Asymmetric algorithms.
-    keymaster_algorithm_t algorithm;
-    paramSet.GetTagValue(TAG_ALGORITHM, &algorithm);
-    if (algorithm == KM_ALGORITHM_RSA || algorithm == KM_ALGORITHM_EC) { 
-        cppbor::Array attestKeyArray;
-        attestKeyArray.add(creationResult->keyBlob);
-        cbor_.addKeyparameters(attestKeyArray, keyParams);
-        cbor_.addAttestationKey(attestKeyArray, attestationKey);
-        attestKeyArray.add(keyParamsMac);
-        auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
-        if (error != KM_ERROR_OK) {
-            LOG(ERROR) << "Failed in attestKey err: " << error;
-            return km_utils::kmError2ScopedAStatus(error);
-        }
-        if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
-            LOG(ERROR) << "Error in decoding of response in importKey.";
-            return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
-        }
     }
     return ScopedAStatus::ok();
 }
@@ -192,7 +150,6 @@ ScopedAStatus JavacardKeyMintDevice::importWrappedKey(const vector<uint8_t>& wra
     std::vector<uint8_t> tag;
     vector<KeyParameter> authList;
     KeyFormat keyFormat;
-    vector<uint8_t> keyParamsMac;
     std::vector<uint8_t> wrappedKeyDescription;
     keymaster_error_t errorCode = parseWrappedKey(wrappedKeyData, iv, transitKey, secureKey, tag,
                                                   authList, keyFormat, wrappedKeyDescription);
@@ -217,31 +174,9 @@ ScopedAStatus JavacardKeyMintDevice::importWrappedKey(const vector<uint8_t>& wra
     }
     if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
         !cbor_.getKeyCharacteristics(item, 2, creationResult->keyCharacteristics) ||
-        !cbor_.getBinaryArray(item, 3, keyParamsMac)) {
+        !cbor_.getCertificateChain(item, 3, creationResult->certificateChain)) {
         LOG(ERROR) << "Error in decoding the response in importWrappedKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
-    }
-    
-    AuthorizationSet paramSet;
-    paramSet.Reinitialize(KmParamSet(authList));
-    // Call attestKey only Asymmetric algorithms.
-    keymaster_algorithm_t algorithm;
-    paramSet.GetTagValue(TAG_ALGORITHM, &algorithm);
-    if (algorithm == KM_ALGORITHM_RSA || algorithm == KM_ALGORITHM_EC) { 
-        cppbor::Array attestKeyArray;
-        attestKeyArray.add(creationResult->keyBlob);
-        cbor_.addKeyparameters(attestKeyArray, authList);
-        attestKeyArray.add(keyParamsMac);
-        cbor_.addAttestationKey(attestKeyArray, std::nullopt);
-        auto [certItem, error] = card_->sendRequest(Instruction::INS_ATTEST_KEY_CMD, attestKeyArray);
-        if (error != KM_ERROR_OK) {
-            LOG(ERROR) << "Failed in attestKey err: " << error;
-            return km_utils::kmError2ScopedAStatus(error);
-        }
-        if (!cbor_.getCertificateChain(certItem, 1, creationResult->certificateChain)) {
-            LOG(ERROR) << "Error in decoding of response in importWrappedKey.";
-            return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
-        }
     }
     return ScopedAStatus::ok();
 }
