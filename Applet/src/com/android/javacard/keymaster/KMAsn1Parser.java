@@ -12,7 +12,13 @@ public class KMAsn1Parser {
   public static final byte ASN1_A0_TAG = (byte) 0xA0;
   public static final byte ASN1_A1_TAG = (byte) 0xA1;
   public static final byte ASN1_BIT_STRING = 0x03;
+
   public static final byte ASN1_UTF8_STRING = 0x0C;
+  public static final byte ASN1_TELETEX_STRING = 0x14;
+  public static final byte ASN1_PRINTABLE_STRING = 0x13;
+  public static final byte ASN1_UNIVERSAL_STRING = 0x1C;
+  public static final byte ASN1_BMP_STRING = 0x1E;
+
   public static final byte[] EC_CURVE = {
       0x06,0x08,0x2a,(byte)0x86,0x48,(byte)0xce,0x3d,0x03,
       0x01,0x07
@@ -58,7 +64,7 @@ public class KMAsn1Parser {
     header(ASN1_SET);
     header(ASN1_SEQUENCE);
     objectIdentifier(COMMON_NAME_OID);
-    return header(ASN1_UTF8_STRING);
+    return subjectHeader();
   }
 
   public short decodeEcSubjectPublicKeyInfo(short blob) {
@@ -212,6 +218,18 @@ public class KMAsn1Parser {
   private short header(short tag){
     short t = getByte();
     if(t != tag) KMException.throwIt(KMError.UNKNOWN_ERROR);
+    return getLength();
+  }
+
+  private short subjectHeader(){
+    short t = getByte();
+    if(t != ASN1_UTF8_STRING &&
+	t != ASN1_TELETEX_STRING &&
+	t != ASN1_PRINTABLE_STRING &&
+	t != ASN1_UNIVERSAL_STRING &&
+	t != ASN1_BMP_STRING) {
+          KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
     return getLength();
   }
 

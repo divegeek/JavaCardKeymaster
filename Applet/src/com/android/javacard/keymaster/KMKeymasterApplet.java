@@ -1351,7 +1351,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return cert;
   }
 
-
   private KMAttestationCert makeAttestationCert(short attKeyBlob, short attKeyParam,
       short attChallenge, short issuer, byte[] scratchPad) {
     KMAttestationCert cert = makeCommonCert(scratchPad);
@@ -1382,7 +1381,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
     }
     KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
-    short length = asn1Decoder.decodeSubject(issuer);
+    short length = 0;
+    try {
+      length = asn1Decoder.decodeSubject(issuer);
+    } catch (KMException e) {
+      KMException.throwIt(KMError.INVALID_ISSUER_SUBJECT_NAME);
+    }
     if (length > KMType.MAX_SUBJECT_CN_LEN) {
       KMException.throwIt(KMError.INVALID_ISSUER_SUBJECT_NAME);
     }

@@ -77,7 +77,7 @@ public class KMEncoder {
     push(obj);
   }
 
-  // Use this function, when the max len
+  // Use this function, when the max len is given
   public short encode(short object, byte[] buffer, short startOff, short maxLength) {
     scratchBuf[STACK_PTR_OFFSET] = 0;
     bufferRef[0] = buffer;

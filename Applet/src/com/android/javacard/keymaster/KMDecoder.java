@@ -363,10 +363,13 @@ public class KMDecoder {
             obj = decode(tagClass);
             KMArray.cast(vals).add(arrPos++, obj);
             break;
-          }catch(KMException e){
-            if(KMException.reason() == KMError.INVALID_TAG &&
-            !ignoreInvalidTags){
-              KMException.throwIt(KMError.INVALID_TAG);
+          } catch(KMException e){
+            if (KMException.reason() == KMError.INVALID_TAG) {
+              if(!ignoreInvalidTags){
+                KMException.throwIt(KMError.INVALID_TAG);
+              }
+            }else {
+              KMException.throwIt(KMException.reason());
             }
             break;
           }
