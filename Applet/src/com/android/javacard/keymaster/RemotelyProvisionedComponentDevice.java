@@ -785,7 +785,7 @@ public class RemotelyProvisionedComponentDevice {
             scratchPad,
             signStructure
         );
-    len = KMPKCS8Decoder.instance().
+    len = KMAsn1Parser.instance().
             decodeEcdsa256Signature(KMByteBlob.instance(scratchPad, signStructure, len), scratchPad, signStructure);
     signStructure = KMByteBlob.instance(scratchPad, signStructure, len);
 

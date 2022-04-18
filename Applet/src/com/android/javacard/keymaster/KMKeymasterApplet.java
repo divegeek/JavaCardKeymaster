@@ -1381,6 +1381,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (!KMEnumArrayTag.cast(attKeyPurpose).contains(KMType.ATTEST_KEY)) {
       KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
     }
+    KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
+    short length = asn1Decoder.decodeSubject(issuer);
+    if (length > KMType.MAX_SUBJECT_CN_LEN) {
+      KMException.throwIt(KMError.INVALID_ISSUER_SUBJECT_NAME);
+    }
     // If issuer is not present then it is an error
     if (KMByteBlob.cast(issuer).length() <= 0) {
       KMException.throwIt(KMError.MISSING_ISSUER_SUBJECT_NAME);
@@ -1719,7 +1724,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void finishKeyAgreementOperation(KMOperationState op, byte[] scratchPad) {
     try {
-      KMPKCS8Decoder pkcs8 = KMPKCS8Decoder.instance();
+      KMAsn1Parser pkcs8 = KMAsn1Parser.instance();
       short blob = pkcs8.decodeEcSubjectPublicKeyInfo(data[INPUT_DATA]);
       short len = op.getOperation().finish(
           KMByteBlob.cast(blob).getBuffer(),
@@ -3061,7 +3066,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void importECKeys(byte[] scratchPad) {
     // Decode key material
-    KMPKCS8Decoder pkcs8 = KMPKCS8Decoder.instance();
+    KMAsn1Parser pkcs8 = KMAsn1Parser.instance();
     short keyBlob = pkcs8.decodeEc(data[IMPORTED_KEY_BLOB]);
     data[PUB_KEY] = KMArray.cast(keyBlob).get((short) 0);
     data[SECRET] = KMArray.cast(keyBlob).get((short) 1);
@@ -3253,7 +3258,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void importRSAKey(byte[] scratchPad) {
     // Decode key material
-    KMPKCS8Decoder pkcs8 = KMPKCS8Decoder.instance();
+    KMAsn1Parser pkcs8 = KMAsn1Parser.instance();
     short keyblob = pkcs8.decodeRsa(data[IMPORTED_KEY_BLOB]);
     data[PUB_KEY] = KMArray.cast(keyblob).get((short) 0);
     short pubKeyExp = KMArray.cast(keyblob).get((short)1);
@@ -4384,7 +4389,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             scratchPad,
             temp
         );
-    len = KMPKCS8Decoder.instance().
+    len = KMAsn1Parser.instance().
             decodeEcdsa256Signature(KMByteBlob.instance(scratchPad, temp, len), scratchPad, temp);
     coseSignStructure = KMByteBlob.instance(scratchPad, temp, len);
 

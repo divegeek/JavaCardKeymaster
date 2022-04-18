@@ -3,13 +3,16 @@ package com.android.javacard.keymaster;
 import com.android.javacard.seprovider.KMException;
 import javacard.framework.Util;
 
-public class KMPKCS8Decoder {
+public class KMAsn1Parser {
   public static final byte ASN1_OCTET_STRING= 0x04;
   public static final byte ASN1_SEQUENCE= 0x30;
+  public static final byte ASN1_SET= 0x31;
   public static final byte ASN1_INTEGER= 0x02;
+  public static final byte OBJECT_IDENTIFIER = 0x06;
   public static final byte ASN1_A0_TAG = (byte) 0xA0;
   public static final byte ASN1_A1_TAG = (byte) 0xA1;
   public static final byte ASN1_BIT_STRING = 0x03;
+  public static final byte ASN1_UTF8_STRING = 0x0C;
   public static final byte[] EC_CURVE = {
       0x06,0x08,0x2a,(byte)0x86,0x48,(byte)0xce,0x3d,0x03,
       0x01,0x07
@@ -23,12 +26,15 @@ public class KMPKCS8Decoder {
       0x3d,0x02,0x01,0x06,0x08,0x2a,(byte)0x86,0x48,
       (byte)0xce,0x3d,0x03,0x01,0x07
   };
+  public static final byte[] COMMON_NAME_OID = {
+      0x55, 0x04, 0x03  
+  };
   private byte[] data;
   private short start;
   private short length;
   private short cur;
-  private static KMPKCS8Decoder inst;
-  private KMPKCS8Decoder(){
+  private static KMAsn1Parser inst;
+  private KMAsn1Parser(){
     start = 0;
     length =  0;
     cur = 0;
@@ -44,6 +50,15 @@ public class KMPKCS8Decoder {
     init(blob);
     decodeCommon((short)0, EC_ALGORITHM);
     return decodeEcPrivateKey((short)1);
+  }
+  
+  public short decodeSubject(short blob) {
+    init(blob);
+    header(ASN1_SEQUENCE);
+    header(ASN1_SET);
+    header(ASN1_SEQUENCE);
+    objectIdentifier(COMMON_NAME_OID);
+    return header(ASN1_UTF8_STRING);
   }
 
   public short decodeEcSubjectPublicKeyInfo(short blob) {
@@ -183,6 +198,17 @@ public class KMPKCS8Decoder {
     if(Util.arrayCompare(data, cur, EC_CURVE, (short)0, len) != 0) KMException.throwIt(KMError.UNKNOWN_ERROR);
     incrementCursor(len);
   }
+  
+  private short objectIdentifier(byte[] oid) {
+     short length = header(OBJECT_IDENTIFIER);
+     if (length != oid.length) {
+       KMException.throwIt(KMError.UNKNOWN_ERROR);
+     }
+     if(Util.arrayCompare(data, cur, oid, (short)0, length) != 0) KMException.throwIt(KMError.UNKNOWN_ERROR);
+     incrementCursor(length);
+     return length;
+  }
+
   private short header(short tag){
     short t = getByte();
     if(t != tag) KMException.throwIt(KMError.UNKNOWN_ERROR);
@@ -222,9 +248,9 @@ public class KMPKCS8Decoder {
     else KMException.throwIt(KMError.UNKNOWN_ERROR);
     return KMType.INVALID_VALUE; //should not come here
   }
-  public static KMPKCS8Decoder instance() {
+  public static KMAsn1Parser instance() {
     if (inst == null) {
-      inst = new KMPKCS8Decoder();
+      inst = new KMAsn1Parser();
     }
     return inst;
   }
