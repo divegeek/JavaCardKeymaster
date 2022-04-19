@@ -403,11 +403,17 @@ public class KMKeyParameters extends KMType {
     short appId = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, keyParamsPtr);
     if (appId != KMTag.INVALID_VALUE) {
       appId = KMByteTag.cast(appId).getValue();
+      if (KMByteBlob.cast(appId).length() == 0) {
+        appId = KMTag.INVALID_VALUE;
+      }
     }
     short appData =
         KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, keyParamsPtr);
     if (appData != KMTag.INVALID_VALUE) {
       appData = KMByteTag.cast(appData).getValue();
+      if (KMByteBlob.cast(appData).length() == 0) {
+        appData = KMTag.INVALID_VALUE;
+      }
     }
     return makeHidden(appId, appData, rootOfTrustBlob, scratchPad);
   }

@@ -145,12 +145,6 @@ public abstract class KMType {
   public static final byte UNVERIFIED_BOOT = 0x02;
   public static final byte FAILED_BOOT = 0x03;
 
-  // Verified Boot Key
-  public static final short VERIFIED_BOOT_KEY = (short) 0xF004;
-
-  // Verified Boot Hash
-  public static final short VERIFIED_BOOT_HASH = (short) 0xF005;
-
   // Device Locked
   public static final short DEVICE_LOCKED = (short) 0xF006;
   public static final byte DEVICE_LOCKED_TRUE = 0x01;
@@ -364,6 +358,10 @@ public abstract class KMType {
   public static final short MAX_ATTESTATION_CHALLENGE_SIZE = 128;
   // Max certificate serial size.
   public static final short MAX_CERTIFICATE_SERIAL_SIZE = 20;
+  // Attestation Application ID
+  public static final short MAX_ATTESTATION_APP_ID_SIZE = 1024;
+  // DER subject max length.
+  public static final short MAX_SUBJECT_DER_LEN = 1095;
 
 
   protected static KMRepository repository;

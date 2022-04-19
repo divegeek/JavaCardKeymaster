@@ -77,68 +77,54 @@ public class KMEncoder {
     push(obj);
   }
 
-  public short encode(short object, byte[] buffer, short startOff) {
+  /**
+   * This functions encodes the given object into the provider buffer space
+   * in cbor format.
+   *
+   * @param object Object to be encoded into cbor data.
+   * @param buffer Output where cbor data is copied.
+   * @param startOff is the start offset of the buffer.
+   * @param bufLen length of the buffer
+   * @param encoderOutLimitLen excepted encoded output length.
+   * @return length of the encoded buffer.
+   */
+  public short encode(short object, byte[] buffer, short startOff, short bufLen,
+      short encoderOutLimitLen) {
     scratchBuf[STACK_PTR_OFFSET] = 0;
     bufferRef[0] = buffer;
     scratchBuf[START_OFFSET] = startOff;
-    short len = (short) (buffer.length - startOff);
-    if ((len < 0) || len > KMRepository.HEAP_SIZE) {
-      scratchBuf[LEN_OFFSET] = KMRepository.HEAP_SIZE;
-    } else {
-      scratchBuf[LEN_OFFSET] = (short) buffer.length;
+    if ((short) (startOff + encoderOutLimitLen) > bufLen) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    //this.length = (short)(startOff + length);
+    scratchBuf[LEN_OFFSET] = (short) (startOff + encoderOutLimitLen);
     push(object);
     encode();
     return (short) (scratchBuf[START_OFFSET] - startOff);
   }
 
-  // array{KMError.OK,Array{KMByteBlobs}}
-  public void encodeCertChain(byte[] buffer, short offset, short length, short errInt32Ptr) {
-    bufferRef[0] = buffer;
-    scratchBuf[START_OFFSET] = offset;
-    scratchBuf[LEN_OFFSET] = (short) (offset + 1);
-    //Total length is ArrayHeader + [UIntHeader + length(errInt32Ptr)]
-    scratchBuf[LEN_OFFSET] += (short) (1 + getEncodedIntegerLength(errInt32Ptr));
-
-    writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
-    encodeUnsignedInteger(errInt32Ptr);
+  public short encode(short object, byte[] buffer, short startOff, short bufLen) {
+    return encode(object, buffer, startOff, bufLen, (short) (bufLen - startOff));
   }
 
   //array{KMError.OK,Array{KMByteBlobs}}
-  public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength, short errInt32Ptr) {
+  public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength) {
+    if (bufferStart > certStart) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
     bufferRef[0] = certBuffer;
     scratchBuf[START_OFFSET] = certStart;
     scratchBuf[LEN_OFFSET] = (short) (certStart + 1);
-    //Array header - 2 elements i.e. 1 byte
+    // Byte Header + cert length
+    scratchBuf[START_OFFSET] -= getEncodedBytesLength(certLength);
+    //Array header - 1 elements i.e. 1 byte
     scratchBuf[START_OFFSET]--;
-    // errInt32Ptr - PowerResetStatus + ErrorCode - 4 bytes
-    // Integer header - 1 byte
-    scratchBuf[START_OFFSET] -= getEncodedIntegerLength(errInt32Ptr);
-    //Array header - 2 elements i.e. 1 byte
-    scratchBuf[START_OFFSET]--;
-    // Cert Byte blob - typically 2 bytes length i.e. 3 bytes header
-    scratchBuf[START_OFFSET] -= 2;
-    if (certLength >= SHORT_PAYLOAD) {
-      scratchBuf[START_OFFSET]--;
-    }
     if (scratchBuf[START_OFFSET] < bufferStart) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     bufferStart = scratchBuf[START_OFFSET];
-    writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
-    encodeUnsignedInteger(errInt32Ptr); //PowerResetStatus + ErrorCode
-    writeMajorTypeWithLength(ARRAY_TYPE, (short) 1); // Array of 1 element
+    writeMajorTypeWithLength(ARRAY_TYPE, (short) 1); // Array of 1 elements
     writeMajorTypeWithLength(BYTES_TYPE, certLength); // Cert Byte Blob of length
     return bufferStart;
-  }
-
-  public short encodeError(short errInt32Ptr, byte[] buffer, short startOff, short length) {
-    bufferRef[0] = buffer;
-    scratchBuf[START_OFFSET] = startOff;
-    scratchBuf[LEN_OFFSET] = (short) (startOff + length + 1);
-    encodeUnsignedInteger(errInt32Ptr);
-    return (short) (scratchBuf[START_OFFSET] - startOff);
   }
 
   private void encode() {
@@ -637,7 +623,7 @@ public void encodeArrayOnlyLength(short arrLength, byte[] buffer, short offset, 
     return len;
   }
 
-  private short getEncodedBytesLength(short len) {
+  public short getEncodedBytesLength(short len) {
     short ret = 0;
     if (len < KMEncoder.UINT8_LENGTH && len >= 0) {
       ret = 1;

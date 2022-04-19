@@ -98,23 +98,19 @@ public class KMByteTag extends KMTag {
   private static boolean validateKey(short key, short byteBlob) {
     short valueLen = KMByteBlob.cast(byteBlob).length();
     switch (key) {
-      case ROOT_OF_TRUST:
-      case UNIQUE_ID:
       case ATTESTATION_APPLICATION_ID:
-      case ATTESTATION_ID_BRAND:
-      case ATTESTATION_ID_DEVICE:
-      case ATTESTATION_ID_PRODUCT:
-      case ATTESTATION_ID_SERIAL:
-      case ATTESTATION_ID_IMEI:
-      case ATTESTATION_ID_MEID:
-      case ATTESTATION_ID_MANUFACTURER:
-      case ATTESTATION_ID_MODEL:
-      case ASSOCIATED_DATA:
-      case NONCE:
-      case CONFIRMATION_TOKEN:
-      case VERIFIED_BOOT_KEY:
-      case VERIFIED_BOOT_HASH:
+        if (valueLen > MAX_ATTESTATION_APP_ID_SIZE) {
+          return false;
+        }
+        break;
       case CERTIFICATE_SUBJECT_NAME:
+      {
+        if (valueLen > MAX_SUBJECT_DER_LEN) {
+          return false;
+        }
+        KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
+        asn1Decoder.validateDerSubject(byteBlob);
+      }
         break;
       case APPLICATION_ID:
       case APPLICATION_DATA:
@@ -126,6 +122,21 @@ public class KMByteTag extends KMTag {
         if (valueLen > MAX_ATTESTATION_CHALLENGE_SIZE) {
           return false;
         }
+        break;
+      case ATTESTATION_ID_BRAND:
+      case ATTESTATION_ID_DEVICE:
+      case ATTESTATION_ID_PRODUCT:
+      case ATTESTATION_ID_SERIAL:
+      case ATTESTATION_ID_IMEI:
+      case ATTESTATION_ID_MEID:
+      case ATTESTATION_ID_MANUFACTURER:
+      case ATTESTATION_ID_MODEL:
+        if (valueLen > KMConfigurations.MAX_ATTESTATION_IDS_SIZE) {
+          return false;
+        }
+        break;
+      case ROOT_OF_TRUST:
+      case NONCE:
         break;
       default:
         return false;
