@@ -147,9 +147,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
   public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34; //0x42
   private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 35; //0x43
-  // Enable this when doing heap profiling.
-  //private static final byte INS_GET_HEAP_PROFILE_DATA = KEYMINT_CMD_APDU_START + 36; //0x44
-
   private static final byte INS_END_KM_CMD = 0x7F;
 
   // Data Dictionary items
@@ -211,7 +208,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte AES_GCM_NONCE_LENGTH = 12;
   // ComputeHMAC constants
   private static final short HMAC_SHARED_PARAM_MAX_SIZE = 64;
-  protected static final short MAX_CERT_SIZE = 2500;
+  protected static final short MAX_CERT_SIZE = 3000;
   protected static final short MAX_KEY_CHARS_SIZE = 512;
   protected static final short MAX_KEYBLOB_SIZE = 1024;
   // KEYBLOB_CURRENT_VERSION goes into KeyBlob and will affect all
@@ -491,10 +488,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_GET_RKP_HARDWARE_INFO:
           rkp.process(apduIns, apdu);
           break;
-        // Enable this when doing heap profiling.
-        /*case INS_GET_HEAP_PROFILE_DATA:
-          processGetHeapProfileData(apdu);
-          break;*/
         default:
           ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
@@ -608,18 +601,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    */
   public static void sendOutgoing(APDU apdu, short resp) {
     //TODO handle the extended buffer stuff. We can reuse this.
-    // Enable this when doing heap profiling.
-    //short usedHeap = repository.getHeapIndex();
     short bufferStartOffset = repository.allocAvailableMemory();
     byte[] buffer = repository.getHeap();
     // TODO we can change the following to incremental send.
-    short bufferLength = encoder.encode(resp, buffer, bufferStartOffset);
+    short bufferLength = encoder.encode(resp, buffer, bufferStartOffset, repository.getHeapReclaimIndex());
     if (((short) (bufferLength + bufferStartOffset)) > ((short) repository
         .getHeap().length)) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
-    // Enable this when doing heap profiling.
-    //repository.updateHeapProfileData((short) (bufferLength + usedHeap));
     // Send data
     apdu.setOutgoing();
     apdu.setOutgoingLength(bufferLength);
@@ -1085,7 +1074,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       createEncryptedKeyBlob(scratchPad);
       // allocate reclaimable memory.
       short buffer = repository.alloc(MAX_KEYBLOB_SIZE);
-      data[KEY_BLOB] = encoder.encode(data[KEY_BLOB], repository.getHeap(), buffer);
+      data[KEY_BLOB] = encoder.encode(data[KEY_BLOB], repository.getHeap(), buffer, repository.getHeapReclaimIndex());
       data[KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), buffer, data[KEY_BLOB]);
     } else {
       data[KEY_BLOB] = KMByteBlob.instance((short) 0);
@@ -3852,8 +3841,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Encodes KeyCharacteristics at the end of the heap
   private void encodeKeyCharacteristics(short keyChars) {
     byte[] buffer = repository.getHeap();
+    short prevReclaimIndex = repository.getHeapReclaimIndex();
     short ptr = repository.allocReclaimableMemory(MAX_KEY_CHARS_SIZE);
-    short len = encoder.encode(keyChars, buffer, ptr, MAX_KEY_CHARS_SIZE);
+    short len = encoder.encode(keyChars, buffer, ptr, prevReclaimIndex, MAX_KEY_CHARS_SIZE);
     // shift the encoded KeyCharacteristics data towards the right till the data[CERTIFICATE] offset.
     Util.arrayCopyNonAtomic(buffer, ptr, buffer, (short) (ptr + (MAX_KEY_CHARS_SIZE - len)), len);
     // Reclaim the unused memory.
@@ -3864,8 +3854,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void encodeKeyBlob(short keyBlobPtr) {
     // allocate reclaimable memory.
     byte[] buffer = repository.getHeap();
+    short prevReclaimIndex = repository.getHeapReclaimIndex();
     short top = repository.allocReclaimableMemory(MAX_KEYBLOB_SIZE);
-    short keyBlob = encoder.encode(keyBlobPtr, buffer, top, MAX_KEYBLOB_SIZE);
+    short keyBlob = encoder.encode(keyBlobPtr, buffer, top, prevReclaimIndex, MAX_KEYBLOB_SIZE);
     Util.arrayCopyNonAtomic(repository.getHeap(), top, repository.getHeap(),
         (short) (top + MAX_KEYBLOB_SIZE - keyBlob), keyBlob);
     short newTop = (short) (top + MAX_KEYBLOB_SIZE - keyBlob);
@@ -4100,13 +4091,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       default:
         KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
+    short prevReclaimIndex = repository.getHeapReclaimIndex();
     short authIndex = repository.allocReclaimableMemory(MAX_AUTH_DATA_SIZE);
     index = 0;
     short len = 0;
     Util.arrayFillNonAtomic(repository.getHeap(), authIndex, MAX_AUTH_DATA_SIZE, (byte) 0);
     while (index < numParams) {
       short tag = Util.getShort(scratchPad, (short) (index * 2));
-      len = encoder.encode(tag, repository.getHeap(), (short) (authIndex + 32));
+      len = encoder.encode(tag, repository.getHeap(), (short) (authIndex + 32), prevReclaimIndex);
       Util.arrayCopyNonAtomic(repository.getHeap(), authIndex, repository.getHeap(),
           (short) (authIndex + len + 32), (short) 32);
       len = seProvider.messageDigest256(repository.getHeap(),
@@ -4204,7 +4196,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     createEncryptedKeyBlob(scratchPad);
     // allocate reclaimable memory.
     short buffer = repository.alloc((short) 1024);
-    short keyBlob = encoder.encode(data[KEY_BLOB], repository.getHeap(), buffer);
+    short keyBlob = encoder.encode(data[KEY_BLOB], repository.getHeap(), buffer, repository.getHeapReclaimIndex());
     data[KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), buffer, keyBlob);
   }
   public static short getPubKey() {
@@ -4226,8 +4218,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    */
   public static short encodeToApduBuffer(short object, byte[] apduBuf, short apduOff,
       short maxLen) {
+	short prevReclaimIndex = repository.getHeapReclaimIndex();  
     short offset = repository.allocReclaimableMemory(maxLen);
-    short len = encoder.encode(object, repository.getHeap(), offset, maxLen);
+    short len = encoder.encode(object, repository.getHeap(), offset, prevReclaimIndex, maxLen);
     Util.arrayCopyNonAtomic(repository.getHeap(), offset, apduBuf, apduOff, len);
     //release memory
     repository.reclaimMemory(maxLen);
@@ -4432,14 +4425,4 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
     }
   }
-
-  // Enable this when doing heap profiling.
-  /*private void processGetHeapProfileData(APDU apdu) {
-    // No Arguments
-    // prepare the response
-    short resp = KMArray.instance((short) 2);
-    KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
-    KMArray.cast(resp).add((short) 1, KMInteger.uint_16(repository.getMaxHeapUsed()));
-    sendOutgoing(apdu, resp);
-  }*/
 }

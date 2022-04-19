@@ -78,32 +78,21 @@ public class KMEncoder {
   }
 
   // Use this function, when the max len is given
-  public short encode(short object, byte[] buffer, short startOff, short maxLength) {
+  public short encode(short object, byte[] buffer, short startOff, short bufLen, short encoderOutLimitLen) {
     scratchBuf[STACK_PTR_OFFSET] = 0;
     bufferRef[0] = buffer;
     scratchBuf[START_OFFSET] = startOff;
-    if ((short) (startOff + maxLength) > buffer.length) {
+    if ((short) (startOff + encoderOutLimitLen) > bufLen) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    scratchBuf[LEN_OFFSET] = (short) (startOff + maxLength);
+    scratchBuf[LEN_OFFSET] = (short) (startOff + encoderOutLimitLen);
     push(object);
     encode();
     return (short) (scratchBuf[START_OFFSET] - startOff);
   }
 
-  public short encode(short object, byte[] buffer, short startOff) {
-    scratchBuf[STACK_PTR_OFFSET] = 0;
-    bufferRef[0] = buffer;
-    scratchBuf[START_OFFSET] = startOff;
-    short len = (short) (buffer.length - startOff);
-    if ((len < 0) || len > KMRepository.HEAP_SIZE) {
-      scratchBuf[LEN_OFFSET] = KMRepository.HEAP_SIZE;
-    } else {
-      scratchBuf[LEN_OFFSET] = (short) buffer.length;
-    }
-    push(object);
-    encode();
-    return (short) (scratchBuf[START_OFFSET] - startOff);
+  public short encode(short object, byte[] buffer, short startOff, short bufLen) {
+    return encode(object, buffer, startOff, bufLen, (short) (bufLen - startOff));
   }
 
   //array{KMError.OK,Array{KMByteBlobs}}

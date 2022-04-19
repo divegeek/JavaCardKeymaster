@@ -737,7 +737,7 @@ public class RemotelyProvisionedComponentDevice {
             bufIndex, (short) 3);
 
     partialPayloadLen +=
-        encoder.encode(arrPtr, repository.getHeap(), (short) (bufIndex + partialPayloadLen));
+        encoder.encode(arrPtr, repository.getHeap(), (short) (bufIndex + partialPayloadLen), repository.getHeapReclaimIndex());
     Util.arrayCopyNonAtomic(repository.getHeap(), bufIndex, scratchPad, len, partialPayloadLen);
     ((KMOperation) operation[0]).update(scratchPad, (short) 0, (short) (len + partialPayloadLen));
   }
