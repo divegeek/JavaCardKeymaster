@@ -288,6 +288,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         KMException.throwIt(KMError.INVALID_ARGUMENT);
       }
       obj = KMByteTag.cast(obj).getValue();
+      if (KMByteBlob.cast(obj).length() > KMConfigurations.MAX_ATTESTATION_IDS_SIZE) {
+        KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+      }
       kmDataStore.setAttestationId(key, KMByteBlob.cast(obj).getBuffer(),
           KMByteBlob.cast(obj).getStartOff(), KMByteBlob.cast(obj).length());
       index++;
