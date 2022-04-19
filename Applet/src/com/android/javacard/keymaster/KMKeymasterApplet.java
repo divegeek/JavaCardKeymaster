@@ -1383,11 +1383,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
     short length = 0;
     try {
-      length = asn1Decoder.decodeSubject(issuer);
+      asn1Decoder.validateDerSubject(issuer);
     } catch (KMException e) {
       KMException.throwIt(KMError.INVALID_ISSUER_SUBJECT_NAME);
     }
-    if (length > KMType.MAX_SUBJECT_CN_LEN) {
+    if (KMByteBlob.cast(issuer).length() > KMType.MAX_SUBJECT_DER_LEN) {
       KMException.throwIt(KMError.INVALID_ISSUER_SUBJECT_NAME);
     }
     // If issuer is not present then it is an error

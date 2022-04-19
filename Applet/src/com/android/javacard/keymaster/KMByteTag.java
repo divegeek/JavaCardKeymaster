@@ -107,8 +107,8 @@ public class KMByteTag extends KMTag {
       case CERTIFICATE_SUBJECT_NAME:
       {
         KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
-        short length = asn1Decoder.decodeSubject(byteBlob);
-        if (length > MAX_SUBJECT_CN_LEN) {
+        asn1Decoder.validateDerSubject(byteBlob);
+        if (valueLen > MAX_SUBJECT_DER_LEN) {
           return false;
         }
       }

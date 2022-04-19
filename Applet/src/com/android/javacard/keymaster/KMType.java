@@ -360,8 +360,8 @@ public abstract class KMType {
   public static final short MAX_CERTIFICATE_SERIAL_SIZE = 20;
   // Attestation Application ID
   public static final short MAX_ATTESTATION_APP_ID_SIZE = 1024;
-  // Maximum Certificate Subject Common name length.
-  public static final short MAX_SUBJECT_CN_LEN = 64;
+  // DER subject max length.
+  public static final short MAX_SUBJECT_DER_LEN = 1095;
 
 
   protected static KMRepository repository;
