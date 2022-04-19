@@ -20,5 +20,7 @@ public class KMConfigurations {
   public static final byte LITTLE_ENDIAN = 0x00;
   public static final byte BIG_ENDIAN = 0x01;
   public static final byte TEE_MACHINE_TYPE = LITTLE_ENDIAN;
+  // If the size of the attestation ids is known and lesser than 64
+  // then reduce the size here. It reduces the heap memory usage.
   public static final byte MAX_ATTESTATION_IDS_SIZE = 64;
 }

@@ -1072,10 +1072,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       upgradeKeyBlobKeyCharacteristics(data[HW_PARAMETERS], scratchPad);
       // create new key blob with current os version etc.
       createEncryptedKeyBlob(scratchPad);
-      // allocate reclaimable memory.
-      short buffer = repository.alloc(MAX_KEYBLOB_SIZE);
-      data[KEY_BLOB] = encoder.encode(data[KEY_BLOB], repository.getHeap(), buffer, repository.getHeapReclaimIndex());
-      data[KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), buffer, data[KEY_BLOB]);
+      short prevReclaimIndex = repository.getHeapReclaimIndex();
+      short offset = repository.allocReclaimableMemory(MAX_KEYBLOB_SIZE);
+      data[KEY_BLOB] = encoder.encode(data[KEY_BLOB], repository.getHeap(), offset,
+          prevReclaimIndex, MAX_KEYBLOB_SIZE);
+      data[KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), offset, data[KEY_BLOB]);
+      repository.reclaimMemory(MAX_KEYBLOB_SIZE);
     } else {
       data[KEY_BLOB] = KMByteBlob.instance((short) 0);
     }
@@ -4194,10 +4196,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[ORIGIN] = KMType.GENERATED;
     makeKeyCharacteristics(scratchPad);
     createEncryptedKeyBlob(scratchPad);
-    // allocate reclaimable memory.
-    short buffer = repository.alloc((short) 1024);
-    short keyBlob = encoder.encode(data[KEY_BLOB], repository.getHeap(), buffer, repository.getHeapReclaimIndex());
-    data[KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), buffer, keyBlob);
+    short prevReclaimIndex = repository.getHeapReclaimIndex();
+    short offset = repository.allocReclaimableMemory(MAX_KEYBLOB_SIZE);
+    data[KEY_BLOB] = encoder.encode(data[KEY_BLOB], repository.getHeap(), offset,
+        prevReclaimIndex, MAX_KEYBLOB_SIZE);
+    data[KEY_BLOB] = KMByteBlob.instance(repository.getHeap(), offset, data[KEY_BLOB]);
+    repository.reclaimMemory(MAX_KEYBLOB_SIZE);
   }
   public static short getPubKey() {
     return data[PUB_KEY];

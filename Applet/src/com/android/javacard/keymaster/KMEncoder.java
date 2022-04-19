@@ -77,8 +77,19 @@ public class KMEncoder {
     push(obj);
   }
 
-  // Use this function, when the max len is given
-  public short encode(short object, byte[] buffer, short startOff, short bufLen, short encoderOutLimitLen) {
+  /**
+   * This functions encodes the given object into the provider buffer space
+   * in cbor format.
+   *
+   * @param object Object to be encoded into cbor data.
+   * @param buffer Output where cbor data is copied.
+   * @param startOff is the start offset of the buffer.
+   * @param bufLen length of the buffer
+   * @param encoderOutLimitLen excepted encoded output length.
+   * @return length of the encoded buffer.
+   */
+  public short encode(short object, byte[] buffer, short startOff, short bufLen,
+      short encoderOutLimitLen) {
     scratchBuf[STACK_PTR_OFFSET] = 0;
     bufferRef[0] = buffer;
     scratchBuf[START_OFFSET] = startOff;
