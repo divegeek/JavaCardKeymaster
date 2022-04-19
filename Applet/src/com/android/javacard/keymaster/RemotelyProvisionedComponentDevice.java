@@ -737,7 +737,7 @@ public class RemotelyProvisionedComponentDevice {
             bufIndex, (short) 3);
 
     partialPayloadLen +=
-        encoder.encode(arrPtr, repository.getHeap(), (short) (bufIndex + partialPayloadLen));
+        encoder.encode(arrPtr, repository.getHeap(), (short) (bufIndex + partialPayloadLen), repository.getHeapReclaimIndex());
     Util.arrayCopyNonAtomic(repository.getHeap(), bufIndex, scratchPad, len, partialPayloadLen);
     ((KMOperation) operation[0]).update(scratchPad, (short) 0, (short) (len + partialPayloadLen));
   }
@@ -785,7 +785,7 @@ public class RemotelyProvisionedComponentDevice {
             scratchPad,
             signStructure
         );
-    len = KMPKCS8Decoder.instance().
+    len = KMAsn1Parser.instance().
             decodeEcdsa256Signature(KMByteBlob.instance(scratchPad, signStructure, len), scratchPad, signStructure);
     signStructure = KMByteBlob.instance(scratchPad, signStructure, len);
 

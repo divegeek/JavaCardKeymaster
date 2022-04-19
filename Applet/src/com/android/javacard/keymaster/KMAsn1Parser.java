@@ -3,13 +3,22 @@ package com.android.javacard.keymaster;
 import com.android.javacard.seprovider.KMException;
 import javacard.framework.Util;
 
-public class KMPKCS8Decoder {
+public class KMAsn1Parser {
   public static final byte ASN1_OCTET_STRING= 0x04;
   public static final byte ASN1_SEQUENCE= 0x30;
+  public static final byte ASN1_SET= 0x31;
   public static final byte ASN1_INTEGER= 0x02;
+  public static final byte OBJECT_IDENTIFIER = 0x06;
   public static final byte ASN1_A0_TAG = (byte) 0xA0;
   public static final byte ASN1_A1_TAG = (byte) 0xA1;
   public static final byte ASN1_BIT_STRING = 0x03;
+
+  public static final byte ASN1_UTF8_STRING = 0x0C;
+  public static final byte ASN1_TELETEX_STRING = 0x14;
+  public static final byte ASN1_PRINTABLE_STRING = 0x13;
+  public static final byte ASN1_UNIVERSAL_STRING = 0x1C;
+  public static final byte ASN1_BMP_STRING = 0x1E;
+
   public static final byte[] EC_CURVE = {
       0x06,0x08,0x2a,(byte)0x86,0x48,(byte)0xce,0x3d,0x03,
       0x01,0x07
@@ -23,12 +32,55 @@ public class KMPKCS8Decoder {
       0x3d,0x02,0x01,0x06,0x08,0x2a,(byte)0x86,0x48,
       (byte)0xce,0x3d,0x03,0x01,0x07
   };
+  
+  //https://datatracker.ietf.org/doc/html/rfc5280, RFC 5280, Page 21
+  // 2.5.4
+  public byte[] COMMON_OID = new byte[] {
+    0x06, 0x03, 0x55, 0x04
+  };
+  // This array contains the last byte of OID for each oid type.
+  // The first 4 bytes are common as shown above in COMMON_OID
+  private static final byte[] attributeOIds = {
+      0x03, /* commonName COMMON_OID.3 */
+      0x04, /* surName COMMON_OID.4*/ 
+      0x05, /* serialNumber COMMON_OID.5 */ 
+      0x06, /* countryName COMMON_OID.6 */  
+      0x07, /* locality COMMON_OID.7 */  
+      0x08, /* stateOrProviince COMMON_OID.8 */  
+      0x0A, /* organizationName COMMON_OID.10 */ 
+      0x0B, /* organizationalUnitName COMMON_OID.11 */  
+      0x0C, /* title COMMON_OID.10 */  
+      0x2A, /* givenName COMMON_OID.42 */ 
+      0x2B, /* initials COMMON_OID.43 */  
+      0x2C, /* generationQualifier COMMON_OID.44 */  
+      0x2E, /* dnQualifer COMMON_OID.46 */  
+      0x41, /* pseudonym COMMON_OID.65 */
+  };
+  // https://datatracker.ietf.org/doc/html/rfc5280, RFC 5280, Page 124
+  // TODO Specification does not mention about the DN_QUALIFIER_OID max length.
+  // So the max limit is set at 64.
+  private static final byte[] attributeValueMaxLen = {
+      0x40, /* 1-64 commonName */
+      0x28, /* 1-40 surname */
+      0x40, /* 1-64 serial */
+      0x02, /* 1-2 country */
+      (byte) 0x80, /* 1-128 locality */
+      (byte) 0x80,  /* 1-128 state */
+      0x40, /* 1-64 organization */
+      0x40, /* 1-64 organization unit*/
+      0x40, /* 1-64 title */
+      0x10, /* 1-16 givenName */
+      0x05, /* 1-5 initials */
+      0x03, /* 1-3 gen qualifier */
+      0x40, /* 1-64 dn-qualifier */ 
+      (byte) 0x80 /* 1-128 pseudonym */
+  };
   private byte[] data;
   private short start;
   private short length;
   private short cur;
-  private static KMPKCS8Decoder inst;
-  private KMPKCS8Decoder(){
+  private static KMAsn1Parser inst;
+  private KMAsn1Parser(){
     start = 0;
     length =  0;
     cur = 0;
@@ -44,6 +96,18 @@ public class KMPKCS8Decoder {
     init(blob);
     decodeCommon((short)0, EC_ALGORITHM);
     return decodeEcPrivateKey((short)1);
+  }
+  
+  public void validateDerSubject(short blob) {
+    init(blob);
+    header(ASN1_SEQUENCE);
+    while (cur < ((short) (start + length))) {
+      header(ASN1_SET);
+      header(ASN1_SEQUENCE);
+      // Parse and validate OBJECT-IDENTIFIER and Value fields
+      // Cursor is incremented in validateAttributeTypeAndValue.
+      validateAttributeTypeAndValue();
+    }
   }
 
   public short decodeEcSubjectPublicKeyInfo(short blob) {
@@ -183,6 +247,46 @@ public class KMPKCS8Decoder {
     if(Util.arrayCompare(data, cur, EC_CURVE, (short)0, len) != 0) KMException.throwIt(KMError.UNKNOWN_ERROR);
     incrementCursor(len);
   }
+  
+  private void validateAttributeTypeAndValue() {
+    short start = cur;
+    if (getByte() != OBJECT_IDENTIFIER) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    short length = getLength();
+    if (length != 3) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    cur = start;
+    boolean found = false;
+    for(short i = 0; i < (short) attributeOIds.length; i++) {
+      if ((Util.arrayCompare(data, cur, COMMON_OID, (short)0, (short) COMMON_OID.length) == 0) &&
+          (attributeOIds[i] == data[(short)(cur + COMMON_OID.length)])) {
+        incrementCursor((short) (COMMON_OID.length + 1));
+        // Validate the length of the attribute value.
+        short tag = getByte();
+        if(tag != ASN1_UTF8_STRING &&
+            tag != ASN1_TELETEX_STRING &&
+            tag != ASN1_PRINTABLE_STRING &&
+            tag != ASN1_UNIVERSAL_STRING &&
+            tag != ASN1_BMP_STRING) {
+           KMException.throwIt(KMError.UNKNOWN_ERROR);
+         }
+        length = getLength();
+        if (length <= 0 && length > attributeValueMaxLen[i]) {
+          KMException.throwIt(KMError.UNKNOWN_ERROR);
+        }
+        incrementCursor(length);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      // None of the attributes matches.
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+  }
+
   private short header(short tag){
     short t = getByte();
     if(t != tag) KMException.throwIt(KMError.UNKNOWN_ERROR);
@@ -222,9 +326,9 @@ public class KMPKCS8Decoder {
     else KMException.throwIt(KMError.UNKNOWN_ERROR);
     return KMType.INVALID_VALUE; //should not come here
   }
-  public static KMPKCS8Decoder instance() {
+  public static KMAsn1Parser instance() {
     if (inst == null) {
-      inst = new KMPKCS8Decoder();
+      inst = new KMAsn1Parser();
     }
     return inst;
   }

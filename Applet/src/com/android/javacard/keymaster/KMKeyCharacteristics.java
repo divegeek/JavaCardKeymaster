@@ -37,15 +37,13 @@ public class KMKeyCharacteristics extends KMType {
   }
 
   public static short exp() {
-    short sb = KMKeyParameters.exp();
-    short tee = KMKeyParameters.exp();
-    short keystore = KMKeyParameters.exp();
+    short keyParamExp = KMKeyParameters.exp();
     short arrPtr = KMArray.instance((short) 3);
 
     KMArray arr = KMArray.cast(arrPtr);
-    arr.add(STRONGBOX_ENFORCED, sb);
-    arr.add(TEE_ENFORCED, tee);
-    arr.add(KEYSTORE_ENFORCED, keystore);
+    arr.add(STRONGBOX_ENFORCED, keyParamExp);
+    arr.add(TEE_ENFORCED, keyParamExp);
+    arr.add(KEYSTORE_ENFORCED, keyParamExp);
     return instance(arrPtr);
   }
 
