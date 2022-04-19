@@ -668,12 +668,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     encodeKeyCharacteristics(keyChars);
     // and encode it to the end of the buffer before KEY_CHARACTERISTICS
     encodeKeyBlob(keyblob);
-    // Write Error code before data[KEY_BLOB]
-    short bufferStartOffset = repository.allocReclaimableMemory((short) 1);
-    buffer[bufferStartOffset] = 0x00;
-    // Write Array header before ErrorCode.
-    bufferStartOffset = repository.allocReclaimableMemory((short) 1);
-    buffer[bufferStartOffset] = (byte) 0x84;
+    // Write Array header and ErrorCode before data[KEY_BLOB]
+    short bufferStartOffset = repository.allocReclaimableMemory((short) 2);
+    Util.setShort(buffer, bufferStartOffset, (short) 0x8400);
 
     short bufferLength = (short) (KMRepository.HEAP_SIZE - bufferStartOffset);
     // Send data
