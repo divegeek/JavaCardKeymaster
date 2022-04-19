@@ -19,7 +19,6 @@ package com.android.javacard.keymaster;
 import com.android.javacard.seprovider.KMAttestationCert;
 import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMException;
-import com.android.javacard.seprovider.KMHmacKey;
 import com.android.javacard.seprovider.KMSEProvider;
 import javacard.framework.APDU;
 import javacard.framework.Applet;
@@ -29,8 +28,6 @@ import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
-import javacard.security.HMACKey;
-import javacard.security.KeyBuilder;
 import javacardx.apdu.ExtendedLength;
 
 /**
@@ -227,6 +224,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Key type constants
   public static final byte SYM_KEY_TYPE = 0;
   public static final byte ASYM_KEY_TYPE = 1;
+  // SHA-256 Digest length in bits
+  public static final short SHA256_DIGEST_LEN_BITS = 256;
+  // Minimum HMAC length in bits
+  public static final short MIN_HMAC_LENGTH_BITS = 64;
 
   protected static RemotelyProvisionedComponentDevice rkp;
   protected static KMEncoder encoder;
@@ -983,7 +984,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           KMException.throwIt(KMError.INVALID_ARGUMENT);
         }
       } else {
-    	KMException.throwIt(KMError.UNKNOWN_ERROR);
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
       }
       index += 4;
     }
@@ -1728,8 +1729,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         // the truncated signature back to the caller. At the time of verfication
         // we again compute the signature of the plain text input, truncate it to
         // TAG_MAC_LENGTH and compare it with the input signature for
-        // verification. So this is the reason we are using KMType.SIGN directly
-        // instead of using op.getPurpose().
+        // verification.
         op.getOperation()
             .sign(
                 KMByteBlob.cast(data[INPUT_DATA]).getBuffer(),
@@ -1741,10 +1741,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           // Copy only signature of mac length size.
           data[OUTPUT_DATA] =
               KMByteBlob.instance(scratchPad, (short) 0, (short) (op.getMacLength() / 8));
-        }else if (op.getPurpose() == KMType.VERIFY) {
+        } else if (op.getPurpose() == KMType.VERIFY) {
+          if ((KMByteBlob.cast(data[SIGNATURE]).length() < (MIN_HMAC_LENGTH_BITS / 8)) ||
+              KMByteBlob.cast(data[SIGNATURE]).length() > (SHA256_DIGEST_LEN_BITS / 8)) {
+            KMException.throwIt(KMError.UNSUPPORTED_MAC_LENGTH);
+          }
+          if ((KMByteBlob.cast(data[SIGNATURE]).length() < (short)(op.getMinMacLength() / 8))) {
+            KMException.throwIt(KMError.INVALID_MAC_LENGTH);
+          }
+
           if (0
               != Util.arrayCompare(
-              scratchPad, (short)0,
+              scratchPad, (short) 0,
               KMByteBlob.cast(data[SIGNATURE]).getBuffer(),
               KMByteBlob.cast(data[SIGNATURE]).getStartOff(),
               KMByteBlob.cast(data[SIGNATURE]).length())) {
@@ -2167,14 +2175,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } else {
       iv = KMArray.instance((short) 0);
     }
-
+    short macLen = 0;
+    if(op.getMacLength() !=  KMType.INVALID_VALUE) {
+    	macLen = (short) (op.getMacLength()/8) ;
+    }
     short params = KMKeyParameters.instance(iv);
     short resp  = KMArray.instance((short) 5);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(resp).add((short) 1, params);
     KMArray.cast(resp).add((short) 2, data[OP_HANDLE]);
     KMArray.cast(resp).add((short) 3, KMInteger.uint_8(op.getBufferingMode()));
-    KMArray.cast(resp).add((short) 4, KMInteger.uint_16((short) (op.getMacLength() / 8)));
+    KMArray.cast(resp).add((short) 4, KMInteger.uint_16(macLen));
     sendOutgoing(apdu, resp);
   }
 
@@ -2404,6 +2415,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
         break;
       case KMType.HMAC:
+        short minMacLen = KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH,
+            data[HW_PARAMETERS]);
+        op.setMinMacLength(minMacLen);
         if (macLen == KMType.INVALID_VALUE) {
           if (op.getPurpose() == KMType.SIGN) {
             KMException.throwIt(KMError.MISSING_MAC_LENGTH);
@@ -2413,12 +2427,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           if (op.getPurpose() == KMType.VERIFY) {
             KMException.throwIt(KMError.INVALID_ARGUMENT);
           }
-          if (macLen
-              < KMIntegerTag.getShortValue(
-              KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[HW_PARAMETERS])) {
+          if (macLen % 8 != 0 ||
+              macLen > SHA256_DIGEST_LEN_BITS ||
+              macLen < MIN_HMAC_LENGTH_BITS) {
+            KMException.throwIt(KMError.UNSUPPORTED_MAC_LENGTH);
+          }
+          if (macLen < minMacLen) {
             KMException.throwIt(KMError.INVALID_MAC_LENGTH);
-          }  else if (macLen % 8 != 0 || macLen > 256) {
-              KMException.throwIt(KMError.UNSUPPORTED_MAC_LENGTH);
           }
           op.setMacLength(macLen);
         }
@@ -3720,8 +3735,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.MIN_MAC_LENGTH, data[KEY_PARAMETERS]);
 
     if (((short) (minMacLength % 8) != 0)
-        || minMacLength < (short) 64
-        || minMacLength > (short) 256) {
+        || minMacLength < MIN_HMAC_LENGTH_BITS
+        || minMacLength > SHA256_DIGEST_LEN_BITS) {
       KMException.throwIt(KMError.UNSUPPORTED_MIN_MAC_LENGTH);
     }
     // Read Keysize
