@@ -95,7 +95,6 @@ public class KMByteTag extends KMTag {
     return KMByteBlob.cast(blobPtr).length();
   }
 
-  // TODO Review this function
   private static boolean validateKey(short key, short byteBlob) {
     short valueLen = KMByteBlob.cast(byteBlob).length();
     switch (key) {
@@ -106,11 +105,11 @@ public class KMByteTag extends KMTag {
         break;
       case CERTIFICATE_SUBJECT_NAME:
       {
-        KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
-        asn1Decoder.validateDerSubject(byteBlob);
         if (valueLen > MAX_SUBJECT_DER_LEN) {
           return false;
         }
+        KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
+        asn1Decoder.validateDerSubject(byteBlob);
       }
         break;
       case APPLICATION_ID:
@@ -136,12 +135,8 @@ public class KMByteTag extends KMTag {
           return false;
         }
         break;
-      case ROOT_OF_TRUST: // TODO : Not adding it as ByteTag in HiddenParamters.
-      //case UNIQUE_ID: This tag never used in keyParamters.
-      case NONCE: // Validation of nonce happends in begin operation.
-      // Below two tags are obsolete in keymint.
-      //case ASSOCIATED_DATA: 
-      //case CONFIRMATION_TOKEN:
+      case ROOT_OF_TRUST:
+      case NONCE:
         break;
       default:
         return false;

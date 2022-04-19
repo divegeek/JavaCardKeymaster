@@ -34,22 +34,46 @@ public class KMAsn1Parser {
   };
   
   //https://datatracker.ietf.org/doc/html/rfc5280, RFC 5280, Page 21
+  // 2.5.4
   public byte[] COMMON_OID = new byte[] {
     0x06, 0x03, 0x55, 0x04
   };
   // This array contains the last byte of OID for each oid type.
   // The first 4 bytes are common as shown above in COMMON_OID
-  private static final byte[] attributeOIds1 = {
-      0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0A, 0x0B, 0x0C, 0x2A,
-      0x2B, 0x2C, 0x2E, 0x41,
+  private static final byte[] attributeOIds = {
+      0x03, /* commonName COMMON_OID.3 */
+      0x04, /* surName COMMON_OID.4*/ 
+      0x05, /* serialNumber COMMON_OID.5 */ 
+      0x06, /* countryName COMMON_OID.6 */  
+      0x07, /* locality COMMON_OID.7 */  
+      0x08, /* stateOrProviince COMMON_OID.8 */  
+      0x0A, /* organizationName COMMON_OID.10 */ 
+      0x0B, /* organizationalUnitName COMMON_OID.11 */  
+      0x0C, /* title COMMON_OID.10 */  
+      0x2A, /* givenName COMMON_OID.42 */ 
+      0x2B, /* initials COMMON_OID.43 */  
+      0x2C, /* generationQualifier COMMON_OID.44 */  
+      0x2E, /* dnQualifer COMMON_OID.46 */  
+      0x41, /* pseudonym COMMON_OID.65 */
   };
   // https://datatracker.ietf.org/doc/html/rfc5280, RFC 5280, Page 124
   // TODO Specification does not mention about the DN_QUALIFIER_OID max length.
+  // So the max limit is set at 64.
   private static final byte[] attributeValueMaxLen = {
-      0x40/*64 commonName*/, 0x28/*40 surname*/, 0x40/*64 serial*/, 0x02/*64 country*/,
-      (byte)0x80/*128 locality*/, (byte)0x80/*128 state*/,  0x40/*64 organization*/, 0x40/*64 organization unit*/,
-      0x40/*64 title*/,  0x10/*16 givenName*/, 0x05/* initials*/, 0x03/* gen qualifier*/, 0x40,/*64 dn-qualifier*/ 
-      (byte)0x80/*128 pseudonym*/
+      0x40, /* 1-64 commonName */
+      0x28, /* 1-40 surname */
+      0x40, /* 1-64 serial */
+      0x02, /* 1-2 country */
+      (byte) 0x80, /* 1-128 locality */
+      (byte) 0x80,  /* 1-128 state */
+      0x40, /* 1-64 organization */
+      0x40, /* 1-64 organization unit*/
+      0x40, /* 1-64 title */
+      0x10, /* 1-16 givenName */
+      0x05, /* 1-5 initials */
+      0x03, /* 1-3 gen qualifier */
+      0x40, /* 1-64 dn-qualifier */ 
+      (byte) 0x80 /* 1-128 pseudonym */
   };
   private byte[] data;
   private short start;
@@ -235,9 +259,9 @@ public class KMAsn1Parser {
     }
     cur = start;
     boolean found = false;
-    for(short i = 0; i < (short) attributeOIds1.length; i++) {
+    for(short i = 0; i < (short) attributeOIds.length; i++) {
       if ((Util.arrayCompare(data, cur, COMMON_OID, (short)0, (short) COMMON_OID.length) == 0) &&
-          (attributeOIds1[i] == data[(short)(cur + COMMON_OID.length)])) {
+          (attributeOIds[i] == data[(short)(cur + COMMON_OID.length)])) {
         incrementCursor((short) (COMMON_OID.length + 1));
         // Validate the length of the attribute value.
         short tag = getByte();
@@ -249,7 +273,7 @@ public class KMAsn1Parser {
            KMException.throwIt(KMError.UNKNOWN_ERROR);
          }
         length = getLength();
-        if (length > attributeValueMaxLen[i]) {
+        if (length <= 0 && length > attributeValueMaxLen[i]) {
           KMException.throwIt(KMError.UNKNOWN_ERROR);
         }
         incrementCursor(length);
