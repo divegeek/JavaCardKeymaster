@@ -33,14 +33,12 @@ import javacard.framework.Util;
  */
 public class KMRepository {
 
-  public static final short HEAP_SIZE = 8500;
+  public static final short HEAP_SIZE = 10000;
 
   // Class Attributes
   private byte[] heap;
   private short[] heapIndex;
   private  static short[] reclaimIndex;
-  // Enable this when doing heap profiling.
-  //public static short maxHeapUsage;
 
   // Singleton instance
   private static KMRepository repository;
@@ -86,8 +84,6 @@ public class KMRepository {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     reclaimIndex[0] -= length;
-    // Enable this when doing heap profiling.
-    //updateHeapProfileData((short) 0);
     return reclaimIndex[0];
   }
 
@@ -125,8 +121,6 @@ public class KMRepository {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     heapIndex[0] += length;
-    // Enable this when doing heap profiling.
-    //updateHeapProfileData((short) 0);
     return (short) (heapIndex[0] - length);
   }
 
@@ -137,24 +131,8 @@ public class KMRepository {
   public short getHeapIndex() {
     return heapIndex[0];
   }
-
-  // Enable this when doing heap profiling.
-/*
-  public void updateHeapProfileData(short size) {
-    short totalHeapConsumed = 0;
-    if (size > 0) {
-      // This case comes while sending output.
-      totalHeapConsumed = size;
-    } else {
-      totalHeapConsumed = (short) (heapIndex[0] + (HEAP_SIZE - reclaimIndex[0]));
-    }
-    if(totalHeapConsumed > maxHeapUsage) {
-    	maxHeapUsage = totalHeapConsumed;
-    }
-  }
   
-  public short getMaxHeapUsed() {
-	  return maxHeapUsage;
+  public short getHeapReclaimIndex() {
+    return reclaimIndex[0];
   }
-  */
 }
