@@ -32,8 +32,24 @@ public class KMAsn1Parser {
       0x3d,0x02,0x01,0x06,0x08,0x2a,(byte)0x86,0x48,
       (byte)0xce,0x3d,0x03,0x01,0x07
   };
-  public static final byte[] COMMON_NAME_OID = {
-      0x55, 0x04, 0x03  
+  
+  //https://datatracker.ietf.org/doc/html/rfc5280, RFC 5280, Page 21
+  public byte[] COMMON_OID = new byte[] {
+    0x06, 0x03, 0x55, 0x04
+  };
+  // This array contains the last byte of OID for each oid type.
+  // The first 4 bytes are common as shown above in COMMON_OID
+  private static final byte[] attributeOIds1 = {
+      0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x0A, 0x0B, 0x0C, 0x2A,
+      0x2B, 0x2C, 0x2E, 0x41,
+  };
+  // https://datatracker.ietf.org/doc/html/rfc5280, RFC 5280, Page 124
+  // TODO Specification does not mention about the DN_QUALIFIER_OID max length.
+  private static final byte[] attributeValueMaxLen = {
+      0x40/*64 commonName*/, 0x28/*40 surname*/, 0x40/*64 serial*/, 0x02/*64 country*/,
+      (byte)0x80/*128 locality*/, (byte)0x80/*128 state*/,  0x40/*64 organization*/, 0x40/*64 organization unit*/,
+      0x40/*64 title*/,  0x10/*16 givenName*/, 0x05/* initials*/, 0x03/* gen qualifier*/, 0x40,/*64 dn-qualifier*/ 
+      (byte)0x80/*128 pseudonym*/
   };
   private byte[] data;
   private short start;
@@ -58,13 +74,16 @@ public class KMAsn1Parser {
     return decodeEcPrivateKey((short)1);
   }
   
-  public short decodeSubject(short blob) {
+  public void validateDerSubject(short blob) {
     init(blob);
     header(ASN1_SEQUENCE);
-    header(ASN1_SET);
-    header(ASN1_SEQUENCE);
-    objectIdentifier(COMMON_NAME_OID);
-    return subjectHeader();
+    while (cur < ((short) (start + length))) {
+      header(ASN1_SET);
+      header(ASN1_SEQUENCE);
+      // Parse and validate OBJECT-IDENTIFIER and Value fields
+      // Cursor is incremented in validateAttributeTypeAndValue.
+      validateAttributeTypeAndValue();
+    }
   }
 
   public short decodeEcSubjectPublicKeyInfo(short blob) {
@@ -205,31 +224,48 @@ public class KMAsn1Parser {
     incrementCursor(len);
   }
   
-  private short objectIdentifier(byte[] oid) {
-     short length = header(OBJECT_IDENTIFIER);
-     if (length != oid.length) {
-       KMException.throwIt(KMError.UNKNOWN_ERROR);
-     }
-     if(Util.arrayCompare(data, cur, oid, (short)0, length) != 0) KMException.throwIt(KMError.UNKNOWN_ERROR);
-     incrementCursor(length);
-     return length;
+  private void validateAttributeTypeAndValue() {
+    short start = cur;
+    if (getByte() != OBJECT_IDENTIFIER) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    short length = getLength();
+    if (length != 3) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    cur = start;
+    boolean found = false;
+    for(short i = 0; i < (short) attributeOIds1.length; i++) {
+      if ((Util.arrayCompare(data, cur, COMMON_OID, (short)0, (short) COMMON_OID.length) == 0) &&
+          (attributeOIds1[i] == data[(short)(cur + COMMON_OID.length)])) {
+        incrementCursor((short) (COMMON_OID.length + 1));
+        // Validate the length of the attribute value.
+        short tag = getByte();
+        if(tag != ASN1_UTF8_STRING &&
+            tag != ASN1_TELETEX_STRING &&
+            tag != ASN1_PRINTABLE_STRING &&
+            tag != ASN1_UNIVERSAL_STRING &&
+            tag != ASN1_BMP_STRING) {
+           KMException.throwIt(KMError.UNKNOWN_ERROR);
+         }
+        length = getLength();
+        if (length > attributeValueMaxLen[i]) {
+          KMException.throwIt(KMError.UNKNOWN_ERROR);
+        }
+        incrementCursor(length);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      // None of the attributes matches.
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
   }
 
   private short header(short tag){
     short t = getByte();
     if(t != tag) KMException.throwIt(KMError.UNKNOWN_ERROR);
-    return getLength();
-  }
-
-  private short subjectHeader(){
-    short t = getByte();
-    if(t != ASN1_UTF8_STRING &&
-	t != ASN1_TELETEX_STRING &&
-	t != ASN1_PRINTABLE_STRING &&
-	t != ASN1_UNIVERSAL_STRING &&
-	t != ASN1_BMP_STRING) {
-          KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
     return getLength();
   }
 
