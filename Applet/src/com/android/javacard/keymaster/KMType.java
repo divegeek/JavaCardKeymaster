@@ -364,6 +364,8 @@ public abstract class KMType {
   public static final short MAX_SUBJECT_DER_LEN = 1095;
 
 
+  protected static short[] keyParamExp;
+
   protected static KMRepository repository;
   protected static byte[] heap;
   // Instance table
@@ -372,6 +374,7 @@ public abstract class KMType {
 
   public static void initialize() {
     instanceTable = JCSystem.makeTransientShortArray(INSTANCE_TABLE_SIZE, JCSystem.CLEAR_ON_RESET);
+    keyParamExp = JCSystem.makeTransientShortArray((short) 2, JCSystem.CLEAR_ON_RESET);
     KMType.repository = KMRepository.instance();
     KMType.heap = repository.getHeap();
   }
@@ -403,6 +406,11 @@ public abstract class KMType {
     heap[ptr] = type;
     Util.setShort(heap, (short) (ptr + 1), INVALID_VALUE);
     return ptr;
+  }
+  
+  protected static void resetData() {
+    keyParamExp[0] = KMType.INVALID_VALUE;
+    keyParamExp[1] = KMType.INVALID_VALUE;
   }
 
 }

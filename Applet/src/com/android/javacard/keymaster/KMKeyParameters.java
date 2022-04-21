@@ -46,37 +46,43 @@ public class KMKeyParameters extends KMType {
   }
 
   public static short exp() {
-    short arrPtr = KMArray.instance((short) 11);
-    KMArray arr = KMArray.cast(arrPtr);
-    arr.add((short) 0, KMEnum.instance(KMType.RULE, KMType.FAIL_ON_INVALID_TAGS));
-    arr.add((short) 1, KMIntegerTag.exp(UINT_TAG));
-    arr.add((short) 2, KMIntegerArrayTag.exp(UINT_ARRAY_TAG));
-    arr.add((short) 3, KMIntegerTag.exp(ULONG_TAG));
-    arr.add((short) 4, KMIntegerTag.exp(DATE_TAG));
-    arr.add((short) 5, KMIntegerArrayTag.exp(ULONG_ARRAY_TAG));
-    arr.add((short) 6, KMEnumTag.exp());
-    arr.add((short) 7, KMEnumArrayTag.exp());
-    arr.add((short) 8, KMByteTag.exp());
-    arr.add((short) 9, KMBoolTag.exp());
-    arr.add((short) 10, KMBignumTag.exp());
-    return instance(arrPtr);
+    if (KMType.keyParamExp[0] == KMType.INVALID_VALUE) {
+      short arrPtr = KMArray.instance((short) 11);
+      KMArray arr = KMArray.cast(arrPtr);
+      arr.add((short) 0, KMEnum.instance(KMType.RULE, KMType.FAIL_ON_INVALID_TAGS));
+      arr.add((short) 1, KMIntegerTag.exp(UINT_TAG));
+      arr.add((short) 2, KMIntegerArrayTag.exp(UINT_ARRAY_TAG));
+      arr.add((short) 3, KMIntegerTag.exp(ULONG_TAG));
+      arr.add((short) 4, KMIntegerTag.exp(DATE_TAG));
+      arr.add((short) 5, KMIntegerArrayTag.exp(ULONG_ARRAY_TAG));
+      arr.add((short) 6, KMEnumTag.exp());
+      arr.add((short) 7, KMEnumArrayTag.exp());
+      arr.add((short) 8, KMByteTag.exp());
+      arr.add((short) 9, KMBoolTag.exp());
+      arr.add((short) 10, KMBignumTag.exp());
+      KMType.keyParamExp[0] = instance(arrPtr);
+    }
+    return KMType.keyParamExp[0];
   }
 
   public static short expAny() {
-    short arrPtr = KMArray.instance((short) 11);
-    KMArray arr = KMArray.cast(arrPtr);
-    arr.add((short) 0, KMEnum.instance(KMType.RULE, KMType.IGNORE_INVALID_TAGS));
-    arr.add((short) 1, KMIntegerTag.exp(UINT_TAG));
-    arr.add((short) 2, KMIntegerArrayTag.exp(UINT_ARRAY_TAG));
-    arr.add((short) 3, KMIntegerTag.exp(ULONG_TAG));
-    arr.add((short) 4, KMIntegerTag.exp(DATE_TAG));
-    arr.add((short) 5, KMIntegerArrayTag.exp(ULONG_ARRAY_TAG));
-    arr.add((short) 6, KMEnumTag.exp());
-    arr.add((short) 7, KMEnumArrayTag.exp());
-    arr.add((short) 8, KMByteTag.exp());
-    arr.add((short) 9, KMBoolTag.exp());
-    arr.add((short) 10, KMBignumTag.exp());
-    return instance(arrPtr);
+    if (KMType.keyParamExp[1] == KMType.INVALID_VALUE) {
+      short arrPtr = KMArray.instance((short) 11);
+      KMArray arr = KMArray.cast(arrPtr);
+      arr.add((short) 0, KMEnum.instance(KMType.RULE, KMType.IGNORE_INVALID_TAGS));
+      arr.add((short) 1, KMIntegerTag.exp(UINT_TAG));
+      arr.add((short) 2, KMIntegerArrayTag.exp(UINT_ARRAY_TAG));
+      arr.add((short) 3, KMIntegerTag.exp(ULONG_TAG));
+      arr.add((short) 4, KMIntegerTag.exp(DATE_TAG));
+      arr.add((short) 5, KMIntegerArrayTag.exp(ULONG_ARRAY_TAG));
+      arr.add((short) 6, KMEnumTag.exp());
+      arr.add((short) 7, KMEnumArrayTag.exp());
+      arr.add((short) 8, KMByteTag.exp());
+      arr.add((short) 9, KMBoolTag.exp());
+      arr.add((short) 10, KMBignumTag.exp());
+      KMType.keyParamExp[1] = instance(arrPtr);
+    }
+    return KMType.keyParamExp[1];
   }
 
   public static short instance(short vals) {
@@ -393,9 +399,6 @@ public class KMKeyParameters extends KMType {
       }
       index++;
     }
-    // Add custom tags at the end of the array. So it becomes easy to
-    // delete them when sending key characteristics back to HAL.
-    arrInd = addCustomTags(keyParamsPtr, scratchPad, arrInd);
     return createKeyParameters(scratchPad, (short) (arrInd / 2));
   }
 
@@ -471,9 +474,10 @@ public class KMKeyParameters extends KMType {
     return KMKeyParameters.instance(arrPtr);
   }
 
-  public static short addCustomTags(short keyParams, byte[] scratchPad, short offset) {
+  public static short makeCustomTags(short keyParams, byte[] scratchPad) {
     short index = 0;
     short tagPtr;
+    short offset = 0;
     short len = (short) customTags.length;
     short tagType;
     while (index < len) {
@@ -493,7 +497,7 @@ public class KMKeyParameters extends KMType {
       }
       index += 2;
     }
-    return offset;
+    return createKeyParameters(scratchPad, (short) (offset / 2));
   }
 
   public void deleteCustomTags() {

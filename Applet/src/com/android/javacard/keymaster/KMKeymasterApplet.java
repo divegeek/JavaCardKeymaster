@@ -191,6 +191,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte SB_PARAMETERS = 35;
   public static final byte CONFIRMATION_TOKEN = 36;
   public static final byte KEY_BLOB_VERSION_DATA_OFFSET = 37;
+  public static final byte CUSTOM_TAGS = 38;
   // Constant
 
   // AddRngEntropy
@@ -202,7 +203,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte KEY_BLOB_NONCE = 2;
   public static final byte KEY_BLOB_AUTH_TAG = 3;
   public static final byte KEY_BLOB_PARAMS = 4;
-  public static final byte KEY_BLOB_PUB_KEY = 5;
+  public static final byte KEY_BLOB_CUSTOM_TAGS = 5;
+  public static final byte KEY_BLOB_PUB_KEY = 6;
   // AES GCM constants
   public static final byte AES_GCM_AUTH_TAG_LENGTH = 16;
   public static final byte AES_GCM_NONCE_LENGTH = 12;
@@ -217,8 +219,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // KeyBlob (structure, encryption algorithm etc).
   public static final short KEYBLOB_CURRENT_VERSION = 1;
   // KeyBlob array size constants.
-  public static final byte SYM_KEY_BLOB_SIZE_V1 = 5;
-  public static final byte ASYM_KEY_BLOB_SIZE_V1 = 6;
+  public static final byte SYM_KEY_BLOB_SIZE_V1 = 6;
+  public static final byte ASYM_KEY_BLOB_SIZE_V1 = 7;
   public static final byte SYM_KEY_BLOB_SIZE_V0 = 4;
   public static final byte ASYM_KEY_BLOB_SIZE_V0 = 5;
   // Key type constants
@@ -397,7 +399,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   @Override
   public void process(APDU apdu) {
     try {
-      resetData();
       repository.onProcess();
       // If this is select applet apdu which is selecting this applet then return
       if (apdu.isISOInterindustryCLA()) {
@@ -594,6 +595,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       tmpVariables[index] = KMType.INVALID_VALUE;
       index++;
     }
+    KMType.resetData();
   }
 
   /**
@@ -652,23 +654,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       // reclaim the unused memory in the certificate.
       repository.reclaimMemory((short) (bufferStart - certStart));
     }
-    // Reserve space of MAX_KEY_CHARS_SIZE to encode KeyCharacteristics
-    short prevReclaimIndex = repository.getHeapReclaimIndex();
-    short keyCharsIndex = repository.allocReclaimableMemory(MAX_KEY_CHARS_SIZE);
-
-    // Encode keyblob at the end of the buffer before KEY_CHARACTERISTICS
-    short keyBlobLen = encodeKeyBlob(keyblob);
-    short keyBlobStart = repository.getHeapReclaimIndex();
 
     // Encode KeyCharacteristics at the end of heap just before data[CERTIFICATE]
-    // in the reserved space of MAX_KEY_CHARS_SIZE
-    short keyCharsLen = encodeKeyCharacteristics(keyCharsIndex, prevReclaimIndex, keyChars);
-    
-    // Adjust the keyblob buffer before KeyChars and reclaim the memory
-    short newKeyBlobStart = (short) (keyBlobStart + (MAX_KEY_CHARS_SIZE - keyCharsLen));
-    Util.arrayCopyNonAtomic(buffer, keyBlobStart, buffer, newKeyBlobStart, keyBlobLen);
-    repository.reclaimMemory((short) (newKeyBlobStart - keyBlobStart));
-    
+    encodeKeyCharacteristics(keyChars);
+    // and encode it to the end of the buffer before KEY_CHARACTERISTICS
+    encodeKeyBlob(keyblob);
     // Write Array header and ErrorCode before data[KEY_BLOB]
     short bufferStartOffset = repository.allocReclaimableMemory((short) 2);
     Util.setShort(buffer, bufferStartOffset, (short) 0x8400);
@@ -779,11 +769,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (isKeyUpgradeRequired(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad)) {
       KMException.throwIt(KMError.KEY_REQUIRES_UPGRADE);
     }
-    // Remove custom tags from key characteristics
-    short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
-    if(teeParams != KMType.INVALID_VALUE) {
-      KMKeyParameters.cast(teeParams).deleteCustomTags();
-    }
     // make response.
     short resp = KMArray.instance((short) 2);
     KMArray.cast(resp).add((short) 0, KMInteger.uint_16(KMError.OK));
@@ -816,6 +801,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short keyBlob = KMType.INVALID_VALUE;
     short byteBlobExp = KMByteBlob.exp();
     short keyChar = KMKeyCharacteristics.exp();
+    short keyParam = KMKeyParameters.exp();
     switch(version) {
       case (short) 0:
         // Old KeyBlob has a maximum of 5 elements.
@@ -833,6 +819,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, byteBlobExp);
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_NONCE, byteBlobExp);
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_PARAMS, keyChar);
+        KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_CUSTOM_TAGS, keyParam);
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_PUB_KEY, byteBlobExp);
         break;
       default:
@@ -1365,6 +1352,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short privKey = data[SECRET];
     short hwParams = data[HW_PARAMETERS];
     short keyChars = data[KEY_CHARACTERISTICS];
+    short customTags = data[CUSTOM_TAGS];
     // Check if key requires upgrade for attestKeyBlob. The KeyBlob is parsed inside
     // isKeyUpgradeRequired function itself.
     if (isKeyUpgradeRequired(attKeyBlob, appId, appData, scratchPad)) {
@@ -1412,6 +1400,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = origBlob;
     data[HW_PARAMETERS] = hwParams;
     data[KEY_CHARACTERISTICS] = keyChars;
+    data[CUSTOM_TAGS] = customTags;
     data[SW_PARAMETERS] = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getKeystoreEnforced();
     data[TEE_PARAMETERS] = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
     data[SB_PARAMETERS] =  KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getStrongboxEnforced();
@@ -3506,20 +3495,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu, cert, data[CERTIFICATE], data[KEY_BLOB], data[KEY_CHARACTERISTICS]);
   }
 
-  private short generateAttestKeyCmd(APDU apdu) {
-	short params = KMKeyParameters.expAny();
-	short blob = KMByteBlob.exp();
-	    // Array of expected arguments
-    short cmd = KMArray.instance((short) 6);
-    KMArray.cast(cmd).add((short) 0, blob); // key blob
-    KMArray.cast(cmd).add((short) 1, params); // keyparamters to be attested.
-    KMArray.cast(cmd).add((short) 2, blob); // attest key blob
-    KMArray.cast(cmd).add((short) 3, params); // attest key params
-    KMArray.cast(cmd).add((short) 4, blob); // attest issuer
-    KMArray.cast(cmd).add((short) 5, blob); // keyparams mac.
-
-    return receiveIncoming(apdu, cmd);
-  }
 
   private short getApplicationId(short params) {
     short appId = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, params);
@@ -3781,7 +3756,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   //    KeyBlob's KeyCharacteristics.
   // 2. Re-create KeyBlob's KeyCharacteristics from HW_PARAMS to make sure we don't miss
   //    anything which happens in these functions makeSbEnforced and makeTeeEnforced in
-  //    the future. Like validations, addition of custom tags e.t.c.
+  //    the future. Like validations.
   // 3. No need to create Keystore Enforced list here as it is not required to be included in
   //    the KeyBlob's KeyCharacteristics.
   // 4. No need to create KeyCharacteristics as upgradeKey does not require to return any
@@ -3795,6 +3770,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         hwParams, (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
     data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(hwParams, scratchPad);
     data[HW_PARAMETERS] = KMKeyParameters.makeHwEnforced(data[SB_PARAMETERS], data[TEE_PARAMETERS]);
+    
+    // Create custom tags from tee params and remove the custom tags from old Keyblob keychars.
+    short version = KMInteger.cast(data[KEY_BLOB_VERSION_DATA_OFFSET]).getShort();
+    switch (version) {
+    case 0:
+      if (data[TEE_PARAMETERS] != KMType.INVALID_VALUE) {
+        data[CUSTOM_TAGS] = KMKeyParameters.makeCustomTags(data[TEE_PARAMETERS], scratchPad);
+        KMKeyParameters.cast(data[TEE_PARAMETERS]).deleteCustomTags();
+      }
+      break;
+
+    default:
+      break;
+    }
   }
 
   private static void makeKeyCharacteristics(byte[] scratchPad) {
@@ -3811,6 +3800,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setStrongboxEnforced(data[SB_PARAMETERS]);
     KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setKeystoreEnforced(data[SW_PARAMETERS]);
     KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setTeeEnforced(data[TEE_PARAMETERS]);
+    // Add custom tags
+    data[CUSTOM_TAGS] = KMKeyParameters.makeCustomTags(data[KEY_PARAMETERS], scratchPad);
   }
 
   private static void createEncryptedKeyBlob(byte[] scratchPad) {
@@ -3832,6 +3823,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_AUTH_TAG, data[AUTH_TAG]);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_NONCE, data[NONCE]);
     KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_VERSION_OFFSET, data[KEY_BLOB_VERSION_DATA_OFFSET]);
+    KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_CUSTOM_TAGS, data[CUSTOM_TAGS]);
 
     short tempChar = KMKeyCharacteristics.instance();
     short emptyParam = KMArray.instance((short) 0);
@@ -3843,39 +3835,34 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   // Encodes KeyCharacteristics at the end of the heap
-  // and return the length of encoded KeyChars.
-  private short encodeKeyCharacteristics(short startOffset, short prevReclaimIndex, short keyChars) {
-    // Remove custom tags from key characteristics
-    short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
-    if(teeParams != KMType.INVALID_VALUE) {
-      KMKeyParameters.cast(teeParams).deleteCustomTags();
-    }
+  private void encodeKeyCharacteristics(short keyChars) {
     byte[] buffer = repository.getHeap();
-    short len = encoder.encode(keyChars, buffer, startOffset, prevReclaimIndex, MAX_KEY_CHARS_SIZE);
+    short prevReclaimIndex = repository.getHeapReclaimIndex();
+    short ptr = repository.allocReclaimableMemory(MAX_KEY_CHARS_SIZE);
+    short len = encoder.encode(keyChars, buffer, ptr, prevReclaimIndex, MAX_KEY_CHARS_SIZE);
     // shift the encoded KeyCharacteristics data towards the right till the data[CERTIFICATE] offset.
-    Util.arrayCopyNonAtomic(buffer, startOffset, buffer, (short) (startOffset + (MAX_KEY_CHARS_SIZE - len)), len);
-    return len;
+    Util.arrayCopyNonAtomic(buffer, ptr, buffer, (short) (ptr + (MAX_KEY_CHARS_SIZE - len)), len);
+    // Reclaim the unused memory.
+    repository.reclaimMemory((short) (MAX_KEY_CHARS_SIZE - len));
   }
 
   // Encodes KeyBlob at the end of the heap
-  // and returns the length of the encoded keyblob
-  private short encodeKeyBlob(short keyBlobPtr) {
+  private void encodeKeyBlob(short keyBlobPtr) {
     // allocate reclaimable memory.
     byte[] buffer = repository.getHeap();
     short prevReclaimIndex = repository.getHeapReclaimIndex();
     short top = repository.allocReclaimableMemory(MAX_KEYBLOB_SIZE);
-    short keyBlobLen = encoder.encode(keyBlobPtr, buffer, top, prevReclaimIndex, MAX_KEYBLOB_SIZE);
+    short keyBlob = encoder.encode(keyBlobPtr, buffer, top, prevReclaimIndex, MAX_KEYBLOB_SIZE);
     Util.arrayCopyNonAtomic(repository.getHeap(), top, repository.getHeap(),
-        (short) (top + MAX_KEYBLOB_SIZE - keyBlobLen), keyBlobLen);
-    short newTop = (short) (top + MAX_KEYBLOB_SIZE - keyBlobLen);
-    // Encode the KeyBlob array inside a ByteBlob. Get the length of
-    // the ByteBlob header.
-    short encodedBytesLength = encoder.getEncodedBytesLength(keyBlobLen);
+        (short) (top + MAX_KEYBLOB_SIZE - keyBlob), keyBlob);
+    short newTop = (short) (top + MAX_KEYBLOB_SIZE - keyBlob);
+    // Encode the KeyBlob array inside a ByteString. Get the length of
+    // the ByteString header.
+    short encodedBytesLength = encoder.getEncodedBytesLength(keyBlob);
     newTop -= encodedBytesLength;
-    encoder.encodeByteBlobHeader(keyBlobLen, buffer, newTop, encodedBytesLength);
+    encoder.encodeByteBlobHeader(keyBlob, buffer, newTop, encodedBytesLength);
     // Reclaim unused memory.
     repository.reclaimMemory((short) (newTop - top));
-    return (short) (keyBlobLen + encodedBytesLength);
   }
 
   private short readKeyBlobVersion(short keyBlob) {
@@ -3914,6 +3901,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         if (KMArray.cast(parsedKeyBlob).length() == ASYM_KEY_BLOB_SIZE_V0) {
           data[PUB_KEY] = KMArray.cast(parsedKeyBlob).get((short) 4);
         }
+        data[KEY_BLOB_VERSION_DATA_OFFSET] = KMInteger.uint_8((byte) 0);
         break;
       case (short) 1:
         data[SECRET] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_SECRET);
@@ -3922,6 +3910,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         data[KEY_CHARACTERISTICS] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_PARAMS);
         data[KEY_BLOB_VERSION_DATA_OFFSET] = KMArray.cast(parsedKeyBlob).get(
             KEY_BLOB_VERSION_OFFSET);
+        data[CUSTOM_TAGS] = KMArray.cast(parsedKeyBlob).get(
+            KEY_BLOB_CUSTOM_TAGS);
         data[PUB_KEY] = KMType.INVALID_VALUE;
         if (KMArray.cast(parsedKeyBlob).length() == ASYM_KEY_BLOB_SIZE_V1) {
           data[PUB_KEY] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_PUB_KEY);
@@ -4062,7 +4052,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private static void makeAuthData(short version, byte[] scratchPad) {
-    // For KeyBlob V1: Auth Data includes HW_PARAMETERS, HIDDEN_PARAMETERS, VERSION and PUB_KEY.
+    // For KeyBlob V1: Auth Data includes HW_PARAMETERS, HIDDEN_PARAMETERS, CUSTOM_TAGS, VERSION and PUB_KEY.
     // For KeyBlob V0: Auth Data includes HW_PARAMETERS, HIDDEN_PARAMETERS and PUB_KEY.
     // VERSION is included only for KeyBlobs having version >= 1.
     // PUB_KEY is included for only ASYMMETRIC KeyBlobs.
@@ -4087,14 +4077,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
         break;
       case (short) 1:
-        numParams = 3;
+        numParams = 4;
         Util.setShort(scratchPad, (short) 0, KMKeyParameters.cast(data[HW_PARAMETERS]).getVals());
         Util.setShort(scratchPad, (short) 2, KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals());
-        Util.setShort(scratchPad, (short) 4, data[KEY_BLOB_VERSION_DATA_OFFSET]);
+        Util.setShort(scratchPad, (short) 4, KMKeyParameters.cast(data[CUSTOM_TAGS]).getVals());
+        Util.setShort(scratchPad, (short) 6, data[KEY_BLOB_VERSION_DATA_OFFSET]);
         // For Asymmetric Keys include the PUB_KEY.
         if (keyType == ASYM_KEY_TYPE) {
-          numParams = 4;
-          Util.setShort(scratchPad, (short) 6, data[PUB_KEY]);
+          numParams = 5;
+          Util.setShort(scratchPad, (short) 8, data[PUB_KEY]);
         }
         break;
       default:

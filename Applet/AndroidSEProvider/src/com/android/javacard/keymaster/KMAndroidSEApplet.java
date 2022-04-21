@@ -97,6 +97,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   @Override
   public void process(APDU apdu) {
     try {
+      resetData();
       // If this is select applet apdu which is selecting this applet then return
       if (apdu.isISOInterindustryCLA()) {
         if (selectingApplet()) {
