@@ -652,11 +652,23 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       // reclaim the unused memory in the certificate.
       repository.reclaimMemory((short) (bufferStart - certStart));
     }
+    // Reserve space of MAX_KEY_CHARS_SIZE to encode KeyCharacteristics
+    short prevReclaimIndex = repository.getHeapReclaimIndex();
+    short keyCharsIndex = repository.allocReclaimableMemory(MAX_KEY_CHARS_SIZE);
+
+    // Encode keyblob at the end of the buffer before KEY_CHARACTERISTICS
+    short keyBlobLen = encodeKeyBlob(keyblob);
+    short keyBlobStart = repository.getHeapReclaimIndex();
 
     // Encode KeyCharacteristics at the end of heap just before data[CERTIFICATE]
-    encodeKeyCharacteristics(keyChars);
-    // and encode it to the end of the buffer before KEY_CHARACTERISTICS
-    encodeKeyBlob(keyblob);
+    // in the reserved space of MAX_KEY_CHARS_SIZE
+    short keyCharsLen = encodeKeyCharacteristics(keyCharsIndex, prevReclaimIndex, keyChars);
+    
+    // Adjust the keyblob buffer before KeyChars and reclaim the memory
+    short newKeyBlobStart = (short) (keyBlobStart + (MAX_KEY_CHARS_SIZE - keyCharsLen));
+    Util.arrayCopyNonAtomic(buffer, keyBlobStart, buffer, newKeyBlobStart, keyBlobLen);
+    repository.reclaimMemory((short) (newKeyBlobStart - keyBlobStart));
+    
     // Write Array header and ErrorCode before data[KEY_BLOB]
     short bufferStartOffset = repository.allocReclaimableMemory((short) 2);
     Util.setShort(buffer, bufferStartOffset, (short) 0x8400);
@@ -3048,11 +3060,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     makeKeyCharacteristics( scratchPad);
     KMAttestationCert cert = generateAttestation(data[ATTEST_KEY_BLOB], data[ATTEST_KEY_PARAMS],scratchPad);
     createEncryptedKeyBlob(scratchPad);
-    // Remove custom tags from key characteristics
-    short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
-    if(teeParams != KMType.INVALID_VALUE) {
-      KMKeyParameters.cast(teeParams).deleteCustomTags();
-    }
     sendOutgoing(apdu, cert, data[CERTIFICATE], data[KEY_BLOB], data[KEY_CHARACTERISTICS]);
   }
 
@@ -3496,11 +3503,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // construct the certificate and place the encoded data in data[CERTIFICATE]
     KMAttestationCert cert = generateAttestation(data[ATTEST_KEY_BLOB], data[ATTEST_KEY_PARAMS], scratchPad);
     createEncryptedKeyBlob(scratchPad);
-    // Remove custom tags from key characteristics
-    short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
-    if(teeParams != KMType.INVALID_VALUE) {
-      KMKeyParameters.cast(teeParams).deleteCustomTags();
-    }
     sendOutgoing(apdu, cert, data[CERTIFICATE], data[KEY_BLOB], data[KEY_CHARACTERISTICS]);
   }
 
@@ -3841,34 +3843,39 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   // Encodes KeyCharacteristics at the end of the heap
-  private void encodeKeyCharacteristics(short keyChars) {
+  // and return the length of encoded KeyChars.
+  private short encodeKeyCharacteristics(short startOffset, short prevReclaimIndex, short keyChars) {
+    // Remove custom tags from key characteristics
+    short teeParams = KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getTeeEnforced();
+    if(teeParams != KMType.INVALID_VALUE) {
+      KMKeyParameters.cast(teeParams).deleteCustomTags();
+    }
     byte[] buffer = repository.getHeap();
-    short prevReclaimIndex = repository.getHeapReclaimIndex();
-    short ptr = repository.allocReclaimableMemory(MAX_KEY_CHARS_SIZE);
-    short len = encoder.encode(keyChars, buffer, ptr, prevReclaimIndex, MAX_KEY_CHARS_SIZE);
+    short len = encoder.encode(keyChars, buffer, startOffset, prevReclaimIndex, MAX_KEY_CHARS_SIZE);
     // shift the encoded KeyCharacteristics data towards the right till the data[CERTIFICATE] offset.
-    Util.arrayCopyNonAtomic(buffer, ptr, buffer, (short) (ptr + (MAX_KEY_CHARS_SIZE - len)), len);
-    // Reclaim the unused memory.
-    repository.reclaimMemory((short) (MAX_KEY_CHARS_SIZE - len));
+    Util.arrayCopyNonAtomic(buffer, startOffset, buffer, (short) (startOffset + (MAX_KEY_CHARS_SIZE - len)), len);
+    return len;
   }
 
   // Encodes KeyBlob at the end of the heap
-  private void encodeKeyBlob(short keyBlobPtr) {
+  // and returns the length of the encoded keyblob
+  private short encodeKeyBlob(short keyBlobPtr) {
     // allocate reclaimable memory.
     byte[] buffer = repository.getHeap();
     short prevReclaimIndex = repository.getHeapReclaimIndex();
     short top = repository.allocReclaimableMemory(MAX_KEYBLOB_SIZE);
-    short keyBlob = encoder.encode(keyBlobPtr, buffer, top, prevReclaimIndex, MAX_KEYBLOB_SIZE);
+    short keyBlobLen = encoder.encode(keyBlobPtr, buffer, top, prevReclaimIndex, MAX_KEYBLOB_SIZE);
     Util.arrayCopyNonAtomic(repository.getHeap(), top, repository.getHeap(),
-        (short) (top + MAX_KEYBLOB_SIZE - keyBlob), keyBlob);
-    short newTop = (short) (top + MAX_KEYBLOB_SIZE - keyBlob);
-    // Encode the KeyBlob array inside a ByteString. Get the length of
-    // the ByteString header.
-    short encodedBytesLength = encoder.getEncodedBytesLength(keyBlob);
+        (short) (top + MAX_KEYBLOB_SIZE - keyBlobLen), keyBlobLen);
+    short newTop = (short) (top + MAX_KEYBLOB_SIZE - keyBlobLen);
+    // Encode the KeyBlob array inside a ByteBlob. Get the length of
+    // the ByteBlob header.
+    short encodedBytesLength = encoder.getEncodedBytesLength(keyBlobLen);
     newTop -= encodedBytesLength;
-    encoder.encodeByteBlobHeader(keyBlob, buffer, newTop, encodedBytesLength);
+    encoder.encodeByteBlobHeader(keyBlobLen, buffer, newTop, encodedBytesLength);
     // Reclaim unused memory.
     repository.reclaimMemory((short) (newTop - top));
+    return (short) (keyBlobLen + encodedBytesLength);
   }
 
   private short readKeyBlobVersion(short keyBlob) {
