@@ -3781,20 +3781,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         hwParams, (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
     data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(hwParams, scratchPad);
     data[HW_PARAMETERS] = KMKeyParameters.makeHwEnforced(data[SB_PARAMETERS], data[TEE_PARAMETERS]);
-    
-    // Create custom tags from tee params and remove the custom tags from old Keyblob keychars.
-    short version = KMInteger.cast(data[KEY_BLOB_VERSION_DATA_OFFSET]).getShort();
-    switch (version) {
-    case 0:
-    case 1:
-      if (data[TEE_PARAMETERS] != KMType.INVALID_VALUE) {
-        KMKeyParameters.cast(data[TEE_PARAMETERS]).deleteCustomTags();
-      }
-      break;
-
-    default:
-      break;
-    }
   }
 
   private static void makeKeyCharacteristics(byte[] scratchPad) {
