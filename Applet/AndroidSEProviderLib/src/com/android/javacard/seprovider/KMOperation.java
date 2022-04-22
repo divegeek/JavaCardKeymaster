@@ -51,4 +51,6 @@ public interface KMOperation {
   // include the auth tag which is appended at the end of the encrypted data. For decryption this will be
   // size of the decrypted data only.
   short getAESGCMOutputSize(short dataSize, short macLength);
+  
+  KMKeyObject getKeyObject();
 }

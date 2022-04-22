@@ -643,20 +643,7 @@ public interface KMSEProvider {
   short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
       short outOffset);
   
-  /**
-   * This function creates an ECKey and initializes the ECPrivateKey with the provided input key
-   * data. The initialized Key is maintained by the SEProvider. This function should be called only
-   * while provisioning the attestation key.
-   *
-   * @param keyData buffer containing the ec private key.
-   * @param offset start of the buffer.
-   * @param length length of the buffer.
-   * @return An instance of KMAttestationKey.
-   */
-  KMAttestationKey createAttestationKey(KMAttestationKey attestationKey, byte[] keyData,
-      short offset,
-      short length);
-  
+
   /**
    * This function generates a HMAC key from the provided key buffers.
    *

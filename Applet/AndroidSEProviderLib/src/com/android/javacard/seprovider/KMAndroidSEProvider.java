@@ -41,20 +41,6 @@ import javacard.security.KeyAgreement;
 
 public class KMAndroidSEProvider implements KMSEProvider {
 
-  // static final variables
-  // --------------------------------------------------------------
-  // P-256 Curve Parameters
-  static byte[] secp256r1_P;
-  static byte[] secp256r1_A;
-
-  static byte[] secp256r1_B;
-  static byte[] secp256r1_S;
-
-  // Uncompressed form
-  static byte[] secp256r1_UCG;
-  static byte[] secp256r1_N;
-  static final short secp256r1_H = 1;
-  // --------------------------------------------------------------
   public static final short AES_GCM_TAG_LENGTH = 16;
   public static final short AES_GCM_NONCE_LENGTH = 12;
   public static final byte KEYSIZE_128_OFFSET = 0x00;
@@ -102,7 +88,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   public KMAndroidSEProvider() {
-    initStatics();
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
@@ -116,8 +101,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
     ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
     keyAgreement = KeyAgreement.getInstance(KeyAgreement.ALG_EC_SVDP_DH_PLAIN, false);
-    initECKey(ecKeyPair);
     poolMgr = KMPoolManager.getInstance();
+    poolMgr.initECKey(ecKeyPair);
     //RsaOAEP Decipher
     rsaOaepDecipher = new KMRsaOAEPEncoding(KMRsaOAEPEncoding.ALG_RSA_PKCS1_OAEP_SHA256_MGF1_SHA1);
 
@@ -136,93 +121,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     resetFlag[0] = (byte) POWER_RESET_FALSE;
   }
 
-  public static void initStatics() {
-    secp256r1_P = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0x00,
-        (byte) 0x00,
-        (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-        (byte) 0x00,
-        (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF,
-        (byte) 0xFF,
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
-        (byte) 0xFF,
-        (byte) 0xFF, (byte) 0xFF};
-
-    secp256r1_A = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0x00,
-        (byte) 0x00,
-        (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-        (byte) 0x00,
-        (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0xFF,
-        (byte) 0xFF,
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
-        (byte) 0xFF,
-        (byte) 0xFF, (byte) 0xFC};
-
-    secp256r1_B = new byte[]{(byte) 0x5A, (byte) 0xC6, (byte) 0x35, (byte) 0xD8, (byte) 0xAA,
-        (byte) 0x3A,
-        (byte) 0x93, (byte) 0xE7, (byte) 0xB3, (byte) 0xEB, (byte) 0xBD, (byte) 0x55, (byte) 0x76,
-        (byte) 0x98,
-        (byte) 0x86, (byte) 0xBC, (byte) 0x65, (byte) 0x1D, (byte) 0x06, (byte) 0xB0, (byte) 0xCC,
-        (byte) 0x53,
-        (byte) 0xB0, (byte) 0xF6, (byte) 0x3B, (byte) 0xCE, (byte) 0x3C, (byte) 0x3E, (byte) 0x27,
-        (byte) 0xD2,
-        (byte) 0x60, (byte) 0x4B};
-
-    secp256r1_S = new byte[]{(byte) 0xC4, (byte) 0x9D, (byte) 0x36, (byte) 0x08, (byte) 0x86,
-        (byte) 0xE7,
-        (byte) 0x04, (byte) 0x93, (byte) 0x6A, (byte) 0x66, (byte) 0x78, (byte) 0xE1, (byte) 0x13,
-        (byte) 0x9D,
-        (byte) 0x26, (byte) 0xB7, (byte) 0x81, (byte) 0x9F, (byte) 0x7E, (byte) 0x90};
-
-    // Uncompressed form
-    secp256r1_UCG = new byte[]{(byte) 0x04, (byte) 0x6B, (byte) 0x17, (byte) 0xD1, (byte) 0xF2,
-        (byte) 0xE1,
-        (byte) 0x2C, (byte) 0x42, (byte) 0x47, (byte) 0xF8, (byte) 0xBC, (byte) 0xE6, (byte) 0xE5,
-        (byte) 0x63,
-        (byte) 0xA4, (byte) 0x40, (byte) 0xF2, (byte) 0x77, (byte) 0x03, (byte) 0x7D, (byte) 0x81,
-        (byte) 0x2D,
-        (byte) 0xEB, (byte) 0x33, (byte) 0xA0, (byte) 0xF4, (byte) 0xA1, (byte) 0x39, (byte) 0x45,
-        (byte) 0xD8,
-        (byte) 0x98, (byte) 0xC2, (byte) 0x96, (byte) 0x4F, (byte) 0xE3, (byte) 0x42, (byte) 0xE2,
-        (byte) 0xFE,
-        (byte) 0x1A, (byte) 0x7F, (byte) 0x9B, (byte) 0x8E, (byte) 0xE7, (byte) 0xEB, (byte) 0x4A,
-        (byte) 0x7C,
-        (byte) 0x0F, (byte) 0x9E, (byte) 0x16, (byte) 0x2B, (byte) 0xCE, (byte) 0x33, (byte) 0x57,
-        (byte) 0x6B,
-        (byte) 0x31, (byte) 0x5E, (byte) 0xCE, (byte) 0xCB, (byte) 0xB6, (byte) 0x40, (byte) 0x68,
-        (byte) 0x37,
-        (byte) 0xBF, (byte) 0x51, (byte) 0xF5};
-
-    secp256r1_N = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0x00,
-        (byte) 0x00,
-        (byte) 0x00, (byte) 0x00, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
-        (byte) 0xFF,
-        (byte) 0xFF, (byte) 0xFF, (byte) 0xBC, (byte) 0xE6, (byte) 0xFA, (byte) 0xAD, (byte) 0xA7,
-        (byte) 0x17,
-        (byte) 0x9E, (byte) 0x84, (byte) 0xF3, (byte) 0xB9, (byte) 0xCA, (byte) 0xC2, (byte) 0xFC,
-        (byte) 0x63,
-        (byte) 0x25, (byte) 0x51};
-  }
-
   public void clean() {
     Util.arrayFillNonAtomic(tmpArray, (short) 0, (short) 256, (byte) 0);
-  }
-
-  private void initECKey(KeyPair ecKeyPair) {
-    ECPrivateKey privKey = (ECPrivateKey) ecKeyPair.getPrivate();
-    ECPublicKey pubkey = (ECPublicKey) ecKeyPair.getPublic();
-    pubkey.setFieldFP(secp256r1_P, (short) 0, (short) secp256r1_P.length);
-    pubkey.setA(secp256r1_A, (short) 0, (short) secp256r1_A.length);
-    pubkey.setB(secp256r1_B, (short) 0, (short) secp256r1_B.length);
-    pubkey.setG(secp256r1_UCG, (short) 0, (short) secp256r1_UCG.length);
-    pubkey.setK(secp256r1_H);
-    pubkey.setR(secp256r1_N, (short) 0, (short) secp256r1_N.length);
-
-    privKey.setFieldFP(secp256r1_P, (short) 0, (short) secp256r1_P.length);
-    privKey.setA(secp256r1_A, (short) 0, (short) secp256r1_A.length);
-    privKey.setB(secp256r1_B, (short) 0, (short) secp256r1_B.length);
-    privKey.setG(secp256r1_UCG, (short) 0, (short) secp256r1_UCG.length);
-    privKey.setK(secp256r1_H);
-    privKey.setR(secp256r1_N, (short) 0, (short) secp256r1_N.length);
   }
 
   public AESKey createAESKey(short keysize) {
@@ -684,27 +584,25 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public KMOperation createSymmetricCipher(short alg, short purpose, short macLength,
       short blockMode, short padding, byte[] secret, short secretStart,
       short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
-    Key key = null;
+
+	short cipherAlg = mapCipherAlg((byte) alg, (byte) padding, (byte) blockMode, (byte) 0);	  
+	KMOperation operation =
+	    	      poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, secretLength, false);  
+
+    KMKeyObject keyObj = operation.getKeyObject();
+    Key key = (Key)keyObj.getKeyObject();
     switch (secretLength) {
       case 32:
-        key = aesKeys[KEYSIZE_256_OFFSET];
-        ((AESKey) key).setKey(secret, secretStart);
-        break;
-      case 16:
-        key = aesKeys[KEYSIZE_128_OFFSET];
+      case 16:	  
         ((AESKey) key).setKey(secret, secretStart);
         break;
       case 24:
-        key = triDesKey;
         ((DESKey) key).setKey(secret, secretStart);
         break;
       default:
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
         break;
-    }
-    short cipherAlg = mapCipherAlg((byte) alg, (byte) padding, (byte) blockMode, (byte) 0);
-    KMOperation operation =
-      poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, false);
+    } 
     ((KMOperationImpl) operation).init(key, KMType.INVALID_VALUE, ivBuffer, ivStart, ivLength);
     return operation;
   }
@@ -716,8 +614,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     KMOperation operation =
         poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
-          KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, false);
-    HMACKey key = createHMACKey(secret, secretStart, secretLength);
+          KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, false);
+    KMKeyObject keyObj = operation.getKeyObject();
+    HMACKey key = (HMACKey)keyObj.getKeyObject();
+    key.setKey(secret, secretStart, secretLength);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
     return operation;
   }
@@ -728,7 +628,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     KMOperation operation =
       poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
-        KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, isTrustedConf);
+        KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, isTrustedConf);
  
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
     return operation; 
@@ -769,8 +669,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short modLength) {
     byte alg = mapSignature256Alg(KMType.RSA, (byte) padding, (byte) digest);
     KMOperation operation = poolMgr.getOperationImpl(KMType.SIGN, alg, KMType.RSA, padding,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE, false);
-    RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
+        KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false);
+    KMKeyObject keyObj = operation.getKeyObject();
+    RSAPrivateKey key = (RSAPrivateKey)((KeyPair)(keyObj.getKeyObject())).getPrivate();
     key.setExponent(secret, secretStart, secretLength);
     key.setModulus(modBuffer, modOff, modLength);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
@@ -782,8 +683,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short modLength) {
     byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0, (byte) mgfDigest);
     KMOperation operation = poolMgr.getOperationImpl(KMType.DECRYPT, cipherAlg, KMType.RSA, padding,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE, false);
-    RSAPrivateKey key = (RSAPrivateKey) rsaKeyPair.getPrivate();
+        KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false);   
+    KMKeyObject keyObj = operation.getKeyObject();
+    RSAPrivateKey key = (RSAPrivateKey) ((KeyPair)(keyObj.getKeyObject())).getPrivate();
     key.setExponent(secret, secretStart, secretLength);
     key.setModulus(modBuffer, modOff, modLength);
     ((KMOperationImpl) operation).init(key, KMType.INVALID_VALUE, null, (short) 0, (short) 0);
@@ -793,22 +695,24 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public KMOperation createEcSigner(short digest, byte[] secret,
       short secretStart, short secretLength) {
     byte alg = mapSignature256Alg(KMType.EC, (byte) 0, (byte) digest);
-    ECPrivateKey key = (ECPrivateKey) ecKeyPair.getPrivate();
-    key.setS(secret, secretStart, secretLength);
     KMOperation operation = poolMgr
-        .getOperationImpl(KMType.SIGN, alg, KMType.EC, KMType.INVALID_VALUE,
-            KMType.INVALID_VALUE, KMType.INVALID_VALUE, false);
+            .getOperationImpl(KMType.SIGN, alg, KMType.EC, KMType.INVALID_VALUE,
+                KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false);
+    KMKeyObject keyObj = operation.getKeyObject();
+    ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObj.getKeyObject())).getPrivate();
+    key.setS(secret, secretStart, secretLength);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
     return operation;
   }
 
   public KMOperation createKeyAgreement(byte[] secret, short secretStart,
       short secretLength) {
-    ECPrivateKey key = (ECPrivateKey) ecKeyPair.getPrivate();
-    key.setS(secret, secretStart, secretLength);
     KMOperation operation = poolMgr
         .getOperationImpl(KMType.AGREE_KEY, KeyAgreement.ALG_EC_SVDP_DH_PLAIN,
-            KMType.EC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, false);
+            KMType.EC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, false);
+    KMKeyObject keyObj = operation.getKeyObject();
+    ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObj.getKeyObject())).getPrivate();
+    key.setS(secret, secretStart, secretLength);
     ((KMOperationImpl) operation).init(key, KMType.INVALID_VALUE, null, (short) 0, (short) 0);
     return operation;
   }
@@ -882,19 +786,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
     } finally {
       clean();
     }
-  }
-
-  @Override
-  public KMAttestationKey createAttestationKey(KMAttestationKey attestationKey, byte[] keyData, short offset,
-      short length) {
-    if (attestationKey == null) {
-      // Strongbox supports only P-256 curve for EC key.
-      KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
-      initECKey(ecKeyPair);
-      attestationKey = new KMECPrivateKey(ecKeyPair);
-    }
-    ((KMECPrivateKey) attestationKey).setS(keyData, offset, length);
-    return (KMAttestationKey) attestationKey;
   }
 
   @Override
@@ -1113,7 +1004,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short privKeyOff, short privKeyLen) {
     if (key == null) {
       KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
-      initECKey(ecKeyPair);
+      poolMgr.initECKey(ecKeyPair);
       key = new KMECDeviceUniqueKey(ecKeyPair);
     }
     ((KMECDeviceUniqueKey) key).setS(privKey, privKeyOff, privKeyLen);
