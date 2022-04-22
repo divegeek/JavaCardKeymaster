@@ -13,7 +13,7 @@ public class KMKeyObject {
     return this.algorithm;
   }
 	
-  public Object getKeyObject() {
+  public Object getKeyObjectInstance() {
 	return keyObjectInst;
   }
 }

@@ -447,7 +447,7 @@ public class KMPoolManager {
       maxOperations = HMAC_MAX_OPERATION_INSTANCES;
     }
 
-    KMKeyObject keyObject = reserveKeyObject(alg, secretLength, maxOperations);    
+    KMKeyObject keyObject = getKeyObjectFromPool(alg, secretLength, maxOperations);    
     while (index < pool.length) {
       if (usageCount >= maxOperations) {
         KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
@@ -475,7 +475,7 @@ public class KMPoolManager {
     return operation;
   }
 
-  public KMKeyObject reserveKeyObject(short alg, short secretLength, short maxOperations) {	
+  public KMKeyObject getKeyObjectFromPool(short alg, short secretLength, short maxOperations) {	
 	KMKeyObject keyObject = null;  
 	byte algo = mapAlgorithm(alg, secretLength);
 	short index = 0;
