@@ -590,7 +590,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
 	    	      poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, secretLength, false);  
 
     KMKeyObject keyObj = operation.getKeyObject();
-    Key key = (Key)keyObj.getKeyObject();
+    Key key = (Key)keyObj.getKeyObjectInstance();
     switch (secretLength) {
       case 32:
       case 16:	  
@@ -616,7 +616,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
           KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, false);
     KMKeyObject keyObj = operation.getKeyObject();
-    HMACKey key = (HMACKey)keyObj.getKeyObject();
+    HMACKey key = (HMACKey)keyObj.getKeyObjectInstance();
     key.setKey(secret, secretStart, secretLength);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
     return operation;
@@ -671,7 +671,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     KMOperation operation = poolMgr.getOperationImpl(KMType.SIGN, alg, KMType.RSA, padding,
         KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false);
     KMKeyObject keyObj = operation.getKeyObject();
-    RSAPrivateKey key = (RSAPrivateKey)((KeyPair)(keyObj.getKeyObject())).getPrivate();
+    RSAPrivateKey key = (RSAPrivateKey)((KeyPair)(keyObj.getKeyObjectInstance())).getPrivate();
     key.setExponent(secret, secretStart, secretLength);
     key.setModulus(modBuffer, modOff, modLength);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
@@ -685,7 +685,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     KMOperation operation = poolMgr.getOperationImpl(KMType.DECRYPT, cipherAlg, KMType.RSA, padding,
         KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false);   
     KMKeyObject keyObj = operation.getKeyObject();
-    RSAPrivateKey key = (RSAPrivateKey) ((KeyPair)(keyObj.getKeyObject())).getPrivate();
+    RSAPrivateKey key = (RSAPrivateKey) ((KeyPair)(keyObj.getKeyObjectInstance())).getPrivate();
     key.setExponent(secret, secretStart, secretLength);
     key.setModulus(modBuffer, modOff, modLength);
     ((KMOperationImpl) operation).init(key, KMType.INVALID_VALUE, null, (short) 0, (short) 0);
@@ -699,7 +699,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
             .getOperationImpl(KMType.SIGN, alg, KMType.EC, KMType.INVALID_VALUE,
                 KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false);
     KMKeyObject keyObj = operation.getKeyObject();
-    ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObj.getKeyObject())).getPrivate();
+    ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObj.getKeyObjectInstance())).getPrivate();
     key.setS(secret, secretStart, secretLength);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
     return operation;
@@ -711,7 +711,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         .getOperationImpl(KMType.AGREE_KEY, KeyAgreement.ALG_EC_SVDP_DH_PLAIN,
             KMType.EC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, false);
     KMKeyObject keyObj = operation.getKeyObject();
-    ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObj.getKeyObject())).getPrivate();
+    ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObj.getKeyObjectInstance())).getPrivate();
     key.setS(secret, secretStart, secretLength);
     ((KMOperationImpl) operation).init(key, KMType.INVALID_VALUE, null, (short) 0, (short) 0);
     return operation;
