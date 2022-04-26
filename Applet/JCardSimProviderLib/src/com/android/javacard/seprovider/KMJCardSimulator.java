@@ -621,9 +621,9 @@ public class KMJCardSimulator implements KMSEProvider {
   @Override
   public boolean hmacVerify(KMComputedHmacKey key, byte[] data, short dataStart, 
     short dataLength, byte[] mac, short macStart, short macLength) {
-      KMHmacKey hmacKey = (KMHmacKey) key;
-      hmacSignature.init(hmacKey.getKey(), Signature.MODE_VERIFY);
-      return hmacSignature.verify(data, dataStart, dataLength, mac, macStart, macLength);
+    KMHmacKey hmacKey = (KMHmacKey) key;
+    hmacSignature.init(hmacKey.getKey(), Signature.MODE_VERIFY);
+    return hmacSignature.verify(data, dataStart, dataLength, mac, macStart, macLength);
   }
 
   @Override

@@ -143,6 +143,12 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
           processSetBootParamsCmd(apdu);
           break;
 
+        case INS_SET_BOOT_ENDED_CMD:
+          //set the flag to mark boot ended
+          kmDataStore.setBootEndedStatus(true);
+          sendError(apdu, KMError.OK);
+          break;         
+
         case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
           processProvisionRkpDeviceUniqueKeyPair(apdu);
           break;

@@ -352,8 +352,12 @@ public class KMUtils {
     byte index = 7;
     byte carry = 0;
     short tmp;
+    short val1 = 0;
+    short val2 = 0; 
     while (index >= 0) {
-      tmp = (short) (buf[(short) (op1 + index)] + buf[(short) (op2 + index)] + carry);
+      val1 = (short) (buf[(short) (op1 + index)] & 0x00FF);
+      val2 = (short) (buf[(short) (op2 + index)] & 0x00FF);
+      tmp = (short) (val1 + val2 + carry);
       carry = 0;
       if (tmp > 255) {
         carry = 1; // max unsigned byte value is 255
