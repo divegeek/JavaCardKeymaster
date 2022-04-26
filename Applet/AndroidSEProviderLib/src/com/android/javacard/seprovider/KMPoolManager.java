@@ -454,8 +454,9 @@ public class KMPoolManager {
       }
       if (pool[index] == null) {
         // Create one of the instance (Cipher / Signer / KeyAgreement] based on purpose.
+        Object cipherObject = createInstance(purpose, alg);
         JCSystem.beginTransaction();
-        pool[index] = createInstance(purpose, alg);
+        pool[index] = cipherObject;
         JCSystem.commitTransaction();
         reserveOperation(operation, purpose, strongboxAlgType, padding, blockMode, macLength,
             pool[index], keyObject);
@@ -485,9 +486,9 @@ public class KMPoolManager {
         KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
       }
       if (keysPool[index] == null) {
+        keyObject = createKeyObjectInstance(algo);
         JCSystem.beginTransaction();
-        keysPool[index] = createKeyObjectInstance(algo);
-        keyObject = (KMKeyObject) keysPool[index];
+        keysPool[index] = keyObject;
         JCSystem.commitTransaction();
         break;
       }
