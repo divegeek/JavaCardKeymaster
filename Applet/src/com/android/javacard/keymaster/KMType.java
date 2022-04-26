@@ -247,6 +247,8 @@ public abstract class KMType {
   public static final short NO_AUTH_REQUIRED = (short) 0x01F7;
   // Allow While On Body
   public static final short ALLOW_WHILE_ON_BODY = (short) 0x01FA;
+  // Max Boot Level
+  public static final short MAX_BOOT_LEVEL = (short) 0x03F2;
   // Trusted User Presence Required
   public static final short TRUSTED_USER_PRESENCE_REQUIRED = (short) 0x01FB;
   // Trusted Confirmation Required
@@ -404,5 +406,4 @@ public abstract class KMType {
     Util.setShort(heap, (short) (ptr + 1), INVALID_VALUE);
     return ptr;
   }
-
 }

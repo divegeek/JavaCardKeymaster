@@ -235,64 +235,6 @@ public class KMKeyParameters extends KMType {
     return createKeyParameters(scratchPad, (short) (arrInd / 2));
   }
 
-  public static short makeSbEnforced(short keyParamsPtr, byte[] scratchPad) {
-    final short[] hwEnforcedTagArr = {
-        // HW Enforced
-        KMType.ENUM_TAG, KMType.ORIGIN,
-        KMType.UINT_TAG, KMType.OS_VERSION,
-        KMType.UINT_TAG, KMType.OS_PATCH_LEVEL,
-        KMType.UINT_TAG, KMType.VENDOR_PATCH_LEVEL,
-        KMType.UINT_TAG, KMType.BOOT_PATCH_LEVEL,
-        KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,
-        KMType.ENUM_TAG, KMType.ALGORITHM,
-        KMType.UINT_TAG, KMType.KEYSIZE,
-        KMType.ULONG_TAG, KMType.RSA_PUBLIC_EXPONENT,
-        KMType.ENUM_TAG, KMType.BLOB_USAGE_REQ,
-        KMType.ENUM_ARRAY_TAG, KMType.DIGEST,
-        KMType.ENUM_ARRAY_TAG, KMType.PADDING,
-        KMType.ENUM_ARRAY_TAG, KMType.BLOCK_MODE,
-        KMType.ENUM_ARRAY_TAG, KMType.RSA_OAEP_MGF_DIGEST,
-        KMType.BOOL_TAG, KMType.NO_AUTH_REQUIRED,
-        KMType.BOOL_TAG, KMType.CALLER_NONCE,
-        KMType.UINT_TAG, KMType.MIN_MAC_LENGTH,
-        KMType.ENUM_TAG, KMType.ECCURVE,
-        KMType.BOOL_TAG, KMType.INCLUDE_UNIQUE_ID,
-        KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE,
-        KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
-        KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
-        KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
-        KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
-    };
-    byte index = 0;
-    short tagInd;
-    short arrInd = 0;
-    short tagPtr;
-    short tagKey;
-    short tagType;
-    short arrPtr = KMKeyParameters.cast(keyParamsPtr).getVals();
-    short len = KMArray.cast(arrPtr).length();
-    while (index < len) {
-      tagInd = 0;
-      tagPtr = KMArray.cast(arrPtr).get(index);
-      tagKey = KMTag.getKey(tagPtr);
-      tagType = KMTag.getTagType(tagPtr);
-      if (!isValidTag(tagType, tagKey)) {
-        KMException.throwIt(KMError.INVALID_KEY_BLOB);
-      }
-      while (tagInd < (short) hwEnforcedTagArr.length) {
-        if ((hwEnforcedTagArr[tagInd] == tagType)
-            && (hwEnforcedTagArr[(short) (tagInd + 1)] == tagKey)) {
-          Util.setShort(scratchPad, arrInd, tagPtr);
-          arrInd += 2;
-          break;
-        }
-        tagInd += 2;
-      }
-      index++;
-    }
-    return createKeyParameters(scratchPad, (short) (arrInd / 2));
-  }
-
   public static short makeHwEnforced(short sb, short tee){
     short len = KMKeyParameters.cast(sb).length();
     len += KMKeyParameters.cast(tee).length();
@@ -328,7 +270,8 @@ public class KMKeyParameters extends KMType {
         KMType.UINT_TAG, KMType.USERID,
         KMType.DATE_TAG, KMType.CREATION_DATETIME,
         KMType.UINT_TAG, KMType.USAGE_COUNT_LIMIT,
-        KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY
+        KMType.BOOL_TAG, KMType.ALLOW_WHILE_ON_BODY,
+        KMType.UINT_TAG, KMType.MAX_BOOT_LEVEL,
     };
     byte index = 0;
     short tagInd;
@@ -393,9 +336,6 @@ public class KMKeyParameters extends KMType {
       }
       index++;
     }
-    // Add custom tags at the end of the array. So it becomes easy to
-    // delete them when sending key characteristics back to HAL.
-    arrInd = addCustomTags(keyParamsPtr, scratchPad, arrInd);
     return createKeyParameters(scratchPad, (short) (arrInd / 2));
   }
 
@@ -471,9 +411,10 @@ public class KMKeyParameters extends KMType {
     return KMKeyParameters.instance(arrPtr);
   }
 
-  public static short addCustomTags(short keyParams, byte[] scratchPad, short offset) {
+  public static short makeCustomTags(short keyParams, byte[] scratchPad) {
     short index = 0;
     short tagPtr;
+    short offset = 0;
     short len = (short) customTags.length;
     short tagType;
     while (index < len) {
@@ -493,7 +434,7 @@ public class KMKeyParameters extends KMType {
       }
       index += 2;
     }
-    return offset;
+    return createKeyParameters(scratchPad, (short) (offset / 2));
   }
 
   public void deleteCustomTags() {
