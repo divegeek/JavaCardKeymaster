@@ -15,9 +15,6 @@
  */
 package com.android.javacard.seprovider;
 
-import com.android.javacard.seprovider.KMError;
-import com.android.javacard.seprovider.KMException;
-import com.android.javacard.seprovider.KMType;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.KeyAgreement;
@@ -46,7 +43,7 @@ public class KMOperationImpl implements KMOperation {
 
   public KMOperationImpl() {
     parameters = JCSystem.makeTransientShortArray(PARAMETERS_LENGTH, JCSystem.CLEAR_ON_RESET);
-    operationInst = JCSystem.makeTransientObjectArray((short) 1, JCSystem.CLEAR_ON_RESET);
+    operationInst = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
     reset();
   }
 
@@ -91,23 +88,32 @@ public class KMOperationImpl implements KMOperation {
   }
 
   public void setCipher(Cipher cipher) {
-    operationInst[0] = cipher;
+    operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO] = cipher;
   }
 
   public void setSignature(Signature signer) {
-    operationInst[0] = signer;
+    operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO] = signer;
   }
 
   public void setKeyAgreement(KeyAgreement keyAgreement) {
-    operationInst[0] = keyAgreement;
+    operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO] = keyAgreement;
   }
 
-  public boolean isResourceMatches(Object object) {
-    return operationInst[0] == object;
+  public boolean isResourceMatches(Object object, byte resourceType) {
+    return operationInst[resourceType] == object;
   }
 
+  public void setKeyObject(KMKeyObject keyObject) {
+    operationInst[KMPoolManager.RESOURCE_TYPE_KEY] = keyObject;
+  }
+
+  public KMKeyObject getKeyObject() {
+    return (KMKeyObject) operationInst[KMPoolManager.RESOURCE_TYPE_KEY];
+  }
+  
   private void reset() {
-    operationInst[0] = null;
+    operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO] = null;
+    operationInst[KMPoolManager.RESOURCE_TYPE_KEY] = null;
     parameters[MAC_LENGTH_OFFSET] = KMType.INVALID_VALUE;
     parameters[AES_GCM_UPDATE_LEN_OFFSET] = 0;
     parameters[BLOCK_MODE_OFFSET] = KMType.INVALID_VALUE;
@@ -131,7 +137,7 @@ public class KMOperationImpl implements KMOperation {
   }
 
   private void initSymmetricCipher(Key key, byte[] ivBuffer, short ivStart, short ivLength) {
-    Cipher symmCipher = (Cipher) operationInst[0];
+    Cipher symmCipher = (Cipher) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO];
     byte cipherAlg = symmCipher.getAlgorithm();
     switch (cipherAlg) {
       case Cipher.ALG_AES_BLOCK_128_CBC_NOPAD:
@@ -167,17 +173,19 @@ public class KMOperationImpl implements KMOperation {
       } else {
         mode = Signature.MODE_SIGN;
       }
-      ((Signature) operationInst[0]).init((PrivateKey) key, mode);
+      ((Signature) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO]).init((PrivateKey) key, mode);
     } else { // RSA Cipher
-      ((Cipher) operationInst[0]).init((PrivateKey) key, mapPurpose(getPurpose()));
+      ((Cipher) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO]).
+          init((PrivateKey) key, mapPurpose(getPurpose()));
     }
   }
 
   private void initEc(Key key) {
     if (KMType.AGREE_KEY == getPurpose()) {
-      ((KeyAgreement) operationInst[0]).init((PrivateKey) key);
+      ((KeyAgreement) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO]).init((PrivateKey) key);
     } else {
-      ((Signature) operationInst[0]).init((PrivateKey) key, mapPurpose(getPurpose()));
+      ((Signature) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO])
+          .init((PrivateKey) key, mapPurpose(getPurpose()));
     }
   }
 
@@ -188,7 +196,8 @@ public class KMOperationImpl implements KMOperation {
         initSymmetricCipher(key, buf, start, length);
         break;
       case KMType.HMAC:
-        ((Signature) operationInst[0]).init(key, mapPurpose(getPurpose()));
+        ((Signature) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO])
+            .init(key, mapPurpose(getPurpose()));
         break;
       case KMType.RSA:
         initRsa(key, digest);
@@ -205,7 +214,8 @@ public class KMOperationImpl implements KMOperation {
   @Override
   public short update(byte[] inputDataBuf, short inputDataStart,
       short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
-    short len = ((Cipher) operationInst[0]).update(inputDataBuf, inputDataStart, inputDataLength,
+    short len = ((Cipher) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO])
+        .update(inputDataBuf, inputDataStart, inputDataLength,
         outputDataBuf, outputDataStart);
     if (parameters[ALG_TYPE_OFFSET] == KMType.AES
         && parameters[BLOCK_MODE_OFFSET] == KMType.GCM) {
@@ -218,13 +228,15 @@ public class KMOperationImpl implements KMOperation {
   @Override
   public short update(byte[] inputDataBuf, short inputDataStart,
       short inputDataLength) {
-    ((Signature) operationInst[0]).update(inputDataBuf, inputDataStart, inputDataLength);
+    ((Signature) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO])
+        .update(inputDataBuf, inputDataStart, inputDataLength);
     return 0;
   }
 
   private short finishKeyAgreement(byte[] publicKey, short start, short len, byte[] output,
       short outputStart) {
-    return ((KeyAgreement) operationInst[0]).generateSecret(publicKey, start, len,
+    return ((KeyAgreement) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO])
+        .generateSecret(publicKey, start, len,
         output, outputStart);
   }
 
@@ -234,7 +246,7 @@ public class KMOperationImpl implements KMOperation {
     short len = 0;
     try {
       byte[] tmpArray = KMAndroidSEProvider.getInstance().tmpArray;
-      Cipher cipher = (Cipher) operationInst[0];
+      Cipher cipher = (Cipher) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO];
       short cipherAlg = parameters[ALG_TYPE_OFFSET];
       short blockMode = parameters[BLOCK_MODE_OFFSET];
       short mode = parameters[PURPOSE_OFFSET];
@@ -328,14 +340,16 @@ public class KMOperationImpl implements KMOperation {
   @Override
   public short sign(byte[] inputDataBuf, short inputDataStart,
       short inputDataLength, byte[] signBuf, short signStart) {
-    return ((Signature) operationInst[0]).sign(inputDataBuf, inputDataStart, inputDataLength,
+    return ((Signature) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO])
+        .sign(inputDataBuf, inputDataStart, inputDataLength,
         signBuf, signStart);
   }
 
   @Override
   public boolean verify(byte[] inputDataBuf, short inputDataStart,
       short inputDataLength, byte[] signBuf, short signStart, short signLength) {
-    return ((Signature) operationInst[0]).verify(inputDataBuf, inputDataStart, inputDataLength,
+    return ((Signature) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO])
+        .verify(inputDataBuf, inputDataStart, inputDataLength,
         signBuf, signStart, signLength);
   }
 
@@ -344,10 +358,10 @@ public class KMOperationImpl implements KMOperation {
     // Few simulators does not reset the Hmac signer instance on init so as
     // a workaround to reset the hmac signer instance in case of abort/failure of the operation
     // the corresponding sign / verify function is called.
-    if (operationInst[0] != null) {
+    if (operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO] != null) {
       if ((parameters[PURPOSE_OFFSET] == KMType.SIGN || parameters[PURPOSE_OFFSET] == KMType.VERIFY) &&
-          (((Signature) operationInst[0]).getAlgorithm() == Signature.ALG_HMAC_SHA_256)) {
-        Signature signer = (Signature) operationInst[0];
+          (((Signature) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO]).getAlgorithm() == Signature.ALG_HMAC_SHA_256)) {
+        Signature signer = (Signature) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO];
         try {
           if (parameters[PURPOSE_OFFSET] == KMType.SIGN) {
             signer.sign(EMPTY, (short) 0, (short) 0, EMPTY, (short) 0);
@@ -364,7 +378,8 @@ public class KMOperationImpl implements KMOperation {
 
   @Override
   public void updateAAD(byte[] dataBuf, short dataStart, short dataLength) {
-    ((AEADCipher) operationInst[0]).updateAAD(dataBuf, dataStart, dataLength);
+    ((AEADCipher) operationInst[KMPoolManager.RESOURCE_TYPE_CRYPTO])
+        .updateAAD(dataBuf, dataStart, dataLength);
   }
 
   @Override
