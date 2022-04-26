@@ -808,20 +808,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       case (short) 0:
         // Old KeyBlob has a maximum of 5 elements.
         keyBlob = KMArray.instance(ASYM_KEY_BLOB_SIZE_V0);
-        KMArray.cast(keyBlob).add((short) 0, byteBlobExp);
-        KMArray.cast(keyBlob).add((short) 1, byteBlobExp);
-        KMArray.cast(keyBlob).add((short) 2, byteBlobExp);
-        KMArray.cast(keyBlob).add((short) 3, keyChar);
-        KMArray.cast(keyBlob).add((short) 4, byteBlobExp);
+        KMArray.cast(keyBlob).add((short) 0, byteBlobExp);// Secret
+        KMArray.cast(keyBlob).add((short) 1, byteBlobExp);// Nonce
+        KMArray.cast(keyBlob).add((short) 2, byteBlobExp);// AuthTag
+        KMArray.cast(keyBlob).add((short) 3, keyChar);// KeyChars
+        KMArray.cast(keyBlob).add((short) 4, byteBlobExp);// PubKey
         break;
       case (short) 1:
         keyBlob = KMArray.instance(ASYM_KEY_BLOB_SIZE_V1);
-        KMArray.cast(keyBlob).add((short) 0, KMInteger.exp());
-        KMArray.cast(keyBlob).add((short) 1, byteBlobExp);
-        KMArray.cast(keyBlob).add((short) 2, byteBlobExp);
-        KMArray.cast(keyBlob).add((short) 3, byteBlobExp);
-        KMArray.cast(keyBlob).add((short) 4, keyChar);
-        KMArray.cast(keyBlob).add((short) 5, byteBlobExp);
+        KMArray.cast(keyBlob).add((short) 0, KMInteger.exp());// Version
+        KMArray.cast(keyBlob).add((short) 1, byteBlobExp);// Secret
+        KMArray.cast(keyBlob).add((short) 2, byteBlobExp);// Nonce
+        KMArray.cast(keyBlob).add((short) 3, byteBlobExp);// AuthTag
+        KMArray.cast(keyBlob).add((short) 4, keyChar);// KeyChars
+        KMArray.cast(keyBlob).add((short) 5, byteBlobExp);// PubKey
         break;
       case (short) 2:
         keyBlob = KMArray.instance(ASYM_KEY_BLOB_SIZE_V2);
@@ -3031,9 +3031,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void importKey(APDU apdu, short keyFmt, byte[] scratchPad) {
-    // Take backup of the KeyParams before they get updated. The original
-    // key params are required to generate MAC in macKeyParams() function.
-    short keyParams = data[KEY_PARAMETERS];
     validateImportKey(data[KEY_PARAMETERS], keyFmt);
     // Check algorithm and dispatch to appropriate handler.
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
@@ -3943,10 +3940,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short minArraySize = 0;
     switch(version) {
     case 0:
-      minArraySize = (short) 4;
+      minArraySize = SYM_KEY_BLOB_SIZE_V0;
       break;
     case 1:
-      minArraySize = (short) 5;
+      minArraySize = SYM_KEY_BLOB_SIZE_V1;
       break;
     case 2:
       minArraySize = SYM_KEY_BLOB_SIZE_V2;
@@ -3975,12 +3972,39 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short keyBlobSecretOff = 0;
     switch(version) {
     case 0:
+      // V0 KeyBlob
+      // KEY_BLOB = [
+      //     SECRET, 
+      //     NONCE, 
+      //     AUTH_TAG, 
+      //     KEY_CHARACTERISTICS,
+      //     PUBKEY
+      // ]
       keyBlobSecretOff = (short) 0;
       break;
     case 1:
+      // V1 KeyBlob
+      // KEY_BLOB = [
+      //     VERSION,   
+      //     SECRET, 
+      //     NONCE, 
+      //     AUTH_TAG, 
+      //     KEY_CHARACTERISTICS,
+      //     PUBKEY
+      // ]
       keyBlobSecretOff = (short) 1;
       break;
     case 2:
+      // V2 KeyBlob
+      // KEY_BLOB = [
+      //     VERSION,   
+      //     SECRET, 
+      //     NONCE, 
+      //     AUTH_TAG, 
+      //     KEY_CHARACTERISTICS,
+      //     CUSTOM_TAGS,
+      //     PUBKEY
+      // ]
       keyBlobSecretOff = KEY_BLOB_SECRET;
       break;
     default:
@@ -4214,21 +4238,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // add authTime in millis to timestamp.
     KMUtils.add(scratchPad, (short) 0, (short) 8, (short) 16);
     return KMInteger.uint_64(scratchPad, (short) 16);
-  }
-
-  private void add(byte[] buf, short op1, short op2, short result) {
-    byte index = 7;
-    byte carry = 0;
-    short tmp;
-    while (index >= 0) {
-      tmp = (short) (buf[(short) (op1 + index)] + buf[(short) (op2 + index)] + carry);
-      carry = 0;
-      if (tmp > 255) {
-        carry = 1; // max unsigned byte value is 255
-      }
-      buf[(short) (result + index)] = (byte) (tmp & (byte) 0xFF);
-      index--;
-    }
   }
 
   public void powerReset() {
