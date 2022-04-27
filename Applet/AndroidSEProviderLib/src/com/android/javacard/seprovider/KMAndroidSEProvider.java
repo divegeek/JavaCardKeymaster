@@ -587,7 +587,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
 	short cipherAlg = mapCipherAlg((byte) alg, (byte) padding, (byte) blockMode, (byte) 0);	  
 	KMOperation operation =
-	    	      poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, secretLength, false);  
+	    	      poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, secretLength);  
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
     Key key = (Key)keyObj.getKeyObjectInstance();
@@ -614,7 +614,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     KMOperation operation =
         poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
-          KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, false);
+          KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0);
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
     HMACKey key = (HMACKey)keyObj.getKeyObjectInstance();
@@ -623,16 +623,16 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return operation;
   }
   
-  private KMOperation createHmacSignerVerifier(short purpose, short digest, HMACKey hmacKey, boolean isTrustedConf) {
+  private KMOperation createHmacSignerVerifier(short purpose, short digest, HMACKey hmacKey) {
     if (digest != KMType.SHA2_256) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
     KMOperation operation =
       poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
-        KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, isTrustedConf);
+        KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0);
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
-    HMACKey key = (HMACKey)keyObj.getKeyObject();
+    HMACKey key = (HMACKey)keyObj.getKeyObjectInstance();
     short len = hmacKey.getKey(tmpArray, (short) 0);
     key.setKey(tmpArray, (short) 0, len);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
@@ -666,7 +666,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {
     KMHmacKey key = (KMHmacKey) computedHmacKey;
-    return createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, key.getKey(), true);
+    return createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, key.getKey());
   } 
   
   public KMOperation createRsaSigner(short digest, short padding, byte[] secret,
@@ -674,7 +674,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short modLength) {
     byte alg = mapSignature256Alg(KMType.RSA, (byte) padding, (byte) digest);
     KMOperation operation = poolMgr.getOperationImpl(KMType.SIGN, alg, KMType.RSA, padding,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false);
+        KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength);
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
     RSAPrivateKey key = (RSAPrivateKey)((KeyPair)(keyObj.getKeyObjectInstance())).getPrivate();
@@ -689,7 +689,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short modLength) {
     byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0, (byte) mgfDigest);
     KMOperation operation = poolMgr.getOperationImpl(KMType.DECRYPT, cipherAlg, KMType.RSA, padding,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false); 
+        KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength); 
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
     RSAPrivateKey key = (RSAPrivateKey) ((KeyPair)(keyObj.getKeyObjectInstance())).getPrivate();
@@ -704,7 +704,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     byte alg = mapSignature256Alg(KMType.EC, (byte) 0, (byte) digest);
     KMOperation operation = poolMgr
             .getOperationImpl(KMType.SIGN, alg, KMType.EC, KMType.INVALID_VALUE,
-                KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength, false);
+                KMType.INVALID_VALUE, KMType.INVALID_VALUE, secretLength);
     KMKeyObject keyObj = operation.getKeyObject();
     ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObj.getKeyObjectInstance())).getPrivate();
     key.setS(secret, secretStart, secretLength);
@@ -716,7 +716,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short secretLength) {
     KMOperation operation = poolMgr
         .getOperationImpl(KMType.AGREE_KEY, KeyAgreement.ALG_EC_SVDP_DH_PLAIN,
-            KMType.EC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, false);
+            KMType.EC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0);
     KMKeyObject keyObj = operation.getKeyObject();
     ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObj.getKeyObjectInstance())).getPrivate();
     key.setS(secret, secretStart, secretLength);

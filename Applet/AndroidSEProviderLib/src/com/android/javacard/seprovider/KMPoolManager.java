@@ -34,8 +34,18 @@ import javacardx.crypto.Cipher;
  */
 public class KMPoolManager {
 
-  public static final short MAX_OPERATION_INSTANCES = 4;
-  private static final short HMAC_MAX_OPERATION_INSTANCES = 8;
+  public static final short MAX_KEYMINT_OPERATION_INSTANCES = 4;
+  public static final short MAX_DYNAMIC_OPERATION_INSTANCES = 5;
+  // 4 Keymint operations + 1 operation for RKP generate CSR flow
+  public static final short MAX_OPERATION_INSTANCES = 
+      (short) (MAX_KEYMINT_OPERATION_INSTANCES + MAX_DYNAMIC_OPERATION_INSTANCES);
+  // Keymint Hmac crypto operations - 4
+  // Trusted confirmation operations - 4
+  // RKP generate CSR  - 1
+  private static final short MAX_HMAC_ALG_INSTANCES = 9;
+  // Keymint AES-GCM operations = 4
+  // RKP generate CSR - 1
+  private static final short MAX_AES_GCM_ALG_INSTANCES = 5;
   public static final byte AES_128 = 0x04;
   public static final byte AES_256 = 0x05;
   //Resource type constants
@@ -65,7 +75,6 @@ public class KMPoolManager {
   // KMOperationImpl pool
   private Object[] operationPool;
   // Hmac signer pool which is used to support TRUSTED_CONFIRMATION_REQUIRED tag.
-  private Object[] hmacSignOperationPool;
   
   private Object[] keysPool;
 
@@ -179,18 +188,26 @@ public class KMPoolManager {
 	  }
   
   private KMPoolManager() {
-	initStatics();  
-    cipherPool = new Object[(short) (CIPHER_ALGS.length * 4)];
- // Extra 4 algorithms are used to support TRUSTED_CONFIRMATION_REQUIRED feature.
-    signerPool = new Object[(short) ((SIG_ALGS.length * 4) + 4)];
+	  initStatics();
+	  // Reserve a (CIPHER_ALGS.length * 4) + 1) size for cipher pool.
+	  // the extra algorithm is for AES-GCM
+    cipherPool = new Object[(short) ((CIPHER_ALGS.length * 4) + 1)];
+    // Reserve a (SIG_ALGS.length * 4) + 5) size for sign pool.
+    // Extra 5 algorithms:
+    // 1) 4 algorithms to support TRUSTED_CONFIRMATION_REQUIRED feature.
+    // 2) 1 algorithm for RKP Hmac sign.
+    signerPool = new Object[(short) ((SIG_ALGS.length * 4) + 5)];
     keyAgreementPool = new Object[(short) (KEY_AGREE_ALGS.length * 4)];
     
-    keysPool = new Object[(short) ((KEY_ALGS.length * 4) + 4)];
-    operationPool = new Object[4];
-    hmacSignOperationPool = new Object[4];
+    // Reserve (KEY_ALGS.length * 4) + 6) size of key pool
+    // Extra 6 keys:
+    // 1) 4 for TRUSTED_CONFIRMATION_REQUIRED feature.
+    // 2) 1 for RKP Hmac
+    // 3) 1 for RKP AES-GCM.
+    keysPool = new Object[(short) ((KEY_ALGS.length * 4) + 6)];
+    operationPool = new Object[MAX_OPERATION_INSTANCES];
     /* Initialize pools */
     initializeOperationPool();
-    initializeHmacSignOperationPool();
     initializeSignerPool();
     initializeCipherPool();
     initializeKeyAgreementPool();
@@ -208,19 +225,14 @@ public class KMPoolManager {
   
   private void initializeOperationPool() {
     short index = 0;
-    while (index < MAX_OPERATION_INSTANCES) {
+    // Create only 4 instances and dynamically create another
+    // instance when required.
+    while (index < MAX_KEYMINT_OPERATION_INSTANCES) {
       operationPool[index] = new KMOperationImpl();
       index++;
     }
   }
 
-  private void initializeHmacSignOperationPool() {
-    short index = 0;
-    while (index < MAX_OPERATION_INSTANCES) {
-      hmacSignOperationPool[index] = new KMOperationImpl();
-      index++;
-    }
-  }
   
   // Create a signature instance of each algorithm once.
   private void initializeSignerPool() {
@@ -349,17 +361,19 @@ public class KMPoolManager {
    *
    * @return instance of the available resource or null if no resource is available.
    */
-  public KMOperation getResourceFromOperationPool(boolean isTrustedConfOpr) {
+  public KMOperation getResourceFromOperationPool() {
     short index = 0;
     KMOperationImpl impl;
-    Object[] oprPool;
-    if(isTrustedConfOpr) {
-    	oprPool = hmacSignOperationPool;
-    } else {
-    	oprPool = operationPool;
-    }
-    while (index < oprPool.length) {
-      impl = (KMOperationImpl) oprPool[index];
+    while (index < operationPool.length) {
+      impl = (KMOperationImpl) operationPool[index];
+      if (impl == null) {
+        // Create new instance of operation
+        impl = new KMOperationImpl();
+        JCSystem.beginTransaction();
+        operationPool[index] = impl;
+        JCSystem.commitTransaction();
+        return impl;
+      }
       // Mode is always set. so compare using mode value.
       if (impl.getPurpose() == KMType.INVALID_VALUE) {
         return impl;
@@ -391,9 +405,10 @@ public class KMPoolManager {
   private boolean isResourceBusy(Object obj, byte resourceType) {
     short index = 0;
     while (index < MAX_OPERATION_INSTANCES) {
-      if (((KMOperationImpl) operationPool[index]).isResourceMatches(obj, resourceType)
-    		  || ((KMOperationImpl) hmacSignOperationPool[index]).isResourceMatches(obj, resourceType)) {
-        return true;
+      if (operationPool[index] != null) {
+        if (((KMOperationImpl) operationPool[index]).isResourceMatches(obj, resourceType)) {
+          return true;
+        }
       }
       index++;
     }
@@ -432,10 +447,10 @@ public class KMPoolManager {
 
   public KMOperation getOperationImpl(short purpose, short alg, short strongboxAlgType,
       short padding,
-      short blockMode, short macLength, short secretLength, boolean isTrustedConfOpr) {
+      short blockMode, short macLength, short secretLength) {
     KMOperation operation;
     // Throw exception if no resource from operation pool is available.
-    if (null == (operation = getResourceFromOperationPool(isTrustedConfOpr))) {
+    if (null == (operation = getResourceFromOperationPool())) {
       KMException.throwIt(KMError.TOO_MANY_OPERATIONS);
     }
     // Get one of the pool instances (cipher / signer / keyAgreement) based on purpose.
@@ -444,7 +459,9 @@ public class KMPoolManager {
     short usageCount = 0;
     short maxOperations = MAX_OPERATION_INSTANCES;
     if (Signature.ALG_HMAC_SHA_256 == alg) {
-      maxOperations = HMAC_MAX_OPERATION_INSTANCES;
+      maxOperations = MAX_HMAC_ALG_INSTANCES;
+    } else if (AEADCipher.ALG_AES_GCM == alg) {
+      maxOperations = MAX_AES_GCM_ALG_INSTANCES;
     }
 
     KMKeyObject keyObject = getKeyObjectFromPool(alg, secretLength, maxOperations);    
@@ -569,8 +586,8 @@ public class KMPoolManager {
   public void powerReset() {
     short index = 0;
     while (index < operationPool.length) {
-      ((KMOperationImpl) operationPool[index]).abort();
-      ((KMOperationImpl) hmacSignOperationPool[index]).abort();
+      if (operationPool[index] != null)
+        ((KMOperationImpl) operationPool[index]).abort();
       index++;
     }
   }
