@@ -35,7 +35,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   // Magic number version
   private static final byte KM_MAGIC_NUMBER = (byte) 0x82;
   // MSB byte is for Major version and LSB byte is for Minor version.
-  private static final short CURRENT_PACKAGE_VERSION = 0x0100;
+  private static final short KM_PERSISTENT_DATA_STORAGE_VERSION = 0x0100;
 
   private static final byte KM_BEGIN_STATE = 0x00;
   private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
@@ -79,7 +79,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   KMAndroidSEApplet() {
     super(new KMAndroidSEProvider());
     if (!UpgradeManager.isUpgrading()) {
-        packageVersion = CURRENT_PACKAGE_VERSION;
+        packageVersion = KM_PERSISTENT_DATA_STORAGE_VERSION;
     }
   }
 
@@ -448,8 +448,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     boolean upgradeAllowed = false;
     short oldMajorVersion = (short) ((version >> 8) & 0x00FF);
     short oldMinorVersion = (short) (version & 0x00FF);
-    short currentMajorVersion = (short) (CURRENT_PACKAGE_VERSION >> 8 & 0x00FF);
-    short currentMinorVersion = (short) (CURRENT_PACKAGE_VERSION & 0x00FF);
+    short currentMajorVersion = (short) (KM_PERSISTENT_DATA_STORAGE_VERSION >> 8 & 0x00FF);
+    short currentMinorVersion = (short) (KM_PERSISTENT_DATA_STORAGE_VERSION & 0x00FF);
     // Downgrade of the Applet is not allowed.
     // Upgrade is not allowed to a next version which is not immediate.
     if ((short) (currentMajorVersion - oldMajorVersion) == 1) {
