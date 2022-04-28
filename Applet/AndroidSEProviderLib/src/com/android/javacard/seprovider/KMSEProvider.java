@@ -539,6 +539,19 @@ public interface KMSEProvider {
       short ivStart,
       short ivLength,
       short macLength);
+  
+  KMOperation getRkpOperation(byte purpose,
+      byte alg,
+      byte digest,
+      byte padding,
+      byte blockMode,
+      byte[] keyBuf,
+      short keyStart,
+      short keyLength,
+      byte[] ivBuf,
+      short ivStart,
+      short ivLength,
+      short macLength);
 
   /**
    * This creates a persistent operation for signing, verify, encryption and decryption using RSA

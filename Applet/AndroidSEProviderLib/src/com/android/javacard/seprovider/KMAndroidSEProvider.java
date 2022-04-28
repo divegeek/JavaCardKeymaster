@@ -583,11 +583,16 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
   public KMOperation createSymmetricCipher(short alg, short purpose, short macLength,
       short blockMode, short padding, byte[] secret, short secretStart,
-      short secretLength, byte[] ivBuffer, short ivStart, short ivLength) {
+      short secretLength, byte[] ivBuffer, short ivStart, short ivLength,
+      boolean isRkp) {
 
-	short cipherAlg = mapCipherAlg((byte) alg, (byte) padding, (byte) blockMode, (byte) 0);	  
-	KMOperation operation =
-	    	      poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, secretLength, false);  
+	  short cipherAlg = mapCipherAlg((byte) alg, (byte) padding, (byte) blockMode, (byte) 0);	  
+	  KMOperation operation = null;
+	  if (isRkp) {
+	    operation = poolMgr.getRKpOperation(purpose, cipherAlg, alg, padding, blockMode, macLength);
+	  } else {
+	    operation = poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, secretLength, false);
+	  }
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
     Key key = (Key)keyObj.getKeyObjectInstance();
@@ -608,13 +613,18 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   public KMOperation createHmacSignerVerifier(short purpose, short digest,
-      byte[] secret, short secretStart, short secretLength) {
+      byte[] secret, short secretStart, short secretLength, boolean isRkp) {
+    KMOperation operation = null;
     if (digest != KMType.SHA2_256) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
-    KMOperation operation =
-        poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
+    if (isRkp) {
+      operation = poolMgr.getRKpOperation(purpose, Signature.ALG_HMAC_SHA_256, KMType.HMAC,
+          KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE);
+    } else {
+      operation = poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
           KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, false);
+    }
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
     HMACKey key = (HMACKey)keyObj.getKeyObjectInstance();
@@ -632,11 +642,34 @@ public class KMAndroidSEProvider implements KMSEProvider {
         KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, isTrustedConf);
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
-    HMACKey key = (HMACKey)keyObj.getKeyObject();
+    HMACKey key = (HMACKey)keyObj.getKeyObjectInstance();
     short len = hmacKey.getKey(tmpArray, (short) 0);
     key.setKey(tmpArray, (short) 0, len);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
     return operation; 
+  }
+
+  @Override
+  public KMOperation getRkpOperation(byte purpose, byte alg,
+      byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart,
+      short keyLength, byte[] ivBuf, short ivStart, short ivLength,
+      short macLength) {
+    KMOperation opr = null;
+    switch (alg) {
+    case KMType.AES:
+      // Convert macLength to bytes
+      macLength = (short) (macLength / 8);
+      opr = createSymmetricCipher(alg, purpose, macLength, blockMode, padding, keyBuf, keyStart, keyLength, ivBuf,
+          ivStart, ivLength, true/* isRKP */);
+      break;
+    case KMType.HMAC:
+      opr = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart, keyLength, true/* isRKP */);
+      break;
+    default:
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+      break;
+    }
+    return opr;
   }
 
   @Override
@@ -651,10 +684,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
         // Convert macLength to bytes
         macLength = (short) (macLength / 8);
         opr = createSymmetricCipher(alg, purpose, macLength, blockMode, padding, keyBuf, keyStart,
-            keyLength, ivBuf, ivStart, ivLength);
+            keyLength, ivBuf, ivStart, ivLength, false/* isRKP */);
         break;
       case KMType.HMAC:
-        opr = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart, keyLength);
+        opr = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart, keyLength, false/* isRKP */);
         break;
       default:
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
