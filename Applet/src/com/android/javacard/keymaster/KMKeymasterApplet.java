@@ -218,6 +218,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // version number whenever you change anything related to
   // KeyBlob (structure, encryption algorithm etc).
   public static final short KEYBLOB_CURRENT_VERSION = 2;
+  // KeyBlob Verion 1 constant.
+  public static final short KEYBLOB_VERSION_1 = 1;
   // KeyBlob array size constants.
   public static final byte SYM_KEY_BLOB_SIZE_V2 = 6;
   public static final byte ASYM_KEY_BLOB_SIZE_V2 = 7;
@@ -3798,7 +3800,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private static void createEncryptedKeyBlob(byte[] scratchPad) {
     // make root of trust blob
-    data[ROT] = readROT(scratchPad);
+    data[ROT] = readROT(scratchPad, KEYBLOB_CURRENT_VERSION);
     if (data[ROT] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
@@ -4016,7 +4018,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void parseEncryptedKeyBlob(short keyBlob, short appId, short appData,
       byte[] scratchPad, short version) {
     // make root of trust blob
-    data[ROT] = readROT(scratchPad);
+    data[ROT] = readROT(scratchPad, version);
     if (data[ROT] == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
@@ -4029,10 +4031,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   // Read RoT
-  public static short readROT(byte[] scratchPad) {
+  public static short readROT(byte[] scratchPad, short version) {
     Util.arrayFillNonAtomic(scratchPad,(short)0, (short)256,(byte)0);
     short len = kmDataStore.getBootKey(scratchPad, (short)0);
-    len += kmDataStore.getVerifiedBootHash(scratchPad, (short)len);
+    // As per IKeyMintDevice.aidl specification The root of trust
+    // consists of verifyBootKey, boot state and device locked.
+    if (version <= KEYBLOB_VERSION_1) {
+      // To parse old keyblobs verified boot hash is included in
+      // the root of trust.
+      len += kmDataStore.getVerifiedBootHash(scratchPad, (short)len);
+    }
     short bootState = kmDataStore.getBootState();
     len = Util.setShort(scratchPad, len, bootState);
     if(kmDataStore.isDeviceBootLocked()){
