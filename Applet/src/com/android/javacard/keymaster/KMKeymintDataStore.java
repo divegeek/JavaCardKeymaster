@@ -570,7 +570,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     }
   }
   
-  public KMRkpMacKey getRkpMacacKey() {
+  public KMRkpMacKey getRkpMacKey() {
 	return rkpMacKey;
   }
 	

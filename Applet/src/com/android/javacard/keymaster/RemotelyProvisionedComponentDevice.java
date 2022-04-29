@@ -1093,7 +1093,7 @@ public class RemotelyProvisionedComponentDevice {
   private void initHmacOperation() {
     short dataEntryIndex = getEntry(EPHEMERAL_MAC_KEY);
     operation[0] =
-        seProvider.initSymmetricOperation(
+        seProvider.getRkpOperation(
             KMType.SIGN,
             KMType.HMAC,
             KMType.SHA2_256,
@@ -1134,7 +1134,7 @@ public class RemotelyProvisionedComponentDevice {
         );
     // Initialize the Cipher object.
     operation[0] =
-        seProvider.initSymmetricOperation(
+        seProvider.getRkpOperation(
             KMType.ENCRYPT,
             KMType.AES,
             (byte) 0,
@@ -1470,7 +1470,7 @@ public class RemotelyProvisionedComponentDevice {
 	        KMByteBlob.cast(macKey).getStartOff(), MAC_KEY_SIZE, (byte) 0);
 	  result = seProvider.hmacSign(KMByteBlob.cast(macKey).getBuffer(), KMByteBlob.cast(macKey).getStartOff(), MAC_KEY_SIZE, data, dataStart, dataLength, signature, signatureStart);	    
 	} else {
-	  result = seProvider.hmacSign(storeDataInst.getRkpMacacKey(), data, dataStart, dataLength, signature, signatureStart);
+	  result = seProvider.hmacSign(storeDataInst.getRkpMacKey(), data, dataStart, dataLength, signature, signatureStart);
 	}
     return result;
   }
