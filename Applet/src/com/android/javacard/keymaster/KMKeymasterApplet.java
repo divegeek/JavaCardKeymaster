@@ -1258,6 +1258,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[HW_PARAMETERS] = KMKeyParameters.makeHwEnforced(hwParams, (byte) data[ORIGIN],
                       osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
     data[SW_PARAMETERS] = KMKeyParameters.makeSwEnforced(swParams, scratchPad);
+    data[KEY_CHARACTERISTICS] = KMKeyCharacteristics.instance();
+    KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setHardwareEnforced(data[HW_PARAMETERS]);
+    KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).setSoftwareEnforced(data[SW_PARAMETERS]);
   }
 
   private void processExportKeyCmd(APDU apdu) {
@@ -2846,7 +2849,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
 
         authTimeoutTagPtr =
-            KMKeyParameters.findTag(KMType.ULONG_TAG, KMType.AUTH_TIMEOUT_MILLIS, data[HW_PARAMETERS]);
+            KMKeyParameters.findTag(KMType.ULONG_TAG, KMType.AUTH_TIMEOUT_MILLIS, data[CUSTOM_TAGS]);
         if (authTimeoutTagPtr == KMType.INVALID_VALUE) {
           KMException.throwIt(KMError.INVALID_KEY_BLOB);
         }
