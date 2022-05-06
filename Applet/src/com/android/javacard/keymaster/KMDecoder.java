@@ -468,5 +468,22 @@ public class KMDecoder {
     readMajorTypeWithPayloadLength(BYTES_TYPE);
     return scratchBuf[START_OFFSET];
   }
+  
+  public short readKeyblobVersion(byte[] buf, short bufOffset, short bufLen) {
+    bufferRef[0] = buf;
+    scratchBuf[START_OFFSET] = bufOffset;
+    scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
+    short arrayLen = readMajorTypeWithPayloadLength(ARRAY_TYPE);
+    if (arrayLen == 0) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short version = KMType.INVALID_VALUE;
+    try {
+      version = decodeInteger(KMInteger.exp());
+    } catch(Exception e) {
+      // Fail to decode Integer. It can happen if it is an old KeyBlob.
+    }
+    return version;
+  }
 
 }

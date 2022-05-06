@@ -631,17 +631,24 @@ public class KMRepository implements KMUpgradable {
     }
   }
 
-  public short readROT() {
+  public short readROT(short version) {
     short totalLength = 0;
     short length = dataLength(BOOT_VERIFIED_BOOT_KEY);
     if (length == 0) {
       return KMType.INVALID_VALUE;
     }
     totalLength += length;
-    if ((length = dataLength(BOOT_VERIFIED_BOOT_HASH)) == 0) {
-      return KMType.INVALID_VALUE;
-    }
-    totalLength += length;
+    // As per specification The root of trust
+    // consists of verifyBootKey, boot state and device locked.
+    if (version <= KMKeymasterApplet.KEYBLOB_VERSION_0) {
+      // To parse old keyblobs verified boot hash is included in
+      // the root of trust.
+
+      if ((length = dataLength(BOOT_VERIFIED_BOOT_HASH)) == 0) {
+        return KMType.INVALID_VALUE;
+      }
+      totalLength += length;
+    }    
     if ((length = dataLength(BOOT_VERIFIED_BOOT_STATE)) == 0) {
       return KMType.INVALID_VALUE;
     }
@@ -655,10 +662,11 @@ public class KMRepository implements KMUpgradable {
     length = readDataEntry(BOOT_VERIFIED_BOOT_KEY, KMByteBlob.cast(blob)
         .getBuffer(), KMByteBlob.cast(blob).getStartOff());
 
-    length += readDataEntry(BOOT_VERIFIED_BOOT_HASH, KMByteBlob.cast(blob)
-            .getBuffer(),
-        (short) (KMByteBlob.cast(blob).getStartOff() + length));
-
+    if (version <= KMKeymasterApplet.KEYBLOB_VERSION_0) {
+      length += readDataEntry(BOOT_VERIFIED_BOOT_HASH, KMByteBlob.cast(blob)
+              .getBuffer(),
+          (short) (KMByteBlob.cast(blob).getStartOff() + length));
+    }
     length += readDataEntry(BOOT_VERIFIED_BOOT_STATE, KMByteBlob.cast(blob)
             .getBuffer(),
         (short) (KMByteBlob.cast(blob).getStartOff() + length));
@@ -1017,6 +1025,16 @@ public class KMRepository implements KMUpgradable {
     // Request object deletion
     oldDataTable = null;
     JCSystem.requestObjectDeletion();
+  }
+
+  // Use this function to reset the heapIndex to its previous state.
+  // Some of the data might be lost so use it carefully.
+  public void setHeapIndex(short offset) {
+    if (offset > heapIndex[0] || offset < 0) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
+    Util.arrayFillNonAtomic(heap, offset, (short) (heapIndex[0] - offset), (byte) 0);
+    heapIndex[0] = offset;
   }
    
 }
