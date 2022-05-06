@@ -38,7 +38,7 @@ public class KMOperationImpl implements KMOperation {
 
   public KMOperationImpl() {
     parameters = JCSystem.makeTransientShortArray((short) 6, JCSystem.CLEAR_ON_RESET);
-    operationInst = JCSystem.makeTransientObjectArray((short) 1, JCSystem.CLEAR_ON_RESET);
+    operationInst = JCSystem.makeTransientObjectArray((short) 2, JCSystem.CLEAR_ON_RESET);
   }
 
   public short getMode() {
@@ -82,19 +82,28 @@ public class KMOperationImpl implements KMOperation {
   }
 
   public void setCipher(Cipher cipher) {
-    operationInst[0] = cipher;
+    operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO] = cipher;
   }
 
   public void setSignature(Signature signer) {
-    operationInst[0] = signer;
+    operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO] = signer;
   }
   
-  public boolean isResourceMatches(Object object) {
-    return operationInst[0] == object;
+  public void setKeyObject(KMKeyObject keyObject) {
+    operationInst[KMAndroidSEProvider.RESOURCE_TYPE_KEY] = keyObject;
+  }
+
+  public KMKeyObject getKeyObject() {
+    return (KMKeyObject) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_KEY];
+  }
+  
+  public boolean isResourceMatches(Object object, byte resourceType) {
+    return operationInst[resourceType] == object;
   }
 
   private void reset() {
-    operationInst[0] = null;
+    operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO] = null;
+    operationInst[KMAndroidSEProvider.RESOURCE_TYPE_KEY] = null;
     parameters[MAC_LENGTH_OFFSET] = KMType.INVALID_VALUE;
     parameters[AES_GCM_UPDATE_LEN_OFFSET] = 0;
     parameters[BLOCK_MODE_OFFSET] = KMType.INVALID_VALUE;;
@@ -106,7 +115,7 @@ public class KMOperationImpl implements KMOperation {
   @Override
   public short update(byte[] inputDataBuf, short inputDataStart,
                       short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
-    short len = ((Cipher) operationInst[0]).update(inputDataBuf, inputDataStart, inputDataLength,
+    short len = ((Cipher) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO]).update(inputDataBuf, inputDataStart, inputDataLength,
       outputDataBuf, outputDataStart);
     if (parameters[CIPHER_ALG_OFFSET] == KMType.AES && parameters[BLOCK_MODE_OFFSET] == KMType.GCM) {
       // Every time Block size data is stored as intermediate result.
@@ -118,7 +127,7 @@ public class KMOperationImpl implements KMOperation {
   @Override
   public short update(byte[] inputDataBuf, short inputDataStart,
                       short inputDataLength) {
-    ((Signature) operationInst[0]).update(inputDataBuf, inputDataStart, inputDataLength);
+    ((Signature) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO]).update(inputDataBuf, inputDataStart, inputDataLength);
     return 0;
   }
 
@@ -126,7 +135,7 @@ public class KMOperationImpl implements KMOperation {
   public short finish(byte[] inputDataBuf, short inputDataStart,
                       short inputDataLen, byte[] outputDataBuf, short outputDataStart) {
     byte[] tmpArray = KMAndroidSEProvider.getInstance().tmpArray;
-    Cipher cipher = (Cipher) operationInst[0];
+    Cipher cipher = (Cipher) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO];
     short cipherAlg = parameters[CIPHER_ALG_OFFSET];
     short blockMode = parameters[BLOCK_MODE_OFFSET];
     short mode = parameters[OPER_MODE_OFFSET];
@@ -211,7 +220,7 @@ public class KMOperationImpl implements KMOperation {
                     short inputDataLength, byte[] signBuf, short signStart) {
     short len = 0;
     try {
-      len = ((Signature) operationInst[0]).sign(inputDataBuf, inputDataStart, inputDataLength,
+      len = ((Signature) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO]).sign(inputDataBuf, inputDataStart, inputDataLength,
         signBuf, signStart);
     } finally {
       reset();
@@ -224,7 +233,7 @@ public class KMOperationImpl implements KMOperation {
                         short inputDataLength, byte[] signBuf, short signStart, short signLength) {
     boolean ret = false;
     try {
-      ret = ((Signature) operationInst[0]).verify(inputDataBuf, inputDataStart, inputDataLength,
+      ret = ((Signature) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO]).verify(inputDataBuf, inputDataStart, inputDataLength,
         signBuf, signStart, signLength);
     } finally {
       reset();
@@ -237,10 +246,10 @@ public class KMOperationImpl implements KMOperation {
     // Few simulators does not reset the Hmac signer instance on init so as
     // a workaround to reset the hmac signer instance in case of abort/failure of the operation
     // the corresponding sign / verify function is called.
-    if (operationInst[0] != null) {
+    if (operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO] != null) {
       if ((parameters[OPER_MODE_OFFSET] == KMType.SIGN || parameters[OPER_MODE_OFFSET] == KMType.VERIFY) &&
-          (((Signature) operationInst[0]).getAlgorithm() == Signature.ALG_HMAC_SHA_256)) {
-        Signature signer = (Signature) operationInst[0];
+          (((Signature) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO]).getAlgorithm() == Signature.ALG_HMAC_SHA_256)) {
+        Signature signer = (Signature) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO];
         try {
           if (parameters[OPER_MODE_OFFSET] == KMType.SIGN) {
             signer.sign(EMPTY, (short) 0, (short) 0, EMPTY, (short) 0);
@@ -257,7 +266,7 @@ public class KMOperationImpl implements KMOperation {
 
   @Override
   public void updateAAD(byte[] dataBuf, short dataStart, short dataLength) {
-    ((AEADCipher) operationInst[0]).updateAAD(dataBuf, dataStart, dataLength);
+    ((AEADCipher) operationInst[KMAndroidSEProvider.RESOURCE_TYPE_CRYPTO]).updateAAD(dataBuf, dataStart, dataLength);
   }
 
   @Override
