@@ -342,9 +342,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
     }
   }
- public static void install(byte[] bArray, short bOffset, byte bLength) {
-   // new KMAndroidSEApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
-  }
+
   /**
    * Processes an incoming APDU and handles it using command objects.
    *
