@@ -1197,8 +1197,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 1);
     short appId = getApplicationId(data[KEY_PARAMETERS]);
     short appData = getApplicationData(data[KEY_PARAMETERS]);
-    
-    
+
     // Check if the KeyBlob requires upgrade. The KeyBlob is parsed inside isKeyUpgradeRequired
     // function itself, but if there is a difference in the KeyBlob version isKeyUpgradeRequired()
     // does not parse the KeyBlob.
@@ -2280,16 +2279,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 2);
     data[KEY_BLOB] = KMArray.cast(args).get((short) 1);
     // Check for app id and app data.
-    data[APP_ID] =
-        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, data[KEY_PARAMETERS]);
-    data[APP_DATA] =
-        KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, data[KEY_PARAMETERS]);
-    if (data[APP_ID] != KMTag.INVALID_VALUE) {
-      data[APP_ID] = KMByteTag.cast(data[APP_ID]).getValue();
-    }
-    if (data[APP_DATA] != KMTag.INVALID_VALUE) {
-      data[APP_DATA] = KMByteTag.cast(data[APP_DATA]).getValue();
-    }
+    data[APP_ID] = getApplicationId(data[KEY_PARAMETERS]);
+    data[APP_DATA] = getApplicationData(data[KEY_PARAMETERS]);
     // Check if key requires upgrade. The KeyBlob is parsed inside isKeyUpgradeRequired
     // function itself.
     if (isKeyUpgradeRequired(data[KEY_BLOB], data[APP_ID], data[APP_DATA], scratchPad)) {
