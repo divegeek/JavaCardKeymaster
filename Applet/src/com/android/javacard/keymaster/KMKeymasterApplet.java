@@ -4119,12 +4119,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       index++;
     }
-
-    Util.arrayCopyNonAtomic(repository.getHeap(), authIndex, scratchPad, (short) 0, len);
-    // Reset the heap index so that MAX_AUTH_DATA_SIZE of RAM can be reused.
-    repository.setHeapIndex(authIndex);
-    authIndex = repository.alloc(len);
-    Util.arrayCopyNonAtomic(scratchPad, (short) 0, repository.getHeap(), authIndex, len);
     data[AUTH_DATA] = authIndex;
     data[AUTH_DATA_LENGTH] = len;
   }

@@ -1026,15 +1026,4 @@ public class KMRepository implements KMUpgradable {
     oldDataTable = null;
     JCSystem.requestObjectDeletion();
   }
-
-  // Use this function to reset the heapIndex to its previous state.
-  // Some of the data might be lost so use it carefully.
-  public void setHeapIndex(short offset) {
-    if (offset > heapIndex[0] || offset < 0) {
-      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-    }
-    Util.arrayFillNonAtomic(heap, offset, (short) (heapIndex[0] - offset), (byte) 0);
-    heapIndex[0] = offset;
-  }
-   
 }
