@@ -186,13 +186,30 @@ keymaster_error_t JavaCardSoftKeymasterContext::ParseKeyBlob(const KeymasterKeyB
     }
     std::tie(item, errorCode) = cc.decodeData(cborKey, false);
     if (item != nullptr) {
+        // V0 KeyBlobs had no version.
+        uint64_t version = 0;
+        int pubKeyOffset;
+        int keyCharsOffset;
+        cc.getUint64(item, 0, version);
+        switch (version) {
+        case 0:
+            pubKeyOffset = 4;
+            keyCharsOffset = 3; 
+            break;
+        case 1:
+            pubKeyOffset = 6;
+            keyCharsOffset = 4; 
+            break;
+        default:
+            return KM_ERROR_INVALID_KEY_BLOB;
+        }
         std::vector<uint8_t> temp(0);
-        if(cc.getBinaryArray(item, 4, temp)) {
+        if(cc.getBinaryArray(item, pubKeyOffset, temp)) {
             key_material = {temp.data(), temp.size()};
             temp.clear();
         }
         KeyCharacteristics keyCharacteristics;
-        cc.getKeyCharacteristics(item, 3, keyCharacteristics);
+        cc.getKeyCharacteristics(item, keyCharsOffset, keyCharacteristics);
 
         sw_enforced.Reinitialize(KmParamSet(keyCharacteristics.softwareEnforced));
         hw_enforced.Reinitialize(KmParamSet(keyCharacteristics.hardwareEnforced));
