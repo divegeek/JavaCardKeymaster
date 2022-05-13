@@ -221,12 +221,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
-        KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
+        KeyBuilder.TYPE_AES_TRANSIENT_RESET, KeyBuilder.LENGTH_AES_128, false);
     aesKeys[KEYSIZE_256_OFFSET] = (AESKey) KeyBuilder.buildKey(
-        KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_256, false);
-    triDesKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES,
+        KeyBuilder.TYPE_AES_TRANSIENT_RESET, KeyBuilder.LENGTH_AES_256, false);
+    triDesKey = (DESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_DES_TRANSIENT_RESET,
         KeyBuilder.LENGTH_DES3_3KEY, false);
-    hmacKey = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) 512,
+    hmacKey = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC_TRANSIENT_RESET, (short) 512,
         false);
     rsaKeyPair = new KeyPair(KeyPair.ALG_RSA, KeyBuilder.LENGTH_RSA_2048);
     ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
