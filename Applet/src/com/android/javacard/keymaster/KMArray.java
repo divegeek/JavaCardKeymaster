@@ -114,6 +114,11 @@ public class KMArray extends KMType {
     return Util.getShort(heap, (short) (instanceTable[KM_ARRAY_OFFSET] + TLV_HEADER_SIZE + 2));
   }
 
+  public short setLength(short len) {
+    return Util.setShort(heap,
+	        (short) (KMType.instanceTable[KM_ARRAY_OFFSET] + TLV_HEADER_SIZE + 2), len);
+  }
+
   public byte[] getBuffer() {
     return heap;
   }
