@@ -1340,20 +1340,22 @@ public class KMFunctionalTest {
   }
 
   private short extractKeyBlobArray(byte[] buf, short off, short buflen) {
-    short ret = KMArray.instance((short) 5);
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_SECRET, KMByteBlob.exp());
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, KMByteBlob.exp());
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_NONCE, KMByteBlob.exp());
-    short ptr = KMKeyCharacteristics.exp();
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_KEYCHAR, ptr);
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_PUB_KEY, KMByteBlob.exp());
+    short byteBlobExp = KMByteBlob.exp();
+    short keyChar = KMKeyCharacteristics.exp();
+    short keyParam = KMKeyParameters.exp();
+    short ret  = KMArray.instance(KMKeymasterApplet.ASYM_KEY_BLOB_SIZE_V1);
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_VERSION_OFFSET, KMInteger.exp());// Version
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_SECRET, byteBlobExp);// Secret
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_NONCE, byteBlobExp);// Nonce
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, byteBlobExp);// AuthTag
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_KEYCHAR, keyChar);// KeyChars
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_CUSTOM_TAGS, keyParam);// KeyChars
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_PUB_KEY, byteBlobExp);// PubKey
+
     ret =
         decoder.decodeArray(
             ret,
             buf, off, buflen);
-    short len = KMArray.cast(ret).length();
-    ptr = KMArray.cast(ret).get((short) 4);
-//    print(KMByteBlob.cast(ptr).getBuffer(),KMByteBlob.cast(ptr).getStartOff(),KMByteBlob.cast(ptr).length());
     return ret;
   }
 
@@ -2467,7 +2469,7 @@ public class KMFunctionalTest {
   @Test
   public void testWithRsaSha1Oaep() {
     init();
-    testEncryptDecryptWithRsa(KMType.SHA1, KMType.RSA_OAEP);
+    testEncryptDecryptWithRsa(KMType.SHA2_256, KMType.RSA_OAEP);
     cleanUp();
   }
 
@@ -2504,7 +2506,7 @@ public class KMFunctionalTest {
       byte[] pubKey, short pubKeyOff) {
     short keyBlobPtr = extractKeyBlobArray(keyBlob, off, len);
     short arrayLen = KMArray.cast(keyBlobPtr).length();
-    if (arrayLen < 5) {
+    if (arrayLen < KMKeymasterApplet.ASYM_KEY_BLOB_SIZE_V1) {
       return 0;
     }
     short pubKeyPtr = KMArray.cast(keyBlobPtr).get(
@@ -2879,7 +2881,8 @@ public class KMFunctionalTest {
 
       // PKCS1 v1.5 randomizes padding so every result should be different.
       Assert.assertFalse(Arrays.equals(cipherText1, cipherText2));
-
+      //Clean the heap.
+      KMRepository.instance().clean();
       pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
           KMType.RSA_PKCS1_1_5_ENCRYPT);
       byte[] plainText = DecryptMessage(cipherText1, pkcs1Params, keyBlob);

@@ -932,6 +932,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       tmpVariables[0] = KMKeyParameters.findTag(KMType.BYTES_TAG, attTag, data[KEY_PARAMETERS]);
       if (tmpVariables[0] != KMType.INVALID_VALUE) {
         tmpVariables[0] = KMByteTag.cast(tmpVariables[0]).getValue();
+        if (KMByteBlob.cast(tmpVariables[0]).length() > KMConfigurations.MAX_ATTESTATION_IDS_SIZE) {
+          KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+        }
         repository.persistAttId(
             mapToAttId(attTag),
             KMByteBlob.cast(tmpVariables[0]).getBuffer(),
@@ -985,6 +988,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = KMArray.cast(tmpVariables[0]).get((short) 0);
     data[APP_ID] = KMArray.cast(tmpVariables[0]).get((short) 1);
     data[APP_DATA] = KMArray.cast(tmpVariables[0]).get((short) 2);
+
+    if (KMByteBlob.cast(data[APP_ID]).length() > KMByteTag.MAX_APP_ID_APP_DATA_SIZE
+    		|| KMByteBlob.cast(data[APP_DATA]).length() > KMByteTag.MAX_APP_ID_APP_DATA_SIZE) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
     if (!KMByteBlob.cast(data[APP_ID]).isValid()) {
       data[APP_ID] = KMType.INVALID_VALUE;
     }

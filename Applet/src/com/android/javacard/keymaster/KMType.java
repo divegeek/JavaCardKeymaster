@@ -296,6 +296,14 @@ public abstract class KMType {
   public static final byte KM_KEY_PARAMETERS_OFFSET = KM_TYPE_BASE_OFFSET + 13;
   public static final byte KM_VERIFICATION_TOKEN_OFFSET = KM_TYPE_BASE_OFFSET + 14;
 
+  // MAX ApplicationID or Application Data size
+  public static final short MAX_APP_ID_APP_DATA_SIZE = 64;
+  // Max attestation challenge size.
+  public static final short MAX_ATTESTATION_CHALLENGE_SIZE = 128;
+
+  // Attestation Application ID
+  public static final short MAX_ATTESTATION_APP_ID_SIZE = 1024;
+ 
   protected static KMRepository repository;
   protected static byte[] heap;
   // Instance table
