@@ -1483,7 +1483,7 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
     }
 
     /* Convert input data to cbor format */
-    array.add(passwordOnly);
+    array.add((passwordOnly ? 1 : 0));
     cborConverter_.addVerificationToken(array, verificationToken, asn1ParamsVerified);
     std::vector<uint8_t> cborData = array.encode();
 
