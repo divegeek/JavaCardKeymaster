@@ -35,7 +35,6 @@ public class KMKeyParameters extends KMType {
 
   private static final short[] hwEnforcedTagArr = {
       // HW Enforced
-      KMType.ENUM_TAG, KMType.ORIGIN,
       KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,
       KMType.ENUM_TAG, KMType.ALGORITHM,
       KMType.UINT_TAG, KMType.KEYSIZE,
@@ -54,7 +53,6 @@ public class KMKeyParameters extends KMType {
       KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE,
       KMType.ENUM_TAG, KMType.USER_AUTH_TYPE,
       KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
-      KMType.BOOL_TAG, KMType.RESET_SINCE_ID_ROTATION,
       KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
       KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
       KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,

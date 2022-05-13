@@ -46,7 +46,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Magic number version
   public static final byte KM_MAGIC_NUMBER = (byte) 0x81;
   // MSB byte is for Major version and LSB byte is for Minor version.
-  public static final short CURRENT_PACKAGE_VERSION = 0x0200; // 2.0
+  public static final short CURRENT_PACKAGE_VERSION = 0x0201; // 2.1
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
@@ -351,6 +351,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   @Override
   public void process(APDU apdu) {
     try {
+      resetData();
       // Handle the card reset status before processing apdu.
       if (repository.isPowerResetEventOccurred()) {
         // Release all the operation instances.
@@ -546,7 +547,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       freeOperations();
       sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
     } finally {
-      resetData();
       repository.clean();
     }
   }
@@ -579,6 +579,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processEarlyBootEndedCmd(APDU apdu) {
     repository.setEarlyBootEndedStatus(true);
+    sendError(apdu, KMError.OK);
   }
 
   private void processDeviceLockedCmd(APDU apdu) {
@@ -985,6 +986,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = KMArray.cast(tmpVariables[0]).get((short) 0);
     data[APP_ID] = KMArray.cast(tmpVariables[0]).get((short) 1);
     data[APP_DATA] = KMArray.cast(tmpVariables[0]).get((short) 2);
+
     if (!KMByteBlob.cast(data[APP_ID]).isValid()) {
       data[APP_ID] = KMType.INVALID_VALUE;
     }
@@ -1153,31 +1155,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Encode the response
     bufferProp[BUF_LEN_OFFSET] = encoder.encode(tmpVariables[0], (byte[]) bufferRef[0], bufferProp[BUF_START_OFFSET]);
     sendOutgoing(apdu);
-  }
-
-  private boolean isKeyUpgradeRequired(short tag, short systemParam) {
-    // validate the tag and check if key needs upgrade.
-    tmpVariables[0] = KMKeyParameters.findTag(KMType.UINT_TAG, tag, data[HW_PARAMETERS]);
-    tmpVariables[0] = KMIntegerTag.cast(tmpVariables[0]).getValue();
-    tmpVariables[1] = KMInteger.uint_8((byte) 0);
-    if (tmpVariables[0] != KMType.INVALID_VALUE) {
-      // OS version in key characteristics must be less the OS version stored in Javacard or the
-      // stored version must be zero. Then only upgrade is allowed else it is invalid argument.
-      if ((tag == KMType.OS_VERSION
-          && KMInteger.compare(tmpVariables[0], systemParam) == 1
-          && KMInteger.compare(systemParam, tmpVariables[1]) == 0)) {
-        // Key needs upgrade.
-        return true;
-      } else if ((KMInteger.compare(tmpVariables[0], systemParam) == -1)) {
-        // Each os version or patch level associated with the key must be less than it's
-        // corresponding value stored in Javacard, then only upgrade is allowed otherwise it
-        // is invalid argument.
-        return true;
-      } else if (KMInteger.compare(tmpVariables[0], systemParam) == 1) {
-        KMException.throwIt(KMError.INVALID_ARGUMENT);
-      }
-    }
-    return false;
   }
 
   private void processUpgradeKeyCmd(APDU apdu) {
@@ -1582,14 +1559,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                     KMByteBlob.cast(storedAttId).length())) {
           KMException.throwIt(KMError.CANNOT_ATTEST_IDS);
         }
-        // Return INVALID_TAG if Attestation IDs does not match.
+        // Return CANNOT_ATTEST_IDS if Attestation IDs does not match.
         if ((KMByteBlob.cast(storedAttId).length() != KMByteBlob.cast(attIdTagValue).length()) ||
             (0 != Util.arrayCompare(KMByteBlob.cast(storedAttId).getBuffer(),
                                     KMByteBlob.cast(storedAttId).getStartOff(),
                                     KMByteBlob.cast(attIdTagValue).getBuffer(),
                                     KMByteBlob.cast(attIdTagValue).getStartOff(),
                                     KMByteBlob.cast(storedAttId).length()))) {
-          KMException.throwIt(KMError.INVALID_TAG);
+          KMException.throwIt(KMError.CANNOT_ATTEST_IDS);
         }
         cert.extensionTag(attIdTag, true);
       }
@@ -2359,6 +2336,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     sendOutgoing(apdu);
   }
 
+  private boolean isDigestSupported(byte alg, byte digest) {
+    switch (alg) {
+    case KMType.RSA:
+    case KMType.EC:
+      if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256) {
+        return false;
+      }
+      break;
+    case KMType.HMAC:
+      if (digest != KMType.SHA2_256) {
+        return false;
+      }
+      break;
+    default:
+      break;
+    }
+    return true;
+  }
+
   private void authorizeAlgorithm(KMOperationState op) {
     short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]);
     if (alg == KMType.INVALID_VALUE) {
@@ -2422,7 +2418,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         break;
       case KMType.EC:
       case KMType.HMAC:
-        if (param == KMType.INVALID_VALUE) {
+        if (param == KMType.INVALID_VALUE ||
+            !isDigestSupported(op.getAlgorithm(), op.getDigest())) {
           KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
         }
         break;
@@ -2439,7 +2436,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PADDING, data[KEY_PARAMETERS]);
     if (param != KMType.INVALID_VALUE) {
       if (KMEnumArrayTag.cast(param).length() != 1) {
-        KMException.throwIt(KMError.INVALID_ARGUMENT);
+        KMException.throwIt(KMError.UNSUPPORTED_PADDING_MODE);
       }
       param = KMEnumArrayTag.cast(param).get((short) 0);
       if (!KMEnumArrayTag.cast(paddings).contains(param)) {
@@ -2463,12 +2460,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             && param != KMType.RSA_PKCS1_1_5_ENCRYPT) {
           KMException.throwIt(KMError.UNSUPPORTED_PADDING_MODE);
         }
-        if (param == KMType.PADDING_NONE && op.getDigest() != KMType.DIGEST_NONE) {
+        if ((param == KMType.PADDING_NONE || param == KMType.RSA_PKCS1_1_5_ENCRYPT)
+            && op.getDigest() != KMType.DIGEST_NONE) {
           KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
         }
         if ((param == KMType.RSA_OAEP || param == KMType.RSA_PSS)
             && op.getDigest() == KMType.DIGEST_NONE) {
           KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+        }
+        if (op.getPurpose() == KMType.SIGN || op.getPurpose() == KMType.VERIFY
+            || param == KMType.RSA_OAEP) {
+          // Digest is mandatory in these cases.
+          if (!isDigestSupported(op.getAlgorithm(), op.getDigest())) {
+            KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
+          }
         }
         op.setPadding((byte) param);
         break;
@@ -3327,7 +3332,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
     if(Util.arrayCompare(F4, (short)0, KMByteBlob.cast(pubKeyExp).getBuffer(),
         KMByteBlob.cast(pubKeyExp).getStartOff(), (short)F4.length) != 0) {
-      KMException.throwIt(KMError.INVALID_ARGUMENT);
+      KMException.throwIt(KMError.IMPORT_PARAMETER_MISMATCH);
     }
     tmpVariables[4] = 0; // index in scratchPad for update parameters.
     // validate public exponent if present in key params - it must be 0x010001
@@ -3765,10 +3770,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables[0] =
         KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST, data[KEY_PARAMETERS]);
     if (KMType.INVALID_VALUE == tmpVariables[0]) {
-      KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
-    }
-
-    if (KMEnumArrayTag.contains(KMType.DIGEST, KMType.DIGEST_NONE, data[KEY_PARAMETERS])) {
       KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
     }
     // Strongbox supports only SHA256.
@@ -4301,6 +4302,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short index = 0;
     short tag;
     short systemParam;
+    boolean isKeyUpgradeRequired = false;
     while(index < 16) {
       tag = Util.getShort(scratchPad, index);
       systemParam = Util.getShort(scratchPad, (short) (index + 2));
@@ -4315,12 +4317,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             && KMInteger.compare(tagValue, systemParam) == 1
             && KMInteger.compare(systemParam, zero) == 0)) {
           // Key needs upgrade.
-          return true;
+          isKeyUpgradeRequired = true;
         } else if ((KMInteger.compare(tagValue, systemParam) == -1)) {
           // Each os version or patch level associated with the key must be less than it's
           // corresponding value stored in Javacard, then only upgrade is allowed otherwise it
           // is invalid argument.
-          return true;
+          isKeyUpgradeRequired = true;
         } else if (KMInteger.compare(tagValue, systemParam) == 1) {
           KMException.throwIt(KMError.INVALID_ARGUMENT);
         }
@@ -4329,7 +4331,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       index += 4;
     }
-    return false;
+    return isKeyUpgradeRequired;
   }
 
   private short readKeyBlobVersion(short keyBlob) {

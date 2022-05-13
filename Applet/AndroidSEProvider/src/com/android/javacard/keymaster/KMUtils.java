@@ -39,9 +39,8 @@ public class KMUtils {
       0, 0, 0, 0x1D, 0x63, (byte) 0xEB, 0x0C, 0x00};//126230400000
   public static final byte[] firstJan2020 = {
       0, 0, 0x01, 0x6F, 0x5E, 0x66, (byte) 0xE8, 0x00}; // 1577836800000 msec
-  public static final byte[] firstJan2051 = {
-      0, 0, 0x02, 0x53, 0x26, (byte) 0x0E, (byte) 0x1C, 0x00}; // 2556144000000
-  // msec
+  public static final byte[] firstJan2050 = {
+      0, 0, 0x02, 0x4b, (byte) 0xCE, 0x5C, (byte)0xF0, 0x00}; //2524608000000 msec
   public static final byte[] febMonthLeapMSec = {
       0, 0, 0, 0, (byte) 0x95, 0x58, 0x6C, 0x00}; //2505600000
   public static final byte[] febMonthMsec = {
@@ -78,12 +77,12 @@ public class KMUtils {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
     if (utcFlag
-        && KMInteger.unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2051,
+        && KMInteger.unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2050,
         (short) 0, (short) 8) >= 0) {
       KMException.throwIt(KMError.INVALID_ARGUMENT);
     }
 
-    if (KMInteger.unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2051, (short) 0,
+    if (KMInteger.unsignedByteArrayCompare(scratchPad, (short) 0, firstJan2050, (short) 0,
         (short) 8) < 0) {
       Util.arrayCopyNonAtomic(firstJan2020, (short) 0, scratchPad, (short) 8,
           (short) 8);
@@ -92,7 +91,7 @@ public class KMUtils {
           (short) 8);
     } else {
       from2020 = false;
-      Util.arrayCopyNonAtomic(firstJan2051, (short) 0, scratchPad, (short) 8,
+      Util.arrayCopyNonAtomic(firstJan2050, (short) 0, scratchPad, (short) 8,
           (short) 8);
       subtract(scratchPad, (short) 0, (short) 8, (short) 16);
       Util.arrayCopyNonAtomic(scratchPad, (short) 16, scratchPad, (short) 0,
@@ -397,7 +396,7 @@ public class KMUtils {
         scratchPad,
         (short) (offset + 8 - timeLen),
         timeLen);
-    Util.arrayCopyNonAtomic(oneMonthMsec, (short) 0, scratchPad, (short) (offset + 8),
+    Util.arrayCopyNonAtomic(ThirtDaysMonthMsec, (short) 0, scratchPad, (short) (offset + 8),
         (short) 8);
     return divide(scratchPad, (short) 0, (short) 8, (short) 16);
   }
