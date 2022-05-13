@@ -170,6 +170,7 @@ public class KMDecoder {
     short tagClass;
     short allowedType;
     short obj;
+    short arrPos = 0;
     // For each tag in payload ...
     while (index < payloadLength) {
       tagFound = false;
@@ -183,7 +184,7 @@ public class KMDecoder {
         if (tagType == allowedType) {
           // then decodeByteBlob and add that to the array.
           obj = decode(tagClass);
-          KMArray.cast(vals).add(index, obj);
+          KMArray.cast(vals).add(arrPos++, obj);
           tagFound = true;
           break;
         }
@@ -195,6 +196,7 @@ public class KMDecoder {
         index++;
       }
     }
+    KMArray.cast(vals).setLength(arrPos);
     return KMKeyParameters.instance(vals);
   }
 
