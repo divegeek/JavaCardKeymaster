@@ -389,6 +389,7 @@ public class KMRepository implements KMUpgradable {
     if (reclaimIndex[0] < heapIndex[0]) {
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
+    Util.arrayFillNonAtomic(heap, reclaimIndex[0], length, (byte) 0);
     reclaimIndex[0] += length;
   }
 
