@@ -608,7 +608,8 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
     hidl_vec<KeyParameter> updatedParams(keyParams);
     // Send earlyBootEnded if there is any pending earlybootEnded event.
     handleSendEarlyBootEndedEvent();
-    if(!findTag(keyParams, Tag::CREATION_DATETIME)) {
+    if(!findTag(keyParams, Tag::CREATION_DATETIME) &&
+            !findTag(keyParams, Tag::ACTIVE_DATETIME)) {
         //Add CREATION_DATETIME in HAL, as secure element is not having clock.
         size_t size = keyParams.size();
         updatedParams.resize(size+1);
@@ -652,7 +653,8 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
     cppbor::Array subArray;
     // Send earlyBootEnded if there is any pending earlybootEnded event.
     handleSendEarlyBootEndedEvent();
-    if(!findTag(keyParams, Tag::CREATION_DATETIME)) {
+    if(!findTag(keyParams, Tag::CREATION_DATETIME) &&
+            !findTag(keyParams, Tag::ACTIVE_DATETIME)) {
         //Add CREATION_DATETIME in HAL, as secure element is not having clock.
         size_t size = keyParams.size();
         updatedParams.resize(size+1);
@@ -716,7 +718,8 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
         return Void();
     }
     hidl_vec<KeyParameter> updatedParams(authList);
-    if(!findTag(authList, Tag::CREATION_DATETIME)) {
+    if(!findTag(authList, Tag::CREATION_DATETIME) &&
+            !findTag(authList, Tag::ACTIVE_DATETIME)) {
         //Add CREATION_DATETIME in HAL, as secure element is not having clock.
         size_t size = authList.size();
         updatedParams.resize(size+1);
