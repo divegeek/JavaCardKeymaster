@@ -46,7 +46,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Magic number version
   public static final byte KM_MAGIC_NUMBER = (byte) 0x81;
   // MSB byte is for Major version and LSB byte is for Minor version.
-  public static final short CURRENT_PACKAGE_VERSION = 0x0201; // 2.1
+  public static final short KM_PERSISTENT_DATA_STORAGE_VERSION = 0x0200; // 2.0
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
@@ -201,7 +201,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // ComputeHMAC constants
   private static final short HMAC_SHARED_PARAM_MAX_SIZE = 64;
   // Maximum certificate size.
-  private static final short MAX_CERT_SIZE = 2048;
+  private static final short MAX_CERT_SIZE = 3000;
   // Buffer constants.
   private static final short BUF_START_OFFSET = 0;
   private static final short BUF_LEN_OFFSET = 2;
@@ -240,7 +240,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (!isUpgrading) {
       keymasterState = KMKeymasterApplet.INIT_STATE;
       seProvider.createMasterKey((short) (KMRepository.MASTER_KEY_SIZE * 8));
-      packageVersion = CURRENT_PACKAGE_VERSION;
+      packageVersion = KM_PERSISTENT_DATA_STORAGE_VERSION;
     }
     KMType.initialize();
     encoder = new KMEncoder();
@@ -933,9 +933,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       tmpVariables[0] = KMKeyParameters.findTag(KMType.BYTES_TAG, attTag, data[KEY_PARAMETERS]);
       if (tmpVariables[0] != KMType.INVALID_VALUE) {
         tmpVariables[0] = KMByteTag.cast(tmpVariables[0]).getValue();
-        if (KMByteBlob.cast(tmpVariables[0]).length() > KMConfigurations.MAX_ATTESTATION_IDS_SIZE) {
-          KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-        }
         repository.persistAttId(
             mapToAttId(attTag),
             KMByteBlob.cast(tmpVariables[0]).getBuffer(),

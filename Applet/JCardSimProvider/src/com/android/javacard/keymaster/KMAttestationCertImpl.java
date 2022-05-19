@@ -448,9 +448,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     // Below are the allowed softwareEnforced Authorization tags inside the attestation certificate's extension.
     short[] tagIds = {
         KMType.ATTESTATION_APPLICATION_ID, KMType.CREATION_DATETIME,
-        KMType.USAGE_EXPIRE_DATETIME, KMType.ORIGINATION_EXPIRE_DATETIME,
-        KMType.ACTIVE_DATETIME, KMType.UNLOCKED_DEVICE_REQUIRED,
-        KMType.ALLOW_WHILE_ON_BODY};
+        KMType.ALLOW_WHILE_ON_BODY, KMType.USAGE_EXPIRE_DATETIME,
+        KMType.ORIGINATION_EXPIRE_DATETIME, KMType.ACTIVE_DATETIME
+        };
     byte index = 0;
     do {
       pushParams(swParams, swParamsIndex, tagIds[index]);
@@ -468,7 +468,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
         KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
         KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
         KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
-        KMType.ORIGIN, KMType.TRUSTED_CONFIRMATION_REQUIRED, KMType.AUTH_TIMEOUT,
+        KMType.ORIGIN, KMType.UNLOCKED_DEVICE_REQUIRED,
+        KMType.TRUSTED_CONFIRMATION_REQUIRED, KMType.AUTH_TIMEOUT,
         KMType.USER_AUTH_TYPE, KMType.NO_AUTH_REQUIRED,
         KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE, KMType.MIN_MAC_LENGTH,
         KMType.CALLER_NONCE, KMType.PADDING, KMType.DIGEST, KMType.BLOCK_MODE,
