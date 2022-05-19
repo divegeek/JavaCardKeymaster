@@ -122,10 +122,6 @@ public class KMByteTag extends KMTag {
       case ATTESTATION_ID_MEID:
       case ATTESTATION_ID_MANUFACTURER:
       case ATTESTATION_ID_MODEL:
-        if (valueLen > KMConfigurations.MAX_ATTESTATION_IDS_SIZE) {
-          KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
-        }
-        break;
       case ASSOCIATED_DATA:
       case NONCE:
       case CONFIRMATION_TOKEN:

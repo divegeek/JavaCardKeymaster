@@ -649,16 +649,25 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
     std::vector<uint8_t> cborOutData;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     KeyCharacteristics keyCharacteristics;
+    hidl_vec<KeyParameter> updatedParams(keyParams);
     cppbor::Array subArray;
     // Send earlyBootEnded if there is any pending earlybootEnded event.
     handleSendEarlyBootEndedEvent();
+    if(!findTag(keyParams, Tag::CREATION_DATETIME) &&
+            !findTag(keyParams, Tag::ACTIVE_DATETIME)) {
+        //Add CREATION_DATETIME in HAL, as secure element is not having clock.
+        size_t size = keyParams.size();
+        updatedParams.resize(size+1);
+        updatedParams[size].tag = Tag::CREATION_DATETIME;
+        updatedParams[size].f.dateTime = java_time(time(nullptr));
+    }
 
     if(keyFormat != KeyFormat::PKCS8 && keyFormat != KeyFormat::RAW) {
         LOG(ERROR) << "INS_IMPORT_KEY_CMD unsupported key format " << (int32_t)keyFormat;
         _hidl_cb(ErrorCode::UNSUPPORTED_KEY_FORMAT, keyBlob, keyCharacteristics);
         return Void();
     }
-    cborConverter_.addKeyparameters(array, keyParams);
+    cborConverter_.addKeyparameters(array, updatedParams);
     array.add(static_cast<uint32_t>(keyFormat)); //javacard accepts only RAW.
   
     array.add(std::vector<uint8_t>(keyData));
@@ -708,7 +717,16 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
         _hidl_cb(errorCode, keyBlob, keyCharacteristics);
         return Void();
     }
-    cborConverter_.addKeyparameters(array, authList);
+    hidl_vec<KeyParameter> updatedParams(authList);
+    if(!findTag(authList, Tag::CREATION_DATETIME) &&
+            !findTag(authList, Tag::ACTIVE_DATETIME)) {
+        //Add CREATION_DATETIME in HAL, as secure element is not having clock.
+        size_t size = authList.size();
+        updatedParams.resize(size+1);
+        updatedParams[size].tag = Tag::CREATION_DATETIME;
+        updatedParams[size].f.dateTime = java_time(time(nullptr));
+    }
+    cborConverter_.addKeyparameters(array, updatedParams);
     array.add(static_cast<uint64_t>(keyFormat));
     array.add(secureKey);
     array.add(tag);

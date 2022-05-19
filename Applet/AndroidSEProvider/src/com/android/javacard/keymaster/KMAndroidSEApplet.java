@@ -64,8 +64,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     packageVersion = packageVersion_;
     provisionStatus = provisionStatus_;
     keymasterState = element.readByte();
-    repository.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
-    seProvider.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
+    repository.onRestore(element, packageVersion, KM_PERSISTENT_DATA_STORAGE_VERSION);
+    seProvider.onRestore(element, packageVersion, KM_PERSISTENT_DATA_STORAGE_VERSION);
     handleDataUpgradeToVersion2_0();
   }
 
@@ -106,8 +106,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     boolean upgradeAllowed = false;
     short oldMajorVersion = (short) ((version >> 8) & 0x00FF);
     short oldMinorVersion = (short) (version & 0x00FF);
-    short currentMajorVersion = (short) (CURRENT_PACKAGE_VERSION >> 8 & 0x00FF);
-    short currentMinorVersion = (short) (CURRENT_PACKAGE_VERSION & 0x00FF);
+    short currentMajorVersion = (short) (KM_PERSISTENT_DATA_STORAGE_VERSION >> 8 & 0x00FF);
+    short currentMinorVersion = (short) (KM_PERSISTENT_DATA_STORAGE_VERSION & 0x00FF);
     // Downgrade of the Applet is not allowed.
     // Upgrade is not allowed to a next version which is not immediate.
     if ((short) (currentMajorVersion - oldMajorVersion) == 1) {
@@ -143,7 +143,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       status = (byte) (status | 0x20);
     }
     provisionStatus = status;
-    packageVersion = CURRENT_PACKAGE_VERSION;
+    packageVersion = KM_PERSISTENT_DATA_STORAGE_VERSION;
 
     short certExpiryLen = 0;
     short issuerLen = 0;
