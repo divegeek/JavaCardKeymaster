@@ -947,12 +947,7 @@ public class KMRepository implements KMUpgradable {
   public void onRestore(Element ele, short oldVersion, short currentVersion) {
     dataIndex = ele.readShort();
     dataTable = (byte[]) ele.readObject();
-    if (oldVersion == 0) {
-      // Previous versions does not contain version information.
-      handleDataUpgradeToVersion2_0();
-    } else {
-      attestIdsIndex = ele.readShort();
-    }
+    attestIdsIndex = ele.readShort();
   }
 
   @Override
@@ -1001,30 +996,5 @@ public class KMRepository implements KMUpgradable {
       (getHeap())[start] = (byte) 0x00;
     }
     writeDataEntry(EARLY_BOOT_ENDED_STATUS, getHeap(), start, EARLY_BOOT_ENDED_FLAG_SIZE);
-  }
-  
-  public void handleDataUpgradeToVersion2_0() {
-    byte[] oldDataTable = dataTable;
-    dataTable = new byte[2048];
-    attestIdsIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
-    dataIndex = (short) (attestIdsIndex + KMConfigurations.TOTAL_ATTEST_IDS_SIZE);
-    // temp buffer.
-    short startOffset = alloc((short) 256);
-
-    short index = ATT_ID_BRAND;
-    short len = 0;
-    while (index <= DEVICE_LOCKED) {
-      len = readData(oldDataTable, index, heap, startOffset, (short) 256);
-      writeDataEntry(index, heap, startOffset, len);
-      index++;
-    }
-    // set default values for the new IDS.
-    setDeviceLockPasswordOnly(false);
-    setBootEndedStatus(false);
-    setEarlyBootEndedStatus(false);
-
-    // Request object deletion
-    oldDataTable = null;
-    JCSystem.requestObjectDeletion();
   }
 }
