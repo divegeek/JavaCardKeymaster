@@ -22,5 +22,6 @@
    "test_resources/batch_cert.der",
    "test_resources/intermediate_cert.der",
    "test_resources/ca_cert.der"
-   ]
+   ],
+   "oem_root_key": "test_resources/oem_root_key.der"
 }
