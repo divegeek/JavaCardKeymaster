@@ -21,7 +21,6 @@ import org.globalplatform.upgrade.UpgradeManager;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.Util;
 
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
 
