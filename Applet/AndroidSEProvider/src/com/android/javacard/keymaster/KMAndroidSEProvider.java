@@ -36,15 +36,6 @@ import javacard.security.Signature;
 import javacardx.crypto.AEADCipher;
 import javacardx.crypto.Cipher;
 
-import com.android.javacard.keymaster.KMAESKey;
-import com.android.javacard.keymaster.KMAttestationKey;
-import com.android.javacard.keymaster.KMECPrivateKey;
-import com.android.javacard.keymaster.KMError;
-import com.android.javacard.keymaster.KMException;
-import com.android.javacard.keymaster.KMHmacKey;
-import com.android.javacard.keymaster.KMMasterKey;
-import com.android.javacard.keymaster.KMPreSharedKey;
-
 public class KMAndroidSEProvider implements KMSEProvider {
 
   // static final variables

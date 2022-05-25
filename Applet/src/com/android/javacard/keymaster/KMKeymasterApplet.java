@@ -41,7 +41,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte CLA_ISO7816_NO_SM_NO_CHAN = (byte) 0x80;
   private static final short KM_HAL_VERSION = (short) 0x4000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
-  private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
   // Magic number version
   public static final byte KM_MAGIC_NUMBER = (byte) 0x81;
@@ -89,6 +88,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte[] OEM_UNLOCK_VERIFICATION_LABEL = { // "Enable RMA"
       0x45, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x52, 0x4d, 0x41
   };
+  // Attestation IDs
+  private static final short[] ATTEST_ID_TAGS = {
+          KMType.ATTESTATION_ID_BRAND,
+          KMType.ATTESTATION_ID_DEVICE,
+          KMType.ATTESTATION_ID_IMEI,
+          KMType.ATTESTATION_ID_MANUFACTURER,
+          KMType.ATTESTATION_ID_MEID,
+          KMType.ATTESTATION_ID_MODEL,
+          KMType.ATTESTATION_ID_PRODUCT,
+          KMType.ATTESTATION_ID_SERIAL
+      };
 
 
   // Possible states of the applet.
@@ -811,7 +821,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processSetVersionAndPatchLevels(APDU apdu) {
     receiveIncoming(apdu);
-    byte[] scratchPad = apdu.getBuffer();
     // Argument 1 OS Version
     tmpVariables[0] = KMInteger.exp();
     // Argument 2 OS Patch level
@@ -991,8 +1000,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processProvisionOEMRootPublicKeyCmd(APDU apdu) {
     receiveIncoming(apdu);
-    // Re-purpose the apdu buffer as scratch pad.
-    byte[] scratchPad = apdu.getBuffer();
     // Arguments
     short keyparams = KMKeyParameters.exp();
     short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT);
@@ -1719,26 +1726,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // id values of both the requested parameters and the provisioned parameters
   // then throw INVALID_TAG error.
   private void addAttestationIds(KMAttestationCert cert) {
-    final short[] attTags =
-        new short[]{
-            KMType.ATTESTATION_ID_BRAND,
-            KMType.ATTESTATION_ID_DEVICE,
-            KMType.ATTESTATION_ID_IMEI,
-            KMType.ATTESTATION_ID_MANUFACTURER,
-            KMType.ATTESTATION_ID_MEID,
-            KMType.ATTESTATION_ID_MODEL,
-            KMType.ATTESTATION_ID_PRODUCT,
-            KMType.ATTESTATION_ID_SERIAL
-        };
     byte index = 0;
     short attIdTag;
     short attIdTagValue;
     short storedAttId;
-    while (index < (short) attTags.length) {
-      attIdTag = KMKeyParameters.findTag(KMType.BYTES_TAG, attTags[index], data[KEY_PARAMETERS]);
+    while (index < (short) ATTEST_ID_TAGS.length) {
+      attIdTag = KMKeyParameters.findTag(KMType.BYTES_TAG, ATTEST_ID_TAGS[index], data[KEY_PARAMETERS]);
       if (attIdTag != KMType.INVALID_VALUE) {
         attIdTagValue = KMByteTag.cast(attIdTag).getValue();
-        storedAttId = repository.getAttId(mapToAttId(attTags[index]));
+        storedAttId = repository.getAttId(mapToAttId(ATTEST_ID_TAGS[index]));
         // Return CANNOT_ATTEST_IDS if Attestation IDs are not provisioned or
         // Attestation IDs are deleted.
         if (storedAttId == KMType.INVALID_VALUE ||

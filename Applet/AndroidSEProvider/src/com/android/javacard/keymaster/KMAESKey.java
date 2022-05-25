@@ -17,8 +17,6 @@ package com.android.javacard.keymaster;
 
 import org.globalplatform.upgrade.Element;
 
-import com.android.javacard.keymaster.KMMasterKey;
-
 import javacard.security.AESKey;
 
 public class KMAESKey implements KMMasterKey {

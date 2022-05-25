@@ -17,8 +17,6 @@ package com.android.javacard.keymaster;
 
 import org.globalplatform.upgrade.Element;
 
-import com.android.javacard.keymaster.KMPreSharedKey;
-
 import javacard.security.HMACKey;
 
 public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey {

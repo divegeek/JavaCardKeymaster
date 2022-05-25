@@ -17,11 +17,6 @@ package com.android.javacard.keymaster;
 
 import org.globalplatform.upgrade.Element;
 
-import com.android.javacard.keymaster.KMAESKey;
-import com.android.javacard.keymaster.KMAttestationCert;
-import com.android.javacard.keymaster.KMAttestationKey;
-
-import javacard.security.AESKey;
 import javacard.security.ECPrivateKey;
 import javacard.security.KeyPair;
 

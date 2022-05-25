@@ -16,8 +16,6 @@
 
 package com.android.javacard.keymaster;
 
-import javacard.framework.ISO7816;
-import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
