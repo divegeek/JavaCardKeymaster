@@ -15,11 +15,6 @@
  */
 package com.android.javacard.keymaster;
 
-import com.android.javacard.keymaster.KMAESKey;
-import com.android.javacard.keymaster.KMByteBlob;
-import com.android.javacard.keymaster.KMECPrivateKey;
-import com.android.javacard.keymaster.KMMasterKey;
-
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -144,7 +139,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static byte verifiedState;
   private static short verifiedHash;
   private static short issuer;
-  private static short signPriv;
 
   private KMAttestationCertImpl() {
   }
@@ -187,7 +181,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     verifiedState = 0;
     rsaCert = true;
     deviceLocked = 0;
-    signPriv = 0;
   }
 
   @Override
