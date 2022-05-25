@@ -133,6 +133,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   //Resource type constants
   public static final byte RESOURCE_TYPE_CRYPTO = 0x00;
   public static final byte RESOURCE_TYPE_KEY = 0x01;
+  public static final byte EC_PUB_KEY_SIZE = 65;
   
   final byte[] KEY_ALGS = {
 	 AES_128,
@@ -210,6 +211,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private KMECPrivateKey attestationKey;
   private KMHmacKey preSharedKey;
   private KMHmacKey computedHmacKey;
+  private byte[] oemRootPublicKey;
 
   private static KMAndroidSEProvider androidSEProvider = null;
 
@@ -267,6 +269,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
           KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
       provisionData = new byte[totalLen];
+      oemRootPublicKey = new byte[EC_PUB_KEY_SIZE];
       
       // Initialize attestationKey and preShared key with zeros.
       Util.arrayFillNonAtomic(tmpArray, (short) 0, TMP_ARRAY_SIZE, (byte) 0);
@@ -1315,6 +1318,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     KMECPrivateKey.onSave(element, attestationKey);
     KMHmacKey.onSave(element, preSharedKey);
     KMHmacKey.onSave(element, computedHmacKey);
+    element.write(oemRootPublicKey);
   }
 
   @Override
@@ -1323,11 +1327,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
     masterKey = KMAESKey.onRestore(element);
     attestationKey = KMECPrivateKey.onRestore(element);
     preSharedKey = KMHmacKey.onRestore(element);
-    if (oldVersion == 0) {
-      // Previous versions does not contain version information.
-      handleDataUpgradeToVersion2_0();
+    computedHmacKey = KMHmacKey.onRestore(element);
+    if (oldVersion == 0x200) {
+      createOemRootPublicKey();
     } else {
-      computedHmacKey = KMHmacKey.onRestore(element);
+      oemRootPublicKey = (byte[]) element.readObject();
     }
   }
 
@@ -1344,7 +1348,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public short getBackupObjectCount() {
     short count =
-        (short) (1 + /* provisionData buffer */
+        (short) (2 + /* provisionData buffer + oemRootPublicKey */
             KMAESKey.getBackupObjectCount() +
             KMECPrivateKey.getBackupObjectCount() +
             KMHmacKey.getBackupObjectCount() +
@@ -1446,20 +1450,21 @@ public class KMAndroidSEProvider implements KMSEProvider {
     return computedHmacKey;
   }
   
-  private void handleDataUpgradeToVersion2_0() {
-    short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
-        KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
-    byte[] oldBuffer = provisionData;
-    provisionData = new byte[totalLen];
-    persistCertificateChain(
-        oldBuffer,
-        (short) 2,
-        Util.getShort(oldBuffer, (short) 0));
-
-    // Request object deletion
-    oldBuffer = null;
-    JCSystem.requestObjectDeletion();
-    
+  private void createOemRootPublicKey() {
+    // Please note that this is a dummy EC P256 Public Key. Replace below key with a real OEM Root
+    // EC P256 public key while upgrading the Applet from data version 2.0 to 3.0. This change
+    // is not required if the Applet is installed first time with version 3.0.
+    oemRootPublicKey = new byte[]{
+        (byte) 0x04, (byte) 0xa7, (byte) 0xf7, (byte) 0x4e, (byte) 0xf2, (byte) 0x21, (byte) 0xdd,
+        (byte) 0x1f, (byte) 0xdb, (byte) 0x19, (byte) 0x87, (byte) 0xbf, (byte) 0x38, (byte) 0x05,
+        (byte) 0xed, (byte) 0x4e, (byte) 0x82, (byte) 0x84, (byte) 0xaf, (byte) 0x92, (byte) 0x99,
+        (byte) 0x36, (byte) 0x7e, (byte) 0xb8, (byte) 0xba, (byte) 0xda, (byte) 0x59, (byte) 0xfe,
+        (byte) 0xd6, (byte) 0x38, (byte) 0x70, (byte) 0x60, (byte) 0xda, (byte) 0xd5, (byte) 0x05,
+        (byte) 0xf2, (byte) 0x83, (byte) 0xf6, (byte) 0x0b, (byte) 0xd2, (byte) 0x82, (byte) 0xcb,
+        (byte) 0x8e, (byte) 0x21, (byte) 0xf5, (byte) 0xf7, (byte) 0x52, (byte) 0xff, (byte) 0x82,
+        (byte) 0x55, (byte) 0xca, (byte) 0xf2, (byte) 0x57, (byte) 0x07, (byte) 0x8e, (byte) 0xea,
+        (byte) 0x7a, (byte) 0xb0, (byte) 0x82, (byte) 0x59, (byte) 0x84, (byte) 0xe7, (byte) 0x75,
+        (byte) 0xfb, (byte) 0xb2};
   }
 
   @Override
@@ -1511,6 +1516,41 @@ public class KMAndroidSEProvider implements KMSEProvider {
     KMKeyObject ptr = new KMKeyObject();
     ptr.setKeyObjectData(alg, keyObject);
     return ptr;
+  }
+
+  @Override
+  public void persistOEMRootPublicKey(byte[] inBuff, short inOffset, short inLength) {
+    if (inLength != 65) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    Util.arrayCopy(inBuff, inOffset, oemRootPublicKey, (short) 0, inLength);
+  }
+
+  @Override
+  public short readOEMRootPublicKey(byte[] buf, short off) {
+    Util.arrayCopyNonAtomic(oemRootPublicKey, (short) 0, buf, off, (short) oemRootPublicKey.length);
+    return (short) oemRootPublicKey.length;
+  }
+
+  @Override
+  public boolean ecVerify256(byte[] keyBuf, short keyBufStart, short keyBufLen, 
+      byte[] inputDataBuf, short inputDataStart, short inputDataLength,
+      byte[] signature, short signatureOff, short signatureLen) {
+    ECPublicKey ecPublicKey = (ECPublicKey) ecKeyPair.getPublic();
+    ecPublicKey.setW(keyBuf, keyBufStart, keyBufLen);
+    Signature.OneShot signer = null;
+    try {
+
+      signer = Signature.OneShot.open(MessageDigest.ALG_SHA_256,
+          Signature.SIG_CIPHER_ECDSA, Cipher.PAD_NULL);
+      signer.init(ecPublicKey, Signature.MODE_VERIFY);
+      return signer.verify(inputDataBuf, inputDataStart, inputDataLength,
+          signature, signatureOff, signatureLen);
+    } finally {
+      if (signer != null) {
+        signer.close();
+      }
+    }
   }
 
     
