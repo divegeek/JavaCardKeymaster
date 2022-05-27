@@ -117,13 +117,13 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
       if (isCommandAllowed(apduIns)) {
         switch (apduIns) {
-          case INS_PROVISION_ATTEST_IDS_CMD://oem
+          case INS_PROVISION_ATTEST_IDS_CMD:
             processProvisionAttestIdsCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_ATTEST_IDS);
             sendError(apdu, KMError.OK);
             break;
 
-          case INS_PROVISION_PRESHARED_SECRET_CMD://oem
+          case INS_PROVISION_PRESHARED_SECRET_CMD:
             processProvisionPreSharedSecretCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_PRESHARED_SECRET);
             sendError(apdu, KMError.OK);
@@ -141,11 +141,11 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             processSetBootEndedCmd(apdu);	
             break;         
 
-          case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD://se
+          case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
             processProvisionRkpDeviceUniqueKeyPair(apdu);
             break;
 
-          case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD://se
+          case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
             processProvisionRkpAdditionalCertChain(apdu);
             break;
           
@@ -154,7 +154,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             sendError(apdu, KMError.OK);
             break;
 
-          case INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD: //oem
+          case INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD:
             processProvisionOEMRootPublicKeyCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_OEM_PUBLIC_KEY);
             sendError(apdu, KMError.OK);
@@ -192,7 +192,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     boolean result = true;
     switch(apduIns) {
       case INS_PROVISION_ATTEST_IDS_CMD:
-      case INS_PROVISION_PRESHARED_SECRET_CMD://oem
+      case INS_PROVISION_PRESHARED_SECRET_CMD:
       case INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD:
         if(kmDataStore.isProvisionLocked()) {
           result = false;  
