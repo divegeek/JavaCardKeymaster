@@ -63,8 +63,8 @@ int readJsonFile(Json::Value& root, std::string& inputFileName) {
     std::string errorMessage;
 
     if(!root.empty()) {
-        printf("\n Already parsed \n");
-        return 1;
+        // Already parsed.
+        return 0;
     }
     std::ifstream stream(inputFileName);
     if (Json::parseFromStream(builder, stream, &root, &errorMessage)) {

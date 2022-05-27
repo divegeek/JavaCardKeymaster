@@ -58,6 +58,10 @@ typedef UniquePtr<BIGNUM, BIGNUM_Delete> BIGNUM_Ptr;
 // EC Affine point length for Nist P256.
 constexpr uint32_t kAffinePointLength = 32;
 
+// OEM Lock / Unlock Verification message
+constexpr char kOemProvisioningLock[] = "OEM Provisioning Lock";
+constexpr char kEnableRma[] = "Enable RMA";
+
 // Tags
 constexpr uint64_t kTagAlgorithm = 268435458u;
 constexpr uint64_t kTagDigest = 536870917u;
@@ -77,6 +81,7 @@ constexpr uint64_t kCurveP256 = 1;
 constexpr uint64_t kAlgorithmEc = 3;
 constexpr uint64_t kDigestSha256 = 4;
 constexpr uint64_t kPurposeAttest = 0x7F;
+constexpr uint64_t kPurposeVerify = 3;
 constexpr uint64_t kKeyFormatRaw = 3;
 
 // json keys
@@ -91,13 +96,19 @@ constexpr char kAdditionalCertChain[] = "additional_cert_chain";
 constexpr char kSignerInfo[] = "signer_info";
 constexpr char kProvisionStatus[] = "provision_status";
 constexpr char kLockProvision[] = "lock_provision";
+constexpr char kOEMRootKey[] = "oem_root_key";
+constexpr char kSeFactoryProvisionLock[] = "se_factory_lock";
+constexpr char kUnLockProvision[] = "unlock_provision";
 
 // Instruction constatnts
 // TODO Modify according to keymint
 constexpr int kAttestationIdsCmd = INS_BEGIN_KM_CMD + 1;
 constexpr int kPresharedSecretCmd = INS_BEGIN_KM_CMD + 2;
-constexpr int kLockProvisionCmd = INS_BEGIN_KM_CMD + 3;
+constexpr int kOemLockProvisionCmd = INS_BEGIN_KM_CMD + 3;
 constexpr int kGetProvisionStatusCmd = INS_BEGIN_KM_CMD + 4;
 constexpr int kBootParamsCmd = INS_BEGIN_KM_CMD + 5;
 constexpr int kDeviceUniqueKeyCmd = INS_BEGIN_KM_CMD + 6;
 constexpr int kAdditionalCertChainCmd = INS_BEGIN_KM_CMD + 7;
+constexpr int kSeFactoryLockCmd = INS_BEGIN_KM_CMD + 9;
+constexpr int kOemRootPublicKeyCmd = INS_BEGIN_KM_CMD + 10;
+constexpr int kOemUnLockProvisionCmd = INS_BEGIN_KM_CMD + 11;

@@ -19,6 +19,7 @@
 #include <memory>
 #include <getopt.h>
 #include "socket.h"
+#include <string.h>
 #include <json/reader.h>
 #include <json/value.h>
 #include <constants.h>
@@ -30,14 +31,16 @@
 // TODO keymint provision status
 enum ProvisionStatus {
     NOT_PROVISIONED = 0x00,
-    PROVISION_STATUS_ATTESTATION_KEY = 0x01,
-    PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x02,
+//    PROVISION_STATUS_ATTESTATION_KEY = 0x01,
+//    PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x02,
     PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04,
     PROVISION_STATUS_ATTEST_IDS = 0x08,
     PROVISION_STATUS_PRESHARED_SECRET = 0x10,
     PROVISION_STATUS_PROVISIONING_LOCKED = 0x20,
     PROVISION_STATUS_DEVICE_UNIQUE_KEY = 0x40,
     PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x80,
+    PROVISION_STATUS_SE_LOCKED = 0x01,
+    PROVISION_STATUS_OEM_PUBLIC_KEY = 0x02
 };
 
 // TODO keymint provision status and lock
@@ -50,6 +53,7 @@ using cppbor::Item;
 using cppbor::Array;
 using cppbor::Uint;
 using cppbor::MajorType;
+bool printProvisionStatus = false;
 
 // static function declarations
 static uint16_t getApduStatus(std::vector<uint8_t>& inputData);
@@ -57,6 +61,7 @@ static int sendData(std::shared_ptr<SocketTransport>& pSocket, std::string input
 static int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, std::vector<uint8_t>& response);
 static int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey);
 static int getUint64(const std::unique_ptr<Item> &item, const uint32_t pos, uint64_t *value);
+static int getProvisionStatus(uint64_t *provisionStatus);
 
 
 // Print usage.
@@ -67,7 +72,9 @@ void usage() {
     printf("-h, --help    show this help message and exit.\n");
     printf("-i, --input  jsonFile \t Input json file \n");
     printf("-s, --provision_status jsonFile \t Gets the provision status of applet. \n");
-    printf("-l, --lock_provision jsonFile \t Gets the provision status of applet. \n");
+    printf("-l, --lock_provision jsonFile \t OEM provisioning lock. \n");
+    printf("-f, --se_factory_lock jsonFile \t SE Factory provisioning lock. \n");
+    printf("-u, --unlock_provision jsonFile \t Unlock OEM provisioning. \n");
 
 }
 
@@ -124,6 +131,14 @@ uint64_t unmaskPowerResetFlag(uint64_t errorCode) {
     return errorCode;
 }
 
+bool isSEFactoryProvisionLocked(uint64_t provisionStatus) {
+    return (0 != (provisionStatus & PROVISION_STATUS_SE_LOCKED));
+}
+
+bool isOEMProvisionLocked(uint64_t provisionStatus) {
+    return (0 != (provisionStatus & PROVISION_STATUS_PROVISIONING_LOCKED));
+}
+
 int provisionData(std::shared_ptr<SocketTransport>& pSocket, std::string apdu, std::vector<uint8_t>& response) {
     if (SUCCESS != sendData(pSocket, apdu, response)) {
         return FAILURE;
@@ -172,10 +187,10 @@ int provisionData(std::shared_ptr<SocketTransport>& pSocket, const char* jsonKey
 
 int openConnection(std::shared_ptr<SocketTransport>& pSocket) {
     if (!pSocket->isConnected()) {
-        if (!pSocket->openConnection())
+        if (!pSocket->openConnection()) {
+            printf("\nFailed to open connection.\n");
             return FAILURE;
-    } else {
-        printf("\n Socket already opened.\n");
+        }
     }
     return SUCCESS;
 }
@@ -191,24 +206,44 @@ int processInputFile() {
         printf("\n Failed to open connection \n");
         return FAILURE;
     }
-    if (0 != provisionData(pSocket, kDeviceUniqueKey) ||
-        0 != provisionData(pSocket, kAdditionalCertChain) ||
-        0 != provisionData(pSocket, kAttestationIds) ||
-        0 != provisionData(pSocket, kSharedSecret) ||
-        0 != provisionData(pSocket, kBootParams)) {
+ 
+    uint64_t provisionStatus = 0;
+    if (SUCCESS != getProvisionStatus(&provisionStatus)) {
+        return false;
+    }
+    if (!isSEFactoryProvisionLocked(provisionStatus) &&
+        ((0 != provisionData(pSocket, kDeviceUniqueKey)) ||
+        (0 != provisionData(pSocket, kAdditionalCertChain)))) {
         return FAILURE;
     }
+    if (!isOEMProvisionLocked(provisionStatus) &&
+        ((0 != provisionData(pSocket, kAttestationIds)) ||
+        (0 != provisionData(pSocket, kSharedSecret)) ||
+        (0 != provisionData(pSocket, kOEMRootKey)))) {
+        return FAILURE;
+    }
+
+    if (0 != provisionData(pSocket, kBootParams)) {
+        return FAILURE;
+    }
+    
     return SUCCESS;
 }
 
 int lockProvision() {
     std::vector<uint8_t> response;
     std::shared_ptr<SocketTransport> pSocket = SocketTransport::getInstance();
+    
+    // Parse Json file
+    if (0 != readJsonFile(root, inputFileName)) {
+        return FAILURE;
+    }
+
     if (SUCCESS != openConnection(pSocket)) {
         printf("\n Failed to open connection \n");
         return FAILURE;
     }
-    if (SUCCESS != provisionData(pSocket, lockProvisionApdu, response)) {
+    if (SUCCESS != provisionData(pSocket, kLockProvision)){
         printf("\n Failed to lock provision.\n");
         return FAILURE;
     }
@@ -216,44 +251,110 @@ int lockProvision() {
     return SUCCESS;
 }
 
-int getProvisionStatus() {
+int unlockProvision() {
     std::vector<uint8_t> response;
     std::shared_ptr<SocketTransport> pSocket = SocketTransport::getInstance();
+
+    // Parse Json file
+    if (0 != readJsonFile(root, inputFileName)) {
+        return FAILURE;
+    }
+    if (SUCCESS != openConnection(pSocket)) {
+        printf("\n Failed to open connection \n");
+        return FAILURE;
+    }
+    if (SUCCESS != provisionData(pSocket, kUnLockProvision)) {
+        printf("\n Failed to unlock provision.\n");
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+int seFactoryProvisionLock() {
+    std::vector<uint8_t> response;
+    std::shared_ptr<SocketTransport> pSocket = SocketTransport::getInstance();
+
+    // Parse Json file
+    if (0 != readJsonFile(root, inputFileName)) {
+        return FAILURE;
+    }
+    if (SUCCESS != openConnection(pSocket)) {
+        printf("\n Failed to open connection \n");
+        return FAILURE;
+    }
+    if (SUCCESS != provisionData(pSocket, kSeFactoryProvisionLock)) {
+        printf("\n Failed to lock SE factory provision.\n");
+        return FAILURE;
+    }
+    return SUCCESS;
+}
+
+int getProvisionStatus(uint64_t *provisionStatus) {
+    std::vector<uint8_t> response;
+    std::shared_ptr<SocketTransport> pSocket = SocketTransport::getInstance();
+    // Parse Json file
+    if (0 != readJsonFile(root, inputFileName)) {
+        return FAILURE;
+    }
     if (SUCCESS != openConnection(pSocket)) {
         printf("\n Failed to open connection \n");
         return FAILURE;
     }
 
-    if (SUCCESS != provisionData(pSocket, provisionStatusApdu, response)) {
-        printf("\n Failed to get provision status \n");
+    Json::Value val = root.get(kProvisionStatus, Json::Value::nullRef);
+    if (!val.isNull()) {
+        if (val.isString()) {
+            if (SUCCESS != provisionData(pSocket, hex2str(val.asString()), response)) {
+                printf("\n Error while provisioning %s \n", kProvisionStatus);
+                return FAILURE;
+            }
+        } else {
+            printf("\n Fail: Expected (%s) tag value is string. \n", kProvisionStatus);
+            return FAILURE;
+        }
+    } else {
         return FAILURE;
     }
     auto [item, pos, message] = cppbor::parse(response);
+    uint64_t status;
     if(item != nullptr) {
-        uint64_t status;
         if(SUCCESS != getUint64(item, 1, &status)) {
             printf("\n Failed to get the provision status.\n");
             return FAILURE;
-        }
-        // TODO Handle Keymint Provision status once added.
-        if ( (0 != (status & ProvisionStatus::PROVISION_STATUS_DEVICE_UNIQUE_KEY)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)) &&
-            (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET))) {
+        }   
+        if (printProvisionStatus) {
+            if ((0 != (status & ProvisionStatus::PROVISION_STATUS_DEVICE_UNIQUE_KEY)) &&
+                (0 != (status & ProvisionStatus::PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)) &&
+                (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTEST_IDS)) &&
+                (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET))) {
                 printf("\n SE is provisioned \n");
-        } else {
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_DEVICE_UNIQUE_KEY)) {
-                printf("\n Device Unique key is not provisioned \n");
             }
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)) {
-                printf("\n Additional certificate chain is not provisioned \n");
+            else {
+                if (0 == (status & ProvisionStatus::PROVISION_STATUS_DEVICE_UNIQUE_KEY)) {
+                    printf("\n Attestation key is not provisioned \n");
+                }
+                if (0 == (status & ProvisionStatus::PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)) {
+                    printf("\n Attestation certificate chain is not provisioned \n");
+                }
+                if (0 == (status & ProvisionStatus::PROVISION_STATUS_ATTEST_IDS)) {
+                    printf("\n Attestation certificate params are not provisioned \n");
+                }
+                if (0 == (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) {
+                    printf("\n Shared secret is not provisioned \n");
+                }
+                if (0 == (status & ProvisionStatus::PROVISION_STATUS_OEM_PUBLIC_KEY)) {
+                    printf("\n OEM Root Public Key is not provisioned \n");
+                }
             }
-            if (0 == (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET)) {
-                printf("\n Shared secret is not provisioned \n");
-            }
-        }
+            printf("\n provisionStatus:%ld\n", status);
+            printProvisionStatus = false;
+        }    
     } else {
         printf("\n Fail to parse the response \n");
         return FAILURE;
+    }
+    if (provisionStatus != nullptr) {
+        *provisionStatus = status;
     }
     return SUCCESS;
 }
@@ -262,11 +363,15 @@ int main(int argc, char* argv[]) {
     int c;
     bool provisionStatusSet = false;
     bool lockProvisionSet = false;
+    bool unlockProvisionSet = false;
+    bool seFactoryLockSet = false;
 
     struct option longOpts[] = {
         {"input",       required_argument, NULL, 'i'},
         {"provision_status", no_argument, NULL,  's'},
-        {"lock_provision", no_argument,   NULL,  'l'},
+        {"oem_lock_provision", no_argument,   NULL,  'l'},
+        {"oem_unlock_provision", no_argument,   NULL,  'u'},
+        {"se_factory_lock", no_argument,   NULL,  'f'},
         {"help",        no_argument,       NULL, 'h'},
         {0,0,0,0}
     };
@@ -278,7 +383,7 @@ int main(int argc, char* argv[]) {
     }
 
     /* getopt_long stores the option index here. */
-    while ((c = getopt_long(argc, argv, ":hlsi:", longOpts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, ":hlufsvi:", longOpts, NULL)) != -1) {
         switch(c) {
             case 'i':
                 // input file
@@ -290,6 +395,12 @@ int main(int argc, char* argv[]) {
                 break;
             case 'l':
                 lockProvisionSet = true;
+                break;
+            case 'u':
+                unlockProvisionSet = true;
+                break;
+            case 'f':
+                seFactoryLockSet = true;
                 break;
             case 'h':
                 // help
@@ -306,16 +417,29 @@ int main(int argc, char* argv[]) {
                 return FAILURE;
         }
     }
-    // Process input file; send apuds to JCServer over socket.
-    if (argc >= 3) {
-        if (SUCCESS != processInputFile()) {
-            return FAILURE;
+
+    if (argc < 3) {
+        usage();
+        return FAILURE;
+    }
+    if (argc == 4) {
+        if (provisionStatusSet) {
+            printProvisionStatus = true;
+            getProvisionStatus(nullptr);
+            return SUCCESS;
         }
     }
-    if (provisionStatusSet)
-        getProvisionStatus();
+    // Process input file; send apuds to JCServer over socket.
+    if (SUCCESS != processInputFile()) {
+        return FAILURE;
+    }
+
+    if (seFactoryLockSet)
+        seFactoryProvisionLock();
     if (lockProvisionSet)
         lockProvision();
+    if (unlockProvisionSet)
+        unlockProvision();        
     return SUCCESS;
 }
 
