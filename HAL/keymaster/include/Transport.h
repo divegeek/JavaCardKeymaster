@@ -17,6 +17,16 @@
 #ifndef __SE_TRANSPORT__
 #define __SE_TRANSPORT__
 
+#include <aidl/android/se/omapi/BnSecureElementListener.h>
+#include <aidl/android/se/omapi/ISecureElementChannel.h>
+#include <aidl/android/se/omapi/ISecureElementListener.h>
+#include <aidl/android/se/omapi/ISecureElementReader.h>
+#include <aidl/android/se/omapi/ISecureElementService.h>
+#include <aidl/android/se/omapi/ISecureElementSession.h>
+#include <android/binder_manager.h>
+
+#include <map>
+
 namespace se_transport {
 
 /**
@@ -30,7 +40,7 @@ class ITransport {
     /**
      * Opens connection.
      */
-	virtual bool openConnection() = 0;
+    virtual bool openConnection() = 0;
     /**
      * Send data over communication channel and receives data back from the remote end.
      */
@@ -54,12 +64,14 @@ class ITransport {
 class OmapiTransport : public ITransport {
 
 public:
-
+    OmapiTransport() : omapiSeService(nullptr), eSEReader(nullptr), session(nullptr),
+        channel(nullptr) {
+    }
     /**
      * Gets the binder instance of ISEService, gets the reader corresponding to secure element, establishes a session
      * and opens a basic channel.
      */
-	bool openConnection() override;
+    bool openConnection() override;
     /**
      * Transmists the data over the opened basic channel and receives the data back.
      */
@@ -75,6 +87,16 @@ public:
      */
     bool isConnected() override;
 
+private:
+    std::shared_ptr<aidl::android::se::omapi::ISecureElementService> omapiSeService;
+    std::shared_ptr<aidl::android::se::omapi::ISecureElementReader> eSEReader;
+    std::shared_ptr<aidl::android::se::omapi::ISecureElementSession> session;
+    std::shared_ptr<aidl::android::se::omapi::ISecureElementChannel> channel;
+    std::map<std::string, std::shared_ptr<aidl::android::se::omapi::ISecureElementReader>>
+            mVSReaders;
+    // Private functions
+    bool initialize();
+    bool internalTransmitApdu(std::vector<uint8_t> apdu, std::vector<uint8_t>& transmitResponse);
 };
 
 class SocketTransport : public ITransport {
@@ -85,7 +107,7 @@ public:
     /**
      * Creates a socket instance and connects to the provided server IP and port.
      */
-	bool openConnection() override;
+    bool openConnection() override;
     /**
      * Sends data over socket and receives data back.
      */
