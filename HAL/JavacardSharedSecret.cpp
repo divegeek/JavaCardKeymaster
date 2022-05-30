@@ -14,7 +14,11 @@ using std::vector;
 ScopedAStatus JavacardSharedSecret::getSharedSecretParameters(SharedSecretParameters* params) {
     card_->initializeJavacard();
     auto [item, err] = card_->sendRequest(Instruction::INS_GET_SHARED_SECRET_PARAM_CMD);
-    if (err != KM_ERROR_OK || !cbor_.getSharedSecretParameters(item, 1, *params)) {
+    if (err != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in sending in getSharedSecretParameters.!!!!!!!!!!!!!!!";
+        return km_utils::kmError2ScopedAStatus(err);
+    }
+    if (!cbor_.getSharedSecretParameters(item, 1, *params)) {
         LOG(ERROR) << "Error in sending in getSharedSecretParameters.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }

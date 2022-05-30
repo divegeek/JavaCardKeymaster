@@ -30,15 +30,15 @@ class SocketTransport : public ITransport {
     /**
      * Creates a socket instance and connects to the provided server IP and port.
      */
-    bool openConnection() override;
+    keymaster_error_t openConnection() override;
     /**
      * Sends data over socket and receives data back.
      */
-    bool sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) override;
+    keymaster_error_t sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) override;
     /**
      * Closes the connection.
      */
-    bool closeConnection() override;
+    keymaster_error_t closeConnection() override;
     /**
      * Returns the state of the connection status. Returns true if the connection is active,
      * false if connection is broken.

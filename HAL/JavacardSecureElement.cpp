@@ -83,9 +83,10 @@ keymaster_error_t JavacardSecureElement::sendData(Instruction ins, std::vector<u
         return ret;
     }
 
-    if (!transport_->sendData(apdu, response)) {
-        LOG(ERROR) << "Error in sending data in sendData.";
-        return (KM_ERROR_SECURE_HW_COMMUNICATION_FAILED);
+    ret = transport_->sendData(apdu, response);
+    if (ret != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in sending data in sendData. " << static_cast<int>(ret);
+        return ret;
     }
 
     // Response size should be greater than 2. Cbor output data followed by two bytes of APDU

@@ -152,20 +152,21 @@ public class KMCoseHeaders extends KMCoseMap {
     return getValueType(KMCose.COSE_LABEL_ALGORITHM);
   }
 
-  public boolean isDataValid(short alg, short keyIdPtr) {
-    short[] headerTags = {
-        KMCose.COSE_LABEL_ALGORITHM, alg,
-        KMCose.COSE_LABEL_KEYID, keyIdPtr,
-    };
+  public boolean isDataValid(short []buff, short alg, short keyIdPtr) {
+    short bufLen = 4;
+	buff[0] = KMCose.COSE_LABEL_ALGORITHM;
+	buff[1] = alg;
+	buff[2] = KMCose.COSE_LABEL_KEYID;
+	buff[3] = keyIdPtr;
     boolean valid = false;
     short value;
     short ptr;
     short tagIndex = 0;
-    while (tagIndex < headerTags.length) {
-      value = headerTags[(short) (tagIndex + 1)];
+    while (tagIndex < bufLen) {
+      value = buff[(short) (tagIndex + 1)];
       if (value != KMType.INVALID_VALUE) {
         valid = false;
-        ptr = getValueType(headerTags[tagIndex]);
+        ptr = getValueType(buff[tagIndex]);
         switch (KMType.getType(ptr)) {
           case KMType.BYTE_BLOB_TYPE:
             if ((KMByteBlob.cast(value).length() == KMByteBlob.cast(ptr).length()) &&

@@ -102,6 +102,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   private KMPreSharedKey preSharedKey;
   private KMComputedHmacKey computedHmacKey;
   private KMRkpMacKey rkpMacKey;
+  private byte[] oemRootPublicKey;
   
   public KMKeymintDataStore(KMSEProvider provider, KMRepository repo) {
     seProvider = provider;
@@ -112,10 +113,10 @@ public class KMKeymintDataStore implements KMUpgradable {
     if (!isUpgrading) {
       additionalCertChain = new byte[ADDITIONAL_CERT_CHAIN_MAX_SIZE];
       bcc = new byte[BCC_MAX_SIZE];
+      oemRootPublicKey = new byte[65];
       setDeviceLock(false);
       setDeviceLockPasswordOnly(false);
     }
-//    initializeCertificateDataBuffer(isUpgrading, factoryAttestSupport);
   }
   
   private void initDataTable(boolean isUpgrading) {
@@ -775,6 +776,25 @@ public class KMKeymintDataStore implements KMUpgradable {
     readDataEntry(PROVISIONED_STATUS, scratchpad, offset);
   }
 
+  public void unlockProvision(byte unlockOffset) {
+    short offset = repository.alloc((short) 1);
+    byte[] buf = repository.getHeap();
+    getProvisionStatus(buf, offset);
+    buf[offset] &= ~unlockOffset;
+    writeDataEntry(PROVISIONED_STATUS, buf, offset, (short) 1);
+  }
+
+  public void persistOEMRootPublicKey(byte[] inBuff, short inOffset, short inLength) {
+    if (inLength != 65) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    Util.arrayCopy(inBuff, inOffset, oemRootPublicKey, (short) 0, inLength);
+  }
+
+  public byte[] getOEMRootPublicKey() {
+    return oemRootPublicKey;
+  }
+  
   @Override
   public void onSave(Element element) {
     // Prmitives
@@ -796,6 +816,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     element.write(bootPatchLevel);
     element.write(additionalCertChain);
     element.write(bcc);
+    element.write(oemRootPublicKey);
+    
     // Key Objects
     seProvider.onSave(element, KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY, masterKey);
     seProvider.onSave(element, KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY,
@@ -806,7 +828,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
 
   @Override
-  public void onRestore(Element element) {
+  public void onRestore(Element element, short oldVersion, short currentVersion) {
   // Read Primitives
     dataIndex = element.readShort();
     deviceBootLocked = element.readBoolean();
@@ -826,12 +848,16 @@ public class KMKeymintDataStore implements KMUpgradable {
     bootPatchLevel = (byte[]) element.readObject();
     additionalCertChain = (byte[]) element.readObject();
     bcc = (byte[]) element.readObject();
+    //oemRootPublicKey has to be provisioned 
+    if (oldVersion >= 0x0200) {
+    	oemRootPublicKey = (byte[]) element.readObject();
+    } 
     // Read Key Objects
-    masterKey = (KMMasterKey) seProvider.onResore(element);
-    computedHmacKey = (KMComputedHmacKey) seProvider.onResore(element);
-    preSharedKey = (KMPreSharedKey) seProvider.onResore(element);
-    deviceUniqueKeyPair = (KMDeviceUniqueKeyPair) seProvider.onResore(element);
-    rkpMacKey = (KMRkpMacKey) seProvider.onResore(element);
+    masterKey = (KMMasterKey) seProvider.onRestore(element);
+    computedHmacKey = (KMComputedHmacKey) seProvider.onRestore(element);
+    preSharedKey = (KMPreSharedKey) seProvider.onRestore(element);
+    deviceUniqueKeyPair = (KMDeviceUniqueKeyPair) seProvider.onRestore(element);
+    rkpMacKey = (KMRkpMacKey) seProvider.onRestore(element);
   }
 
   @Override
@@ -853,9 +879,10 @@ public class KMKeymintDataStore implements KMUpgradable {
 	// dataTable - 1
     // AttestationIds - 8 
     // bootParameters - 3
-	// AdditionalCertificateChain - 1
-	// BCC - 1
-    return (short) (14 +
+    // AdditionalCertificateChain - 1
+    // BCC - 1
+    // oemRootPublicKey - 1
+    return (short) (15 +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY) +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY) +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY) +
