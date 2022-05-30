@@ -1125,7 +1125,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
   
   @Override
-  public Object onResore(Element element) {
+  public Object onRestore(Element element) {
     if (element == null) {
       return null;
     }

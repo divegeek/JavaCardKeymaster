@@ -104,6 +104,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       0x65, 0x6E
   };
 
+  //OEM lock / unlock verification constants.
+  protected static final byte[] OEM_LOCK_PROVISION_VERIFICATION_LABEL = { // "OEM Provisioning Lock"
+    0x4f, 0x45, 0x4d, 0x20, 0x50, 0x72, 0x6f, 0x76, 0x69, 0x73, 0x69, 0x6f, 0x6e, 0x69, 0x6e,
+    0x67, 0x20, 0x4c, 0x6f, 0x63, 0x6b
+  };
+
+  protected static final byte[] OEM_UNLOCK_PROVISION_VERIFICATION_LABEL = { // "Enable RMA"
+   0x45, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x52, 0x4d, 0x41
+  };
+  
+  private static final byte OEM_LOCK = 1;
+  private static final byte OEM_UNLOCK = 0;
+ 
   public static final short MAX_COSE_BUF_SIZE = (short) 1024;
   // Maximum allowed buffer size for to encode the key parameters
   // which is used while creating mac for key paramters.

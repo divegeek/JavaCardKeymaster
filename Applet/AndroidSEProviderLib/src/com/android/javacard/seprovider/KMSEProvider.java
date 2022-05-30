@@ -704,7 +704,7 @@ public interface KMSEProvider {
    * @param element instance of the Element class.
    * @return restored object.
    */
-  Object onResore(Element element);
+  Object onRestore(Element element);
   
   /**
    * This function returns the count of the primitive bytes required to

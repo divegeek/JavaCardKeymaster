@@ -21,7 +21,7 @@ public interface KMUpgradable {
 
   void onSave(Element ele);
 
-  void onRestore(Element ele);
+  void onRestore(Element ele, short oldVersion, short currentVersion);
 
   short getBackupPrimitiveByteCount();
 
