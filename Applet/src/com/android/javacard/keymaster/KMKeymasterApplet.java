@@ -113,7 +113,25 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static final byte[] OEM_UNLOCK_PROVISION_VERIFICATION_LABEL = { // "Enable RMA"
    0x45, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x52, 0x4d, 0x41
   };
-  
+
+  private static final byte[] JavacardKeymintDevice = {
+	        0x4a,0x61,0x76,0x61,0x63,0x61,0x72,0x64,
+	        0x4b,0x65,0x79,0x6d,0x69,0x6e,0x74,
+	        0x44,0x65,0x76,0x69,0x63,0x65,
+	    };
+  private static final byte[] Google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
+
+  private static final short[] attTags = {
+	            KMType.ATTESTATION_ID_BRAND,
+	            KMType.ATTESTATION_ID_DEVICE,
+	            KMType.ATTESTATION_ID_IMEI,
+	            KMType.ATTESTATION_ID_MANUFACTURER,
+	            KMType.ATTESTATION_ID_MEID,
+	            KMType.ATTESTATION_ID_MODEL,
+	            KMType.ATTESTATION_ID_PRODUCT,
+	            KMType.ATTESTATION_ID_SERIAL
+	        };
+
   private static final byte OEM_LOCK = 1;
   private static final byte OEM_UNLOCK = 0;
  
@@ -713,12 +731,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void processGetHwInfoCmd(APDU apdu) {
     // No arguments expected
     final byte version = 1;
-    final byte[] JavacardKeymintDevice = {
-        0x4a,0x61,0x76,0x61,0x63,0x61,0x72,0x64,
-        0x4b,0x65,0x79,0x6d,0x69,0x6e,0x74,
-        0x44,0x65,0x76,0x69,0x63,0x65,
-    };
-    final byte[] Google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
     // Make the response
     short respPtr = KMArray.instance((short) 6);
     KMArray resp = KMArray.cast(respPtr);
@@ -1507,17 +1519,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // id values of both the requested parameters and the provisioned parameters
   // then throw INVALID_TAG error.
   private void addAttestationIds(KMAttestationCert cert, byte[] scratchPad) {
-    final short[] attTags =
-        new short[]{
-            KMType.ATTESTATION_ID_BRAND,
-            KMType.ATTESTATION_ID_DEVICE,
-            KMType.ATTESTATION_ID_IMEI,
-            KMType.ATTESTATION_ID_MANUFACTURER,
-            KMType.ATTESTATION_ID_MEID,
-            KMType.ATTESTATION_ID_MODEL,
-            KMType.ATTESTATION_ID_PRODUCT,
-            KMType.ATTESTATION_ID_SERIAL
-        };
     byte index = 0;
     short attIdTag;
     short attIdTagValue;
@@ -4339,7 +4340,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ptr2 = KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PROTECTED_PARAMS_OFFSET);
       ptr2 = decoder.decode(coseHeadersExp, KMByteBlob.cast(ptr2).getBuffer(),
           KMByteBlob.cast(ptr2).getStartOff(), KMByteBlob.cast(ptr2).length());
-      if (!KMCoseHeaders.cast(ptr2).isDataValid(alg, KMType.INVALID_VALUE)) {
+      if (!KMCoseHeaders.cast(ptr2).isDataValid(rkp.rkpTmpVariables, alg, KMType.INVALID_VALUE)) {
         KMException.throwIt(KMError.STATUS_FAILED);
       }
 
@@ -4350,7 +4351,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       if ((index == (short) (len - 1)) && len > 1) {
         alg = expLeafCertAlg;
       }
-      if (!KMCoseKey.cast(ptr2).isDataValid(KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE, alg,
+      if (!KMCoseKey.cast(ptr2).isDataValid(rkp.rkpTmpVariables, KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE, alg,
           KMType.INVALID_VALUE, KMCose.COSE_ECCURVE_256)) {
         KMException.throwIt(KMError.STATUS_FAILED);
       }
@@ -4410,7 +4411,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMDeviceUniqueKeyPair deviceUniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair(testMode);
     short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
     short coseKey =
-        KMCose.constructCoseKey(
+        KMCose.constructCoseKey(rkp.rkpTmpVariables,
             KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
             KMType.INVALID_VALUE,
             KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
@@ -4446,7 +4447,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // protected header
     short protectedHeader =
-        KMCose.constructHeaders(KMNInteger.uint_8(KMCose.COSE_ALG_ES256), KMType.INVALID_VALUE,
+        KMCose.constructHeaders(rkp.rkpTmpVariables, KMNInteger.uint_8(KMCose.COSE_ALG_ES256), KMType.INVALID_VALUE,
             KMType.INVALID_VALUE, KMType.INVALID_VALUE);
     // temp temporarily holds the length of encoded headers.
     temp = KMKeymasterApplet.encodeToApduBuffer(protectedHeader, scratchPad, (short) 0,
