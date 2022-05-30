@@ -1030,6 +1030,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short index = 0;
     short tag;
     short systemParam;
+    boolean isKeyUpgradeRequired = false;
     while(index < 16) {
       tag = Util.getShort(scratchPad, index);
       systemParam = Util.getShort(scratchPad, (short) (index + 2));
@@ -1044,12 +1045,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             && KMInteger.compare(tagValue, systemParam) == 1
             && KMInteger.compare(systemParam, zero) == 0)) {
           // Key needs upgrade.
-          return true;
+          isKeyUpgradeRequired = true;
         } else if ((KMInteger.compare(tagValue, systemParam) == -1)) {
           // Each os version or patch level associated with the key must be less than it's
           // corresponding value stored in Javacard, then only upgrade is allowed otherwise it
           // is invalid argument.
-          return true;
+          isKeyUpgradeRequired = true;
         } else if (KMInteger.compare(tagValue, systemParam) == 1) {
           KMException.throwIt(KMError.INVALID_ARGUMENT);
         }
@@ -1058,7 +1059,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       index += 4;
     }
-    return false;
+    return isKeyUpgradeRequired;
   }
 
   private void processUpgradeKeyCmd(APDU apdu) {
@@ -2359,7 +2360,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         break;
       case KMType.EC:
       case KMType.HMAC:
-        if (op.getPurpose() != KMType.AGREE_KEY && param == KMType.INVALID_VALUE) {
+    	if ((param == KMType.INVALID_VALUE && op.getPurpose() != KMType.AGREE_KEY)||
+          !isDigestSupported(op.getAlgorithm(), op.getDigest())) {
           KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
         }
         break;
@@ -2407,6 +2409,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         if ((param == KMType.RSA_OAEP || param == KMType.RSA_PSS)
             && op.getDigest() == KMType.DIGEST_NONE) {
           KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+        }
+        if (op.getPurpose() == KMType.SIGN || op.getPurpose() == KMType.VERIFY
+            || param == KMType.RSA_OAEP) {
+          // Digest is mandatory in these cases.
+          if (!isDigestSupported(op.getAlgorithm(), op.getDigest())) {
+            KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
+          }
         }
         //TODO d to verify whether javacard support MGF1 = SHA1 or is it equal to the OAEP scheme
         // digest. There is no way to define any other digest.
@@ -3915,17 +3924,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         data[KEY_BLOB_VERSION_DATA_OFFSET] = KMInteger.uint_8((byte) 0);
         break;
       case (short) 1:
-        data[SECRET] = KMArray.cast(parsedKeyBlob).get((short) 0);
-        data[NONCE]= KMArray.cast(parsedKeyBlob).get((short) 1);
-        data[AUTH_TAG] = KMArray.cast(parsedKeyBlob).get((short) 2);
-        data[KEY_CHARACTERISTICS] = KMArray.cast(parsedKeyBlob).get((short) 3);
         data[KEY_BLOB_VERSION_DATA_OFFSET] = KMArray.cast(parsedKeyBlob).get(
-            (short) 4);
-        data[CUSTOM_TAGS] = KMType.INVALID_VALUE;
-        data[PUB_KEY] = KMType.INVALID_VALUE;
+                  (short) 0);  
+        data[SECRET] = KMArray.cast(parsedKeyBlob).get((short) 1);
+        data[NONCE]= KMArray.cast(parsedKeyBlob).get((short) 2);
+        data[AUTH_TAG] = KMArray.cast(parsedKeyBlob).get((short) 3);
+        data[KEY_CHARACTERISTICS] = KMArray.cast(parsedKeyBlob).get((short) 4);
         if (KMArray.cast(parsedKeyBlob).length() == ASYM_KEY_BLOB_SIZE_V1) {
           data[PUB_KEY] = KMArray.cast(parsedKeyBlob).get((short) 5);
         }
+        data[CUSTOM_TAGS] = KMType.INVALID_VALUE;
+        data[PUB_KEY] = KMType.INVALID_VALUE;
         break;
       case (short) 2:
         data[SECRET] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_SECRET);
@@ -4506,5 +4515,24 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.NO_USER_CONFIRMATION);
       }
     }
+  }
+
+  private boolean isDigestSupported(short alg, short digest) {
+    switch (alg) {
+    case KMType.RSA:
+    case KMType.EC:
+      if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256) {
+        return false;
+      }
+      break;
+    case KMType.HMAC:
+      if (digest != KMType.SHA2_256) {
+        return false;
+      }
+      break;
+    default:
+      break;
+    }
+    return true;
   }
 }

@@ -66,6 +66,7 @@ cc_library {
         "liblog",
         "libbinder_ndk",
         "android.se.omapi-V1-ndk",
+        "libhardware"
     ],
 }
 

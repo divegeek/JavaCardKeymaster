@@ -135,6 +135,10 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
           case INS_SET_BOOT_PARAMS_CMD:
             processSetBootParamsCmd(apdu);
+            break;
+
+          case INS_SET_BOOT_ENDED_CMD:
+            processSetBootEndedCmd(apdu);	
             break;         
 
           case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
@@ -519,9 +523,24 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     sendOutgoing(apdu, resp);
   }
 
+  private void processSetBootEndedCmd(APDU apdu) {
+	if (seProvider.isBootSignalEventSupported()
+              && (!seProvider.isDeviceRebooted())) {
+      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+    }
+    //set the flag to mark boot ended
+    kmDataStore.setBootEndedStatus(true);
+    seProvider.clearDeviceBooted(false);
+    sendError(apdu, KMError.OK);
+  }
+
   private void processSetBootParamsCmd(APDU apdu) {
-    short argsProto = KMArray.instance((short) 5);
-    
+    if (seProvider.isBootSignalEventSupported()
+              && (!seProvider.isDeviceRebooted())) {
+      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+    }
+
+    short argsProto = KMArray.instance((short) 5);    
     byte[] scratchPad = apdu.getBuffer();
     // Array of 4 expected arguments
     // Argument 0 Boot Patch level

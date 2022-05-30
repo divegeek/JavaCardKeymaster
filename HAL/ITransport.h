@@ -17,11 +17,13 @@
 #pragma once
 #include <memory>
 #include <vector>
+#include <hardware/keymaster_defs.h>
 
 namespace keymint::javacard {
 using std::shared_ptr;
 using std::vector;
-
+constexpr int KM_ERROR_HARDWARE_TYPE_UNAVAILABLE = -68;
+constexpr int KM_ERROR_HARDWARE_NOT_YET_AVAILABLE = -85;
 /**
  * ITransport is an interface with a set of virtual methods that allow communication between the
  * HAL and the applet on the secure element.
@@ -33,15 +35,15 @@ class ITransport {
     /**
      * Opens connection.
      */
-    virtual bool openConnection() = 0;
+    virtual keymaster_error_t openConnection() = 0;
     /**
      * Send data over communication channel and receives data back from the remote end.
      */
-    virtual bool sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) = 0;
+    virtual keymaster_error_t sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) = 0;
     /**
      * Closes the connection.
      */
-    virtual bool closeConnection() = 0;
+    virtual keymaster_error_t closeConnection() = 0;
     /**
      * Returns the state of the connection status. Returns true if the connection is active, false
      * if connection is broken.

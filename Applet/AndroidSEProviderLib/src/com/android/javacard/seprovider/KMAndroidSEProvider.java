@@ -117,7 +117,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     rng = RandomData.getInstance(RandomData.ALG_KEYGENERATION);
     androidSEProvider = this;
     resetFlag = JCSystem.makeTransientByteArray((short) 1,
-        JCSystem.CLEAR_ON_DESELECT);
+        JCSystem.CLEAR_ON_RESET);
     resetFlag[0] = (byte) POWER_RESET_FALSE;
   }
 
@@ -1196,6 +1196,21 @@ public class KMAndroidSEProvider implements KMSEProvider {
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     return 0;
+  }
+
+  @Override
+  public boolean isBootSignalEventSupported() {
+    return false;
+  }
+
+  @Override
+  public boolean isDeviceRebooted() {
+    return false;
+  }
+
+  @Override
+  public void clearDeviceBooted(boolean resetBootFlag) {
+    // To be filled
   }
   
 }

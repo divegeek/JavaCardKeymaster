@@ -23,20 +23,23 @@ using std::vector;
 class OmapiTransport : public ITransport {
 
   public:
+    OmapiTransport() : omapiSeService(nullptr), eSEReader(nullptr), session(nullptr),
+        channel(nullptr), mVSReaders({}) {
+    }
     /**
-     * Gets the binder instance of ISEService, gets the reader corresponding to secure element,
+     * Gets the binder instance of ISEService, gets te reader corresponding to secure element,
      * establishes a session and opens a basic channel.
      */
-    bool openConnection() override;
+    keymaster_error_t openConnection() override;
     /**
      * Transmists the data over the opened basic channel and receives the data back.
      */
-    bool sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) override;
+    keymaster_error_t sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) override;
 
     /**
      * Closes the connection.
      */
-    bool closeConnection() override;
+    keymaster_error_t closeConnection() override;
     /**
      * Returns the state of the connection status. Returns true if the connection is active, false
      * if connection is broken.
@@ -44,15 +47,13 @@ class OmapiTransport : public ITransport {
     bool isConnected() override;
 
   private:
-    std::shared_ptr<aidl::android::se::omapi::ISecureElementService> omapiSeService = nullptr;
-    std::shared_ptr<aidl::android::se::omapi::ISecureElementReader> eSEReader = nullptr;
+    std::shared_ptr<aidl::android::se::omapi::ISecureElementService> omapiSeService;
+    std::shared_ptr<aidl::android::se::omapi::ISecureElementReader> eSEReader;
+    std::shared_ptr<aidl::android::se::omapi::ISecureElementSession> session;
+    std::shared_ptr<aidl::android::se::omapi::ISecureElementChannel> channel;
     std::map<std::string, std::shared_ptr<aidl::android::se::omapi::ISecureElementReader>>
-        mVSReaders = {};
-    std::string const ESE_READER_PREFIX = "eSE";
-    constexpr static const char omapiServiceName[] =
-        "android.system.omapi.ISecureElementService/default";
-
-    bool initialize();
+        mVSReaders;
+    keymaster_error_t initialize();
     bool
     internalTransmitApdu(std::shared_ptr<aidl::android::se::omapi::ISecureElementReader> reader,
                          std::vector<uint8_t> apdu, std::vector<uint8_t>& transmitResponse);
