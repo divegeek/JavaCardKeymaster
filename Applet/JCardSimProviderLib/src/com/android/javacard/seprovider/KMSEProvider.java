@@ -26,6 +26,28 @@ import org.globalplatform.upgrade.Element;
 public interface KMSEProvider {
 
   /**
+   * This function tells if boot signal event is supported or not.
+   *
+   * @return true if supported, false otherwise.
+   */
+  boolean isBootSignalEventSupported();
+
+  /**
+   * This function tells if the device is booted or not.
+   *
+   * @return true if device booted, false otherwise.
+   */
+  boolean isDeviceRebooted();
+
+  /**
+   * This function is supposed to be used to reset the device booted stated after set boot param is
+   * handled
+   *
+   * @param resetBootFlag is false if event has been handled
+   */
+  void clearDeviceBooted(boolean resetBootFlag);
+  
+  /**
    * Create a symmetric key instance. If the algorithm and/or keysize are not supported then it
    * should throw a CryptoException.
    *
@@ -541,6 +563,39 @@ public interface KMSEProvider {
       short macLength);
 
   /**
+   *  This function creates an Operation instance only for RKP module.
+   *
+   * @param purpose is KMType.ENCRYPT or KMType.DECRYPT for AES and DES algorithm. It will be
+   * KMType.SIGN and KMType.VERIFY for HMAC algorithm
+   * @param alg is KMType.HMAC, KMType.AES or KMType.DES.
+   * @param digest is KMType.SHA2_256 in case of HMAC else it will be KMType.DIGEST_NONE.
+   * @param padding is KMType.PADDING_NONE or KMType.PKCS7 (in case of AES and DES).
+   * @param blockMode is KMType.CTR, KMType.GCM. KMType.CBC or KMType.ECB for AES or DES else it is
+   * 0.
+   * @param keyBuf is aes, des or hmac key buffer.
+   * @param keyStart is the start of the key buffer.
+   * @param keyLength is the length of the key buffer.
+   * @param ivBuf is the iv buffer (in case on AES and DES algorithm without ECB mode)
+   * @param ivStart is the start of the iv buffer.
+   * @param ivLength is the length of the iv buffer. It will be zero in case of HMAC and AES/DES
+   * with ECB mode.
+   * @param macLength is the mac length in case of signing operation for hmac algorithm.
+   * @return KMOperation instance.
+   */
+  KMOperation getRkpOperation(byte purpose,
+      byte alg,
+      byte digest,
+      byte padding,
+      byte blockMode,
+      byte[] keyBuf,
+      short keyStart,
+      short keyLength,
+      byte[] ivBuf,
+      short ivStart,
+      short ivLength,
+      short macLength);
+
+  /**
    * This creates a persistent operation for signing, verify, encryption and decryption using RSA
    * and EC algorithms when keymaster hal's beginOperation function is executed. For RSA the public
    * exponent is always 0x0100101. For EC the curve is always p256. The KMOperation instance can be
@@ -644,20 +699,6 @@ public interface KMSEProvider {
       short outOffset);
   
   /**
-   * This function creates an ECKey and initializes the ECPrivateKey with the provided input key
-   * data. The initialized Key is maintained by the SEProvider. This function should be called only
-   * while provisioning the attestation key.
-   *
-   * @param keyData buffer containing the ec private key.
-   * @param offset start of the buffer.
-   * @param length length of the buffer.
-   * @return An instance of KMAttestationKey.
-   */
-  KMAttestationKey createAttestationKey(KMAttestationKey attestationKey, byte[] keyData,
-      short offset,
-      short length);
-  
-  /**
    * This function generates a HMAC key from the provided key buffers.
    *
    * @param presharedKey instance of the presharedkey.
@@ -684,7 +725,7 @@ public interface KMSEProvider {
    * @param element instance of the Element class.
    * @return restored object.
    */
-  Object onResore(Element element);
+  Object onRestore(Element element);
   
   /**
    * This function returns the count of the primitive bytes required to
