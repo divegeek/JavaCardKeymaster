@@ -788,6 +788,9 @@ public class KMKeymintDataStore implements KMUpgradable {
     if (inLength != 65) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
+    if(oemRootPublicKey == null) {
+      oemRootPublicKey = new byte[65];
+    }
     Util.arrayCopy(inBuff, inOffset, oemRootPublicKey, (short) 0, inLength);
   }
 

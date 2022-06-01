@@ -437,9 +437,9 @@ public class RemotelyProvisionedComponentDevice {
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
       }
       // PubKeysToSignMac
-      byte[] empty = {};
+      short empty = repository.alloc((short)0) ;
       short len =
-          ((KMOperation) operation[0]).sign(empty, (short) 0,
+          ((KMOperation) operation[0]).sign(repository.getHeap(), (short) empty,
               (short) 0, scratchPad, (short) 0);
       // release operation
       releaseOperation();
@@ -561,9 +561,9 @@ public class RemotelyProvisionedComponentDevice {
 
   private short processFinalData(byte[] scratchPad) {
     // Call finish on AES GCM Cipher
-    byte[] empty = {};
+    short empty = repository.alloc((short)0) ;
     short len =
-        ((KMOperation) operation[0]).finish(empty, (short) 0, (short) 0, scratchPad, (short) 0);
+        ((KMOperation) operation[0]).finish(repository.getHeap(), (short) empty, (short) 0, scratchPad, (short) 0);
     return len;
   }
 
@@ -848,7 +848,7 @@ public class RemotelyProvisionedComponentDevice {
    */
   private short createDeviceInfo(byte[] scratchpad) {
     // Device Info Key Value pairs.
-    for (short i = 0; i < 30; i++) {
+    for (short i = 0; i < 32; i++) {
     	rkpTmpVariables[i] = KMType.INVALID_VALUE;
     }
     short dataOffset = 2;
