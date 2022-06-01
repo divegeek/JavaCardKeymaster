@@ -1226,16 +1226,14 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     return 0;
   }
-  
+
   private void persistProvisionData(byte[] buf, short off, short len, short maxSize, short copyToOff) {
     if (len > maxSize) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
-    JCSystem.beginTransaction();
-    Util.arrayCopyNonAtomic(buf, off, provisionData, Util.setShort(provisionData, copyToOff, len), len);
-    JCSystem.commitTransaction();
+    Util.arrayCopy(buf, off, provisionData, Util.setShort(provisionData, copyToOff, len), len);
   }
-  
+
   private void persistCertificateChain(byte[] certChain, short certChainOff, short certChainLen) {
     persistProvisionData(certChain, certChainOff, certChainLen,
         KMConfigurations.CERT_CHAIN_MAX_SIZE, CERT_CHAIN_OFFSET);
@@ -1264,9 +1262,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
     // Next single byte holds the byte string header.
     // Next 3 bytes holds the total length of the certificate chain.
     // clear buffer.
-    JCSystem.beginTransaction();
-    Util.arrayFillNonAtomic(provisionData, (short) 0, (short) provisionData.length, (byte) 0);
-    JCSystem.commitTransaction();
+    Util.arrayFill(provisionData, (short) 0, (short) provisionData.length, (byte) 0);
     // Persist data.
     persistCertificateChain(buffer, certChainOff, certChainLen);
     persistCertficateIssuer(buffer, certIssuerOff, certIssuerLen);
