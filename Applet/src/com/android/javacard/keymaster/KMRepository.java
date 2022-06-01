@@ -509,19 +509,15 @@ public class KMRepository implements KMUpgradable {
       JCSystem.beginTransaction();
       Util.setShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET), dataPtr);
       Util.setShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH), len);
-      Util.arrayCopyNonAtomic(buf, offset, dataTable, dataPtr, len);
       JCSystem.commitTransaction();
       // End Transaction
+      Util.arrayCopy(buf, offset, dataTable, dataPtr, len);
     } else {
       if (len != dataLen) {
         KMException.throwIt(KMError.UNKNOWN_ERROR);
       }
       dataPtr = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET));
-      // Begin Transaction
-      JCSystem.beginTransaction();
-      Util.arrayCopyNonAtomic(buf, offset, dataTable, dataPtr, len);
-      JCSystem.commitTransaction();
-      // End Transaction
+      Util.arrayCopy(buf, offset, dataTable, dataPtr, len);
     }
   }
 
@@ -535,7 +531,11 @@ public class KMRepository implements KMUpgradable {
   }
 
   public short getHmacNonce() {
-    return readData(HMAC_NONCE);
+    short blob = readData(HMAC_NONCE);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    return blob;
   }
 
   public short getComputedHmacKey() {
@@ -598,8 +598,9 @@ public class KMRepository implements KMUpgradable {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
-      return KMInteger.uint_32(zero, (short) 0);
+      KMException.throwIt(KMError.INVALID_DATA);
     }
+    return KMType.INVALID_VALUE;
   }
 
   public short getVendorPatchLevel() {
@@ -608,8 +609,9 @@ public class KMRepository implements KMUpgradable {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
-      return KMInteger.uint_32(zero, (short) 0);
+      KMException.throwIt(KMError.INVALID_DATA);
     }
+    return KMType.INVALID_VALUE;
   }
 
   public short getBootPatchLevel() {
@@ -618,8 +620,9 @@ public class KMRepository implements KMUpgradable {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
-      return KMInteger.uint_32(zero, (short) 0);
+      KMException.throwIt(KMError.INVALID_DATA);
     }
+    return KMType.INVALID_VALUE;
   }
 
   public short getOsPatch() {
@@ -628,15 +631,16 @@ public class KMRepository implements KMUpgradable {
       return KMInteger.uint_32(
           KMByteBlob.cast(blob).getBuffer(), KMByteBlob.cast(blob).getStartOff());
     } else {
-      return KMInteger.uint_32(zero, (short) 0);
+      KMException.throwIt(KMError.INVALID_DATA);
     }
+    return KMType.INVALID_VALUE;
   }
 
   public short readROT(short version) {
     short totalLength = 0;
     short length = dataLength(BOOT_VERIFIED_BOOT_KEY);
     if (length == 0) {
-      return KMType.INVALID_VALUE;
+      KMException.throwIt(KMError.INVALID_DATA);
     }
     totalLength += length;
     // As per specification The root of trust
@@ -646,16 +650,16 @@ public class KMRepository implements KMUpgradable {
       // the root of trust.
 
       if ((length = dataLength(BOOT_VERIFIED_BOOT_HASH)) == 0) {
-        return KMType.INVALID_VALUE;
+        KMException.throwIt(KMError.INVALID_DATA);
       }
       totalLength += length;
     }    
     if ((length = dataLength(BOOT_VERIFIED_BOOT_STATE)) == 0) {
-      return KMType.INVALID_VALUE;
+      KMException.throwIt(KMError.INVALID_DATA);
     }
     totalLength += length;
     if ((length = dataLength(BOOT_DEVICE_LOCKED_STATUS)) == 0) {
-      return KMType.INVALID_VALUE;
+      KMException.throwIt(KMError.INVALID_DATA);
     }
     totalLength += length;
 
@@ -679,11 +683,19 @@ public class KMRepository implements KMUpgradable {
   }
 
   public short getVerifiedBootKey() {
-    return readData(BOOT_VERIFIED_BOOT_KEY);
+    short blob = readData(BOOT_VERIFIED_BOOT_KEY);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    return blob;
   }
 
   public short getVerifiedBootHash() {
-    return readData(BOOT_VERIFIED_BOOT_HASH);
+    short blob = readData(BOOT_VERIFIED_BOOT_HASH);
+    if (blob == KMType.INVALID_VALUE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    return blob;
   }
 
   public boolean getBootLoaderLock() {
@@ -724,8 +736,9 @@ public class KMRepository implements KMUpgradable {
       return KMInteger.uint_64(KMByteBlob.cast(blob).getBuffer(),
           KMByteBlob.cast(blob).getStartOff());
     } else {
-      return KMInteger.uint_64(zero, (short) 0);
+      KMException.throwIt(KMError.INVALID_DATA);
     }
+    return blob;
   }
 
   public void setOsVersion(byte[] buf, short start, short len) {
