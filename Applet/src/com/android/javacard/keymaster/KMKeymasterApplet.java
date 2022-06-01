@@ -38,7 +38,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte AES_BLOCK_SIZE = 16;
   public static final byte DES_BLOCK_SIZE = 8;
   public static final short MAX_LENGTH = (short) 0x2000;
-  private static final byte CLA_ISO7816_NO_SM_NO_CHAN = (byte) 0x80;
   private static final short KM_HAL_VERSION = (short) 0x4000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
@@ -354,11 +353,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected void validateApduHeader(APDU apdu) {
     // Read the apdu header and buffer.
     byte[] apduBuffer = apdu.getBuffer();
-    byte apduClass = apduBuffer[ISO7816.OFFSET_CLA];
     short P1P2 = Util.getShort(apduBuffer, ISO7816.OFFSET_P1);
 
-    // Validate APDU Header.
-    if ((apduClass != CLA_ISO7816_NO_SM_NO_CHAN)) {
+    // Validate CLA 
+    if (!seProvider.isValidCLA(apdu)) {
       ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
     }
 
