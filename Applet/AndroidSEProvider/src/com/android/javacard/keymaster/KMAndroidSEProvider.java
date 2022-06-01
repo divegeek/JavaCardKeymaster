@@ -18,6 +18,7 @@ package com.android.javacard.keymaster;
 import org.globalplatform.upgrade.Element;
 import org.globalplatform.upgrade.UpgradeManager;
 
+import javacard.framework.APDU;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -1538,6 +1539,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
         signer.close();
       }
     }
+  }
+
+  @Override
+  public boolean isValidCLA(APDU apdu) {
+    return apdu.isValidCLA();
   }
 
     

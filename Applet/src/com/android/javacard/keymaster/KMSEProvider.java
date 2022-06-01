@@ -15,6 +15,7 @@
  */
 package com.android.javacard.keymaster;
 
+import javacard.framework.APDU;
 import org.globalplatform.upgrade.Element;
 
 /**
@@ -658,4 +659,12 @@ public interface KMSEProvider extends KMUpgradable {
       byte[] signature,
       short signatureOff,
       short signatureLen);
+
+  /**
+   * Validates the CLA in the APDU.
+   *
+   * @param apdu instance of the APDU class.
+   * @return true if CLA is valid, false otherwise.
+   */
+  boolean isValidCLA(APDU apdu);
 }

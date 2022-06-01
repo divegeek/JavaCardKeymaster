@@ -27,6 +27,7 @@ import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
 
+import javacard.framework.APDU;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
@@ -1433,6 +1434,22 @@ public class KMJCardSimulator implements KMSEProvider {
     signer.init(ecPublicKey, Signature.MODE_VERIFY);
     return signer.verify(inputDataBuf, inputDataStart, inputDataLength,
         signatureDataBuf, signatureDataStart, signatureDataLen);
+  }
+
+  @Override
+  public boolean isValidCLA(APDU apdu) {
+    /**
+     * Returns whether the current APDU command CLA byte is valid. The CLA byte is invalid
+     * if the CLA bits (b8,b7,b6) is %b001, which is a CLA encoding reserved for future use(RFU),
+     * or if CLA is 0xFF which is an invalid value as defined in the ISO 7816-4:2013 specification.
+     */
+    byte[] apduBuffer = apdu.getBuffer();
+    short apduClass = (short) (apduBuffer[ISO7816.OFFSET_CLA] & 0x00FF);
+    if (((apduClass & 0x00E0) == 0x0020) ||
+        (apduClass == 0x00FF)) {
+      return false;
+    }
+    return true;
   }
 
 }
