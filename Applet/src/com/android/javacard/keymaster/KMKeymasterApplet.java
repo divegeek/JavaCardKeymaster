@@ -3219,7 +3219,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void importKey(APDU apdu, byte[] scratchPad, byte keyFormat) {
-    
+    // Check if the purpose is ATTEST_KEY.
+    if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.ATTEST_KEY, data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
+    }
+
     tmpVariables[0] =
             KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, data[KEY_PARAMETERS]);
     if (tmpVariables[0] != KMType.INVALID_VALUE && repository.getEarlyBootEndedStatus()) {
@@ -3714,6 +3718,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.reclaimMemory(bufferProp[BUF_LEN_OFFSET]);
 
     data[KEY_PARAMETERS] = KMArray.cast(tmpVariables[2]).get((short) 0);
+    // Check if the purpose is ATTEST_KEY.
+    if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.ATTEST_KEY, data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.UNSUPPORTED_PURPOSE);
+    }
     // Check if EarlyBootEnded tag is present.
     tmpVariables[0] =
         KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY, data[KEY_PARAMETERS]);

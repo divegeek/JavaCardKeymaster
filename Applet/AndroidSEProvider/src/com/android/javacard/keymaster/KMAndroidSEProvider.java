@@ -1435,6 +1435,15 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
   @Override
   public KMComputedHmacKey getComputedHmacKey() {
+    KMHmacKey key = (KMHmacKey) computedHmacKey;
+    byte length = key.getKey(tmpArray, (short) 0);
+    if (length != COMPUTED_HMAC_KEY_SIZE) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    Util.arrayFillNonAtomic(tmpArray, (short) 32, (short) 32, (byte) 0);
+    if (0 == Util.arrayCompare(tmpArray, (short) 0, tmpArray, (short) 32, COMPUTED_HMAC_KEY_SIZE)) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
     return computedHmacKey;
   }
   

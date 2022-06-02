@@ -31,11 +31,15 @@ public class KMRepository implements KMUpgradable {
 
   // Data table configuration
   public static final short DATA_INDEX_SIZE = 33;
-  public static final short DATA_INDEX_ENTRY_SIZE = 4;
+  public static final short DATA_INDEX_ENTRY_SIZE = 5;
+  public static final short DATA_INDEX_ENTRY_SIZE_VERSION_2 = 4;
   public static final short DATA_MEM_SIZE = 2048;
   public static final short HEAP_SIZE = 10000;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
+  public static final short DATA_INDEX_ENTRY_CLEAR_FLAG_OFFSET = 4;
+  public static final byte DATA_CLEARED = 0;
+  public static final byte DATA_PRESENT = 1;
   public static final short OPERATION_HANDLE_SIZE = 8; /* 8 bytes */
   private static final short OPERATION_HANDLE_STATUS_OFFSET = 0;
   private static final short OPERATION_HANDLE_STATUS_SIZE = 1;
@@ -476,6 +480,7 @@ public class KMRepository implements KMUpgradable {
     if (dataLen != 0) {
       short dataPtr = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET));
       JCSystem.beginTransaction();
+      dataTable[(short) (id + DATA_INDEX_ENTRY_CLEAR_FLAG_OFFSET)] = DATA_CLEARED;
       Util.arrayFillNonAtomic(dataTable, dataPtr, dataLen, (byte) 0);
       JCSystem.commitTransaction();
     }
@@ -487,6 +492,10 @@ public class KMRepository implements KMUpgradable {
 
   private short readDataEntry(short id, byte[] buf, short offset) {
     id = (short) (id * DATA_INDEX_ENTRY_SIZE);
+    if (DATA_CLEARED ==
+        dataTable[(short) (id + DATA_INDEX_ENTRY_CLEAR_FLAG_OFFSET)]) {
+      return (short) 0;
+    }
     short len = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
     if (len != 0) {
       Util.arrayCopyNonAtomic(
@@ -509,20 +518,28 @@ public class KMRepository implements KMUpgradable {
       JCSystem.beginTransaction();
       Util.setShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET), dataPtr);
       Util.setShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH), len);
+      dataTable[(short) (id + DATA_INDEX_ENTRY_CLEAR_FLAG_OFFSET)] = DATA_PRESENT;
+      Util.arrayCopyNonAtomic(buf, offset, dataTable, dataPtr, len);
       JCSystem.commitTransaction();
       // End Transaction
-      Util.arrayCopy(buf, offset, dataTable, dataPtr, len);
     } else {
       if (len != dataLen) {
         KMException.throwIt(KMError.UNKNOWN_ERROR);
       }
       dataPtr = Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_OFFSET));
-      Util.arrayCopy(buf, offset, dataTable, dataPtr, len);
+      JCSystem.beginTransaction();
+      Util.arrayCopyNonAtomic(buf, offset, dataTable, dataPtr, len);
+      dataTable[(short) (id + DATA_INDEX_ENTRY_CLEAR_FLAG_OFFSET)] = DATA_PRESENT;
+      JCSystem.commitTransaction();
     }
   }
 
   private short dataLength(short id) {
     id = (short) (id * DATA_INDEX_ENTRY_SIZE);
+    if (DATA_CLEARED ==
+        dataTable[(short) (id + DATA_INDEX_ENTRY_CLEAR_FLAG_OFFSET)]) {
+      return (short) 0;
+    }
     return Util.getShort(dataTable, (short) (id + DATA_INDEX_ENTRY_LENGTH));
   }
 
@@ -961,6 +978,84 @@ public class KMRepository implements KMUpgradable {
     dataIndex = ele.readShort();
     dataTable = (byte[]) ele.readObject();
     attestIdsIndex = ele.readShort();
+    handleDataUpgrade(oldVersion, currentVersion);
+  }
+  
+  private void handleDataUpgrade(short oldVersion, short currentVersion) {
+    if (oldVersion == 0x0200 && currentVersion == 0x0300) {
+      byte[] OldDataTable = dataTable;
+      short attIdsIndex = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
+      short oldAttestIdsIndex = (short)(DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE_VERSION_2);
+      // Allocate temp buffer to copy indexes and 50 bytes for comparing the data 
+      // to be zeros.
+      short heapOff = repository.alloc((short) (DATA_MEM_SIZE + 50));
+      // Calculate the change in the offset in the new table.
+      short offsetShift = (short) (attIdsIndex - oldAttestIdsIndex);
+      short oldIndex;
+      short len;
+      short offset;
+      short newIndex;
+      byte dataStatus;
+      for (short id = 0; id < DATA_INDEX_SIZE; id++) {
+        oldIndex = (short) (id * DATA_INDEX_ENTRY_SIZE_VERSION_2);
+        len = Util.getShort(OldDataTable, oldIndex);
+        offset = Util.getShort(OldDataTable, (short) (oldIndex + DATA_INDEX_ENTRY_OFFSET));
+        newIndex = (short) (id * DATA_INDEX_ENTRY_SIZE + heapOff);
+        Util.setShort(heap, newIndex, len);
+        if (len == 0) {
+          heap[(short) (newIndex + DATA_INDEX_ENTRY_CLEAR_FLAG_OFFSET)] = DATA_CLEARED;
+        } else {
+          dataStatus = DATA_PRESENT;
+          switch (id) {
+          case ATT_ID_BRAND:
+          case ATT_ID_DEVICE:
+          case ATT_ID_IMEI:
+          case ATT_ID_MANUFACTURER:
+          case ATT_ID_MEID:
+          case ATT_ID_MODEL:
+          case ATT_ID_SERIAL:
+          case ATT_ID_PRODUCT:
+          case BOOT_OS_VERSION: 
+          case BOOT_OS_PATCH_LEVEL:
+          case VENDOR_PATCH_LEVEL:
+          case BOOT_PATCH_LEVEL:
+          case BOOT_VERIFIED_BOOT_KEY:
+          case BOOT_VERIFIED_BOOT_HASH:
+          case HMAC_NONCE:
+          case DEVICE_LOCKED_TIME:
+          case AUTH_TAG_1:
+          case (short) (AUTH_TAG_1 + 1):
+          case (short) (AUTH_TAG_1 + 2):
+          case (short) (AUTH_TAG_1 + 3):
+          case (short) (AUTH_TAG_1 + 4):
+          case (short) (AUTH_TAG_1 + 5):
+          case (short) (AUTH_TAG_1 + 6):
+          case (short) (AUTH_TAG_1 + 7):
+            Util.arrayFillNonAtomic(heap, (short) (heapOff + DATA_MEM_SIZE), len, (byte) 0);
+            if (0 == Util.arrayCompare(heap, (short) (heapOff + DATA_MEM_SIZE), OldDataTable, offset, len)) {
+              dataStatus = DATA_CLEARED;
+            }
+            break;
+          default:
+              break;
+          }
+          heap[(short) (newIndex + DATA_INDEX_ENTRY_CLEAR_FLAG_OFFSET)] = dataStatus;
+          Util.setShort(heap, (short) (newIndex + DATA_INDEX_ENTRY_OFFSET), 
+              (short) (offset + offsetShift));
+        }
+      }
+      Util.arrayCopyNonAtomic(OldDataTable, oldAttestIdsIndex, heap,
+          (short) (heapOff + attIdsIndex), (short) (DATA_MEM_SIZE -  attIdsIndex));
+      JCSystem.beginTransaction();
+      dataTable = new byte[DATA_MEM_SIZE];
+      Util.arrayCopyNonAtomic(heap, heapOff, dataTable, (short) 0, DATA_MEM_SIZE);
+      attestIdsIndex = (short) (attestIdsIndex + offsetShift);
+      dataIndex = (short) (dataIndex + offsetShift);
+      JCSystem.commitTransaction();
+      
+      OldDataTable = null;
+      JCSystem.requestObjectDeletion();
+    }
   }
 
   @Override
