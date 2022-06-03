@@ -65,17 +65,17 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   public static final byte BOOT_HASH_MAX_SIZE = 32;
 
   // Provision reporting status
-  private static final byte NOT_PROVISIONED = 0x00;
-  private static final byte PROVISION_STATUS_ATTESTATION_KEY = 0x01; // unused in keymint
-  private static final byte PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x02; // unused in keymint
-  private static final byte PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x04; // unused in keymint
-  private static final byte PROVISION_STATUS_ATTEST_IDS = 0x08;
-  private static final byte PROVISION_STATUS_PRESHARED_SECRET = 0x10;
-  private static final byte PROVISION_STATUS_PROVISIONING_LOCKED = 0x20;
-  private static final byte PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR = 0x40;
-  private static final byte PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = (byte) 0x80;
-  private static final byte PROVISION_STATUS_SE_LOCKED = 0x01; 
-  private static final byte PROVISION_STATUS_OEM_PUBLIC_KEY = 0x02;
+  private static final short NOT_PROVISIONED = 0x0000;
+  private static final short PROVISION_STATUS_ATTESTATION_KEY = 0x0001;
+  private static final short PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x0002; 
+  private static final short PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x0004;
+  private static final short PROVISION_STATUS_ATTEST_IDS = 0x0008;
+  private static final short PROVISION_STATUS_PRESHARED_SECRET = 0x0010;
+  private static final short PROVISION_STATUS_PROVISIONING_LOCKED = 0x0020;
+  private static final short PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR = 0x0040;
+  private static final short PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x0080;
+  private static final short PROVISION_STATUS_SE_LOCKED = 0x0100; 
+  private static final short PROVISION_STATUS_OEM_PUBLIC_KEY = 0x0200;
 
   public static final short SHARED_SECRET_KEY_SIZE = 32;
 
@@ -206,7 +206,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     	break;
     	
       case INS_SE_FACTORY_PROVISIONING_LOCK_CMD:
-        if(!isSeFactoryProvisioningComplete()) {
+        if(isSeFactoryProvisioningLocked() || !isSeFactoryProvisioningComplete()) {
           result = false;  
         }
         break;
@@ -216,7 +216,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         // 1. All the necessary provisioning commands are succcessfully executed
         // 2. SE provision is locked
         // 3. OEM Root Public is provisioned.
-        if (!(isProvisioningComplete() && isSeFactoryProvisioningLocked())) {
+        if (kmDataStore.isProvisionLocked() || !(isProvisioningComplete() && isSeFactoryProvisioningLocked())) {
           result = false; 
         }
         break;
@@ -243,44 +243,48 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   }
   
   private boolean isSeFactoryProvisioningLocked() {
-    short dInex = repository.allocReclaimableMemory((short)1);
-	byte data[] = repository.getHeap();
+    short dInex = repository.allocReclaimableMemory((short)2);
+    byte data[] = repository.getHeap();
     kmDataStore.getProvisionStatus(data, dInex);
+    short pStatus = Util.getShort(data, dInex);
     boolean result = false;
-    if ((0 != (data[dInex] & PROVISION_STATUS_SE_LOCKED))) {
+    if ((0 != (pStatus & PROVISION_STATUS_SE_LOCKED))) {
     	result = true;
     }
-    repository.reclaimMemory((short)1);
+    repository.reclaimMemory((short)2);
     return result;
   }
 
   private boolean isSeFactoryProvisioningComplete() {
-    short dIndex = repository.allocReclaimableMemory((short)1);
+    short dIndex = repository.allocReclaimableMemory((short)2);
 	byte data[] = repository.getHeap();
     kmDataStore.getProvisionStatus(data, dIndex);
+    short pStatus = Util.getShort(data, dIndex);
     boolean result = false;
-    if ((0 != (data[dIndex] & INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD))
-            && (0 != ((data[dIndex] & INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD)))) {
-    	result = true;
+    if ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
+            && (0 != ((pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)))) {
+      result = true;
     }
-    repository.reclaimMemory((short)1);
+    repository.reclaimMemory((short)2);
     return result;
   }
 
   private void processOEMUnlockProvisionCmd(APDU apdu) {
-    handleOEMLockUnlockCmd(OEM_UNLOCK_PROVISION_VERIFICATION_LABEL, apdu);
+    authenticateOEM(OEM_UNLOCK_PROVISION_VERIFICATION_LABEL, apdu);
+    kmDataStore.setProvisionLock(false);
     kmDataStore.unlockProvision(PROVISION_STATUS_PROVISIONING_LOCKED);
     sendError(apdu, KMError.OK);
   }
 
   private void processOEMLockProvisionCmd(APDU apdu) {
-    handleOEMLockUnlockCmd(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
+   authenticateOEM(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
     // Enable the lock bit in provision status.
+    kmDataStore.setProvisionLock(true);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
     sendError(apdu, KMError.OK);
   }
 
-  private void handleOEMLockUnlockCmd(byte[] plainMsg, APDU apdu) {
+  private void authenticateOEM(byte[] plainMsg, APDU apdu) {
     
     tmpVariables[0] = KMArray.instance((short) 1);
     KMArray.cast(tmpVariables[0]).add((short) 0, KMByteBlob.exp());
@@ -519,7 +523,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     kmDataStore.getProvisionStatus(scratchpad, (short) 0);
     short resp = KMArray.instance((short) 2);
     KMArray.cast(resp).add((short) 0, buildErrorStatus(KMError.OK));
-    KMArray.cast(resp).add((short) 1, KMInteger.uint_8(scratchpad[0]));
+    KMArray.cast(resp).add((short) 1, KMInteger.instance(scratchpad, (short)0, (short)2));
     sendOutgoing(apdu, resp);
   }
 
@@ -586,51 +590,28 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     enumVal = KMEnum.cast(bootParam).getVal();
     kmDataStore.setDeviceLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
 
-    
     // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
     Util.arrayFillNonAtomic(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE, (byte) 0);
     kmDataStore.createComputedHmacKey(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE);
-    
+
     super.reboot();
     sendError(apdu, KMError.OK);
   }
 
   private boolean isProvisioningComplete() {
-	short dInex = repository.allocReclaimableMemory((short)1);
-	byte data[] = repository.getHeap();
+    short dInex = repository.allocReclaimableMemory((short)2);
+    byte data[] = repository.getHeap();
     kmDataStore.getProvisionStatus(data, dInex);
+    short pStatus = Util.getShort(data, dInex);
     boolean result = false;
-    if (kmDataStore.isProvisionLocked() || ((0 != (data[dInex] & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
-        && (0 != (data[dInex] & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
-        && (0 != (data[dInex]  & PROVISION_STATUS_PRESHARED_SECRET))
-        && (0 != (data[dInex]  & PROVISION_STATUS_ATTEST_IDS)))) {
+    if (kmDataStore.isProvisionLocked() || ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
+        && (0 != (pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
+        && (0 != (pStatus  & PROVISION_STATUS_PRESHARED_SECRET))
+        && (0 != (pStatus  & PROVISION_STATUS_ATTEST_IDS)))) {
     	result = true;
     }
-    repository.reclaimMemory((short)1);
+    repository.reclaimMemory((short)2);
     return result;
-  }
-
-  private boolean isOemProvisionComplete() {
-	short dInex = repository.allocReclaimableMemory((short)1);
-	byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dInex);
-    boolean result = false;
-    if ((0 != (data[dInex] & PROVISION_STATUS_OEM_PUBLIC_KEY))
-        && (0 != (data[dInex] & PROVISION_STATUS_SE_LOCKED))) {
-    	result = true;
-    }
-    repository.reclaimMemory((short)1);
-    return result;
-  }
-
-  private void processLockProvisioningCmd(APDU apdu) {
-    if (isProvisioningComplete()) {
-      kmDataStore.setProvisionLocked();
-      kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
-      sendError(apdu, KMError.OK);
-    } else {
-      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-    }
   }
 
   @Override
@@ -704,5 +685,5 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     }
     return apduBuffer[ISO7816.OFFSET_INS];
   }
-}
 
+}
