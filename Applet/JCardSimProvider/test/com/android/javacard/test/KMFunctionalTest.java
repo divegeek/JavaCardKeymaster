@@ -1154,11 +1154,9 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
-  @Test
-  public void testRsaImportKeySuccess() {
-    init();
+  public ResponseAPDU importRsaKey(boolean includeAttestKeyPurpose) {
     byte[] pub = new byte[]{0x00, 0x01, 0x00, 0x01};
-    short arrPtr = KMArray.instance((short) 6);
+    short arrPtr = KMArray.instance((short) 7);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
     short keySize = KMIntegerTag
         .instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short) 2048));
@@ -1170,12 +1168,19 @@ public class KMFunctionalTest {
     byteBlob = KMByteBlob.instance((short) 1);
     KMByteBlob.cast(byteBlob).add((short) 0, KMType.RSA_PSS);
     short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
+    short purposeLength = (short) (includeAttestKeyPurpose ? 2 : 1);
+    byteBlob = KMByteBlob.instance((short) purposeLength);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.SIGN);
+    if (includeAttestKeyPurpose)
+      KMByteBlob.cast(byteBlob).add((short) 1, KMType.ATTEST_KEY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
     KMArray.cast(arrPtr).add((short) 0, boolTag);
     KMArray.cast(arrPtr).add((short) 1, keySize);
     KMArray.cast(arrPtr).add((short) 2, digest);
     KMArray.cast(arrPtr).add((short) 3, rsaPubExpTag);
     KMArray.cast(arrPtr).add((short) 4, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
     KMArray.cast(arrPtr).add((short) 5, padding);
+    KMArray.cast(arrPtr).add((short) 6, purpose);
     short keyParams = KMKeyParameters.instance(arrPtr);
     short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.PKCS8);
     short keyBlob = KMByteBlob.instance(rsa_key_pkcs8, (short) 0, (short) rsa_key_pkcs8.length);
@@ -1186,7 +1191,14 @@ public class KMFunctionalTest {
     arg.add((short) 2, keyBlob);
     CommandAPDU apdu = encodeApdu((byte) INS_IMPORT_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return simulator.transmitCommand(apdu);
+  }
+
+  @Test
+  public void testRsaImportKeySuccess() {
+    init();
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = importRsaKey(false);
     short ret = KMArray.instance((short) 3);
     KMArray.cast(ret).add((short) 0, KMInteger.exp());
     KMArray.cast(ret).add((short) 1, KMByteBlob.exp());
@@ -1561,6 +1573,8 @@ public class KMFunctionalTest {
         // Simulate reboot using set boot parameters.
         // Clear the rate limited keys from the flash memory
         setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
+        setAndroidOSSystemProperties(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
+            (short) VENDOR_PATCH_LEVEL);
       }
       short rsaKeyArr = generateRsaKey(null, null, KMInteger.uint_8((byte) 1));
       Assert.assertEquals(KMInteger.cast(KMArray.cast(rsaKeyArr).get((short) 0)).getShort(),
@@ -2185,9 +2199,7 @@ public class KMFunctionalTest {
     return ret;
   }
 
-  @Test
-  public void testImportWrappedKey() {
-    init();
+  public ResponseAPDU importWrappedKey(boolean includePurposeAttestKey) {
     byte[] wrappedKey = new byte[16];
     cryptoProvider.newRandomNumber(wrappedKey, (short) 0, (short) 16);
     byte[] encWrappedKey = new byte[16];
@@ -2237,9 +2249,12 @@ public class KMFunctionalTest {
     KMByteBlob.cast(byteBlob).add((short) 0, KMType.PKCS7);
     KMByteBlob.cast(byteBlob).add((short) 1, KMType.PADDING_NONE);
     short paddingMode = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
-    byteBlob = KMByteBlob.instance((short) 2);
+    short purposeLength = (short) (includePurposeAttestKey ? 3 : 2);
+    byteBlob = KMByteBlob.instance((short) purposeLength);
     KMByteBlob.cast(byteBlob).add((short) 0, KMType.ENCRYPT);
     KMByteBlob.cast(byteBlob).add((short) 1, KMType.DECRYPT);
+    if (includePurposeAttestKey)
+      KMByteBlob.cast(byteBlob).add((short) 2, KMType.ATTEST_KEY);
     short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
     short tagIndex = 0;
     KMArray.cast(arrPtr).add(tagIndex++, boolTag);
@@ -2274,7 +2289,13 @@ public class KMFunctionalTest {
     KMArray.cast(arr).add((short) 11, KMInteger.uint_8((byte) 0)); // Biometric Sid
     CommandAPDU apdu = encodeApdu((byte) INS_IMPORT_WRAPPED_KEY_CMD, arr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return simulator.transmitCommand(apdu);
+  }
+
+  @Test
+  public void testImportWrappedKeySuccess() {
+    init();
+    ResponseAPDU response = importWrappedKey(false);
     short ret = KMArray.instance((short) 3);
     KMArray.cast(ret).add((short) 0, KMInteger.exp());
     KMArray.cast(ret).add((short) 1, KMByteBlob.exp());
@@ -2302,6 +2323,84 @@ public class KMFunctionalTest {
     Assert.assertEquals(KMEnumTag.cast(tag).getValue(), KMType.AES);
     tag = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ORIGIN, hwParams);
     Assert.assertEquals(KMEnumTag.cast(tag).getValue(), KMType.SECURELY_IMPORTED);
+    cleanUp();
+  }
+
+  @Test
+  public void testImportWrappedKeyAttestKeyFailure() {
+    // Keymaster does not support ATTEST_KEY
+    init();
+    ResponseAPDU response = importWrappedKey(true);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    Assert.assertEquals(KMError.UNSUPPORTED_PURPOSE, KMInteger.cast(ret).getShort());
+    cleanUp();
+  }
+
+  @Test
+  public void testImportKeyAttestKeyFailure() {
+    // Keymaster does not support ATTEST_KEY
+    init();
+    ResponseAPDU response = importRsaKey(true);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    Assert.assertEquals(KMError.UNSUPPORTED_PURPOSE, KMInteger.cast(ret).getShort());
+    cleanUp();
+  }
+
+  @Test
+  public void testGenerateAttestKeyFailure() {
+    // Keymaster does not support ATTEST_KEY
+    init();
+    byte[] activeAndCreationDateTime = {0, 0, 0x01, 0x73, 0x51, 0x7C, (byte) 0xCC, 0x00};
+    short arrPtr = KMArray.instance((short) 9);
+    short keySize = KMIntegerTag
+        .instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short) 2048));
+    short byteBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.DIGEST_NONE);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
+    byteBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.PADDING_NONE);
+    short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
+    byteBlob = KMByteBlob.instance((short) 6);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.SIGN);
+    KMByteBlob.cast(byteBlob).add((short) 1, KMType.VERIFY);
+    KMByteBlob.cast(byteBlob).add((short) 2, KMType.ENCRYPT);
+    KMByteBlob.cast(byteBlob).add((short) 3, KMType.DECRYPT);
+    KMByteBlob.cast(byteBlob).add((short) 4, KMType.WRAP_KEY);
+    KMByteBlob.cast(byteBlob).add((short) 5, KMType.ATTEST_KEY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
+    byte[] pub = {0, 1, 0, 1};
+    short rsaPubExpTag = KMIntegerTag
+        .instance(KMType.ULONG_TAG, KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pub, (short) 0));
+    short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
+    short tagIndex = 0;
+    KMArray.cast(arrPtr).add(tagIndex++, purpose);
+    KMArray.cast(arrPtr).add(tagIndex++, boolTag);
+    KMArray.cast(arrPtr).add(tagIndex++, keySize);
+    KMArray.cast(arrPtr).add(tagIndex++, digest);
+    KMArray.cast(arrPtr).add(tagIndex++, rsaPubExpTag);
+    KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
+    KMArray.cast(arrPtr).add(tagIndex++, padding);
+    short dateTag = KMInteger.uint_64(activeAndCreationDateTime, (short) 0);
+    KMArray.cast(arrPtr)
+        .add(tagIndex++, KMIntegerTag.instance(KMType.DATE_TAG, KMType.ACTIVE_DATETIME, dateTag));
+    KMArray.cast(arrPtr)
+        .add(tagIndex++, KMIntegerTag.instance(KMType.DATE_TAG, KMType.CREATION_DATETIME, dateTag));
+
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    arrPtr = KMArray.instance((short) 1);
+    KMArray arg = KMArray.cast(arrPtr);
+    arg.add((short) 0, keyParams);
+    CommandAPDU apdu = encodeApdu((byte) INS_GENERATE_KEY_CMD, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    Assert.assertEquals(KMError.UNSUPPORTED_PURPOSE, KMInteger.cast(ret).getShort());
     cleanUp();
   }
 
