@@ -59,24 +59,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_KEYMINT_PROVIDER_APDU_START + 10;
   private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 11;
   
-
   private static final byte INS_KEYMINT_PROVIDER_APDU_END = 0x1F;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
-
-  // Provision reporting status
-  private static final short NOT_PROVISIONED = 0x0000;
-  private static final short PROVISION_STATUS_ATTESTATION_KEY = 0x0001;
-  private static final short PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x0002; 
-  private static final short PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x0004;
-  private static final short PROVISION_STATUS_ATTEST_IDS = 0x0008;
-  private static final short PROVISION_STATUS_PRESHARED_SECRET = 0x0010;
-  private static final short PROVISION_STATUS_PROVISIONING_LOCKED = 0x0020;
-  private static final short PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR = 0x0040;
-  private static final short PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x0080;
-  private static final short PROVISION_STATUS_SE_LOCKED = 0x0100; 
-  private static final short PROVISION_STATUS_OEM_PUBLIC_KEY = 0x0200;
-
   public static final short SHARED_SECRET_KEY_SIZE = 32;
 
   // Package version.

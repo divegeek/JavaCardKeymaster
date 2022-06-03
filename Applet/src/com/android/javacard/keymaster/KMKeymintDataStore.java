@@ -866,8 +866,34 @@ public class KMKeymintDataStore implements KMUpgradable {
     preSharedKey = (KMPreSharedKey) seProvider.onRestore(element);
     deviceUniqueKeyPair = (KMDeviceUniqueKeyPair) seProvider.onRestore(element);
     rkpMacKey = (KMRkpMacKey) seProvider.onRestore(element);
+    handleDataUpgrade(oldVersion, currentVersion);
   }
 
+  void handleDataUpgrade(short oldVersion, short currentVersion) {
+    if(oldVersion == 0x0100 && currentVersion == 0x0200) {
+      handleProvisionStatusUpgrade();
+    }
+  }
+
+  void handleProvisionStatusUpgrade( ){
+    short dInex = repository.allocReclaimableMemory((short)2);
+    byte data[] = repository.getHeap();
+    getProvisionStatus(data, dInex);
+    short newStatus = (short)( data[dInex] & 0x00ff);
+    if( KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED 
+    		== (newStatus & KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED)) {
+      newStatus |= KMKeymasterApplet.PROVISION_STATUS_SE_LOCKED;
+    }
+    Util.setShort(data, dInex, newStatus);
+    short pStatusOff = (short) (PROVISIONED_STATUS * DATA_INDEX_ENTRY_SIZE);
+    JCSystem.beginTransaction();
+    Util.setShort(dataTable, (short) (pStatusOff + DATA_INDEX_ENTRY_OFFSET), (short)0);
+    Util.setShort(dataTable, (short) (pStatusOff + DATA_INDEX_ENTRY_LENGTH), (short)0);
+    JCSystem.commitTransaction(); 
+    writeDataEntry(PROVISIONED_STATUS, data, dInex, (short) 2);
+    repository.reclaimMemory((short)2);
+  }
+  
   @Override
   public short getBackupPrimitiveByteCount() {
     // dataIndex - 2 bytes
