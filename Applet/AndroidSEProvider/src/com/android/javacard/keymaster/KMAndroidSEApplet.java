@@ -220,8 +220,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     	
       default:
         // Allow other commands only if provision is completed.  
-    	if (!isProvisioningComplete()) {
-    		result = false;
+    	if (!(isProvisioningComplete())) {
+    	  result = false;
     	}   	          
     }
     return result;
@@ -518,7 +518,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
     }
     //set the flag to mark boot ended
-    kmDataStore.setBootEndedStatus(true);
+    kmDataStore.updateSBInitStatus(KMKeymintDataStore.DEVICE_BOOT_ENDED_DONE);
     seProvider.clearDeviceBooted(false);
     sendError(apdu, KMError.OK);
   }
@@ -528,7 +528,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
               && (!seProvider.isDeviceRebooted())) {
       ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
     }
-
+    kmDataStore.clearSBInitStatus();
     short argsProto = KMArray.instance((short) 5);    
     byte[] scratchPad = apdu.getBuffer();
     // Array of 4 expected arguments
@@ -580,6 +580,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     kmDataStore.createComputedHmacKey(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE);
 
     super.reboot();
+    kmDataStore.updateSBInitStatus(KMKeymintDataStore.SET_BOOT_PARAMS_DONE);
     sendError(apdu, KMError.OK);
   }
 
