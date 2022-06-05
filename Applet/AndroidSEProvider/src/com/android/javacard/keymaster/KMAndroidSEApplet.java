@@ -123,7 +123,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             break;
 
           case INS_SET_BOOT_ENDED_CMD:
-            processSetBootEndedCmd(apdu);	
+            processSetBootEndedCmd(apdu);
             break;         
 
           case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:

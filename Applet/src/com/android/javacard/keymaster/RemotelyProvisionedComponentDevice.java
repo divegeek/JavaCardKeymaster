@@ -1059,8 +1059,8 @@ public class RemotelyProvisionedComponentDevice {
   // data table for later usage.
   private short generateEphemeralEcKey(byte[] scratchPad) {
     // Generate ephemeral ec key.
-	rkpTmpVariables[0] = 0;
-	rkpTmpVariables[1] = 0;
+    rkpTmpVariables[0] = 0;
+    rkpTmpVariables[1] = 0;
     seProvider.createAsymmetricKey(
         KMType.EC,
         scratchPad,

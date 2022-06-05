@@ -180,17 +180,17 @@ public class KMCoseKey extends KMCoseMap {
    * @return true if valid, otherwise false.
    */
   public boolean isDataValid(short []buff, short keyType, short keyIdPtr, short keyAlg, short keyOps, short curve) {
-	short buffLen = 10;
-	buff[0] = KMCose.COSE_KEY_KEY_TYPE;
-	buff[1] = keyType;
-	buff[2] = KMCose.COSE_KEY_KEY_ID;
-	buff[3] = keyIdPtr;
-	buff[4] = KMCose.COSE_KEY_ALGORITHM;
-	buff[5] = keyAlg;
-	buff[6] = KMCose.COSE_KEY_KEY_OPS;
-	buff[7] = keyOps;
-	buff[8] = KMCose.COSE_KEY_CURVE;
-	buff[9] = curve;
+    short buffLen = 10;
+    buff[0] = KMCose.COSE_KEY_KEY_TYPE;
+    buff[1] = keyType;
+    buff[2] = KMCose.COSE_KEY_KEY_ID;
+    buff[3] = keyIdPtr;
+    buff[4] = KMCose.COSE_KEY_ALGORITHM;
+    buff[5] = keyAlg;
+    buff[6] = KMCose.COSE_KEY_KEY_OPS;
+    buff[7] = keyOps;
+    buff[8] = KMCose.COSE_KEY_CURVE;
+    buff[9] = curve;
     boolean valid = false;
     short ptr;
     short tagIndex = 0;
