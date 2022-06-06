@@ -70,7 +70,7 @@ public class KMRepository implements KMUpgradable {
   public static final byte DEVICE_LOCKED_PASSWORD_ONLY = 22;
   // Total 8 auth tags, so the next offset is AUTH_TAG_1 + 8
   public static final byte AUTH_TAG_1 = 23;
-  public static final byte BOOT_ENDED_STATUS = 31;
+  public static final byte DEVICE_STATUS = 31;
   public static final byte EARLY_BOOT_ENDED_STATUS = 32;
 
   // Data Item sizes
@@ -94,7 +94,7 @@ public class KMRepository implements KMUpgradable {
   public static final short AUTH_TAG_LENGTH = 16;
   public static final short AUTH_TAG_COUNTER_SIZE = 4;
   public static final short AUTH_TAG_ENTRY_SIZE = (AUTH_TAG_LENGTH + AUTH_TAG_COUNTER_SIZE + 1);
-  public static final short BOOT_ENDED_FLAG_SIZE = 1;
+  public static final short DEVICE_STATUS_FLAG_SIZE = 1;
   public static final short EARLY_BOOT_ENDED_FLAG_SIZE = 1;
   private static final byte[] zero = {0, 0, 0, 0, 0, 0, 0, 0};
   
@@ -698,7 +698,7 @@ public class KMRepository implements KMUpgradable {
     return blob;
   }
 
-  public boolean getBootLoaderLock() {
+  public boolean getBootDeviceLocked() {
     short blob = readData(BOOT_DEVICE_LOCKED_STATUS);
     if (blob == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.INVALID_DATA);
@@ -770,7 +770,7 @@ public class KMRepository implements KMUpgradable {
     // boot parameters.
   }
 
-  public void setBootloaderLocked(boolean flag) {
+  public void setBootDeviceLocked(boolean flag) {
     short start = alloc(BOOT_DEVICE_LOCK_FLAG_SIZE);
     if (flag) {
       (getHeap())[start] = (byte) 0x01;
@@ -975,24 +975,20 @@ public class KMRepository implements KMUpgradable {
     return (short) 1;
   }
 
-  public boolean getBootEndedStatus() {
-    short blob = readData(BOOT_ENDED_STATUS);
+  public byte getDeviceBootStatus() {
+    short blob = readData(DEVICE_STATUS);
     if (blob == KMType.INVALID_VALUE) {
       KMException.throwIt(KMError.INVALID_DATA);
     }
-    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]) == 0x01;
+    return (byte) ((getHeap())[KMByteBlob.cast(blob).getStartOff()]);
   }
-  
-  public void setBootEndedStatus(boolean flag) {
-    short start = alloc(BOOT_ENDED_STATUS);
-    if (flag) {
-      (getHeap())[start] = (byte) 0x01;
-    } else {
-      (getHeap())[start] = (byte) 0x00;
-    }
-    writeDataEntry(BOOT_ENDED_STATUS, getHeap(), start, BOOT_ENDED_FLAG_SIZE);
+
+  public void setDeviceBootStatus(byte deviceStatus) {
+    short start = alloc(DEVICE_STATUS_FLAG_SIZE);
+    (getHeap())[start] = deviceStatus;
+    writeDataEntry(DEVICE_STATUS, getHeap(), start, DEVICE_STATUS_FLAG_SIZE);
   }
-  
+
   public boolean getEarlyBootEndedStatus() {
     short blob = readData(EARLY_BOOT_ENDED_STATUS);
     if (blob == KMType.INVALID_VALUE) {
@@ -1002,7 +998,7 @@ public class KMRepository implements KMUpgradable {
   }
 	  
   public void setEarlyBootEndedStatus(boolean flag) {
-    short start = alloc(EARLY_BOOT_ENDED_STATUS);
+    short start = alloc(EARLY_BOOT_ENDED_FLAG_SIZE);
     if (flag) {
       (getHeap())[start] = (byte) 0x01;
     } else {

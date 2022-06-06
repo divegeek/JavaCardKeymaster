@@ -118,7 +118,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 6; //0x06
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 7; //0x07
   private static final byte INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD + 8; //0x08
-  private static final byte INS_SET_BOOT_ENDED_CMD = INS_BEGIN_KM_CMD + 9; //0x09
+  private static final byte INS_SET_BOOT_ENDED_CMD = INS_BEGIN_KM_CMD + 9; //0x09 // Unused
   private static final byte INS_SE_FACTORY_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 10; //0x0A
   private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_BEGIN_KM_CMD + 11; //0x0B
   private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 12; //0x0C
@@ -237,6 +237,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short KEYBLOB_CURRENT_VERSION = 1;
   // KeyBlob Verion 1 constant.
   public static final short KEYBLOB_VERSION_0 = 0;
+  // Device boot states. Applet starts executing the
+  // core commands once all the states are set. The commands
+  // that are allowed irrespective of these states are:
+  // All the provision commands
+  // INS_GET_HW_INFO_CMD
+  // INS_ADD_RNG_ENTROPY_CMD
+  // INS_COMPUTE_SHARED_HMAC_CMD
+  // INS_GET_HMAC_SHARING_PARAM_CMD
+  public static final byte SET_BOOT_PARAMS_SUCCESS = 0x01;
+  public static final byte SET_SYSTEM_PROPERTIES_SUCCESS = 0x02;
+  public static final byte NEGOTIATED_SHARED_SECRET_SUCCESS = 0x04;
 
   // Keymaster Applet attributes
   protected static byte keymasterState = ILLEGAL_STATE;
@@ -485,23 +496,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                 && (!seProvider.isDeviceRebooted())) {
               ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
             }
+            // clear the device reboot status
+            repository.setDeviceBootStatus((byte) 0x00);
             processSetBootParamsCmd(apdu);
+            //set the flag to mark boot started
+            repository.setDeviceBootStatus(SET_BOOT_PARAMS_SUCCESS);
+            seProvider.clearDeviceBooted(false);
 
             sendError(apdu, KMError.OK);
             return;
-            
-          case INS_SET_BOOT_ENDED_CMD:
-              if (seProvider.isBootSignalEventSupported()
-                  && (keymasterState == KMKeymasterApplet.ACTIVE_STATE)
-                  && (!seProvider.isDeviceRebooted())) {
-                ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-              }
-              //set the flag to mark boot ended
-              repository.setBootEndedStatus(true);
-              
-              seProvider.clearDeviceBooted(false);
-              sendError(apdu, KMError.OK);
-              return;
 
           case INS_GET_PROVISION_STATUS_CMD:
             processGetProvisionStatusCmd(apdu);
@@ -512,6 +515,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       if ((keymasterState == KMKeymasterApplet.ACTIVE_STATE)
           || ((keymasterState == KMKeymasterApplet.IN_PROVISION_STATE)
           && isProvisioningComplete())) {
+
+        if (!isKeymasterReady(apduIns)) {
+          KMException.throwIt(KMError.UNKNOWN_ERROR);
+        }
         switch (apduIns) {
           case INS_GENERATE_KEY_CMD:
             processGenerateKey(apdu);
@@ -617,6 +624,39 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } finally {
       repository.clean();
     }
+  }
+
+  // After every device boot, the Keymaster becomes ready to execute all the commands only after
+  // 1. boot parameters are set,
+  // 2. system properties are set and
+  // 3. computed the shared secret successfully.
+  private boolean isKeymasterReady(byte apduIns) {
+      byte deviceBootStatus =
+          (SET_BOOT_PARAMS_SUCCESS | SET_SYSTEM_PROPERTIES_SUCCESS |
+              NEGOTIATED_SHARED_SECRET_SUCCESS);
+      if (repository.getDeviceBootStatus() == deviceBootStatus) {
+        // Keymaster is ready to execute all the commands.
+        return true;
+      }
+      // Below commands are allowed even if the Keymaster is not ready.
+      switch (apduIns) {
+        case INS_GET_HW_INFO_CMD:
+        case INS_ADD_RNG_ENTROPY_CMD:
+        case INS_GET_HMAC_SHARING_PARAM_CMD:
+        case INS_COMPUTE_SHARED_HMAC_CMD:
+        case INS_SET_VERSION_PATCHLEVEL_CMD:
+        case INS_OEM_UNLOCK_PROVISIONING_CMD:
+          return true;
+        default:
+          break;
+      }
+      return false;
+  }
+
+  private void setDeviceBootStatus(byte deviceRebootStatus) {
+    byte status = repository.getDeviceBootStatus();
+    status |= deviceRebootStatus;
+    repository.setDeviceBootStatus(status);
   }
 
   private void generateUniqueOperationHandle(byte[] buf, short offset, short len) {
@@ -854,6 +894,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMInteger.cast(tmpVariables[2]).getStartOff(),
       KMInteger.cast(tmpVariables[2]).length());
 
+    setDeviceBootStatus(SET_SYSTEM_PROPERTIES_SUCCESS);
     sendError(apdu, KMError.OK);
   }
   
@@ -1337,6 +1378,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             (short) sharingCheck.length,
             scratchPad,
             tmpVariables[6]);
+    setDeviceBootStatus(NEGOTIATED_SHARED_SECRET_SUCCESS);
     // verification signature blob - 32 bytes
     tmpVariables[1] = KMByteBlob.instance(scratchPad, tmpVariables[6], tmpVariables[5]);
     // prepare the response
@@ -1682,7 +1724,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     addTags(
         KMKeyCharacteristics.cast(data[KEY_CHARACTERISTICS]).getSoftwareEnforced(), false, cert);
 
-    cert.deviceLocked(repository.getBootLoaderLock());
+    cert.deviceLocked(repository.getBootDeviceLocked());
     cert.issuer(getProvisionedCertificateData(KMSEProvider.CERTIFICATE_ISSUER));
     cert.publicKey(data[PUB_KEY]);
     cert.verifiedBootHash(repository.getVerifiedBootHash());
@@ -2775,7 +2817,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     //Validate bootloader only 
     tmpVariables[0] =
             KMKeyParameters.findTag(KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY, data[HW_PARAMETERS]);
-    if (tmpVariables[0] != KMType.INVALID_VALUE && repository.getBootEndedStatus()) {
+    if (tmpVariables[0] != KMType.INVALID_VALUE) {
     	KMException.throwIt(KMError.INVALID_KEY_BLOB);
     }
     
@@ -3674,11 +3716,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     repository.setBootState(enumVal);
 
     enumVal = KMEnum.cast(tmpVariables[4]).getVal();
-    repository.setBootloaderLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
-
-    // Clear Android system properties expect boot patch level as it is
-    // already set.
-    repository.clearAndroidSystemProperties();
+    repository.setBootDeviceLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
 
     // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
     Util.arrayFillNonAtomic(scratchPad, (short) 0, KMRepository.COMPUTED_HMAC_KEY_SIZE, (byte) 0);
@@ -3691,9 +3729,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Hmac is cleared, so generate a new Hmac nonce.
     seProvider.newRandomNumber(scratchPad, (short) 0, KMRepository.HMAC_SEED_NONCE_SIZE);
     repository.initHmacNonce(scratchPad, (short) 0, KMRepository.HMAC_SEED_NONCE_SIZE);
-    
-    //flag to maintain the boot state
-    repository.setBootEndedStatus(false);
     
     //flag to maintain early boot ended state
     repository.setEarlyBootEndedStatus(false);
