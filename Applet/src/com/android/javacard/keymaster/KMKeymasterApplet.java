@@ -457,93 +457,92 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       byte[] apduBuffer = apdu.getBuffer();
       byte apduIns = apduBuffer[ISO7816.OFFSET_INS];
-      if (isCommandAllowed(apduIns)) {
-        switch (apduIns) {
-          case INS_INIT_STRONGBOX_CMD:
-            processInitStrongBoxCmd(apdu);
-            sendError(apdu, KMError.OK);
-            return;
-          case INS_GENERATE_KEY_CMD:
-            processGenerateKey(apdu);
-            break;
-          case INS_IMPORT_KEY_CMD:
-            processImportKeyCmd(apdu);
-            break;
-          case INS_BEGIN_IMPORT_WRAPPED_KEY_CMD:
-            processBeginImportWrappedKeyCmd(apdu);
-            break;
-          case INS_FINISH_IMPORT_WRAPPED_KEY_CMD:
-            processFinishImportWrappedKeyCmd(apdu);
-            break;
-          case INS_EXPORT_KEY_CMD:
-            processExportKeyCmd(apdu);
-            break;
-          case INS_UPGRADE_KEY_CMD:
-            processUpgradeKeyCmd(apdu);
-            break;
-          case INS_DELETE_KEY_CMD:
-            processDeleteKeyCmd(apdu);
-            break;
-          case INS_DELETE_ALL_KEYS_CMD:
-            processDeleteAllKeysCmd(apdu);
-            break;
-          case INS_ADD_RNG_ENTROPY_CMD:
-            processAddRngEntropyCmd(apdu);
-            break;
-          case INS_COMPUTE_SHARED_HMAC_CMD:
-            processComputeSharedHmacCmd(apdu);
-            break;
-          case INS_DESTROY_ATT_IDS_CMD:
-            processDestroyAttIdsCmd(apdu);
-            break;
-          case INS_VERIFY_AUTHORIZATION_CMD:
-            processVerifyAuthorizationCmd(apdu);
-            break;
-          case INS_GET_HMAC_SHARING_PARAM_CMD:
-            processGetHmacSharingParamCmd(apdu);
-            break;
-          case INS_GET_KEY_CHARACTERISTICS_CMD:
-            processGetKeyCharacteristicsCmd(apdu);
-            break;
-          case INS_GET_HW_INFO_CMD:
-            processGetHwInfoCmd(apdu);
-            break;
-          case INS_BEGIN_OPERATION_CMD:
-            processBeginOperationCmd(apdu);
-            break;
-          case INS_UPDATE_OPERATION_CMD:
-            processUpdateOperationCmd(apdu);
-            break;
-          case INS_FINISH_OPERATION_CMD:
-            processFinishOperationCmd(apdu);
-            break;
-          case INS_ABORT_OPERATION_CMD:
-            processAbortOperationCmd(apdu);
-            break;
-          case INS_DEVICE_LOCKED_CMD:
-            processDeviceLockedCmd(apdu);
-            break;
-          case INS_EARLY_BOOT_ENDED_CMD:
-            processEarlyBootEndedCmd(apdu);
-            break;
-          case INS_UPDATE_AAD_OPERATION_CMD:
-            processUpdateAadOperationCmd(apdu);
-            break;
-          case INS_GENERATE_RKP_KEY_CMD:
-          case INS_BEGIN_SEND_DATA_CMD:
-          case INS_UPDATE_CHALLENGE_CMD:
-          case INS_UPDATE_EEK_CHAIN_CMD:
-          case INS_UPDATE_KEY_CMD:
-          case INS_FINISH_SEND_DATA_CMD:
-          case INS_GET_RESPONSE_CMD:
-          case INS_GET_RKP_HARDWARE_INFO:
-            rkp.process(apduIns, apdu);
-            break;
-          default:
-            ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
-        }
-      } else {
-        ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
+      if (!isStrongBoxKeymasterCmdAllowed(apduIns)) {
+          ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+      }
+      switch (apduIns) {
+        case INS_INIT_STRONGBOX_CMD:
+          processInitStrongBoxCmd(apdu);
+          sendError(apdu, KMError.OK);
+          return;
+        case INS_GENERATE_KEY_CMD:
+          processGenerateKey(apdu);
+          break;
+        case INS_IMPORT_KEY_CMD:
+          processImportKeyCmd(apdu);
+          break;
+        case INS_BEGIN_IMPORT_WRAPPED_KEY_CMD:
+          processBeginImportWrappedKeyCmd(apdu);
+          break;
+        case INS_FINISH_IMPORT_WRAPPED_KEY_CMD:
+          processFinishImportWrappedKeyCmd(apdu);
+          break;
+        case INS_EXPORT_KEY_CMD:
+          processExportKeyCmd(apdu);
+          break;
+        case INS_UPGRADE_KEY_CMD:
+          processUpgradeKeyCmd(apdu);
+          break;
+        case INS_DELETE_KEY_CMD:
+          processDeleteKeyCmd(apdu);
+          break;
+        case INS_DELETE_ALL_KEYS_CMD:
+          processDeleteAllKeysCmd(apdu);
+          break;
+        case INS_ADD_RNG_ENTROPY_CMD:
+          processAddRngEntropyCmd(apdu);
+          break;
+        case INS_COMPUTE_SHARED_HMAC_CMD:
+          processComputeSharedHmacCmd(apdu);
+          break;
+        case INS_DESTROY_ATT_IDS_CMD:
+          processDestroyAttIdsCmd(apdu);
+          break;
+        case INS_VERIFY_AUTHORIZATION_CMD:
+          processVerifyAuthorizationCmd(apdu);
+          break;
+        case INS_GET_HMAC_SHARING_PARAM_CMD:
+          processGetHmacSharingParamCmd(apdu);
+          break;
+        case INS_GET_KEY_CHARACTERISTICS_CMD:
+          processGetKeyCharacteristicsCmd(apdu);
+          break;
+        case INS_GET_HW_INFO_CMD:
+          processGetHwInfoCmd(apdu);
+          break;
+        case INS_BEGIN_OPERATION_CMD:
+          processBeginOperationCmd(apdu);
+          break;
+        case INS_UPDATE_OPERATION_CMD:
+          processUpdateOperationCmd(apdu);
+          break;
+        case INS_FINISH_OPERATION_CMD:
+          processFinishOperationCmd(apdu);
+          break;
+        case INS_ABORT_OPERATION_CMD:
+          processAbortOperationCmd(apdu);
+          break;
+        case INS_DEVICE_LOCKED_CMD:
+          processDeviceLockedCmd(apdu);
+          break;
+        case INS_EARLY_BOOT_ENDED_CMD:
+          processEarlyBootEndedCmd(apdu);
+          break;
+        case INS_UPDATE_AAD_OPERATION_CMD:
+          processUpdateAadOperationCmd(apdu);
+          break;
+        case INS_GENERATE_RKP_KEY_CMD:
+        case INS_BEGIN_SEND_DATA_CMD:
+        case INS_UPDATE_CHALLENGE_CMD:
+        case INS_UPDATE_EEK_CHAIN_CMD:
+        case INS_UPDATE_KEY_CMD:
+        case INS_FINISH_SEND_DATA_CMD:
+        case INS_GET_RESPONSE_CMD:
+        case INS_GET_RKP_HARDWARE_INFO:
+          rkp.process(apduIns, apdu);
+          break;
+        default:
+          ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
     } catch (KMException exception) {
       freeOperations();
@@ -566,20 +565,21 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
-  private boolean isCommandAllowed(short apduIns) {
-    boolean result = true;
-    switch(apduIns) {
-      case INS_INIT_STRONGBOX_CMD:
-      case INS_GET_HMAC_SHARING_PARAM_CMD:
-      case INS_COMPUTE_SHARED_HMAC_CMD:
-        break;
-
+  private boolean isStrongBoxKeymasterCmdAllowed(byte apduIns) {
+    if(kmDataStore.isSBInitCompleted()) {
+      return true;	
+    }    
+    // Data Dirty.
+    switch (apduIns) {
+      case INS_GENERATE_KEY_CMD:
+      case INS_IMPORT_KEY_CMD:
+      case INS_IMPORT_WRAPPED_KEY_CMD:
+      case INS_ATTEST_KEY_CMD:
+        return false;
       default:
-        if(!(kmDataStore.isSBInitCompleted())) {
-          result = false;	
-        }
+        break;
     }
-    return result;
+    return true;
   }
 
   private void generateUniqueOperationHandle(byte[] buf, short offset, short len) {
@@ -1036,7 +1036,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             (short) sharingCheck.length,
             scratchPad,
             keyLen);
-    kmDataStore.updateSBInitStatus(KMKeymintDataStore.NEGOTIATED_SHARED_SECRET_DONE);
+    kmDataStore.updateSBInitStatus(KMKeymintDataStore.NEGOTIATED_SHARED_SECRET_SUCCESS);
     // verification signature blob - 32 bytes
     //tmpVariables[1]
     short signature = KMByteBlob.instance(scratchPad, keyLen, signLen);
@@ -3444,7 +3444,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     setOsVersion(osVersion);
     setOsPatchLevel(osPatchLevel);
     setVendorPatchLevel(vendorPatchLevel);
-    kmDataStore.updateSBInitStatus(KMKeymintDataStore.INIT_STRONGBOX_DONE);
+    kmDataStore.updateSBInitStatus(KMKeymintDataStore.SET_SYSTEM_PROPERTIES_SUCCESS);
   }
 
   public void reboot() {

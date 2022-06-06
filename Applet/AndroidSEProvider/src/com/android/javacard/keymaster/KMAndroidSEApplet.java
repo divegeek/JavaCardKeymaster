@@ -518,7 +518,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
     }
     //set the flag to mark boot ended
-    kmDataStore.updateSBInitStatus(KMKeymintDataStore.DEVICE_BOOT_ENDED_DONE);
+    kmDataStore.updateSBInitStatus(KMKeymintDataStore.SET_BOOT_ENDED_SUCCESS);
     seProvider.clearDeviceBooted(false);
     sendError(apdu, KMError.OK);
   }
@@ -580,7 +580,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     kmDataStore.createComputedHmacKey(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE);
 
     super.reboot();
-    kmDataStore.updateSBInitStatus(KMKeymintDataStore.SET_BOOT_PARAMS_DONE);
+    kmDataStore.updateSBInitStatus(KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS);
     sendError(apdu, KMError.OK);
   }
 
