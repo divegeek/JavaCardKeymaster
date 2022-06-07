@@ -570,9 +570,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // 2. system properties are set and
   // 3. computed the shared secret successfully.
   private boolean isKeymintReady(byte apduIns) {
-	 if(kmDataStore.isDeviceReady()) {
-	   return true;	
-	 } 
+    if(kmDataStore.isDeviceReady()) {
+      return true;
+    }
      // Below commands are allowed even if the Keymaster is not ready.
      switch (apduIns) {
        case INS_GET_HW_INFO_CMD:
@@ -2598,7 +2598,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeKeyUsageForCount(scratchPad);
 
     KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
-      	  KMError.INVALID_KEY_BLOB);
+    		KMError.INVALID_KEY_BLOB);
 
     //Validate early boot
     //VTS expects error code EARLY_BOOT_ONLY during begin operation if eary boot ended tag is present

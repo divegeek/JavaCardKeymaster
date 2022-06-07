@@ -120,7 +120,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
           case INS_SET_BOOT_PARAMS_CMD:
             processSetBootParamsCmd(apdu);
-            break;       
+            break;
 
           case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
             processProvisionRkpDeviceUniqueKeyPair(apdu);
@@ -215,7 +215,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     	
       default:
         // Allow other commands only if provision is completed.  
-    	if (!(isProvisioningComplete())) {
+    	if (!isProvisioningComplete()) {
     	  result = false;
     	}   	          
     }
