@@ -52,6 +52,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final byte POWER_RESET_FALSE = (byte) 0xAA;
   public static final byte POWER_RESET_TRUE = (byte) 0x00;
   private static final short COMPUTED_HMAC_KEY_SIZE = 32;
+  private static byte[] CMAC_KDF_CONSTANT_L;
+  private static byte[] CMAC_KDF_CONSTANT_ZERO;
 
   private static KeyAgreement keyAgreement;
 
@@ -88,6 +90,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   public KMAndroidSEProvider() {
+    initStatics();
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
@@ -119,6 +122,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
     resetFlag = JCSystem.makeTransientByteArray((short) 1,
         JCSystem.CLEAR_ON_RESET);
     resetFlag[0] = (byte) POWER_RESET_FALSE;
+  }
+  
+  void initStatics() {
+    CMAC_KDF_CONSTANT_L = new byte[] {
+	    0x00, 0x00, 0x01, 0x00 };
+    CMAC_KDF_CONSTANT_ZERO = new byte[] {0x00};
   }
 
   public void clean() {
@@ -401,23 +410,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public HMACKey cmacKdf(KMPreSharedKey preSharedKey, byte[] label, short labelStart,
       short labelLen,
       byte[] context, short contextStart, short contextLength) {
-    try {
+      try {
       // This is hardcoded to requirement - 32 byte output with two concatenated
       // 16 bytes K1 and K2.
       final byte n = 2; // hardcoded
-      // [L] 256 bits - hardcoded 32 bits as per
-      // reference impl in keymaster.
-      short zeroIndex = 0;
-      short LIndex = 1;
-      short bufIndex = 5;
-      short keyIndex = 9;
-      //1st byte in tempArray is reserved for zero
-      //next 4 bytes in tempArray is reserved for L
-      tmpArray[0] = 0;
-      tmpArray[1] = 0;
-      tmpArray[2] = 0;
-      tmpArray[3] = 1;
-      tmpArray[4] = 0;
       
       // [i] counter - 32 bits
       short iBufLen = 4;
@@ -439,12 +435,12 @@ public class KMAndroidSEProvider implements KMSEProvider {
       while (i <= n) {
         tmpArray[3] = i;
         // 4 bytes of iBuf with counter in it
-        kdf.update(tmpArray, bufIndex, iBufLen);
+        kdf.update(tmpArray, (short) 0, (short) iBufLen);
         kdf.update(label, labelStart, (short) labelLen); // label
-        kdf.update(tmpArray, zeroIndex, (short) 1); // 1 byte of 0x00
+        kdf.update(CMAC_KDF_CONSTANT_ZERO, (short) 0, (short) CMAC_KDF_CONSTANT_ZERO.length); // 1 byte of 0x00
         kdf.update(context, contextStart, contextLength); // context
         // 4 bytes of L - signature of 16 bytes
-        pos = kdf.sign(tmpArray, LIndex, (short) 4, tmpArray,
+        pos = kdf.sign(CMAC_KDF_CONSTANT_L, (short) 0, (short) CMAC_KDF_CONSTANT_L.length, tmpArray,
             (short) (iBufLen + pos));
         i++;
       }

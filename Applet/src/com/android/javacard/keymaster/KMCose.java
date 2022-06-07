@@ -305,13 +305,13 @@ public class KMCose {
    * @return instance of KMCoseHeaders.
    */
   public static short constructHeaders(short []buff, short alg, short keyId, short iv, short ephemeralKey) {
-	buff[0]= alg;
-	buff[1]= keyId;
-	buff[2]= iv;
-	buff[3]= ephemeralKey;
-	for(short i = 4; i < 8; i++) {
+    buff[0]= alg;
+    buff[1]= keyId;
+    buff[2]= iv;
+    buff[3]= ephemeralKey;
+    for(short i = 4; i < 8; i++) {
       buff[i] = KMType.INVALID_VALUE;
-	}
+    }
     short ptr = handleCosePairTags(coseHeaderConst, buff, (short)4, false);
     ptr = KMCoseHeaders.instance(ptr);
     KMCoseHeaders.cast(ptr).canonicalize();
@@ -490,7 +490,7 @@ public class KMCose {
     buff[6] = pubY;
     buff[7] = priv;
     for (short i = valueIndex; i < 16; i++) {
-	  buff[i] = KMType.INVALID_VALUE;
+      buff[i] = KMType.INVALID_VALUE;
     } 
     short arrPtr = handleCosePairTags(coseKeyConst, buff, valueIndex, includeTestKey);
     if (includeTestKey) {

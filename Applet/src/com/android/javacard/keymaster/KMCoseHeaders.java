@@ -154,10 +154,10 @@ public class KMCoseHeaders extends KMCoseMap {
 
   public boolean isDataValid(short []buff, short alg, short keyIdPtr) {
     short bufLen = 4;
-	buff[0] = KMCose.COSE_LABEL_ALGORITHM;
-	buff[1] = alg;
-	buff[2] = KMCose.COSE_LABEL_KEYID;
-	buff[3] = keyIdPtr;
+    buff[0] = KMCose.COSE_LABEL_ALGORITHM;
+    buff[1] = alg;
+    buff[2] = KMCose.COSE_LABEL_KEYID;
+    buff[3] = keyIdPtr;
     boolean valid = false;
     short value;
     short ptr;
