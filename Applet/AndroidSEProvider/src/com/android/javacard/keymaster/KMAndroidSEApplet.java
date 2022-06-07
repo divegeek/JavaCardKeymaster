@@ -23,6 +23,11 @@ import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
+  // provisionStatus - 1 byte
+  // keymasterState  - 1 byte
+  // MagicNumber     - 1 byte
+  // Applet package version - 2 bytes.
+  private static final byte PRIMITIVE_DATA_STORAGE_SIZE = 0x05;
 
   KMAndroidSEApplet() {
     super(new KMAndroidSEProvider());
@@ -78,8 +83,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     primitiveCount += repository.getBackupPrimitiveByteCount();
     objectCount += repository.getBackupObjectCount();
     //KMKeymasterApplet count
-    primitiveCount += computePrimitveDataSize();
-    objectCount += computeObjectCount();
+    primitiveCount += PRIMITIVE_DATA_STORAGE_SIZE;
+    // No objects to be stored in KMAndroidSEApplet.
 
     // Create element.
     Element element = UpgradeManager.createElement(Element.TYPE_SIMPLE,
@@ -91,15 +96,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     repository.onSave(element);
     seProvider.onSave(element);
     return element;
-  }
-
-  private short computePrimitveDataSize() {
-    // provisionStatus + keymasterState + magic byte + version
-    return (short) 5;
-  }
-
-  private short computeObjectCount() {
-    return (short) 0;
   }
 
   public boolean isUpgradeAllowed(short oldVersion) {
