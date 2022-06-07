@@ -698,7 +698,6 @@ public interface KMSEProvider {
   short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
       short outOffset);
   
-
   /**
    * This function generates a HMAC key from the provided key buffers.
    *

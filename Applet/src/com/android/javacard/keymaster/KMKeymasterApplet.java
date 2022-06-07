@@ -266,6 +266,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Minimum HMAC length in bits
   public static final short MIN_HMAC_LENGTH_BITS = 64;
 
+  // Provision reporting status
+  public  static final short NOT_PROVISIONED = 0x0000;
+  public static final short PROVISION_STATUS_ATTESTATION_KEY = 0x0001;
+  public static final short PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x0002; 
+  public static final short PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x0004;
+  public static final short PROVISION_STATUS_ATTEST_IDS = 0x0008;
+  public static final short PROVISION_STATUS_PRESHARED_SECRET = 0x0010;
+  public static final short PROVISION_STATUS_PROVISIONING_LOCKED = 0x0020;
+  public static final short PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR = 0x0040;
+  public static final short PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x0080;
+  public static final short PROVISION_STATUS_SE_LOCKED = 0x0100; 
+  public static final short PROVISION_STATUS_OEM_PUBLIC_KEY = 0x0200;
+
   protected static RemotelyProvisionedComponentDevice rkp;
   protected static KMEncoder encoder;
   protected static KMDecoder decoder;

@@ -462,7 +462,6 @@ public class KMKeymintDataStore implements KMUpgradable {
     Util.arrayCopyNonAtomic(buf, offset, additionalCertChain,
         (short) 2, len);
     JCSystem.commitTransaction();
-
   }
 
   public short getAdditionalCertChainLength() {
@@ -749,8 +748,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     Util.arrayCopyNonAtomic(buffer, start, bootPatchLevel, (short) 0, (short) length);
   }
   
-  public void setProvisionLocked() {
-    writeBoolean(PROVISIONED_LOCKED, true);
+  public void setProvisionLock(boolean lockValue) {
+    writeBoolean(PROVISIONED_LOCKED, lockValue);
   }
 
   public boolean isProvisionLocked() {
@@ -763,25 +762,28 @@ public class KMKeymintDataStore implements KMUpgradable {
     return false;
   }
   
-  public void setProvisionStatus(byte provisionStatus) {
-    short offset = repository.alloc((short) 1);
+  public void setProvisionStatus(short provisionStatus) {
+    short offset = repository.alloc((short) 2);
     byte[] buf = repository.getHeap();
     getProvisionStatus(buf, offset);
-    buf[offset] |= provisionStatus;
-    writeDataEntry(PROVISIONED_STATUS, buf, offset, (short) 1);
+    provisionStatus |= Util.getShort(buf, offset);
+    Util.setShort(buf, offset, provisionStatus);
+    writeDataEntry(PROVISIONED_STATUS, buf, offset, (short) 2);
   }
   
   public void getProvisionStatus(byte[] scratchpad, short offset) {
-    scratchpad[offset] = 0;
+    Util.setShort(scratchpad, offset, (short)0);
     readDataEntry(PROVISIONED_STATUS, scratchpad, offset);
   }
 
-  public void unlockProvision(byte unlockOffset) {
-    short offset = repository.alloc((short) 1);
+  public void unlockProvision(short unlockOffset) {
+    short offset = repository.alloc((short) 2);
     byte[] buf = repository.getHeap();
     getProvisionStatus(buf, offset);
-    buf[offset] &= ~unlockOffset;
-    writeDataEntry(PROVISIONED_STATUS, buf, offset, (short) 1);
+    short temp = Util.getShort(buf, offset);
+    temp &= ~unlockOffset;
+    Util.setShort(buf, offset, temp);
+    writeDataEntry(PROVISIONED_STATUS, buf, offset, (short) 2);
   }
 
   public void persistOEMRootPublicKey(byte[] inBuff, short inOffset, short inLength) {
@@ -795,6 +797,9 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
 
   public byte[] getOEMRootPublicKey() {
+    if(oemRootPublicKey == null) {
+      KMException.throwIt(KMError.INVALID_DATA);	
+    }
     return oemRootPublicKey;
   }
   
@@ -861,8 +866,34 @@ public class KMKeymintDataStore implements KMUpgradable {
     preSharedKey = (KMPreSharedKey) seProvider.onRestore(element);
     deviceUniqueKeyPair = (KMDeviceUniqueKeyPair) seProvider.onRestore(element);
     rkpMacKey = (KMRkpMacKey) seProvider.onRestore(element);
+    handleDataUpgrade(oldVersion, currentVersion);
   }
 
+  void handleDataUpgrade(short oldVersion, short currentVersion) {
+    if(oldVersion == 0x0100 && currentVersion == 0x0200) {
+      handleProvisionStatusUpgrade();
+    }
+  }
+
+  void handleProvisionStatusUpgrade( ){
+    short dInex = repository.allocReclaimableMemory((short)2);
+    byte data[] = repository.getHeap();
+    getProvisionStatus(data, dInex);
+    short newStatus = (short)( data[dInex] & 0x00ff);
+    if( KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED 
+    		== (newStatus & KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED)) {
+      newStatus |= KMKeymasterApplet.PROVISION_STATUS_SE_LOCKED;
+    }
+    Util.setShort(data, dInex, newStatus);
+    short pStatusOff = (short) (PROVISIONED_STATUS * DATA_INDEX_ENTRY_SIZE);
+    JCSystem.beginTransaction();
+    Util.setShort(dataTable, (short) (pStatusOff + DATA_INDEX_ENTRY_OFFSET), (short)0);
+    Util.setShort(dataTable, (short) (pStatusOff + DATA_INDEX_ENTRY_LENGTH), (short)0);
+    JCSystem.commitTransaction(); 
+    writeDataEntry(PROVISIONED_STATUS, data, dInex, (short) 2);
+    repository.reclaimMemory((short)2);
+  }
+  
   @Override
   public short getBackupPrimitiveByteCount() {
     // dataIndex - 2 bytes
