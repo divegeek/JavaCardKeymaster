@@ -577,8 +577,14 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private short validateApdu(APDU apdu) {
     // Read the apdu header and buffer.
     byte[] apduBuffer = apdu.getBuffer();
-    byte apduClass = apduBuffer[ISO7816.OFFSET_CLA];
+    short apduClass = (short) (apduBuffer[ISO7816.OFFSET_CLA] & 0x00FF);
     short P1P2 = Util.getShort(apduBuffer, ISO7816.OFFSET_P1);
+
+    // Validate CLA.
+    if (((apduClass & 0x00E0) == 0x0020) ||
+        (apduClass == 0x00FF)) {
+      ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
+    }
 
     // Validate P1P2.
     if (P1P2 != KMKeymasterApplet.KM_HAL_VERSION) {

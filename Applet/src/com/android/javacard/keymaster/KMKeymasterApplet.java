@@ -48,7 +48,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short VERIFIED_BOOT_HASH_SIZE = 32;
   public static final short BOOT_PATCH_LVL_SIZE = 4;
 
-  protected static final byte CLA_ISO7816_NO_SM_NO_CHAN = (byte) 0x80;
   protected static final short KM_HAL_VERSION = (short) 0x5000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
