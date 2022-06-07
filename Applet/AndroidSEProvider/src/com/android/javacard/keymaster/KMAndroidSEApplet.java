@@ -54,7 +54,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 7;
   private static final byte INS_SET_BOOT_ENDED_CMD = 
-		  INS_KEYMINT_PROVIDER_APDU_START + 8;
+		  INS_KEYMINT_PROVIDER_APDU_START + 8; //unused
   private static final byte INS_SE_FACTORY_PROVISIONING_LOCK_CMD = INS_KEYMINT_PROVIDER_APDU_START + 9;
   private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_KEYMINT_PROVIDER_APDU_START + 10;
   private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 11;
@@ -121,10 +121,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           case INS_SET_BOOT_PARAMS_CMD:
             processSetBootParamsCmd(apdu);
             break;
-
-          case INS_SET_BOOT_ENDED_CMD:
-            processSetBootEndedCmd(apdu);
-            break;         
 
           case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
             processProvisionRkpDeviceUniqueKeyPair(apdu);
@@ -214,14 +210,13 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         break;
         
       case INS_SET_BOOT_PARAMS_CMD:
-      case INS_SET_BOOT_ENDED_CMD:
       case INS_GET_PROVISION_STATUS_CMD:
     	break;
     	
       default:
         // Allow other commands only if provision is completed.  
     	if (!isProvisioningComplete()) {
-    		result = false;
+    	  result = false;
     	}   	          
     }
     return result;
@@ -512,23 +507,13 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     sendOutgoing(apdu, resp);
   }
 
-  private void processSetBootEndedCmd(APDU apdu) {
-	if (seProvider.isBootSignalEventSupported()
-              && (!seProvider.isDeviceRebooted())) {
-      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-    }
-    //set the flag to mark boot ended
-    kmDataStore.setBootEndedStatus(true);
-    seProvider.clearDeviceBooted(false);
-    sendError(apdu, KMError.OK);
-  }
-
   private void processSetBootParamsCmd(APDU apdu) {
     if (seProvider.isBootSignalEventSupported()
               && (!seProvider.isDeviceRebooted())) {
       ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
     }
-
+    // clear the device reboot status
+    kmDataStore.clearDeviceBootStatus();
     short argsProto = KMArray.instance((short) 5);    
     byte[] scratchPad = apdu.getBuffer();
     // Array of 4 expected arguments
@@ -580,6 +565,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     kmDataStore.createComputedHmacKey(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE);
 
     super.reboot();
+    kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS);
+    seProvider.clearDeviceBooted(false);
     sendError(apdu, KMError.OK);
   }
 

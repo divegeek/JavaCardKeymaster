@@ -37,7 +37,7 @@ keymaster_error_t JavacardSecureElement::initializeJavacard() {
     request.add(Uint(getOsVersion()));
     request.add(Uint(getOsPatchlevel()));
     request.add(Uint(getVendorPatchlevel()));
-    auto [item, err] = sendRequest(Instruction::INS_SET_BOOT_PARAMS_CMD, request);
+    auto [item, err] = sendRequest(Instruction::INS_INIT_STRONGBOX_CMD, request);
     return err;
 }
 
