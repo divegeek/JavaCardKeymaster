@@ -49,9 +49,10 @@ public class KMKeymintDataStore implements KMUpgradable {
   public static final byte DEVICE_LOCKED_TIME = 5;
   public static final byte DEVICE_LOCKED = 6;
   public static final byte DEVICE_LOCKED_PASSWORD_ONLY = 7;
+
   // Total 8 auth tags, so the next offset is AUTH_TAG_1 + 8
   public static final byte AUTH_TAG_1 = 8;
-  public static final byte BOOT_ENDED_FLAG = 15;
+  public static final byte DEVICE_STATUS_FLAG = 15;
   public static final byte EARLY_BOOT_ENDED_FLAG = 16;
   private static final byte PROVISIONED_LOCKED = 17;
   private static final byte PROVISIONED_STATUS = 18;
@@ -69,15 +70,22 @@ public class KMKeymintDataStore implements KMUpgradable {
   public static final short AUTH_TAG_ENTRY_SIZE = (AUTH_TAG_LENGTH + AUTH_TAG_COUNTER_SIZE + 1);
   private static final short MASTER_KEY_SIZE = 16;
   private static final short SHARED_SECRET_KEY_SIZE = 32;
+  private static final byte DEVICE_STATUS_FLAG_SIZE = 1;
   
   private static final short ADDITIONAL_CERT_CHAIN_MAX_SIZE = 512;//First 2 bytes for length.
   private static final short BCC_MAX_SIZE = 512;
 
-  public static final byte RESET_SB_INIT_STATUS = 0x00;
-  public static final byte SET_BOOT_PARAMS_SUCCESS = 0x01;
-  public static final byte SET_BOOT_ENDED_SUCCESS = 0x02;
-  public static final byte SET_SYSTEM_PROPERTIES_SUCCESS = 0x04;
-  public static final byte NEGOTIATED_SHARED_SECRET_SUCCESS = 0x08;
+ //Device boot states. Applet starts executing the
+ // core commands once all the states are set. The commands
+ // that are allowed irrespective of these states are:
+ // All the provision commands
+ // INS_GET_HW_INFO_CMD
+ // INS_ADD_RNG_ENTROPY_CMD
+ // INS_COMPUTE_SHARED_HMAC_CMD
+ // INS_GET_HMAC_SHARING_PARAM_CMD
+ public static final byte SET_BOOT_PARAMS_SUCCESS = 0x01;
+ public static final byte SET_SYSTEM_PROPERTIES_SUCCESS = 0x02;
+ public static final byte NEGOTIATED_SHARED_SECRET_SUCCESS = 0x04;
 
   // Data - originally was in repository
   private byte[] attIdBrand;
@@ -257,18 +265,6 @@ public class KMKeymintDataStore implements KMUpgradable {
     return readBoolean(EARLY_BOOT_ENDED_FLAG);
   }
 
-  public boolean getBootEndedStatus() {
-    boolean result = false;
-    short offset = repository.allocReclaimableMemory((short) 1);
-    byte[] buf = repository.getHeap();
-    getSBInitStatus(buf, offset);
-    if(SET_BOOT_ENDED_SUCCESS == (buf[offset] & SET_BOOT_ENDED_SUCCESS)) {
-      result = true;
-    }
-    repository.reclaimMemory((short)1);
-    return result;
-  }
-
   public short getDeviceTimeStamp() {
     short blob = readData(DEVICE_LOCKED_TIME);
     if (blob == KMType.INVALID_VALUE) {
@@ -320,38 +316,37 @@ public class KMKeymintDataStore implements KMUpgradable {
   public void setEarlyBootEndedStatus(boolean flag) {
     writeBoolean(EARLY_BOOT_ENDED_FLAG, flag);
   }
- 
-  public void clearSBInitStatus() {
-    clearDataEntry(BOOT_ENDED_FLAG);
-  }
   
-  public void updateSBInitStatus(byte initStatus) {
-    short offset = repository.allocReclaimableMemory((short) 1);
-	byte[] buf = repository.getHeap();
-	getSBInitStatus(buf, offset);
-	buf[offset] |= initStatus;
-    writeDataEntry(BOOT_ENDED_FLAG, buf, offset, (short) 1);
-    repository.reclaimMemory((short)1);
+  public void clearDeviceBootStatus() {
+	clearDataEntry(DEVICE_STATUS_FLAG);
   }
 
-  public boolean isSBInitCompleted() {
-	boolean result = false;
-	short offset = repository.allocReclaimableMemory((short) 1);
+  public void setDeviceBootStatus(byte initStatus) {
+    short offset = repository.allocReclaimableMemory(DEVICE_STATUS_FLAG_SIZE);
 	byte[] buf = repository.getHeap();
-	getSBInitStatus(buf, offset);
+	getDeviceBootStatus(buf, offset);
+	buf[offset] |= initStatus;
+    writeDataEntry(DEVICE_STATUS_FLAG, buf, offset, DEVICE_STATUS_FLAG_SIZE);
+    repository.reclaimMemory(DEVICE_STATUS_FLAG_SIZE);
+  }
+
+  public boolean isDeviceReady() {
+	boolean result = false;
+	short offset = repository.allocReclaimableMemory(DEVICE_STATUS_FLAG_SIZE);
+	byte[] buf = repository.getHeap();
+	getDeviceBootStatus(buf, offset);
     if ((0 != (buf[offset] & SET_BOOT_PARAMS_SUCCESS))
-    		&& (0 != (buf[offset]  & SET_BOOT_ENDED_SUCCESS))
             && (0 != (buf[offset]  & SET_SYSTEM_PROPERTIES_SUCCESS))
             && (0 != (buf[offset]  & NEGOTIATED_SHARED_SECRET_SUCCESS))) {
       result = true;
     }
-    repository.reclaimMemory((short)1);
+    repository.reclaimMemory(DEVICE_STATUS_FLAG_SIZE);
     return result;
   }
 
-  public short getSBInitStatus(byte[] scratchpad, short offset) {
+  public short getDeviceBootStatus(byte[] scratchpad, short offset) {
     scratchpad[offset] = 0;
-    return readDataEntry(BOOT_ENDED_FLAG, scratchpad, offset);
+    return readDataEntry(DEVICE_STATUS_FLAG, scratchpad, offset);
   }
 
   public void clearDeviceLockTimeStamp() {
@@ -932,7 +927,6 @@ public class KMKeymintDataStore implements KMUpgradable {
   void handleDataUpgrade(short oldVersion, short currentVersion) {
     if(oldVersion == 0x0100 && currentVersion == 0x0200) {
       handleProvisionStatusUpgrade();
-      handleSBInitStatusUpgrade();
     }
   }
 
@@ -953,19 +947,6 @@ public class KMKeymintDataStore implements KMUpgradable {
     JCSystem.commitTransaction(); 
     writeDataEntry(PROVISIONED_STATUS, data, dInex, (short) 2);
     repository.reclaimMemory((short)2);
-  }
-
-  void handleSBInitStatusUpgrade(){
-    short dInex = repository.allocReclaimableMemory((short)1);
-    byte data[] = repository.getHeap();
-    short len = getSBInitStatus(data, dInex);
-    if(len != 0) {
-      updateSBInitStatus((byte)(SET_BOOT_PARAMS_SUCCESS | 
-    		  SET_BOOT_ENDED_SUCCESS |
-    		  SET_SYSTEM_PROPERTIES_SUCCESS |
-    		  NEGOTIATED_SHARED_SECRET_SUCCESS));
-    }
-    repository.reclaimMemory((short)1);
   }
   
   @Override

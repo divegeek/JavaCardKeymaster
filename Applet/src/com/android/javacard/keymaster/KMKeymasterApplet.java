@@ -457,7 +457,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       byte[] apduBuffer = apdu.getBuffer();
       byte apduIns = apduBuffer[ISO7816.OFFSET_INS];
-      if (!isStrongBoxKeymasterCmdAllowed(apduIns)) {
+      if (!isKeymintReady(apduIns)) {
           ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
       }
       switch (apduIns) {
@@ -565,21 +565,26 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
-  private boolean isStrongBoxKeymasterCmdAllowed(byte apduIns) {
-    if(kmDataStore.isSBInitCompleted()) {
-      return true;	
-    }    
-    // Data Dirty.
-    switch (apduIns) {
-      case INS_GENERATE_KEY_CMD:
-      case INS_IMPORT_KEY_CMD:
-      case INS_IMPORT_WRAPPED_KEY_CMD:
-      case INS_ATTEST_KEY_CMD:
-        return false;
-      default:
-        break;
-    }
-    return true;
+  //After every device boot, the Keymaster becomes ready to execute all the commands only after
+  // 1. boot parameters are set,
+  // 2. system properties are set and
+  // 3. computed the shared secret successfully.
+  private boolean isKeymintReady(byte apduIns) {
+	 if(kmDataStore.isDeviceReady()) {
+	   return true;	
+	 } 
+     // Below commands are allowed even if the Keymaster is not ready.
+     switch (apduIns) {
+       case INS_GET_HW_INFO_CMD:
+       case INS_ADD_RNG_ENTROPY_CMD:
+       case INS_GET_HMAC_SHARING_PARAM_CMD:
+       case INS_COMPUTE_SHARED_HMAC_CMD:
+       case INS_INIT_STRONGBOX_CMD:
+         return true;
+       default:
+         break;
+     }
+     return false;
   }
 
   private void generateUniqueOperationHandle(byte[] buf, short offset, short len) {
@@ -1036,7 +1041,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             (short) sharingCheck.length,
             scratchPad,
             keyLen);
-    kmDataStore.updateSBInitStatus(KMKeymintDataStore.NEGOTIATED_SHARED_SECRET_SUCCESS);
+    kmDataStore.setDeviceBootStatus(KMKeymintDataStore.NEGOTIATED_SHARED_SECRET_SUCCESS);
     // verification signature blob - 32 bytes
     //tmpVariables[1]
     short signature = KMByteBlob.instance(scratchPad, keyLen, signLen);
@@ -2592,17 +2597,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeDeviceUnlock(scratchPad);
     authorizeKeyUsageForCount(scratchPad);
 
+    KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
+      	  KMError.INVALID_KEY_BLOB);
+
     //Validate early boot
     //VTS expects error code EARLY_BOOT_ONLY during begin operation if eary boot ended tag is present
     if (kmDataStore.getEarlyBootEndedStatus()) {
       KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
           KMError.EARLY_BOOT_ENDED);
-    }
-
-    //Validate bootloader only
-    if (kmDataStore.getBootEndedStatus()) {
-      KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
-    	  KMError.INVALID_KEY_BLOB);
     }
 
     // Authorize Caller Nonce - if caller nonce absent in key char and nonce present in
@@ -3444,7 +3446,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     setOsVersion(osVersion);
     setOsPatchLevel(osPatchLevel);
     setVendorPatchLevel(vendorPatchLevel);
-    kmDataStore.updateSBInitStatus(KMKeymintDataStore.SET_SYSTEM_PROPERTIES_SUCCESS);
+    kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_SYSTEM_PROPERTIES_SUCCESS);
   }
 
   public void reboot() {
