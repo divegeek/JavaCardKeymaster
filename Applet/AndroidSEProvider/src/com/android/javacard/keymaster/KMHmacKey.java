@@ -21,26 +21,10 @@ import javacard.security.HMACKey;
 
 public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey {
 
-  private HMACKey hmacKey;
+  public HMACKey hmacKey;
 
   public KMHmacKey(HMACKey key) {
     hmacKey = key;
-  }
-
-  public void setKey(byte[] keyData, short kOff, short length) {
-    hmacKey.setKey(keyData, kOff, length);
-  }
-
-  public byte getKey(byte[] keyData, short kOff) {
-    return hmacKey.getKey(keyData, kOff);
-  }
-  
-  public HMACKey getKey() {
-    return hmacKey;
-  }
-
-  public short getKeySizeBits() {
-    return hmacKey.getSize();
   }
 
   public static void onSave(Element element, KMHmacKey kmKey) {

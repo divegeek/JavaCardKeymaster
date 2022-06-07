@@ -881,7 +881,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
     timeOffset = KMByteBlob.instance((short) 32);
     //Get the key data from the master key and use it for HMAC Sign.
-    AESKey aesKey = ((KMAESKey) masterKey).getKey();
+    AESKey aesKey = ((KMAESKey) masterKey).aesKey;
     short mKeyData = KMByteBlob.instance((short) (aesKey.getSize() / 8));
     aesKey.getKey(
         KMByteBlob.cast(mKeyData).getBuffer(),

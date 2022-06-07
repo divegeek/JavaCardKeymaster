@@ -17,6 +17,7 @@ package com.android.javacard.keymaster;
 
 import org.globalplatform.upgrade.Element;
 import org.globalplatform.upgrade.UpgradeManager;
+import org.jcp.xml.dsig.internal.dom.Utils;
 
 import javacard.framework.APDU;
 import javacard.framework.JCSystem;
@@ -227,14 +228,18 @@ public class KMAndroidSEProvider implements KMSEProvider {
     initECKey(ecKeyPair);
 
     // Re-usable cipher and signature instances
-    cipherPool = new Object[(short) (CIPHER_ALGS.length * 4)];
+    cipherPool = new Object[(short) (CIPHER_ALGS.length * MAX_OPERATION_INSTANCES)];
     // Extra 4 algorithms are used to support TRUSTED_CONFIRMATION_REQUIRED feature.
-    sigPool = new Object[(short) ((SIG_ALGS.length * 4) + 4)];
+    sigPool =
+        new Object[(short) ((SIG_ALGS.length * MAX_OPERATION_INSTANCES)
+            + MAX_OPERATION_INSTANCES)];
     operationPool = new Object[MAX_OPERATION_INSTANCES];
     hmacSignOperationPool = new Object[MAX_OPERATION_INSTANCES];
     // Reserve (KEY_ALGS.length * 4) + 4) size of key pool
     // Extra 4 keys for TRUSTED_CONFIRMATION_REQUIRED feature.
-    keysPool = new Object[(short) ((KEY_ALGS.length * 4) + 4)];
+    keysPool =
+        new Object[(short) ((KEY_ALGS.length * MAX_OPERATION_INSTANCES)
+            + MAX_OPERATION_INSTANCES)];
     
     // Creates an instance of each cipher algorithm once.
     initializeCipherPool();
@@ -298,9 +303,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   private boolean isCipherAlgorithm(byte alg) {
-    short index = 0;
-    while (index < CIPHER_ALGS.length) {
-      if (CIPHER_ALGS[index++] == alg) {
+    for (short index = 0; index < CIPHER_ALGS.length; index++) {
+      if (CIPHER_ALGS[index] == alg) {
         return true;
       }
     }
@@ -308,9 +312,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   private boolean isSignerAlgorithm(byte alg) {
-    short index = 0;
-    while (index < SIG_ALGS.length) {
-      if (SIG_ALGS[index++] == alg) {
+    for (short index = 0; index < SIG_ALGS.length; index++) {
+      if (SIG_ALGS[index] == alg) {
         return true;
       }
     }
@@ -318,35 +321,27 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   private void initializeOperationPool() {
-    short index = 0;
-    while (index < MAX_OPERATION_INSTANCES) {
+    for (short index = 0; index < MAX_OPERATION_INSTANCES; index++) {
       operationPool[index] = new KMOperationImpl();
-      index++;
     }
   }
 
   private void initializeHmacSignOperationPool() {
-    short index = 0;
-    while (index < MAX_OPERATION_INSTANCES) {
+    for (short index = 0; index < MAX_OPERATION_INSTANCES; index++) {
       hmacSignOperationPool[index] = new KMOperationImpl();
-      index++;
     }
   }
 
   // Create a signature instance of each algorithm once.
   private void initializeSigPool() {
-    short index = 0;
-    while (index < SIG_ALGS.length) {
+    for (short index = 0; index < SIG_ALGS.length; index++) {
       sigPool[index] = getSignatureInstance(SIG_ALGS[index]);
-      index++;
     }
   }
 
   private void initializeKeysPool() {
-    short index = 0;
-    while (index < KEY_ALGS.length) {
+    for (short index = 0; index < KEY_ALGS.length; index++) {
       keysPool[index] = createKeyObjectInstance(KEY_ALGS[index]);
-      index++;
     }
   }
 
@@ -371,10 +366,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
   // Create a cipher instance of each algorithm once.
   private void initializeCipherPool() {
-    short index = 0;
-    while (index < CIPHER_ALGS.length) {
+    for (short index = 0; index < CIPHER_ALGS.length; index++) {
       cipherPool[index] = getCipherInstance(CIPHER_ALGS[index]);
-      index++;
     }
   }
 
@@ -477,13 +470,13 @@ public class KMAndroidSEProvider implements KMSEProvider {
     if (KMType.HMAC == algo) {
       maxOperations = HMAC_MAX_OPERATION_INSTANCES;
     }
-    if(algo == KMType.AES) {
+    if (algo == KMType.AES) {
       if (secretLength == 16) {
         algo = AES_128;
       } else if (secretLength == 32) {
-	algo = AES_256;
+        algo = AES_256;
       } else {
-	 CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
       }
     }
     short index = 0;
@@ -500,7 +493,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         break;
       }
       keyObject = (KMKeyObject) keysPool[index];
-      if (algo == keyObject.getAlgorithm()) {
+      if (algo == keyObject.algorithm) {
         // Check if the Object instance is not busy and free to use.
         if (!isResourceBusy(keyObject, RESOURCE_TYPE_KEY)) {
           break;
@@ -797,8 +790,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short iBufLen = 4;
       short keyOutLen = n * 16;
       //Convert Hmackey to AES Key as the algorithm is ALG_AES_CMAC_128.
-      KMHmacKey hmacKey = ((KMHmacKey) preSharedKey);
-      hmacKey.getKey(tmpArray, (short) 0);
+      ((KMHmacKey) preSharedKey).hmacKey.getKey(tmpArray, (short) 0);
       aesKeys[KEYSIZE_256_OFFSET].setKey(tmpArray, (short) 0);
       //Initialize the key derivation function.
       kdf.init(aesKeys[KEYSIZE_256_OFFSET], Signature.MODE_SIGN);
@@ -837,8 +829,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public boolean hmacVerify(KMComputedHmacKey key, byte[] data, short dataStart,
       short dataLength, byte[] mac, short macStart, short macLength) {
-    KMHmacKey hmacKey = (KMHmacKey) key;
-    hmacSignature.init(hmacKey.getKey(), Signature.MODE_VERIFY);
+    hmacSignature.init(((KMHmacKey) key).hmacKey, Signature.MODE_VERIFY);
     return hmacSignature.verify(data, dataStart, dataLength, mac, macStart,
         macLength);
   }
@@ -854,10 +845,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public short hmacKDF(KMMasterKey masterkey, byte[] data, short dataStart,
       short dataLength, byte[] signature, short signatureStart) {
     try {
-      AESKey aesKey = ((KMAESKey) masterkey).getKey();
-      aesKey.getKey(tmpArray, (short) 0);
+      ((KMAESKey) masterkey).aesKey.getKey(tmpArray, (short) 0);
       HMACKey key = createHMACKey(tmpArray, (short) 0,
-          (short) (aesKey.getSize() / 8));
+          (short) (((KMAESKey) masterkey).aesKey.getSize() / 8));
       return hmacSign(key, data, dataStart, dataLength, signature,
           signatureStart);
     } finally {
@@ -983,7 +973,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public Cipher createSymmetricCipher(short alg, short purpose,
       short blockMode, short padding, byte[] secret, short secretStart,
       short secretLength, byte[] ivBuffer, short ivStart, short ivLength, KMKeyObject keyObject) {
-    Key key = (Key) keyObject.getKeyObjectInstance();
+    Key key = (Key) keyObject.keyObjectInst;
     Cipher symmCipher = null;
     switch (secretLength) {
       case 16:  
@@ -1026,7 +1016,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
   private Signature createHmacSignerVerifier(short purpose, short digest,
     byte[] secret, short secretStart, short secretLength, KMKeyObject keyObject) {
-    HMACKey key = (HMACKey) keyObject.getKeyObjectInstance();
+    HMACKey key = (HMACKey) keyObject.keyObjectInst;
     key.setKey(secret, secretStart, secretLength);	  
     return createHmacSignerVerifier(purpose, digest, key);
   }
@@ -1084,8 +1074,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {
     KMOperationImpl opr = null;
-    KMHmacKey key = (KMHmacKey) computedHmacKey;
-    short len = key.getKey(tmpArray, (short) 0);
+    short len = ((KMHmacKey) computedHmacKey).hmacKey.getKey(tmpArray, (short) 0);
     KMKeyObject keyObject = getKeyObjectFromPool(KMType.HMAC, len); 
     Signature signerVerifier = createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, tmpArray,
     		(short) 0, len, keyObject);
@@ -1108,7 +1097,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       opMode = Signature.MODE_SIGN;
     }
     Signature rsaSigner = getSignatureInstanceFromPool(alg);
-    RSAPrivateKey key = (RSAPrivateKey) ((KeyPair)(keyObject.getKeyObjectInstance())).getPrivate();
+    RSAPrivateKey key = (RSAPrivateKey) ((KeyPair)(keyObject.keyObjectInst)).getPrivate();
     key.setExponent(secret, secretStart, secretLength);
     key.setModulus(modBuffer, modOff, modLength);
     rsaSigner.init(key, opMode);
@@ -1120,7 +1109,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short modLength, KMKeyObject keyObject) {
     byte cipherAlg = mapCipherAlg(KMType.RSA, (byte) padding, (byte) 0, (byte) digest);
     Cipher rsaCipher = getCipherInstanceFromPool(cipherAlg);
-    RSAPrivateKey key = (RSAPrivateKey) ((KeyPair)(keyObject.getKeyObjectInstance())).getPrivate();
+    RSAPrivateKey key = (RSAPrivateKey) ((KeyPair)(keyObject.keyObjectInst)).getPrivate();
     key.setExponent(secret, secretStart, secretLength);
     key.setModulus(modBuffer, modOff, modLength);
     rsaCipher.init(key, Cipher.MODE_DECRYPT);
@@ -1131,7 +1120,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
       short secretStart, short secretLength, KMKeyObject keyObject) {
     byte alg = mapSignature256Alg(KMType.EC, (byte) 0, (byte) digest);
     Signature ecSigner = null;
-    ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObject.getKeyObjectInstance())).getPrivate();
+    ECPrivateKey key = (ECPrivateKey) ((KeyPair)(keyObject.keyObjectInst)).getPrivate();
     key.setS(secret, secretStart, secretLength);
     ecSigner = getSignatureInstanceFromPool(alg);
     ecSigner.init(key, Signature.MODE_SIGN);
@@ -1358,7 +1347,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
         masterKey = new KMAESKey(key);
         short keyLen = (short) (keySizeBits / 8);
         getTrueRandomNumber(tmpArray, (short) 0, keyLen);
-        masterKey.setKey(tmpArray, (short) 0);
+        ((KMAESKey) masterKey).aesKey.setKey(tmpArray, (short) 0);
       }
       return (KMMasterKey) masterKey;
     } finally {
@@ -1375,10 +1364,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
       initECKey(ecKeyPair);
       attestationKey = new KMECPrivateKey(ecKeyPair);
     }
-    attestationKey.setS(keyData, offset, length);
+    ECPrivateKey ecPriv = (ECPrivateKey) ((KMECPrivateKey) attestationKey).ecKeyPair.getPrivate();
+    ecPriv.setS(keyData, offset, length);
     return (KMAttestationKey) attestationKey;
   }
-  
+
   @Override
   public KMComputedHmacKey createComputedHmacKey(byte[] keyData, short offset, short length) {
     if (length != COMPUTED_HMAC_KEY_SIZE) {
@@ -1389,7 +1379,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
           false);
       computedHmacKey = new KMHmacKey(key);
     }
-    computedHmacKey.setKey(keyData, offset, length);
+    ((KMHmacKey) computedHmacKey).hmacKey.setKey(keyData, offset, length);
     return (KMComputedHmacKey) computedHmacKey;
   }  
 
@@ -1404,7 +1394,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
           false);
       preSharedKey = new KMHmacKey(key);
     }
-    preSharedKey.setKey(keyData, offset, length);
+    ((KMHmacKey) preSharedKey).hmacKey.setKey(keyData, offset, length);
     return (KMPreSharedKey) preSharedKey;
   }
 
@@ -1502,7 +1492,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
       KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
     }
     KMKeyObject ptr = new KMKeyObject();
-    ptr.setKeyObjectData(alg, keyObject);
+    JCSystem.beginTransaction();
+    ptr.algorithm = alg;
+    ptr.keyObjectInst = keyObject;
+    JCSystem.commitTransaction();
     return ptr;
   }
 

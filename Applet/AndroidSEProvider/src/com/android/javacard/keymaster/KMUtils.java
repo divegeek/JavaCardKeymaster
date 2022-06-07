@@ -438,4 +438,15 @@ public class KMUtils {
     }
   }
 
+  public static boolean isEmpty(byte[] buf, short offset, short len) {
+    boolean empty = true;
+    for (short index = 0; index < len; index++) {
+      if (buf[(short) (index + offset)] != 0) {
+        empty = false;
+        break;
+      }
+    }
+    return empty;
+  }
+
 }
