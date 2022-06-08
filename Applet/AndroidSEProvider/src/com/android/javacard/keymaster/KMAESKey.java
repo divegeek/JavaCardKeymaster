@@ -21,22 +21,10 @@ import javacard.security.AESKey;
 
 public class KMAESKey implements KMMasterKey {
 
-  private AESKey aesKey;
+  public AESKey aesKey;
 
   public KMAESKey(AESKey key) {
     aesKey = key;
-  }
-
-  public void setKey(byte[] keyData, short kOff) {
-    aesKey.setKey(keyData, kOff);
-  }
-
-  public AESKey getKey() {
-    return aesKey;
-  }
-
-  public short getKeySizeBits() {
-    return aesKey.getSize();
   }
 
   public static void onSave(Element element, KMAESKey kmKey) {
