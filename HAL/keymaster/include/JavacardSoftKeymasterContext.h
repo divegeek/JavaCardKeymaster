@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef SYSTEM_KEYMASTER_JAVA_CARD_SOFT_KEYMASTER_CONTEXT_H_
-#define SYSTEM_KEYMASTER_JAVA_CARD_SOFT_KEYMASTER_CONTEXT_H_
+#pragma once
 
 #include <keymaster/contexts/pure_soft_keymaster_context.h>
 #include <keymaster/contexts/soft_attestation_cert.h>
+
 namespace keymaster {
 
 class SoftKeymasterKeyRegistrations;
@@ -48,4 +48,3 @@ class JavaCardSoftKeymasterContext : public keymaster::PureSoftKeymasterContext 
 
 }  // namespace keymaster
 
-#endif  // SYSTEM_KEYMASTER_PURE_SOFT_KEYMASTER_CONTEXT_H_

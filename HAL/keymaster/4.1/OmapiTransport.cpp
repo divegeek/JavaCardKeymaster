@@ -14,14 +14,16 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  */
+
+#include "Transport.h"
+
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
+
 #include <vector>
 
 #include <android-base/logging.h>
-
-#include "Transport.h"
 
 namespace se_transport {
 
