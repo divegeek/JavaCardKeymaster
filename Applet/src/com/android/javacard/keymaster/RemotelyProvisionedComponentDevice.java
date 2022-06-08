@@ -159,10 +159,13 @@ public class RemotelyProvisionedComponentDevice {
     operation = JCSystem.makeTransientObjectArray((short) 1, JCSystem.CLEAR_ON_RESET);
     dataIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
     // Initialize RKP mac key
-    short offset = repository.alloc((short) RKP_MAC_KEY_SIZE);
-    byte[] buffer = repository.getHeap();
-    seProvider.getTrueRandomNumber(buffer, offset, RKP_MAC_KEY_SIZE);
-    storeDataInst.createRkpMacKey(buffer, offset, RKP_MAC_KEY_SIZE);
+    if (!seProvider.isUpgrading()) {
+      short offset = repository.allocReclaimableMemory((short) RKP_MAC_KEY_SIZE);
+      byte[] buffer = repository.getHeap();
+      seProvider.getTrueRandomNumber(buffer, offset, RKP_MAC_KEY_SIZE);
+      storeDataInst.createRkpMacKey(buffer, offset, RKP_MAC_KEY_SIZE);
+      repository.reclaimMemory(RKP_MAC_KEY_SIZE);
+    }
     operation[0] = null;
     createAuthorizedEEKRoot();
   }
