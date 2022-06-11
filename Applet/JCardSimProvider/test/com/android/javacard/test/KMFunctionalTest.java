@@ -991,6 +991,43 @@ public class KMFunctionalTest {
     return response;
   }
 
+  private ResponseAPDU computeSharedSecret(CardSimulator simulator) {
+    short ret = getHmacSharingParams();
+    short error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
+    KMHmacSharingParameters params = KMHmacSharingParameters.cast(KMArray.cast(ret).get((short) 1));
+    short seed = params.getSeed();
+    short nonce = params.getNonce();
+
+    short params1 = KMHmacSharingParameters.instance();
+    KMHmacSharingParameters.cast(params1).setSeed(KMByteBlob.instance((short) 0));
+    short num = KMByteBlob.instance((short) 32);
+    Util.arrayCopyNonAtomic(
+        KMByteBlob.cast(nonce).getBuffer(),
+        KMByteBlob.cast(nonce).getStartOff(),
+        KMByteBlob.cast(num).getBuffer(),
+        KMByteBlob.cast(num).getStartOff(),
+        KMByteBlob.cast(num).length());
+
+    KMHmacSharingParameters.cast(params1).setNonce(num);
+    short params2 = KMHmacSharingParameters.instance();
+    KMHmacSharingParameters.cast(params2).setSeed(KMByteBlob.instance((short) 0));
+    num = KMByteBlob.instance((short) 32);
+    cryptoProvider.newRandomNumber(
+        KMByteBlob.cast(num).getBuffer(),
+        KMByteBlob.cast(num).getStartOff(),
+        KMByteBlob.cast(num).length());
+    KMHmacSharingParameters.cast(params2).setNonce(num);
+    short arr = KMArray.instance((short) 2);
+    KMArray.cast(arr).add((short) 0, params1);
+    KMArray.cast(arr).add((short) 1, params2);
+    short arrPtr = KMArray.instance((short) 1);
+    KMArray.cast(arrPtr).add((short) 0, arr);
+    CommandAPDU apdu = encodeApdu((byte) INS_COMPUTE_SHARED_HMAC_CMD, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return response;
+  }
+
   private void provisionCmd(CardSimulator simulator) {
     Assert.assertEquals(0x9000, provisionSigningKey(simulator).getSW());
     Assert.assertEquals(0x9000, provisionSigningCertificate(simulator).getSW());
@@ -1004,6 +1041,8 @@ public class KMFunctionalTest {
     setAndroidOSSystemProperties(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
       (short) VENDOR_PATCH_LEVEL);
     Assert.assertEquals(0x9000, provisionLocked(simulator).getSW());
+    // negotiate shared secret.
+    Assert.assertEquals(0x9000, computeSharedSecret(simulator).getSW());
   }
 
   private void cleanUp() {
@@ -1575,6 +1614,7 @@ public class KMFunctionalTest {
         setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
         setAndroidOSSystemProperties(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
             (short) VENDOR_PATCH_LEVEL);
+        computeSharedSecret(simulator);
       }
       short rsaKeyArr = generateRsaKey(null, null, KMInteger.uint_8((byte) 1));
       Assert.assertEquals(KMInteger.cast(KMArray.cast(rsaKeyArr).get((short) 0)).getShort(),
@@ -3230,6 +3270,7 @@ public class KMFunctionalTest {
     // set android system properties
     setAndroidOSSystemProperties(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
         (short) VENDOR_PATCH_LEVEL);
+    computeSharedSecret(simulator);
     Assert.assertEquals(0x9000, provisionOemUnLock(simulator).getSW());
     Assert.assertEquals(0x9000, provisionSharedSecret(simulator).getSW());
     Assert.assertEquals(0x9000, provisionAttestIds(simulator).getSW());
@@ -3339,6 +3380,8 @@ public class KMFunctionalTest {
     Assert.assertEquals(0x9000, provisionAttestIds(simulator).getSW());
     Assert.assertEquals(0x9000, provisionOEMRootPublicKey(simulator).getSW());
     Assert.assertEquals(0x9000, provisionLocked(simulator).getSW());
+    // set bootup parameters
+    setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
     ResponseAPDU response = provisionSharedSecret(simulator);
     Assert.assertEquals(0x9000, response.getSW());
     byte[] respBuf = response.getBytes();
@@ -3465,6 +3508,7 @@ public class KMFunctionalTest {
       setBootParams(simulator, (short) test_data[i][3]);
       setAndroidOSSystemProperties(simulator, (short) test_data[i][0], (short) test_data[i][1],
           (short) test_data[i][2]);
+      computeSharedSecret(simulator);
       ret = upgradeKey(
         KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
         null, null, test_data[i][5]);
