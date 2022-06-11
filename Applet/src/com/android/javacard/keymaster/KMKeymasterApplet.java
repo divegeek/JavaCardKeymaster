@@ -767,7 +767,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[VERIFICATION_TOKEN] = KMArray.cast(tmpVariables[0]).get((short) 1);
     validateVerificationToken(data[VERIFICATION_TOKEN], scratchPad);
     short verTime = KMVerificationToken.cast(data[VERIFICATION_TOKEN]).getTimestamp();
-    short lastDeviceLockedTime = repository.getDeviceTimeStamp();
+    short lastDeviceLockedTime;
+    try {
+      lastDeviceLockedTime = repository.getDeviceTimeStamp();
+    } catch (KMException e) {
+      lastDeviceLockedTime = KMInteger.uint_8((byte) 0);
+    }
     if (KMInteger.compare(verTime, lastDeviceLockedTime) > 0) {
       Util.arrayFillNonAtomic(scratchPad, (short) 0, KMInteger.UINT_64, (byte) 0);
       KMInteger.cast(verTime).getValue(scratchPad, (short) 0, KMInteger.UINT_64);
