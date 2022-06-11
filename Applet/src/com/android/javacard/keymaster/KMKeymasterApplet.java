@@ -237,6 +237,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // INS_ADD_RNG_ENTROPY_CMD
   // INS_COMPUTE_SHARED_HMAC_CMD
   // INS_GET_HMAC_SHARING_PARAM_CMD
+  // INS_EARLY_BOOT_ENDED
   public static final byte SET_BOOT_PARAMS_SUCCESS = 0x01;
   public static final byte SET_SYSTEM_PROPERTIES_SUCCESS = 0x02;
   public static final byte NEGOTIATED_SHARED_SECRET_SUCCESS = 0x04;
@@ -596,16 +597,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           case INS_OEM_UNLOCK_PROVISIONING_CMD:
             processOEMUnlockProvisionCmd(apdu);
             break;
-          case INS_PROVISION_ATTEST_IDS_CMD:
-          case INS_PROVISION_ATTESTATION_KEY_CMD:
-          case INS_PROVISION_ATTESTATION_CERT_DATA_CMD:
-          case INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD:
-          case INS_PROVISION_PRESHARED_SECRET_CMD:
-          case INS_SE_FACTORY_LOCK_PROVISIONING_CMD:
-          case INS_OEM_LOCK_PROVISIONING_CMD:
-            // Provision commands are not allowed in ACTIVE_STATE
-            ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-            break;
           default:
             ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
         }
@@ -642,10 +633,21 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         // Keymaster is ready to execute all the commands.
         return true;
       }
-      // Below commands are allowed even if the Keymaster is not ready.
       switch (apduIns) {
+        case INS_PROVISION_ATTEST_IDS_CMD:
+        case INS_PROVISION_ATTESTATION_KEY_CMD:
+        case INS_PROVISION_ATTESTATION_CERT_DATA_CMD:
+        case INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD:
+        case INS_PROVISION_PRESHARED_SECRET_CMD:
+        case INS_SE_FACTORY_LOCK_PROVISIONING_CMD:
+        case INS_OEM_LOCK_PROVISIONING_CMD:
+          // Provision commands are not allowed in ACTIVE_STATE
+          ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+          break;
+        // Below commands are allowed even if the Keymaster is not ready.
         case INS_GET_HW_INFO_CMD:
         case INS_ADD_RNG_ENTROPY_CMD:
+        case INS_EARLY_BOOT_ENDED_CMD:
         case INS_GET_HMAC_SHARING_PARAM_CMD:
         case INS_COMPUTE_SHARED_HMAC_CMD:
         case INS_SET_VERSION_PATCHLEVEL_CMD:
