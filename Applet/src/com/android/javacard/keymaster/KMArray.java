@@ -50,7 +50,7 @@ public class KMArray extends KMType {
 
   public static short exp() {
     short ptr = instance(ARRAY_TYPE, ARRAY_HEADER_SIZE);
-    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), (short) 0);
+    Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), KMType.INVALID_VALUE);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), ANY_ARRAY_LENGTH);
     return ptr;
   }

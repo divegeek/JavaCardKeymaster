@@ -40,7 +40,7 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte TRUE = 0x01;
   private static final byte FALSE = 0x00;
   // RKP Version
-  private static final short RKP_VERSION = (short) 0x01;
+  private static final short RKP_VERSION = (short) 0x02;
   // Boot params
   private static final byte OS_VERSION_ID = 0x00;
   private static final byte SYSTEM_PATCH_LEVEL_ID = 0x01;
@@ -52,7 +52,7 @@ public class RemotelyProvisionedComponentDevice {
       0x72, 0x65, 0x72};
   public static final byte[] PRODUCT = {0x70, 0x72, 0x6F, 0x64, 0x75, 0x63, 0x74};
   public static final byte[] MODEL = {0x6D, 0x6F, 0x64, 0x65, 0x6C};
-  public static final byte[] BOARD = {0x62, 0x6F, 0x61, 0x72, 0x64};
+  public static final byte[] DEVICE = {0x64, 0x65, 0x76, 0x69, 0x63, 0x65};
   public static final byte[] VB_STATE = {0x76, 0x62, 0x5F, 0x73, 0x74, 0x61, 0x74, 0x65};
   public static final byte[] BOOTLOADER_STATE =
       {0x62, 0x6F, 0x6F, 0x74, 0x6C, 0x6F, 0x61, 0x64, 0x65, 0x72, 0x5F, 0x73, 0x74, 0x61, 0x74,
@@ -74,8 +74,8 @@ public class RemotelyProvisionedComponentDevice {
       {0x76, 0x65, 0x72, 0x73, 0x69, 0x6F, 0x6E};
   public static final byte[] SECURITY_LEVEL =
       {0x73, 0x65, 0x63, 0x75, 0x72, 0x69, 0x74, 0x79, 0x5F, 0x6C, 0x65, 0x76, 0x65, 0x6C};
-  public static final byte[] ATTEST_ID_STATE =
-      {0x61, 0x74, 0x74, 0x5f, 0x69, 0x64, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65};
+  public static final byte[] FUSED =
+      {0x66, 0x75, 0x73, 0x65, 0x64};
   // Verified boot state values
   public static final byte[] VB_STATE_GREEN = {0x67, 0x72, 0x65, 0x65, 0x6E};
   public static final byte[] VB_STATE_YELLOW = {0x79, 0x65, 0x6C, 0x6C, 0x6F, 0x77};
@@ -85,14 +85,15 @@ public class RemotelyProvisionedComponentDevice {
   public static final byte[] UNLOCKED = {0x75, 0x6E, 0x6C, 0x6F, 0x63, 0x6B, 0x65, 0x64};
   public static final byte[] LOCKED = {0x6C, 0x6F, 0x63, 0x6B, 0x65, 0x64};
   // Device info CDDL schema version
-  public static final byte DI_SCHEMA_VERSION = 1;
+  public static final byte DI_SCHEMA_VERSION = 2;
   public static final byte[] DI_SECURITY_LEVEL = {0x73, 0x74, 0x72, 0x6F, 0x6E, 0x67, 0x62, 0x6F,
       0x78};
-  public static final byte[] ATTEST_ID_LOCKED = {0x6c, 0x6f, 0x63, 0x6b, 0x65, 0x64};
-  public static final byte[] ATTEST_ID_OPEN = {0x6f, 0x70, 0x65, 0x6e};
   private static final short MAX_SEND_DATA = 1024;
   
   private static final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
+
+  private static final byte[] uniqueId = {0x73, 0x74, 0x72, 0x6f, 0x6e, 0x67, 0x62, 0x6f, 0x78,
+      0x20, 0x6b, 0x65, 0x79, 0x6d, 0x69, 0x6e, 0x74}; // "strongbox keymint"
   // more data or no data
   private static final byte MORE_DATA = 0x01; // flag to denote more data to retrieve
   private static final byte NO_DATA = 0x00;
@@ -242,12 +243,13 @@ public class RemotelyProvisionedComponentDevice {
   private void processGetRkpHwInfoCmd(APDU apdu) {
     // Make the response
     // Author name - Google.
-    short respPtr = KMArray.instance((short) 4);
+    short respPtr = KMArray.instance((short) 5);
     KMArray resp = KMArray.cast(respPtr);
     resp.add((short) 0, KMInteger.uint_16(KMError.OK));
     resp.add((short) 1, KMInteger.uint_16(RKP_VERSION));
     resp.add((short) 2, KMByteBlob.instance(google, (short) 0, (short) google.length));
     resp.add((short) 3, KMInteger.uint_8(KMType.RKP_CURVE_P256));
+    resp.add((short) 4, KMByteBlob.instance(uniqueId, (short) 0, (short) uniqueId.length));
     KMKeymasterApplet.sendOutgoing(apdu, respPtr);
   }
 
@@ -864,6 +866,7 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(rkpTmpVariables, metaOffset, PRODUCT,
         getAttestationId(KMType.ATTESTATION_ID_PRODUCT, scratchpad));
     updateItem(rkpTmpVariables, metaOffset, MODEL, getAttestationId(KMType.ATTESTATION_ID_MODEL, scratchpad));
+    updateItem(rkpTmpVariables, metaOffset, DEVICE, getAttestationId(KMType.ATTESTATION_ID_DEVICE, scratchpad));
     updateItem(rkpTmpVariables, metaOffset, VB_STATE, getVbState());
     updateItem(rkpTmpVariables, metaOffset, BOOTLOADER_STATE, getBootloaderState());
     updateItem(rkpTmpVariables, metaOffset, VB_META_DIGEST, getVerifiedBootHash(scratchpad));
@@ -876,9 +879,7 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(rkpTmpVariables, metaOffset, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(rkpTmpVariables, metaOffset, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
-    byte[] attestIdState = storeDataInst.isProvisionLocked() ? ATTEST_ID_LOCKED : ATTEST_ID_OPEN;
-    updateItem(rkpTmpVariables, metaOffset, ATTEST_ID_STATE,
-            KMTextString.instance(attestIdState, (short) 0, (short) attestIdState.length));
+    updateItem(rkpTmpVariables, metaOffset, FUSED, KMInteger.uint_8((byte) 0));
     // Create device info map.
     short map = KMMap.instance(rkpTmpVariables[1]);
     short mapIndex = 0;
@@ -900,7 +901,7 @@ public class RemotelyProvisionedComponentDevice {
    * Update the item inside the device info structure.
    *
    * @param deviceIds Device Info structure to be updated.
-   * @param meta Out parameter meta information. Offset 0 is index and Offset 1 is length.
+   * @param metaOffset Out parameter meta information. Offset 0 is index and Offset 1 is length.
    * @param item Key info to be updated.
    * @param value value to be updated.
    */

@@ -85,6 +85,7 @@ public class KMJCardSimulator implements KMSEProvider {
   private static byte[] entropyPool;
   private static byte[] rndNum;
   private KMHmacKey preSharedKey;
+  private boolean deviceRebooted = true;
 
   private static KMJCardSimulator jCardSimulator = null;
 
@@ -1514,16 +1515,17 @@ public KMOperation getRkpOperation(byte purpose, byte alg,
 
 @Override
 public boolean isBootSignalEventSupported() {
-	return false;
+	return true;
 }
 
 @Override
 public boolean isDeviceRebooted() {
-	return false;
+	return deviceRebooted;
 }
 
 @Override
 public void clearDeviceBooted(boolean resetBootFlag) {
+    deviceRebooted = false;
 	// TODO Auto-generated method stub
 	
 }

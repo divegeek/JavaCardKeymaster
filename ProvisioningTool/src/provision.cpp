@@ -223,9 +223,9 @@ int processInputFile() {
         return FAILURE;
     }
 
-    if (0 != provisionData(pSocket, kBootParams)) {
+    /*if (0 != provisionData(pSocket, kBootParams)) {
         return FAILURE;
-    }
+    }*/
     
     return SUCCESS;
 }

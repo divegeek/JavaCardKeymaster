@@ -32,6 +32,7 @@ public class KMEncoder {
   private static final byte ARRAY_TYPE = (byte) 0x80;
   private static final byte MAP_TYPE = (byte) 0xA0;
   private static final byte SIMPLE_VALUE_TYPE = (byte) 0xE0;
+  private static final byte SEMANTIC_TAG_TYPE = (byte) 0xC0;
 
   // masks
   private static final byte ADDITIONAL_MASK = 0x1F;
@@ -158,6 +159,9 @@ public class KMEncoder {
           break;
         case KMType.KEY_PARAM_TYPE:
           encodeKeyParam(exp);
+          break;
+        case KMType.SEMANTIC_TAG_TYPE:
+          encodeSemanticTag(exp);
           break;
         case KMType.COSE_KEY_TYPE:
         case KMType.COSE_HEADERS_TYPE:
@@ -487,6 +491,15 @@ public void encodeArrayOnlyLength(short arrLength, byte[] buffer, short offset, 
     short msbIndex = applyNegIntegerEncodingRule(val, startOff, len);
     encodeInteger(val, len, startOff, NEG_INT_TYPE);
     removeNegIntegerEncodingRule(val, startOff, len, msbIndex);
+  }
+
+  private void encodeSemanticTag(short obj) {
+    short tag = KMSemanticTag.cast(obj).getKeyPtr();
+    encode(KMSemanticTag.cast(obj).getValuePtr());
+    encodeInteger(KMInteger.cast(tag).getBuffer(),
+        KMInteger.cast(tag).length(),
+        KMInteger.cast(tag).getStartOff(),
+        SEMANTIC_TAG_TYPE);
   }
 
   private void encodeUnsignedInteger(short obj) {

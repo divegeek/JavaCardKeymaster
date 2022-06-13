@@ -28,7 +28,7 @@ import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 /**
- * KMRepository class manages persistent and volatile memory usage by the applet. Note the
+ * KMRepository class manages volatile memory usage by the applet. Note the
  * repository is only used by applet and it is not intended to be used by seProvider.
  */
 public class KMRepository {
