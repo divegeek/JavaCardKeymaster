@@ -63,6 +63,7 @@ public class KMProvision {
   private static final byte KEYMINT_CMD_APDU_START = 0x20;
   private static final byte INS_COMPUTE_SHARED_HMAC_CMD = KEYMINT_CMD_APDU_START + 10; //0x2A
   private static final byte INS_GET_HMAC_SHARING_PARAM_CMD = KEYMINT_CMD_APDU_START + 13; //0x2D
+  private static final byte INS_EARLY_BOOT_ENDED_CMD = KEYMINT_CMD_APDU_START + 21; //0x35
   private static final byte INS_INIT_STRONGBOX_CMD = KEYMINT_CMD_APDU_START + 26; //0x3A
   // The instructions from 0x43 to 0x4C will be reserved for KeyMint 1.0 for any future use.
   // KeyMint 2.0 Instructions
@@ -113,7 +114,8 @@ public class KMProvision {
   //----------------------------------------------------------------------------------------------
   //  Provision functions
   //----------------------------------------------------------------------------------------------
-  public static void setAndroidOSSystemProperties(CardSimulator simulator, KMEncoder encoder,
+  public static ResponseAPDU setAndroidOSSystemProperties(CardSimulator simulator,
+      KMEncoder encoder,
       KMDecoder decoder, short osVersion,
       short osPatchLevel, short vendorPatchLevel) {
     // Argument 1 OS Version
@@ -131,16 +133,11 @@ public class KMProvision {
     vals.add((short) 2, vendorpatchPtr);
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_INIT_STRONGBOX_CMD, arrPtr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void setBootParams(CardSimulator simulator, KMEncoder encoder, KMDecoder decoder,
+  public static ResponseAPDU setBootParams(CardSimulator simulator, KMEncoder encoder,
+      KMDecoder decoder,
       short bootPatchLevel) {
     // Argument 0 boot patch level
     short bootpatchPtr = KMInteger.uint_16((short) bootPatchLevel);
@@ -167,16 +164,10 @@ public class KMProvision {
     vals.add((short) 4, deviceLockedPtr);
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_SET_BOOT_PARAMS_CMD, arrPtr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void provisionAdditionalCertChain(CardSimulator simulator,
+  public static ResponseAPDU provisionAdditionalCertChain(CardSimulator simulator,
       KMSEProvider cryptoProvider, KMEncoder encoder, KMDecoder decoder) {
     short[] lengths = new short[2];
     byte[] rootPriv = new byte[128];
@@ -245,16 +236,10 @@ public class KMProvision {
             additionalCertChain);
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder,
         (byte) INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD, map);
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void provisionDeviceUniqueKeyPair(CardSimulator simulator,
+  public static ResponseAPDU provisionDeviceUniqueKeyPair(CardSimulator simulator,
       KMSEProvider cryptoProvider, KMEncoder encoder,
       KMDecoder decoder) {
     short[] lengths = new short[2];
@@ -281,16 +266,10 @@ public class KMProvision {
     KMArray.cast(arr).add((short) 0, coseKey);
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder,
         (byte) INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD, arr);
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void provisionOEMRootPublicKey(CardSimulator simulator, KMEncoder encoder,
+  public static ResponseAPDU provisionOEMRootPublicKey(CardSimulator simulator, KMEncoder encoder,
       KMDecoder decoder) {
     // KeyParameters.
     short arrPtr = KMArray.instance((short) 4);
@@ -321,16 +300,10 @@ public class KMProvision {
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD,
         finalArrayPtr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void provisionSharedSecret(CardSimulator simulator, KMEncoder encoder,
+  public static ResponseAPDU provisionSharedSecret(CardSimulator simulator, KMEncoder encoder,
       KMDecoder decoder) {
     byte[] sharedKeySecret = {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -343,16 +316,10 @@ public class KMProvision {
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_PROVISION_PRESHARED_SECRET_CMD,
         arrPtr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void provisionAttestIds(CardSimulator simulator, KMEncoder encoder,
+  public static ResponseAPDU provisionAttestIds(CardSimulator simulator, KMEncoder encoder,
       KMDecoder decoder) {
     short arrPtr = KMArray.instance((short) 8);
 
@@ -388,16 +355,10 @@ public class KMProvision {
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_PROVISION_ATTEST_IDS_CMD,
         outerArrPtr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void provisionLocked(CardSimulator simulator, KMEncoder encoder,
+  public static ResponseAPDU provisionLocked(CardSimulator simulator, KMEncoder encoder,
       KMDecoder decoder) {
     // Sign the Lock message
     byte[] signature = new byte[120];
@@ -420,16 +381,10 @@ public class KMProvision {
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_OEM_LOCK_PROVISIONING_CMD,
         arr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void provisionOemUnLock(CardSimulator simulator, KMEncoder encoder,
+  public static ResponseAPDU provisionOemUnLock(CardSimulator simulator, KMEncoder encoder,
       KMDecoder decoder) {
     // Sign the Lock message
     byte[] signature = new byte[120];
@@ -451,26 +406,14 @@ public class KMProvision {
 
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_OEM_UNLOCK_PROVISIONING_CMD,
         arr);
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(apdu);
   }
 
-  public static void provisionSeLocked(CardSimulator simulator, KMDecoder decoder) {
+  public static ResponseAPDU provisionSeLocked(CardSimulator simulator, KMDecoder decoder) {
     CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_SE_FACTORY_PROVISIONING_LOCK_CMD,
         0x50, 0x00);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
+    return simulator.transmitCommand(commandAPDU);
   }
 
   public static void computeSharedSecret(CardSimulator simulator, KMSEProvider cryptoProvider,
@@ -520,22 +463,43 @@ public class KMProvision {
   public static void provisionCmd(CardSimulator simulator,
       KMSEProvider cryptoProvider, KMEncoder encoder,
       KMDecoder decoder) {
-    provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder);
-    provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder);
-    provisionSeLocked(simulator, decoder);
-    provisionSharedSecret(simulator, encoder, decoder);
-    provisionAttestIds(simulator, encoder, decoder);
-    provisionOEMRootPublicKey(simulator, encoder, decoder);
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        provisionSeLocked(simulator, decoder)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        provisionSharedSecret(simulator, encoder, decoder)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        provisionAttestIds(simulator, encoder, decoder)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        provisionOEMRootPublicKey(simulator, encoder, decoder)));
     //setBootParams(simulator, encoder, decoder, (short) BOOT_PATCH_LEVEL);
     // set android system properties
-    setAndroidOSSystemProperties(simulator, encoder, decoder, (short) OS_VERSION,
-        (short) OS_PATCH_LEVEL,
-        (short) VENDOR_PATCH_LEVEL);
-    provisionLocked(simulator, encoder, decoder);
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        setAndroidOSSystemProperties(simulator, encoder, decoder, (short) OS_VERSION,
+            (short) OS_PATCH_LEVEL,
+            (short) VENDOR_PATCH_LEVEL)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        provisionLocked(simulator, encoder, decoder)));
     // negotiate shared secret.
     computeSharedSecret(simulator, cryptoProvider, encoder, decoder);
     byte[] challenge = getRootOfTrustChallenge(simulator, encoder, decoder);
     sendRootOfTrust(simulator, cryptoProvider, encoder, decoder, challenge);
+    sendEarlyBootEnded(simulator, decoder);
+  }
+
+  public static void sendEarlyBootEnded(CardSimulator simulator, KMDecoder decoder) {
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_EARLY_BOOT_ENDED_CMD, 0x50, 0x00);
+    //print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(commandAPDU);
+    Assert.assertEquals(0x9000, response.getSW());
+    byte[] resp = response.getBytes();
+    short arr = KMArray.instance((short) 1);
+    KMArray.cast(arr).add((short) 0, KMInteger.exp());
+    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
+    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
   }
 
   public static short getHmacSharingParams(CardSimulator simulator, KMDecoder decoder) {

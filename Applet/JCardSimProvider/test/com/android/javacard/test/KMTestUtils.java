@@ -13,7 +13,9 @@ import com.android.javacard.keymaster.KMDecoder;
 import com.android.javacard.keymaster.KMEncoder;
 import com.android.javacard.keymaster.KMError;
 import com.android.javacard.keymaster.KMInteger;
+import com.android.javacard.keymaster.KMKeyCharacteristics;
 import com.android.javacard.keymaster.KMKeyParameters;
+import com.android.javacard.keymaster.KMKeymasterApplet;
 import com.android.javacard.keymaster.KMMap;
 import com.android.javacard.keymaster.KMNInteger;
 import com.android.javacard.keymaster.KMSemanticTag;
@@ -24,12 +26,15 @@ import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMECPrivateKey;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMSEProvider;
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
 import javacard.framework.Util;
 import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
 import javax.smartcardio.CommandAPDU;
+import javax.smartcardio.ResponseAPDU;
 import org.junit.Assert;
 
 public class KMTestUtils {
@@ -102,6 +107,13 @@ public class KMTestUtils {
       (byte) 0xeb, (byte) 0x86, (byte) 0x99, (byte) 0x98, (byte) 0xab, (byte) 0x3a, (byte) 0xb4,
       (byte) 0x80, (byte) 0xaa, (byte) 0xbd, (byte) 0x50};
 
+  public static final short ADDITIONAL_MASK = 0x1F;
+  private static final short UINT8_LENGTH = 0x18;
+  private static final short UINT16_LENGTH = 0x19;
+  public static final short MAJOR_TYPE_MASK = 0xE0;
+  public static final byte CBOR_ARRAY_MAJOR_TYPE = (byte) 0x80;
+  public static final byte CBOR_UINT_MAJOR_TYPE = 0x00;
+  public static final short SE_POWER_RESET_FLAG = (short) 0x4000;
   public static final String PROD_EEK_ID =
       "3573B73FA08A8089B12667E9CB7C75A1AF0261FC6E6503913BD34B7D14943E46";
   public static final String PROD_PUB_KEY =
@@ -138,6 +150,33 @@ public class KMTestUtils {
     Util.arrayCopyNonAtomic(buf, (short) 0, apdu, (short) 0,
         (short) (7 + (short) encodedCmd.length));
     return new CommandAPDU(apdu);
+  }
+
+  public static byte readMajorType(byte[] resp) {
+    byte val = resp[0];
+    return (byte) (val & MAJOR_TYPE_MASK);
+  }
+
+  // payload length cannot be more then 16 bits.
+  public static short readMajorTypeWithPayloadLength(byte[] resp, short majorType) {
+    short cur = (short) 0;
+    short payloadLength = 0;
+    byte val = resp[cur++];
+    if ((short) (val & MAJOR_TYPE_MASK) != majorType) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short lenType = (short) (val & ADDITIONAL_MASK);
+    if (lenType > UINT16_LENGTH) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
+    if (lenType < UINT8_LENGTH) {
+      payloadLength = lenType;
+    } else if (lenType == UINT8_LENGTH) {
+      payloadLength = (short) (resp[cur] & 0xFF);
+    } else {
+      payloadLength = Util.getShort(resp, cur);
+    }
+    return payloadLength;
   }
 
   public static short decodeCoseMac(KMDecoder decoder, byte[] coseMac, short coseMacOff,
@@ -990,4 +1029,78 @@ public class KMTestUtils {
     System.out.println(sb.toString());
   }
 
+  public static short translateExtendedErrorCodes(short err) {
+    switch (err) {
+      case KMError.SW_CONDITIONS_NOT_SATISFIED:
+      case KMError.UNSUPPORTED_CLA:
+      case KMError.INVALID_P1P2:
+      case KMError.INVALID_DATA:
+      case KMError.CRYPTO_ILLEGAL_USE:
+      case KMError.CRYPTO_ILLEGAL_VALUE:
+      case KMError.CRYPTO_INVALID_INIT:
+      case KMError.CRYPTO_UNINITIALIZED_KEY:
+      case KMError.GENERIC_UNKNOWN_ERROR:
+        err = KMError.UNKNOWN_ERROR;
+        break;
+      case KMError.CRYPTO_NO_SUCH_ALGORITHM:
+        err = KMError.UNSUPPORTED_ALGORITHM;
+        break;
+      case KMError.UNSUPPORTED_INSTRUCTION:
+      case KMError.CMD_NOT_ALLOWED:
+      case KMError.SW_WRONG_LENGTH:
+        err = KMError.UNIMPLEMENTED;
+        break;
+      default:
+        break;
+    }
+    return err;
+  }
+
+  public static short extractKeyBlobArray(KMDecoder decoder, byte[] buf, short off, short buflen) {
+    short byteBlobExp = KMByteBlob.exp();
+    short keyChar = KMKeyCharacteristics.exp();
+    short keyParam = KMKeyParameters.exp();
+    short ret = KMArray.instance(KMKeymasterApplet.ASYM_KEY_BLOB_SIZE_V2_V3);
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_VERSION_OFFSET, KMInteger.exp());// Version
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_SECRET, byteBlobExp);// Secret
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_NONCE, byteBlobExp);// Nonce
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, byteBlobExp);// AuthTag
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_PARAMS, keyChar);// KeyChars
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_CUSTOM_TAGS, keyParam);// KeyChars
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_PUB_KEY, byteBlobExp);// PubKey
+
+    ret = decoder.decodeArray(ret, buf, off, buflen);
+    return ret;
+  }
+
+  public static short getPublicKey(KMDecoder decoder, byte[] keyBlob, short off, short len,
+      byte[] pubKey, short pubKeyOff) {
+    short keyBlobPtr = extractKeyBlobArray(decoder, keyBlob, off, len);
+    short arrayLen = KMArray.cast(keyBlobPtr).length();
+    if (arrayLen < KMKeymasterApplet.ASYM_KEY_BLOB_SIZE_V2_V3) {
+      return 0;
+    }
+    short pubKeyPtr = KMArray.cast(keyBlobPtr).get(
+        KMKeymasterApplet.KEY_BLOB_PUB_KEY);
+    Util.arrayCopy(KMByteBlob.cast(pubKeyPtr).getBuffer(),
+        KMByteBlob.cast(pubKeyPtr).getStartOff(), pubKey, pubKeyOff,
+        KMByteBlob.cast(pubKeyPtr).length());
+    return KMByteBlob.cast(pubKeyPtr).length();
+  }
+
+  public static short decodeError(KMDecoder decoder, ResponseAPDU response) {
+    byte[] respBuf = response.getBytes();
+    short arr = KMArray.instance((short) 1);
+    KMArray.cast(arr).add((short) 0, KMInteger.exp());
+    arr = decoder.decode(arr, respBuf, (short) 0, (short) respBuf.length);
+    return KMInteger.cast(KMArray.cast(arr).get((short) 0)).getShort();
+  }
+
+  public static String toHexString(byte[] num) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < num.length; i++) {
+      sb.append(String.format("%02X", num[i]));
+    }
+    return sb.toString();
+  }
 }

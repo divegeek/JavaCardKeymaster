@@ -553,7 +553,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           processGetRootOfTrustChallenge(apdu);
           break;
         case INS_GET_ROT_DATA_CMD:
-          sendError(apdu, KMError.UNIMPLEMENTED);
+          sendResponse(apdu, KMError.UNIMPLEMENTED);
           break;
         case INS_SEND_ROT_DATA_CMD:
           processSendRootOfTrust(apdu);
@@ -620,7 +620,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     short semanticTag = KMArray.cast(cmd).get((short) 0);
     short coseMacPtr = KMSemanticTag.cast(semanticTag).getValuePtr();
-;    // Exp for KMCoseHeaders
+    // Exp for KMCoseHeaders
     short coseHeadersExp = KMCoseHeaders.exp();
     // validate protected Headers
     short ptr = KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_PROTECTED_PARAMS_OFFSET);
@@ -664,17 +664,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Allow set boot params only when the host device reboots and the applet is in
     // active state. If host does not support boot signal event, then allow this
     // instruction any time.
+    kmDataStore.getDeviceBootStatus(scratchPad, (short) 0);
+    boolean isBootParamsSet =
+        ((scratchPad[0] & KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS) != 0) ? true : false;
     if (!seProvider.isBootSignalEventSupported() ||
-         seProvider.isDeviceRebooted()) {
+        !isBootParamsSet) {
       // store the data.
       storeRootOfTrust(rotPayload, scratchPad);
       kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS);
-      seProvider.clearDeviceBooted(false);
     }
     // Invalidate the challenge
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 16, (byte) 0);
     kmDataStore.setChallenge(scratchPad, (short) 0, (short) 16);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void storeRootOfTrust(short rotPayload, byte[] scratchPad) {
@@ -735,7 +737,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
        case INS_COMPUTE_SHARED_HMAC_CMD:
        case INS_EARLY_BOOT_ENDED_CMD:
        case INS_INIT_STRONGBOX_CMD:
-       case INS_EARLY_BOOT_ENDED_CMD:
        case INS_GET_ROT_CHALLENGE_CMD:
        case INS_SEND_ROT_DATA_CMD:
          return true;
@@ -2664,6 +2665,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               KMException.throwIt(KMError.UNSUPPORTED_MGF_DIGEST);
             }
             op.setMgfDigest((byte) mgfDigest);
+          } else {
+            op.setMgfDigest(KMType.SHA1);
           }
         }
         op.setPadding((byte) param);
