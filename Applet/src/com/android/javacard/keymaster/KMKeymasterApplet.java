@@ -550,7 +550,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           processGetRootOfTrustChallenge(apdu);
           break;
         case INS_GET_ROT_DATA_CMD:
-          sendError(apdu, KMError.UNIMPLEMENTED);
+          sendResponse(apdu, KMError.UNIMPLEMENTED);
           break;
         case INS_SEND_ROT_DATA_CMD:
           processSendRootOfTrust(apdu);
@@ -671,7 +671,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // Invalidate the challenge
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 16, (byte) 0);
     kmDataStore.setChallenge(scratchPad, (short) 0, (short) 16);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void storeRootOfTrust(short rotPayload, byte[] scratchPad) {
@@ -732,7 +732,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
        case INS_COMPUTE_SHARED_HMAC_CMD:
        case INS_EARLY_BOOT_ENDED_CMD:
        case INS_INIT_STRONGBOX_CMD:
-       case INS_EARLY_BOOT_ENDED_CMD:
        case INS_GET_ROT_CHALLENGE_CMD:
        case INS_SEND_ROT_DATA_CMD:
          return true;

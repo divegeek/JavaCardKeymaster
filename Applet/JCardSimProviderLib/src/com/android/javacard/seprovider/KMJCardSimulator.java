@@ -1490,6 +1490,5 @@ public boolean isDeviceRebooted() {
 public void clearDeviceBooted(boolean resetBootFlag) {
     deviceRebooted = false;
 	// TODO Auto-generated method stub
-	
 }
 }
