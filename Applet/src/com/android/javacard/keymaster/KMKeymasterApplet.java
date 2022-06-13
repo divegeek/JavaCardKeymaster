@@ -176,7 +176,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 32; //0x40
   public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
   public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34; //0x42
-  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 35; //0x43
+  // The instructions from 0x43 to 0x4C will be reserved for KeyMint 1.0 for any future use.
+  // KeyMint 2.0 Instructions
+  private static final byte INS_GET_ROT_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 45; // 0x4D
+  private static final byte INS_GET_ROT_DATA_CMD = KEYMINT_CMD_APDU_START + 46; // 0x4E
+  private static final byte INS_SEND_ROT_DATA_CMD = KEYMINT_CMD_APDU_START + 47; // 0x4F
+  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 48; //0x50
   private static final byte INS_END_KM_CMD = 0x7F;
 
   // Data Dictionary items
@@ -540,6 +545,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_GET_RKP_HARDWARE_INFO:
           rkp.process(apduIns, apdu);
           break;
+          //KeyMint 2.0
+        case INS_GET_ROT_CHALLENGE_CMD:
+          processGetRootOfTrustChallenge(apdu);
+          break;
+        case INS_GET_ROT_DATA_CMD:
+          sendError(apdu, KMError.UNIMPLEMENTED);
+          break;
+        case INS_SEND_ROT_DATA_CMD:
+          processSendRootOfTrust(apdu);
+          break;
         default:
           ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
       }
@@ -564,6 +579,142 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
+  private void processGetRootOfTrustChallenge(APDU apdu) {
+    byte[] scratchpad = apdu.getBuffer();
+    // Generate 16-byte random challenge nonce, used to prove freshness when exchanging root of
+    // trust data.
+    seProvider.newRandomNumber(scratchpad, (short) 0, (short) 16);
+    kmDataStore.setChallenge(scratchpad, (short) 0, (short) 16);
+    short challenge = KMByteBlob.instance(scratchpad, (short) 0, (short) 16);
+    short arr = KMArray.instance((short) 2);
+    KMArray.cast(arr).add((short) 0, KMInteger.uint_16(KMError.OK));
+    KMArray.cast(arr).add((short) 1, challenge);
+    sendOutgoing(apdu, arr);
+  }
+
+  private short sendRootOfTrustCmd(APDU apdu) {
+    short arrInst = KMArray.instance((short) 4);
+    short headers = KMCoseHeaders.exp();
+    KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
+    KMArray.cast(arrInst).add((short) 1, headers);
+    KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
+    KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
+    short semanticTag = KMSemanticTag.exp(arrInst);
+    short arr = KMArray.exp(semanticTag);
+    return receiveIncoming(apdu, arr);
+  }
+
+  private void processSendRootOfTrust(APDU apdu) {
+    byte[] scratchPad = apdu.getBuffer();
+    short cmd = KMType.INVALID_VALUE;
+    // As per VTS if the input data is empty or not well-formed
+    // CoseMac return VERIFICATION_FAILED error.
+    try {
+      cmd = sendRootOfTrustCmd(apdu);
+    } catch (Exception e) {
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+
+    short semanticTag = KMArray.cast(cmd).get((short) 0);
+    short coseMacPtr = KMSemanticTag.cast(semanticTag).getValuePtr();
+;    // Exp for KMCoseHeaders
+    short coseHeadersExp = KMCoseHeaders.exp();
+    // validate protected Headers
+    short ptr = KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_PROTECTED_PARAMS_OFFSET);
+    ptr = decoder.decode(coseHeadersExp, KMByteBlob.cast(ptr).getBuffer(),
+        KMByteBlob.cast(ptr).getStartOff(), KMByteBlob.cast(ptr).length());
+
+    if (!KMCoseHeaders.cast(ptr).isDataValid(tmpVariables, KMCose.COSE_ALG_HMAC_256,
+        KMType.INVALID_VALUE)) {
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+
+    // Validate the Mac
+    short len = kmDataStore.getChallenge(scratchPad, (short) 0);
+    short extAad = KMByteBlob.instance(scratchPad, (short) 0, len);
+    // Compute CoseMac Structure and compare the macs.
+    short rotPayload = KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_PAYLOAD_OFFSET);
+    short macStructure =
+        KMCose.constructCoseMacStructure(
+            KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_PROTECTED_PARAMS_OFFSET),
+            extAad,
+            rotPayload);
+    short encodedLen = KMKeymasterApplet.encodeToApduBuffer(macStructure, scratchPad, (short) 0,
+        KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+
+    short hmacLen =
+        seProvider.hmacSign(kmDataStore.getComputedHmacKey(), scratchPad, (short) 0,
+            encodedLen, scratchPad, encodedLen);
+
+    if (hmacLen != KMByteBlob.cast(
+        KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_TAG_OFFSET)).length()) {
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+
+    if (0 != Util.arrayCompare(scratchPad, encodedLen,
+        KMByteBlob.cast(KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_TAG_OFFSET)).getBuffer(),
+        KMByteBlob.cast(KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_TAG_OFFSET)).getStartOff(),
+        hmacLen)) {
+      KMException.throwIt(KMError.VERIFICATION_FAILED);
+    }
+    // Store the data only once after reboot.
+    // Allow set boot params only when the host device reboots and the applet is in
+    // active state. If host does not support boot signal event, then allow this
+    // instruction any time.
+    if (!seProvider.isBootSignalEventSupported() ||
+         seProvider.isDeviceRebooted()) {
+      // store the data.
+      storeRootOfTrust(rotPayload, scratchPad);
+      kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS);
+      seProvider.clearDeviceBooted(false);
+    }
+    // Invalidate the challenge
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 16, (byte) 0);
+    kmDataStore.setChallenge(scratchPad, (short) 0, (short) 16);
+    sendError(apdu, KMError.OK);
+  }
+
+  private void storeRootOfTrust(short rotPayload, byte[] scratchPad) {
+    short byteBlobExp = KMByteBlob.exp();
+    short intExp = KMInteger.exp();
+    short boolExp = KMSimpleValue.exp();
+    short arr = KMArray.instance((short) 5);
+    KMArray.cast(arr).add((short) 0, byteBlobExp); // Verfied boot key.
+    KMArray.cast(arr).add((short) 1, boolExp); // deviceLocked.
+    KMArray.cast(arr).add((short) 2, intExp); // Verified Boot State.
+    KMArray.cast(arr).add((short) 3, byteBlobExp); // Verfied boot hash.
+    KMArray.cast(arr).add((short) 4, intExp); // Boot patch level
+    short semanticExp = KMSemanticTag.exp(arr);
+
+    short semanticPtr = decoder.decode(semanticExp, KMByteBlob.cast(rotPayload).getBuffer(),
+        KMByteBlob.cast(rotPayload).getStartOff(), KMByteBlob.cast(rotPayload).length());
+    short rotArr = KMSemanticTag.cast(semanticPtr).getValuePtr();
+    // Store verified boot key
+    short ptr = KMArray.cast(rotArr).get((short) 0);
+    kmDataStore.setBootKey(KMByteBlob.cast(ptr).getBuffer(),
+        KMByteBlob.cast(ptr).getStartOff(),
+        KMByteBlob.cast(ptr).length());
+    // Store Boot device locked.
+    ptr = KMArray.cast(rotArr).get((short) 1);
+    kmDataStore.setDeviceLocked(
+        (KMSimpleValue.cast(ptr).getValue() == KMSimpleValue.TRUE) ? true : false);
+    // Store verified boot state
+    ptr = KMArray.cast(rotArr).get((short) 2);
+    kmDataStore.setBootState(KMInteger.cast(ptr).getShort());
+    // Store Verified boot hash
+    ptr = KMArray.cast(rotArr).get((short) 3);
+    kmDataStore.setVerifiedBootHash(KMByteBlob.cast(ptr).getBuffer(),
+        KMByteBlob.cast(ptr).getStartOff(),
+        KMByteBlob.cast(ptr).length());
+    // Store boot patch level
+    ptr = KMArray.cast(rotArr).get((short) 4);
+    kmDataStore.setBootPatchLevel(KMInteger.cast(ptr).getBuffer(),
+        KMInteger.cast(ptr).getStartOff(),
+        KMInteger.cast(ptr).length());
+  }
+
+
+
   //After every device boot, the Keymaster becomes ready to execute all the commands only after
   // 1. boot parameters are set,
   // 2. system properties are set and
@@ -575,11 +726,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
      // Below commands are allowed even if the Keymaster is not ready.
      switch (apduIns) {
        case INS_GET_HW_INFO_CMD:
+       case INS_GET_RKP_HARDWARE_INFO:
        case INS_ADD_RNG_ENTROPY_CMD:
        case INS_GET_HMAC_SHARING_PARAM_CMD:
        case INS_COMPUTE_SHARED_HMAC_CMD:
+       case INS_EARLY_BOOT_ENDED_CMD:
        case INS_INIT_STRONGBOX_CMD:
        case INS_EARLY_BOOT_ENDED_CMD:
+       case INS_GET_ROT_CHALLENGE_CMD:
+       case INS_SEND_ROT_DATA_CMD:
          return true;
        default:
          break;
@@ -774,7 +929,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processGetHwInfoCmd(APDU apdu) {
     // No arguments expected
-    final byte version = 1;
+    final byte version = 2;
     // Make the response
     short respPtr = KMArray.instance((short) 6);
     KMArray resp = KMArray.cast(respPtr);
@@ -1073,7 +1228,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (version < KEYBLOB_CURRENT_VERSION) {
       return true;
     }
-    short bootPatchLevel = getBootPatchLevel(scratchPad);
+    short bootPatchLevel = kmDataStore.getBootPatchLevel();
     // Fill the key-value properties in the scratchpad
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 16, (byte) 0);
     Util.setShort(scratchPad, (short) 0, KMType.OS_VERSION);
@@ -3770,13 +3925,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private static void validateECKeys() {
     // Read key size
-    short eccurve = KMEnumTag.getValue(KMType.ECCURVE, data[KEY_PARAMETERS]);
-    if(!KMTag.isValidKeySize(data[KEY_PARAMETERS])) {
-      if (eccurve == KMType.INVALID_VALUE) {
-        KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
-      } else if (eccurve != KMType.P_256) {
-        KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
-      }
+    short ecCurve = KMEnumTag.getValue(KMType.ECCURVE, data[KEY_PARAMETERS]);
+    /* In KeyMint 2.0, If EC_CURVE not provided, generateKey
+     * must return ErrorCode::UNSUPPORTED_KEY_SIZE or ErrorCode::UNSUPPORTED_EC_CURVE.
+     */
+    if (ecCurve != KMType.P_256) {
+      KMException.throwIt(KMError.UNSUPPORTED_EC_CURVE);
+    }
+    short ecKeySize = KMEnumTag.getValue(KMType.KEYSIZE, data[KEY_PARAMETERS]);
+    if((ecKeySize != KMType.INVALID_VALUE) &&
+        !KMTag.isValidKeySize(data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
     }
   }
 
@@ -3840,15 +3999,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = createKeyBlobInstance(SYM_KEY_TYPE);
   }
 
-  protected static short getBootPatchLevel(byte[] scratchPad){
-    Util.arrayFillNonAtomic(scratchPad,(short)0, BOOT_PATCH_LVL_SIZE, (byte)0);
-    short len = kmDataStore.getBootPatchLevel(scratchPad,(short)0);
-    if(len != BOOT_PATCH_LVL_SIZE){
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
-    return KMInteger.uint_32(scratchPad, (short)0);
-  }
-
   // This function is only called from processUpgradeKey command.
   // 1. Update the latest values of OSVersion, OSPatch, VendorPatch and BootPatch in the
   //    KeyBlob's KeyCharacteristics.
@@ -3863,7 +4013,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short osVersion = kmDataStore.getOsVersion();
     short osPatch = kmDataStore.getOsPatch();
     short vendorPatch = kmDataStore.getVendorPatchLevel();
-    short bootPatch = getBootPatchLevel(scratchPad);
+    short bootPatch = kmDataStore.getBootPatchLevel();
     data[SB_PARAMETERS] = KMKeyParameters.makeSbEnforced(
         hwParams, (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
     data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(hwParams, scratchPad);
@@ -3874,7 +4024,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short osVersion = kmDataStore.getOsVersion();
     short osPatch = kmDataStore.getOsPatch();
     short vendorPatch = kmDataStore.getVendorPatchLevel();
-    short bootPatch = getBootPatchLevel(scratchPad);
+    short bootPatch = kmDataStore.getBootPatchLevel();
     data[SB_PARAMETERS] = KMKeyParameters.makeSbEnforced(
         data[KEY_PARAMETERS], (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
     data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(data[KEY_PARAMETERS], scratchPad);

@@ -37,8 +37,6 @@ public class KMKeymintDataStore implements KMUpgradable {
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
-
-  //TODO reduced data table size from 2048 to 300.
   public static final short DATA_MEM_SIZE = 300;
 
   // Old Data table offsets
@@ -104,6 +102,9 @@ public class KMKeymintDataStore implements KMUpgradable {
   private byte[] bootPatchLevel;
   private boolean deviceBootLocked;
   private short bootState;
+  // Challenge for Root of trust
+  private byte[] challenge;
+
   
   private short dataIndex;
   private byte[] dataTable;
@@ -119,6 +120,11 @@ public class KMKeymintDataStore implements KMUpgradable {
   private KMRkpMacKey rkpMacKey;
   private byte[] oemRootPublicKey;
   private short provisionStatus;
+  private static KMKeymintDataStore kmDataStore;
+
+  public static KMKeymintDataStore instance() {
+    return kmDataStore;
+  }
   
   public KMKeymintDataStore(KMSEProvider provider, KMRepository repo) {
     seProvider = provider;
@@ -133,6 +139,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     }
     setDeviceLockPasswordOnly(false);
     setDeviceLock(false);
+    kmDataStore = this;
   }
   
   private void initDataTable() {
@@ -770,13 +777,11 @@ public class KMKeymintDataStore implements KMUpgradable {
     return deviceBootLocked;
   }
 
-  public short getBootPatchLevel(byte[] buffer, short start) {
+  public short getBootPatchLevel() {
     if (bootPatchLevel == null) {
       KMException.throwIt(KMError.INVALID_DATA);
     }
-    Util.arrayCopyNonAtomic(bootPatchLevel, (short) 0, buffer, start,
-        (short) bootPatchLevel.length);
-    return (short) bootPatchLevel.length;
+    return KMInteger.uint_32(bootPatchLevel, (short) 0);
   }
 
   public void setVerifiedBootHash(byte[] buffer, short start, short length) {
@@ -815,6 +820,25 @@ public class KMKeymintDataStore implements KMUpgradable {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     Util.arrayCopy(buffer, start, bootPatchLevel, (short) 0, (short) length);
+  }
+
+  public void setChallenge(byte[] buf, short start, short length) {
+    if (challenge == null) {
+      challenge = new byte[16];
+    }
+    if (length != 16) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    Util.arrayCopy(buf, start, challenge, (short) 0, (short) length);
+  }
+
+  public short getChallenge(byte[] buffer, short start) {
+    if (challenge == null) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    Util.arrayCopyNonAtomic(challenge, (short) 0, buffer, start,
+        (short) challenge.length);
+    return (short) challenge.length;
   }
 
   public boolean isProvisionLocked() {

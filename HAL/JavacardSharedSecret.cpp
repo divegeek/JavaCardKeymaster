@@ -36,7 +36,12 @@ ScopedAStatus
 JavacardSharedSecret::computeSharedSecret(const std::vector<SharedSecretParameters>& params,
                                           std::vector<uint8_t>* secret) {
 
-    auto error = card_->initializeJavacard();
+    auto error = card_->sendEarlyBootEndedEvent(false);
+    if(error != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in sending earlyBoot event javacard.";
+        return km_utils::kmError2ScopedAStatus(error);
+    }
+    error = card_->initializeJavacard();
     if(error != KM_ERROR_OK) {
         LOG(ERROR) << "Error in initializing javacard.";
         return km_utils::kmError2ScopedAStatus(error);    
