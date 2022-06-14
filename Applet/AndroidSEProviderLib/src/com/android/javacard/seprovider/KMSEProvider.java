@@ -26,6 +26,28 @@ import org.globalplatform.upgrade.Element;
 public interface KMSEProvider {
 
   /**
+   * This function tells if boot signal event is supported or not.
+   *
+   * @return true if supported, false otherwise.
+   */
+  boolean isBootSignalEventSupported();
+
+  /**
+   * This function tells if the device is booted or not.
+   *
+   * @return true if device booted, false otherwise.
+   */
+  boolean isDeviceRebooted();
+
+  /**
+   * This function is supposed to be used to reset the device booted stated after set boot param is
+   * handled
+   *
+   * @param resetBootFlag is false if event has been handled
+   */
+  void clearDeviceBooted(boolean resetBootFlag);
+  
+  /**
    * Create a symmetric key instance. If the algorithm and/or keysize are not supported then it
    * should throw a CryptoException.
    *
@@ -676,7 +698,6 @@ public interface KMSEProvider {
   short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
       short outOffset);
   
-
   /**
    * This function generates a HMAC key from the provided key buffers.
    *
@@ -704,7 +725,7 @@ public interface KMSEProvider {
    * @param element instance of the Element class.
    * @return restored object.
    */
-  Object onResore(Element element);
+  Object onRestore(Element element);
   
   /**
    * This function returns the count of the primitive bytes required to

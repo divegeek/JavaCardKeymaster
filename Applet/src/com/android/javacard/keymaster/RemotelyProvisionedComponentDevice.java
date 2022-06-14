@@ -91,6 +91,8 @@ public class RemotelyProvisionedComponentDevice {
   public static final byte[] ATTEST_ID_LOCKED = {0x6c, 0x6f, 0x63, 0x6b, 0x65, 0x64};
   public static final byte[] ATTEST_ID_OPEN = {0x6f, 0x70, 0x65, 0x6e};
   private static final short MAX_SEND_DATA = 1024;
+  
+  private static final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
   // more data or no data
   private static final byte MORE_DATA = 0x01; // flag to denote more data to retrieve
   private static final byte NO_DATA = 0x00;
@@ -143,6 +145,7 @@ public class RemotelyProvisionedComponentDevice {
   private Object[] operation;
   private short[] dataIndex;
   public static Object[] authorizedEekRoots;
+  public short[] rkpTmpVariables;
 
   public RemotelyProvisionedComponentDevice(KMEncoder encoder, KMDecoder decoder,
       KMRepository repository, KMSEProvider seProvider, KMKeymintDataStore storeDInst) {
@@ -151,14 +154,18 @@ public class RemotelyProvisionedComponentDevice {
     this.repository = repository;
     this.seProvider = seProvider;
     this.storeDataInst = storeDInst;
+    rkpTmpVariables = JCSystem.makeTransientShortArray((short) 32, JCSystem.CLEAR_ON_RESET);
     data = JCSystem.makeTransientByteArray(DATA_SIZE, JCSystem.CLEAR_ON_RESET);
     operation = JCSystem.makeTransientObjectArray((short) 1, JCSystem.CLEAR_ON_RESET);
     dataIndex = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
     // Initialize RKP mac key
-    short offset = repository.alloc((short) RKP_MAC_KEY_SIZE);
-    byte[] buffer = repository.getHeap();
-    seProvider.getTrueRandomNumber(buffer, offset, RKP_MAC_KEY_SIZE);
-    storeDataInst.createRkpMacKey(buffer, offset, RKP_MAC_KEY_SIZE);
+    if (!seProvider.isUpgrading()) {
+      short offset = repository.allocReclaimableMemory((short) RKP_MAC_KEY_SIZE);
+      byte[] buffer = repository.getHeap();
+      seProvider.getTrueRandomNumber(buffer, offset, RKP_MAC_KEY_SIZE);
+      storeDataInst.createRkpMacKey(buffer, offset, RKP_MAC_KEY_SIZE);
+      repository.reclaimMemory(RKP_MAC_KEY_SIZE);
+    }
     operation[0] = null;
     createAuthorizedEEKRoot();
   }
@@ -235,7 +242,6 @@ public class RemotelyProvisionedComponentDevice {
   private void processGetRkpHwInfoCmd(APDU apdu) {
     // Make the response
     // Author name - Google.
-    final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
     short respPtr = KMArray.instance((short) 4);
     KMArray resp = KMArray.cast(respPtr);
     resp.add((short) 0, KMInteger.uint_16(KMError.OK));
@@ -434,9 +440,9 @@ public class RemotelyProvisionedComponentDevice {
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
       }
       // PubKeysToSignMac
-      byte[] empty = {};
+      short empty = repository.alloc((short)0) ;
       short len =
-          ((KMOperation) operation[0]).sign(empty, (short) 0,
+          ((KMOperation) operation[0]).sign(repository.getHeap(), (short) empty,
               (short) 0, scratchPad, (short) 0);
       // release operation
       releaseOperation();
@@ -558,9 +564,9 @@ public class RemotelyProvisionedComponentDevice {
 
   private short processFinalData(byte[] scratchPad) {
     // Call finish on AES GCM Cipher
-    byte[] empty = {};
+    short empty = repository.alloc((short)0) ;
     short len =
-        ((KMOperation) operation[0]).finish(empty, (short) 0, (short) 0, scratchPad, (short) 0);
+        ((KMOperation) operation[0]).finish(repository.getHeap(), (short) empty, (short) 0, scratchPad, (short) 0);
     return len;
   }
 
@@ -596,7 +602,7 @@ public class RemotelyProvisionedComponentDevice {
     ptr = decoder.decode(coseHeadersExp, KMByteBlob.cast(ptr).getBuffer(),
         KMByteBlob.cast(ptr).getStartOff(), KMByteBlob.cast(ptr).length());
 
-    if (!KMCoseHeaders.cast(ptr).isDataValid(KMCose.COSE_ALG_HMAC_256, KMType.INVALID_VALUE)) {
+    if (!KMCoseHeaders.cast(ptr).isDataValid(rkpTmpVariables, KMCose.COSE_ALG_HMAC_256, KMType.INVALID_VALUE)) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
 
@@ -605,7 +611,7 @@ public class RemotelyProvisionedComponentDevice {
     ptr = decoder.decode(coseKeyExp, KMByteBlob.cast(ptr).getBuffer(),
         KMByteBlob.cast(ptr).getStartOff(), KMByteBlob.cast(ptr).length());
 
-    if (!KMCoseKey.cast(ptr).isDataValid(KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE,
+    if (!KMCoseKey.cast(ptr).isDataValid(rkpTmpVariables, KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE,
         KMCose.COSE_ALG_ES256, KMType.INVALID_VALUE, KMCose.COSE_ECCURVE_256)) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
@@ -706,7 +712,7 @@ public class RemotelyProvisionedComponentDevice {
       short encodedCoseKeysLen) {
     short ptr;
     short len;
-    short headerPtr = KMCose.constructHeaders(
+    short headerPtr = KMCose.constructHeaders(rkpTmpVariables, 
         KMInteger.uint_8(KMCose.COSE_ALG_HMAC_256),
         KMType.INVALID_VALUE,
         KMType.INVALID_VALUE,
@@ -762,7 +768,7 @@ public class RemotelyProvisionedComponentDevice {
     aad = KMByteBlob.instance(scratchPad, (short) 0, aad);
 
     /* construct protected header */
-    short protectedHeaders = KMCose.constructHeaders(
+    short protectedHeaders = KMCose.constructHeaders(rkpTmpVariables,
         KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
         KMType.INVALID_VALUE,
         KMType.INVALID_VALUE,
@@ -801,7 +807,8 @@ public class RemotelyProvisionedComponentDevice {
 
   private KMDeviceUniqueKeyPair createDeviceUniqueKeyPair(boolean testMode, byte[] scratchPad) {
     KMDeviceUniqueKeyPair deviceUniqueKeyPair;
-    short[] lengths = {0, 0};
+    rkpTmpVariables[0] = 0;
+    rkpTmpVariables[1] = 0;
     if (testMode) {
       seProvider.createAsymmetricKey(
           KMType.EC,
@@ -811,10 +818,10 @@ public class RemotelyProvisionedComponentDevice {
           scratchPad,
           (short) 128,
           (short) 128,
-          lengths);
+          rkpTmpVariables);
       deviceUniqueKeyPair =
-    		storeDataInst.createRkpTestDeviceUniqueKeyPair(scratchPad, (short) 128, lengths[1],
-              scratchPad, (short) 0, lengths[0]);
+    		storeDataInst.createRkpTestDeviceUniqueKeyPair(scratchPad, (short) 128, rkpTmpVariables[1],
+              scratchPad, (short) 0, rkpTmpVariables[0]);
     } else {
       deviceUniqueKeyPair = storeDataInst.getRkpDeviceUniqueKeyPair(false);
     }
@@ -844,52 +851,41 @@ public class RemotelyProvisionedComponentDevice {
    */
   private short createDeviceInfo(byte[] scratchpad) {
     // Device Info Key Value pairs.
-    short[] deviceIds = {
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE, KMType.INVALID_VALUE,
-    };
-    short[] out = {0/* index */, 0 /* length */};
-    updateItem(deviceIds, out, BRAND, getAttestationId(KMType.ATTESTATION_ID_BRAND, scratchpad));
-    updateItem(deviceIds, out, MANUFACTURER,
+    for (short i = 0; i < 32; i++) {
+    	rkpTmpVariables[i] = KMType.INVALID_VALUE;
+    }
+    short dataOffset = 2;
+    rkpTmpVariables[0] = dataOffset;
+    rkpTmpVariables[1] = 0;
+    short metaOffset = 0;
+    updateItem(rkpTmpVariables, metaOffset, BRAND, getAttestationId(KMType.ATTESTATION_ID_BRAND, scratchpad));
+    updateItem(rkpTmpVariables, metaOffset, MANUFACTURER,
         getAttestationId(KMType.ATTESTATION_ID_MANUFACTURER, scratchpad));
-    updateItem(deviceIds, out, PRODUCT,
+    updateItem(rkpTmpVariables, metaOffset, PRODUCT,
         getAttestationId(KMType.ATTESTATION_ID_PRODUCT, scratchpad));
-    updateItem(deviceIds, out, MODEL, getAttestationId(KMType.ATTESTATION_ID_MODEL, scratchpad));
-    updateItem(deviceIds, out, VB_STATE, getVbState());
-    updateItem(deviceIds, out, BOOTLOADER_STATE, getBootloaderState());
-    updateItem(deviceIds, out, VB_META_DIGEST, getVerifiedBootHash(scratchpad));
-    updateItem(deviceIds, out, OS_VERSION, getBootParams(OS_VERSION_ID, scratchpad));
-    updateItem(deviceIds, out, SYSTEM_PATCH_LEVEL,
+    updateItem(rkpTmpVariables, metaOffset, MODEL, getAttestationId(KMType.ATTESTATION_ID_MODEL, scratchpad));
+    updateItem(rkpTmpVariables, metaOffset, VB_STATE, getVbState());
+    updateItem(rkpTmpVariables, metaOffset, BOOTLOADER_STATE, getBootloaderState());
+    updateItem(rkpTmpVariables, metaOffset, VB_META_DIGEST, getVerifiedBootHash(scratchpad));
+    updateItem(rkpTmpVariables, metaOffset, OS_VERSION, getBootParams(OS_VERSION_ID, scratchpad));
+    updateItem(rkpTmpVariables, metaOffset, SYSTEM_PATCH_LEVEL,
         getBootParams(SYSTEM_PATCH_LEVEL_ID, scratchpad));
-    updateItem(deviceIds, out, BOOT_PATCH_LEVEL, getBootParams(BOOT_PATCH_LEVEL_ID, scratchpad));
-    updateItem(deviceIds, out, VENDOR_PATCH_LEVEL,
+    updateItem(rkpTmpVariables, metaOffset, BOOT_PATCH_LEVEL, getBootParams(BOOT_PATCH_LEVEL_ID, scratchpad));
+    updateItem(rkpTmpVariables, metaOffset, VENDOR_PATCH_LEVEL,
         getBootParams(VENDOR_PATCH_LEVEL_ID, scratchpad));
-    updateItem(deviceIds, out, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
-    updateItem(deviceIds, out, SECURITY_LEVEL,
+    updateItem(rkpTmpVariables, metaOffset, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
+    updateItem(rkpTmpVariables, metaOffset, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
     byte[] attestIdState = storeDataInst.isProvisionLocked() ? ATTEST_ID_LOCKED : ATTEST_ID_OPEN;
-    updateItem(deviceIds, out, ATTEST_ID_STATE,
+    updateItem(rkpTmpVariables, metaOffset, ATTEST_ID_STATE,
             KMTextString.instance(attestIdState, (short) 0, (short) attestIdState.length));
     // Create device info map.
-    short map = KMMap.instance(out[1]);
+    short map = KMMap.instance(rkpTmpVariables[1]);
     short mapIndex = 0;
-    short index = 0;
-    while (index < (short) deviceIds.length) {
-      if (deviceIds[index] != KMType.INVALID_VALUE) {
-        KMMap.cast(map).add(mapIndex++, deviceIds[index], deviceIds[(short) (index + 1)]);
+    short index = 2;
+    while (index < (short) 32) {
+      if (rkpTmpVariables[index] != KMType.INVALID_VALUE) {
+        KMMap.cast(map).add(mapIndex++, rkpTmpVariables[index], rkpTmpVariables[(short) (index + 1)]);
       }
       index += 2;
     }
@@ -908,12 +904,12 @@ public class RemotelyProvisionedComponentDevice {
    * @param item Key info to be updated.
    * @param value value to be updated.
    */
-  private void updateItem(short[] deviceIds, short[] meta, byte[] item, short value) {
+  private void updateItem(short[] deviceIds, short metaOffset, byte[] item, short value) {
     if (KMType.INVALID_VALUE != value) {
-      deviceIds[meta[0]++] =
+      deviceIds[deviceIds[metaOffset]++] =
           KMTextString.instance(item, (short) 0, (short) item.length);
-      deviceIds[meta[0]++] = value;
-      meta[1]++;
+      deviceIds[deviceIds[metaOffset]++] = value;
+      deviceIds[(short)(metaOffset+1)]++;
     }
   }
 
@@ -1066,7 +1062,8 @@ public class RemotelyProvisionedComponentDevice {
   // data table for later usage.
   private short generateEphemeralEcKey(byte[] scratchPad) {
     // Generate ephemeral ec key.
-    short[] lengths = {0/* Private key Length*/, 0 /* Public key length*/};
+    rkpTmpVariables[0] = 0;
+    rkpTmpVariables[1] = 0;
     seProvider.createAsymmetricKey(
         KMType.EC,
         scratchPad,
@@ -1075,18 +1072,18 @@ public class RemotelyProvisionedComponentDevice {
         scratchPad,
         (short) 128,
         (short) 128,
-        lengths);
+        rkpTmpVariables);
     // Copy the ephemeral private key from scratch pad
-    short ptr = KMByteBlob.instance(lengths[0]);
+    short ptr = KMByteBlob.instance(rkpTmpVariables[0]);
     Util.arrayCopyNonAtomic(
         scratchPad,
         (short) 0,
         KMByteBlob.cast(ptr).getBuffer(),
         KMByteBlob.cast(ptr).getStartOff(),
-        lengths[0]);
+        rkpTmpVariables[0]);
     //Store  ephemeral public key in data table for later usage.
-    short dataEntryIndex = createEntry(EPHEMERAL_PUB_KEY, lengths[1]);
-    Util.arrayCopyNonAtomic(scratchPad, (short) 128, data, dataEntryIndex, lengths[1]);
+    short dataEntryIndex = createEntry(EPHEMERAL_PUB_KEY, rkpTmpVariables[1]);
+    Util.arrayCopyNonAtomic(scratchPad, (short) 128, data, dataEntryIndex, rkpTmpVariables[1]);
     return ptr;
   }
 
@@ -1154,7 +1151,7 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private short processRecipientStructure(byte[] scratchPad) {
-    short protectedHeaderRecipient = KMCose.constructHeaders(
+    short protectedHeaderRecipient = KMCose.constructHeaders(rkpTmpVariables,
         KMNInteger.uint_8(KMCose.COSE_ALG_ECDH_ES_HKDF_256),
         KMType.INVALID_VALUE,
         KMType.INVALID_VALUE,
@@ -1169,7 +1166,7 @@ public class RemotelyProvisionedComponentDevice {
     short pubKeyIndex = getEntry(EPHEMERAL_PUB_KEY);
     // prepare cosekey
     short coseKey =
-        KMCose.constructCoseKey(
+        KMCose.constructCoseKey(rkpTmpVariables,
             KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
             KMType.INVALID_VALUE,
             KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
@@ -1184,7 +1181,7 @@ public class RemotelyProvisionedComponentDevice {
     short keyIdentifierPtr = KMByteBlob
         .instance(data, getEntry(EEK_KEY_ID), getEntryLength(EEK_KEY_ID));
     short unprotectedHeaderRecipient =
-        KMCose.constructHeaders(KMType.INVALID_VALUE, keyIdentifierPtr, KMType.INVALID_VALUE,
+        KMCose.constructHeaders(rkpTmpVariables, KMType.INVALID_VALUE, keyIdentifierPtr, KMType.INVALID_VALUE,
             coseKey);
 
     // Construct recipients structure.
@@ -1258,7 +1255,7 @@ public class RemotelyProvisionedComponentDevice {
 
   // AAD is the CoseEncrypt structure
   private void processAesGcmUpdateAad(byte[] scratchPad) {
-    short protectedHeader = KMCose.constructHeaders(
+    short protectedHeader = KMCose.constructHeaders(rkpTmpVariables,
         KMInteger.uint_8(KMCose.COSE_ALG_AES_GCM_256),
         KMType.INVALID_VALUE,
         KMType.INVALID_VALUE,
@@ -1304,7 +1301,7 @@ public class RemotelyProvisionedComponentDevice {
 
   private short getCoseEncryptProtectedHeader(byte[] scratchPad) {
     // CoseEncrypt protected headers.
-    short protectedHeader = KMCose.constructHeaders(
+    short protectedHeader = KMCose.constructHeaders(rkpTmpVariables,
         KMInteger.uint_8(KMCose.COSE_ALG_AES_GCM_256),
         KMType.INVALID_VALUE,
         KMType.INVALID_VALUE,
@@ -1318,13 +1315,13 @@ public class RemotelyProvisionedComponentDevice {
   private short getCoseEncryptUnprotectedHeader(byte[] scratchPad, short nonce) {
     /* CoseEncrypt unprotected headers */
     return KMCose
-        .constructHeaders(KMType.INVALID_VALUE, KMType.INVALID_VALUE, nonce, KMType.INVALID_VALUE);
+        .constructHeaders(rkpTmpVariables, KMType.INVALID_VALUE, KMType.INVALID_VALUE, nonce, KMType.INVALID_VALUE);
   }
 
   private short constructCoseMacForRkpKey(boolean testMode, byte[] scratchPad, short pubKey) {
     // prepare cosekey
     short coseKey =
-        KMCose.constructCoseKey(
+        KMCose.constructCoseKey(rkpTmpVariables,
             KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
             KMType.INVALID_VALUE,
             KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
@@ -1340,7 +1337,7 @@ public class RemotelyProvisionedComponentDevice {
         .encodeToApduBuffer(coseKey, scratchPad, (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
     short payload = KMByteBlob.instance(scratchPad, (short) 0, len);
     // Prepare protected header, which is required to construct the COSE_MAC0
-    short headerPtr = KMCose.constructHeaders(
+    short headerPtr = KMCose.constructHeaders(rkpTmpVariables,
         KMInteger.uint_8(KMCose.COSE_ALG_HMAC_256),
         KMType.INVALID_VALUE,
         KMType.INVALID_VALUE,

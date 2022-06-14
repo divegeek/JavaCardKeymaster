@@ -52,6 +52,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public static final byte POWER_RESET_FALSE = (byte) 0xAA;
   public static final byte POWER_RESET_TRUE = (byte) 0x00;
   private static final short COMPUTED_HMAC_KEY_SIZE = 32;
+  private static byte[] CMAC_KDF_CONSTANT_L;
+  private static byte[] CMAC_KDF_CONSTANT_ZERO;
 
   private static KeyAgreement keyAgreement;
 
@@ -88,6 +90,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   public KMAndroidSEProvider() {
+    initStatics();
     // Re-usable AES,DES and HMAC keys in persisted memory.
     aesKeys = new AESKey[2];
     aesKeys[KEYSIZE_128_OFFSET] = (AESKey) KeyBuilder.buildKey(
@@ -117,8 +120,14 @@ public class KMAndroidSEProvider implements KMSEProvider {
     rng = RandomData.getInstance(RandomData.ALG_KEYGENERATION);
     androidSEProvider = this;
     resetFlag = JCSystem.makeTransientByteArray((short) 1,
-        JCSystem.CLEAR_ON_DESELECT);
+        JCSystem.CLEAR_ON_RESET);
     resetFlag[0] = (byte) POWER_RESET_FALSE;
+  }
+  
+  void initStatics() {
+    CMAC_KDF_CONSTANT_L = new byte[] {
+	    0x00, 0x00, 0x01, 0x00 };
+    CMAC_KDF_CONSTANT_ZERO = new byte[] {0x00};
   }
 
   public void clean() {
@@ -401,19 +410,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public HMACKey cmacKdf(KMPreSharedKey preSharedKey, byte[] label, short labelStart,
       short labelLen,
       byte[] context, short contextStart, short contextLength) {
-    try {
+      try {
       // This is hardcoded to requirement - 32 byte output with two concatenated
       // 16 bytes K1 and K2.
       final byte n = 2; // hardcoded
-      // [L] 256 bits - hardcoded 32 bits as per
-      // reference impl in keymaster.
-      final byte[] L = {
-          0, 0, 1, 0
-      };
-      // byte
-      final byte[] zero = {
-          0
-      };
+      
       // [i] counter - 32 bits
       short iBufLen = 4;
       short keyOutLen = n * 16;
@@ -436,10 +437,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
         // 4 bytes of iBuf with counter in it
         kdf.update(tmpArray, (short) 0, (short) iBufLen);
         kdf.update(label, labelStart, (short) labelLen); // label
-        kdf.update(zero, (short) 0, (short) 1); // 1 byte of 0x00
+        kdf.update(CMAC_KDF_CONSTANT_ZERO, (short) 0, (short) CMAC_KDF_CONSTANT_ZERO.length); // 1 byte of 0x00
         kdf.update(context, contextStart, contextLength); // context
         // 4 bytes of L - signature of 16 bytes
-        pos = kdf.sign(L, (short) 0, (short) 4, tmpArray,
+        pos = kdf.sign(CMAC_KDF_CONSTANT_L, (short) 0, (short) CMAC_KDF_CONSTANT_L.length, tmpArray,
             (short) (iBufLen + pos));
         i++;
       }
@@ -969,22 +970,21 @@ public class KMAndroidSEProvider implements KMSEProvider {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
     HMACKey hmacKey = createHMACKey(prk, prkOff, prkLen);
-    Util.arrayFill(tmpArray, (short) 0, (short) 32, (byte) 0);
-    byte[] cnt = {(byte) 0};
+    Util.arrayFill(tmpArray, (short) 0, (short) 33, (byte) 0);
     short bytesCopied = 0;
     short len = 0;
     for (short i = 0; i < n; i++) {
-      cnt[0]++;
+      tmpArray[0]++;
       hmacSignature.init(hmacKey, Signature.MODE_SIGN);
       if (i != 0) {
-        hmacSignature.update(tmpArray, (short) 0, (short) 32);
+        hmacSignature.update(tmpArray, (short) 1, (short) 32);
       }
       hmacSignature.update(info, infoOff, infoLen);
-      len = hmacSignature.sign(cnt, (short) 0, (short) 1, tmpArray, (short) 0);
+      len = hmacSignature.sign(tmpArray, (short) 0, (short) 1, tmpArray, (short) 1);
       if ((short) (bytesCopied + len) > outLen) {
         len = (short) (outLen - bytesCopied);
       }
-      Util.arrayCopyNonAtomic(tmpArray, (short) 0, out, (short) (outOff + bytesCopied), len);
+      Util.arrayCopyNonAtomic(tmpArray, (short) 1, out, (short) (outOff + bytesCopied), len);
       bytesCopied += len;
     }
     return outLen;
@@ -1125,7 +1125,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
   
   @Override
-  public Object onResore(Element element) {
+  public Object onRestore(Element element) {
     if (element == null) {
       return null;
     }
@@ -1196,6 +1196,21 @@ public class KMAndroidSEProvider implements KMSEProvider {
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     return 0;
+  }
+
+  @Override
+  public boolean isBootSignalEventSupported() {
+    return false;
+  }
+
+  @Override
+  public boolean isDeviceRebooted() {
+    return false;
+  }
+
+  @Override
+  public void clearDeviceBooted(boolean resetBootFlag) {
+    // To be filled
   }
   
 }

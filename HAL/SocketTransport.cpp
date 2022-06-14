@@ -31,12 +31,12 @@ namespace keymint::javacard {
 using std::shared_ptr;
 using std::vector;
 
-bool SocketTransport::openConnection() {
+keymaster_error_t SocketTransport::openConnection() {
     struct sockaddr_in serv_addr;
     if ((mSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         LOG(ERROR) << "Socket creation failed"
                    << " Error: " << strerror(errno);
-        return false;
+        return static_cast<keymaster_error_t>(KM_ERROR_HARDWARE_TYPE_UNAVAILABLE);
     }
 
     serv_addr.sin_family = AF_INET;
@@ -45,19 +45,19 @@ bool SocketTransport::openConnection() {
     // Convert IPv4 and IPv6 addresses from text to binary form
     if (inet_pton(AF_INET, IPADDR, &serv_addr.sin_addr) <= 0) {
         LOG(ERROR) << "Invalid address/ Address not supported.";
-        return false;
+        return static_cast<keymaster_error_t>(KM_ERROR_HARDWARE_TYPE_UNAVAILABLE);
     }
 
     if (connect(mSocket, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
         close(mSocket);
         LOG(ERROR) << "Connection failed. Error: " << strerror(errno);
-        return false;
+        return KM_ERROR_SECURE_HW_COMMUNICATION_FAILED;
     }
     socketStatus = true;
-    return true;
+    return KM_ERROR_OK;
 }
 
-bool SocketTransport::sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) {
+keymaster_error_t SocketTransport::sendData(const vector<uint8_t>& inData, vector<uint8_t>& output) {
     int count = 1;
     while (!socketStatus && count++ < 5) {
         sleep(1);
@@ -67,7 +67,7 @@ bool SocketTransport::sendData(const vector<uint8_t>& inData, vector<uint8_t>& o
 
     if (count >= 5) {
         LOG(ERROR) << "Failed to open socket connection";
-        return false;
+        return KM_ERROR_SECURE_HW_COMMUNICATION_FAILED;
     }
     // Prepend the input length to the inputData before sending.
     vector<uint8_t> inDataPrependedLength;
@@ -85,15 +85,19 @@ bool SocketTransport::sendData(const vector<uint8_t>& inData, vector<uint8_t>& o
         }
         LOG(ERROR) << "Failed to send data over socket err: " << errno;
         connectionResetCnt = 0;
-        return false;
+        return KM_ERROR_SECURE_HW_COMMUNICATION_FAILED;
     }
-    return readData(output);
+    
+    if (!readData(output)) {
+        return KM_ERROR_SECURE_HW_COMMUNICATION_FAILED;
+    }
+    return KM_ERROR_OK;
 }
 
-bool SocketTransport::closeConnection() {
+keymaster_error_t SocketTransport::closeConnection() {
     close(mSocket);
     socketStatus = false;
-    return true;
+    return KM_ERROR_OK;
 }
 
 bool SocketTransport::isConnected() {

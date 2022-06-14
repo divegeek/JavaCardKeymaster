@@ -1407,7 +1407,7 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public Object onResore(Element element) {
+  public Object onRestore(Element element) {
     return null;
   }
 
@@ -1450,17 +1450,44 @@ public class KMJCardSimulator implements KMSEProvider {
     return (KMPreSharedKey) preSharedKey;
   }
 
-  @Override
-  public com.android.javacard.seprovider.KMAttestationKey createAttestationKey(
-      com.android.javacard.seprovider.KMAttestationKey attestationKey, byte[] keyData, short offset,
-      short length) {
-    if (attestationKey == null) {
-      // Strongbox supports only P-256 curve for EC key.
-      KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
-      attestationKey = new KMECPrivateKey(ecKeyPair);
-    }
-    ((KMECPrivateKey) attestationKey).setS(keyData, offset, length);
-    return (KMAttestationKey) attestationKey;
-  }
 
+@Override
+public KMOperation getRkpOperation(byte purpose, byte alg,
+	      byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart,
+	      short keyLength, byte[] ivBuf, short ivStart, short ivLength,
+	      short macLength) {
+    KMOperation opr = null;
+    switch (alg) {
+    case KMType.AES:
+    KMCipher aesGcm = createAesGcmCipher(purpose, macLength, keyBuf, keyStart, keyLength,
+                ivBuf, ivStart, ivLength);
+      opr = new KMOperationImpl(aesGcm);
+      break;
+    case KMType.HMAC:
+      Signature signerVerifier = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart,
+                keyLength);
+      opr = new KMOperationImpl(signerVerifier);      
+      break;
+    default:
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+      break;
+    }
+    return opr;
+}
+
+@Override
+public boolean isBootSignalEventSupported() {
+	return false;
+}
+
+@Override
+public boolean isDeviceRebooted() {
+	return false;
+}
+
+@Override
+public void clearDeviceBooted(boolean resetBootFlag) {
+	// TODO Auto-generated method stub
+	
+}
 }

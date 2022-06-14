@@ -48,7 +48,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short VERIFIED_BOOT_HASH_SIZE = 32;
   public static final short BOOT_PATCH_LVL_SIZE = 4;
 
-  protected static final byte CLA_ISO7816_NO_SM_NO_CHAN = (byte) 0x80;
   protected static final short KM_HAL_VERSION = (short) 0x5000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
   private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
@@ -104,6 +103,37 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       0x65, 0x6E
   };
 
+  //OEM lock / unlock verification constants.
+  protected static final byte[] OEM_LOCK_PROVISION_VERIFICATION_LABEL = { // "OEM Provisioning Lock"
+    0x4f, 0x45, 0x4d, 0x20, 0x50, 0x72, 0x6f, 0x76, 0x69, 0x73, 0x69, 0x6f, 0x6e, 0x69, 0x6e,
+    0x67, 0x20, 0x4c, 0x6f, 0x63, 0x6b
+  };
+
+  protected static final byte[] OEM_UNLOCK_PROVISION_VERIFICATION_LABEL = { // "Enable RMA"
+   0x45, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x52, 0x4d, 0x41
+  };
+
+  private static final byte[] JavacardKeymintDevice = {
+	        0x4a,0x61,0x76,0x61,0x63,0x61,0x72,0x64,
+	        0x4b,0x65,0x79,0x6d,0x69,0x6e,0x74,
+	        0x44,0x65,0x76,0x69,0x63,0x65,
+	    };
+  private static final byte[] Google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
+
+  private static final short[] attTags = {
+	            KMType.ATTESTATION_ID_BRAND,
+	            KMType.ATTESTATION_ID_DEVICE,
+	            KMType.ATTESTATION_ID_IMEI,
+	            KMType.ATTESTATION_ID_MANUFACTURER,
+	            KMType.ATTESTATION_ID_MEID,
+	            KMType.ATTESTATION_ID_MODEL,
+	            KMType.ATTESTATION_ID_PRODUCT,
+	            KMType.ATTESTATION_ID_SERIAL
+	        };
+
+  private static final byte OEM_LOCK = 1;
+  private static final byte OEM_UNLOCK = 0;
+ 
   public static final short MAX_COSE_BUF_SIZE = (short) 1024;
   // Maximum allowed buffer size for to encode the key parameters
   // which is used while creating mac for key paramters.
@@ -234,6 +264,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short SHA256_DIGEST_LEN_BITS = 256;
   // Minimum HMAC length in bits
   public static final short MIN_HMAC_LENGTH_BITS = 64;
+
+  // Provision reporting status
+  public  static final short NOT_PROVISIONED = 0x0000;
+  public static final short PROVISION_STATUS_ATTESTATION_KEY = 0x0001;
+  public static final short PROVISION_STATUS_ATTESTATION_CERT_CHAIN = 0x0002; 
+  public static final short PROVISION_STATUS_ATTESTATION_CERT_PARAMS = 0x0004;
+  public static final short PROVISION_STATUS_ATTEST_IDS = 0x0008;
+  public static final short PROVISION_STATUS_PRESHARED_SECRET = 0x0010;
+  public static final short PROVISION_STATUS_PROVISIONING_LOCKED = 0x0020;
+  public static final short PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR = 0x0040;
+  public static final short PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x0080;
+  public static final short PROVISION_STATUS_SE_LOCKED = 0x0100; 
+  public static final short PROVISION_STATUS_OEM_PUBLIC_KEY = 0x0200;
 
   protected static RemotelyProvisionedComponentDevice rkp;
   protected static KMEncoder encoder;
@@ -413,6 +456,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       byte[] apduBuffer = apdu.getBuffer();
       byte apduIns = apduBuffer[ISO7816.OFFSET_INS];
+      if (!isKeymintReady(apduIns)) {
+          ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
+      }
       switch (apduIns) {
         case INS_INIT_STRONGBOX_CMD:
           processInitStrongBoxCmd(apdu);
@@ -518,6 +564,28 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     }
   }
 
+  //After every device boot, the Keymaster becomes ready to execute all the commands only after
+  // 1. boot parameters are set,
+  // 2. system properties are set and
+  // 3. computed the shared secret successfully.
+  private boolean isKeymintReady(byte apduIns) {
+    if(kmDataStore.isDeviceReady()) {
+      return true;
+    }
+     // Below commands are allowed even if the Keymaster is not ready.
+     switch (apduIns) {
+       case INS_GET_HW_INFO_CMD:
+       case INS_ADD_RNG_ENTROPY_CMD:
+       case INS_GET_HMAC_SHARING_PARAM_CMD:
+       case INS_COMPUTE_SHARED_HMAC_CMD:
+       case INS_INIT_STRONGBOX_CMD:
+         return true;
+       default:
+         break;
+     }
+     return false;
+  }
+
   private void generateUniqueOperationHandle(byte[] buf, short offset, short len) {
     do {
       seProvider.newRandomNumber(buf, offset, len);
@@ -535,6 +603,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processEarlyBootEndedCmd(APDU apdu) {
     kmDataStore.setEarlyBootEndedStatus(true);
+    sendError(apdu, KMError.OK);
   }
 
   private short deviceLockedCmd(APDU apdu){
@@ -700,12 +769,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void processGetHwInfoCmd(APDU apdu) {
     // No arguments expected
     final byte version = 1;
-    final byte[] JavacardKeymintDevice = {
-        0x4a,0x61,0x76,0x61,0x63,0x61,0x72,0x64,
-        0x4b,0x65,0x79,0x6d,0x69,0x6e,0x74,
-        0x44,0x65,0x76,0x69,0x63,0x65,
-    };
-    final byte[] Google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
     // Make the response
     short respPtr = KMArray.instance((short) 6);
     KMArray resp = KMArray.cast(respPtr);
@@ -977,6 +1040,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             (short) sharingCheck.length,
             scratchPad,
             keyLen);
+    kmDataStore.setDeviceBootStatus(KMKeymintDataStore.NEGOTIATED_SHARED_SECRET_SUCCESS);
     // verification signature blob - 32 bytes
     //tmpVariables[1]
     short signature = KMByteBlob.instance(scratchPad, keyLen, signLen);
@@ -1017,6 +1081,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short index = 0;
     short tag;
     short systemParam;
+    boolean isKeyUpgradeRequired = false;
     while(index < 16) {
       tag = Util.getShort(scratchPad, index);
       systemParam = Util.getShort(scratchPad, (short) (index + 2));
@@ -1031,12 +1096,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             && KMInteger.compare(tagValue, systemParam) == 1
             && KMInteger.compare(systemParam, zero) == 0)) {
           // Key needs upgrade.
-          return true;
+          isKeyUpgradeRequired = true;
         } else if ((KMInteger.compare(tagValue, systemParam) == -1)) {
           // Each os version or patch level associated with the key must be less than it's
           // corresponding value stored in Javacard, then only upgrade is allowed otherwise it
           // is invalid argument.
-          return true;
+          isKeyUpgradeRequired = true;
         } else if (KMInteger.compare(tagValue, systemParam) == 1) {
           KMException.throwIt(KMError.INVALID_ARGUMENT);
         }
@@ -1045,7 +1110,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       index += 4;
     }
-    return false;
+    return isKeyUpgradeRequired;
   }
 
   private void processUpgradeKeyCmd(APDU apdu) {
@@ -1493,17 +1558,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // id values of both the requested parameters and the provisioned parameters
   // then throw INVALID_TAG error.
   private void addAttestationIds(KMAttestationCert cert, byte[] scratchPad) {
-    final short[] attTags =
-        new short[]{
-            KMType.ATTESTATION_ID_BRAND,
-            KMType.ATTESTATION_ID_DEVICE,
-            KMType.ATTESTATION_ID_IMEI,
-            KMType.ATTESTATION_ID_MANUFACTURER,
-            KMType.ATTESTATION_ID_MEID,
-            KMType.ATTESTATION_ID_MODEL,
-            KMType.ATTESTATION_ID_PRODUCT,
-            KMType.ATTESTATION_ID_SERIAL
-        };
     byte index = 0;
     short attIdTag;
     short attIdTagValue;
@@ -2346,7 +2400,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         break;
       case KMType.EC:
       case KMType.HMAC:
-        if (op.getPurpose() != KMType.AGREE_KEY && param == KMType.INVALID_VALUE) {
+    	if ((param == KMType.INVALID_VALUE && op.getPurpose() != KMType.AGREE_KEY)||
+          !isDigestSupported(op.getAlgorithm(), op.getDigest())) {
           KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
         }
         break;
@@ -2394,6 +2449,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         if ((param == KMType.RSA_OAEP || param == KMType.RSA_PSS)
             && op.getDigest() == KMType.DIGEST_NONE) {
           KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+        }
+        if (op.getPurpose() == KMType.SIGN || op.getPurpose() == KMType.VERIFY
+            || param == KMType.RSA_OAEP) {
+          // Digest is mandatory in these cases.
+          if (!isDigestSupported(op.getAlgorithm(), op.getDigest())) {
+            KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
+          }
         }
         //TODO d to verify whether javacard support MGF1 = SHA1 or is it equal to the OAEP scheme
         // digest. There is no way to define any other digest.
@@ -2534,17 +2596,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeDeviceUnlock(scratchPad);
     authorizeKeyUsageForCount(scratchPad);
 
+    KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
+    		KMError.INVALID_KEY_BLOB);
+
     //Validate early boot
     //VTS expects error code EARLY_BOOT_ONLY during begin operation if eary boot ended tag is present
     if (kmDataStore.getEarlyBootEndedStatus()) {
       KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
           KMError.EARLY_BOOT_ENDED);
-    }
-
-    //Validate bootloader only
-    if (kmDataStore.getBootEndedStatus()) {
-      KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
-    	  KMError.INVALID_KEY_BLOB);
     }
 
     // Authorize Caller Nonce - if caller nonce absent in key char and nonce present in
@@ -3386,12 +3445,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     setOsVersion(osVersion);
     setOsPatchLevel(osPatchLevel);
     setVendorPatchLevel(vendorPatchLevel);
+    kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_SYSTEM_PROPERTIES_SUCCESS);
   }
 
   public void reboot() {
     kmDataStore.clearHmacNonce();
-    //flag to maintain the boot state
-    kmDataStore.setBootEndedStatus(false);
     //flag to maintain early boot ended state
     kmDataStore.setEarlyBootEndedStatus(false);
     //Clear all the operation state.
@@ -3902,17 +3960,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         data[KEY_BLOB_VERSION_DATA_OFFSET] = KMInteger.uint_8((byte) 0);
         break;
       case (short) 1:
-        data[SECRET] = KMArray.cast(parsedKeyBlob).get((short) 0);
-        data[NONCE]= KMArray.cast(parsedKeyBlob).get((short) 1);
-        data[AUTH_TAG] = KMArray.cast(parsedKeyBlob).get((short) 2);
-        data[KEY_CHARACTERISTICS] = KMArray.cast(parsedKeyBlob).get((short) 3);
         data[KEY_BLOB_VERSION_DATA_OFFSET] = KMArray.cast(parsedKeyBlob).get(
-            (short) 4);
-        data[CUSTOM_TAGS] = KMType.INVALID_VALUE;
-        data[PUB_KEY] = KMType.INVALID_VALUE;
+                  (short) 0);  
+        data[SECRET] = KMArray.cast(parsedKeyBlob).get((short) 1);
+        data[NONCE]= KMArray.cast(parsedKeyBlob).get((short) 2);
+        data[AUTH_TAG] = KMArray.cast(parsedKeyBlob).get((short) 3);
+        data[KEY_CHARACTERISTICS] = KMArray.cast(parsedKeyBlob).get((short) 4);
         if (KMArray.cast(parsedKeyBlob).length() == ASYM_KEY_BLOB_SIZE_V1) {
           data[PUB_KEY] = KMArray.cast(parsedKeyBlob).get((short) 5);
         }
+        data[CUSTOM_TAGS] = KMType.INVALID_VALUE;
+        data[PUB_KEY] = KMType.INVALID_VALUE;
         break;
       case (short) 2:
         data[SECRET] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_SECRET);
@@ -4317,7 +4375,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       ptr2 = KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PROTECTED_PARAMS_OFFSET);
       ptr2 = decoder.decode(coseHeadersExp, KMByteBlob.cast(ptr2).getBuffer(),
           KMByteBlob.cast(ptr2).getStartOff(), KMByteBlob.cast(ptr2).length());
-      if (!KMCoseHeaders.cast(ptr2).isDataValid(alg, KMType.INVALID_VALUE)) {
+      if (!KMCoseHeaders.cast(ptr2).isDataValid(rkp.rkpTmpVariables, alg, KMType.INVALID_VALUE)) {
         KMException.throwIt(KMError.STATUS_FAILED);
       }
 
@@ -4328,7 +4386,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       if ((index == (short) (len - 1)) && len > 1) {
         alg = expLeafCertAlg;
       }
-      if (!KMCoseKey.cast(ptr2).isDataValid(KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE, alg,
+      if (!KMCoseKey.cast(ptr2).isDataValid(rkp.rkpTmpVariables, KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE, alg,
           KMType.INVALID_VALUE, KMCose.COSE_ECCURVE_256)) {
         KMException.throwIt(KMError.STATUS_FAILED);
       }
@@ -4388,7 +4446,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMDeviceUniqueKeyPair deviceUniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair(testMode);
     short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
     short coseKey =
-        KMCose.constructCoseKey(
+        KMCose.constructCoseKey(rkp.rkpTmpVariables,
             KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
             KMType.INVALID_VALUE,
             KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
@@ -4424,7 +4482,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     // protected header
     short protectedHeader =
-        KMCose.constructHeaders(KMNInteger.uint_8(KMCose.COSE_ALG_ES256), KMType.INVALID_VALUE,
+        KMCose.constructHeaders(rkp.rkpTmpVariables, KMNInteger.uint_8(KMCose.COSE_ALG_ES256), KMType.INVALID_VALUE,
             KMType.INVALID_VALUE, KMType.INVALID_VALUE);
     // temp temporarily holds the length of encoded headers.
     temp = KMKeymasterApplet.encodeToApduBuffer(protectedHeader, scratchPad, (short) 0,
@@ -4493,5 +4551,24 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMException.throwIt(KMError.NO_USER_CONFIRMATION);
       }
     }
+  }
+
+  private boolean isDigestSupported(short alg, short digest) {
+    switch (alg) {
+    case KMType.RSA:
+    case KMType.EC:
+      if (digest != KMType.DIGEST_NONE && digest != KMType.SHA2_256) {
+        return false;
+      }
+      break;
+    case KMType.HMAC:
+      if (digest != KMType.SHA2_256) {
+        return false;
+      }
+      break;
+    default:
+      break;
+    }
+    return true;
   }
 }

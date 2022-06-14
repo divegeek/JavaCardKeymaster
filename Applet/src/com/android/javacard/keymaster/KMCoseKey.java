@@ -179,23 +179,27 @@ public class KMCoseKey extends KMCoseMap {
    * @param curve    value of the curve.
    * @return true if valid, otherwise false.
    */
-  public boolean isDataValid(short keyType, short keyIdPtr, short keyAlg, short keyOps, short curve) {
-    short[] coseKeyTags = {
-        KMCose.COSE_KEY_KEY_TYPE, keyType,
-        KMCose.COSE_KEY_KEY_ID, keyIdPtr,
-        KMCose.COSE_KEY_ALGORITHM, keyAlg,
-        KMCose.COSE_KEY_KEY_OPS, keyOps,
-        KMCose.COSE_KEY_CURVE, curve,
-    };
+  public boolean isDataValid(short []buff, short keyType, short keyIdPtr, short keyAlg, short keyOps, short curve) {
+    short buffLen = 10;
+    buff[0] = KMCose.COSE_KEY_KEY_TYPE;
+    buff[1] = keyType;
+    buff[2] = KMCose.COSE_KEY_KEY_ID;
+    buff[3] = keyIdPtr;
+    buff[4] = KMCose.COSE_KEY_ALGORITHM;
+    buff[5] = keyAlg;
+    buff[6] = KMCose.COSE_KEY_KEY_OPS;
+    buff[7] = keyOps;
+    buff[8] = KMCose.COSE_KEY_CURVE;
+    buff[9] = curve;
     boolean valid = false;
     short ptr;
     short tagIndex = 0;
     short value;
-    while (tagIndex < coseKeyTags.length) {
-      value = coseKeyTags[(short) (tagIndex + 1)];
+    while (tagIndex < buffLen) {
+      value = buff[(short) (tagIndex + 1)];
       if (value != KMType.INVALID_VALUE) {
         valid = false;
-        ptr = getValueType(coseKeyTags[tagIndex], KMType.INVALID_VALUE);
+        ptr = getValueType(buff[tagIndex], KMType.INVALID_VALUE);
         switch (KMType.getType(ptr)) {
           case KMType.BYTE_BLOB_TYPE:
             if ((KMByteBlob.cast(value).length() == KMByteBlob.cast(ptr).length()) &&

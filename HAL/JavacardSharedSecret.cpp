@@ -12,9 +12,17 @@ using std::shared_ptr;
 using std::vector;
 
 ScopedAStatus JavacardSharedSecret::getSharedSecretParameters(SharedSecretParameters* params) {
-    card_->initializeJavacard();
+    auto error = card_->initializeJavacard();
+    if(error != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in initializing javacard.";
+        return km_utils::kmError2ScopedAStatus(error);    
+    }
     auto [item, err] = card_->sendRequest(Instruction::INS_GET_SHARED_SECRET_PARAM_CMD);
-    if (err != KM_ERROR_OK || !cbor_.getSharedSecretParameters(item, 1, *params)) {
+    if (err != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in sending in getSharedSecretParameters.";
+        return km_utils::kmError2ScopedAStatus(err);
+    }
+    if (!cbor_.getSharedSecretParameters(item, 1, *params)) {
         LOG(ERROR) << "Error in sending in getSharedSecretParameters.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
@@ -25,7 +33,11 @@ ScopedAStatus
 JavacardSharedSecret::computeSharedSecret(const std::vector<SharedSecretParameters>& params,
                                           std::vector<uint8_t>* secret) {
 
-    card_->initializeJavacard();
+    auto error = card_->initializeJavacard();
+    if(error != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in initializing javacard.";
+        return km_utils::kmError2ScopedAStatus(error);    
+    }
     cppbor::Array request;
     cbor_.addSharedSecretParameters(request, params);
     auto [item, err] = card_->sendRequest(Instruction::INS_COMPUTE_SHARED_SECRET_CMD, request);
