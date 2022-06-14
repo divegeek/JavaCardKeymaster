@@ -184,7 +184,7 @@ public class KMPoolManager {
 	  }
   
   private KMPoolManager() {
-	initStatics();  
+    initStatics();  
     cipherPool = new Object[(short) (CIPHER_ALGS.length * 4)];
  // Extra 4 algorithms are used to support TRUSTED_CONFIRMATION_REQUIRED feature.
     signerPool = new Object[(short) ((SIG_ALGS.length * 4) + 4)];
@@ -202,9 +202,8 @@ public class KMPoolManager {
     initializeKeysPool();
     // Initialize the Crypto and Key objects required for RKP flow.
     initializeRKpObjects();
-    
   }
-  
+
   private void initializeRKpObjects() {
     rkpOPeration = new KMOperationImpl();
     rkpAesGcm = Cipher.getInstance(AEADCipher.ALG_AES_GCM, false);

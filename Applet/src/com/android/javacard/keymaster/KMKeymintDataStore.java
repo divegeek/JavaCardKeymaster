@@ -925,7 +925,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
 
   void handleDataUpgrade(short oldVersion, short currentVersion) {
-    if(oldVersion == 0x0100 && currentVersion == 0x0200) {
+    if(oldVersion != currentVersion) {
       handleProvisionStatusUpgrade();
     }
   }
