@@ -17,6 +17,8 @@
 #define LOG_TAG "javacard.strongbox.keymint.operation-impl"
 
 #include "JavacardKeyMintOperation.h"
+
+#include "CborConverter.h"
 #include <JavacardKeyMintUtils.h>
 #include <aidl/android/hardware/security/keymint/ErrorCode.h>
 #include <aidl/android/hardware/security/secureclock/ISecureClock.h>
@@ -257,11 +259,11 @@ keymaster_error_t JavacardKeyMintOperation::sendUpdate(const vector<uint8_t>& in
     if (error != KM_ERROR_OK) {
         return error;
     }
-    vector<uint8_t> respData;
-    if (!cbor_.getBinaryArray(item, 1, respData)) {
+    auto optTemp = cbor_.getByteArrayVec(item, 1);
+    if (!optTemp) {
         return KM_ERROR_UNKNOWN_ERROR;
     }
-    output.insert(output.end(), respData.begin(), respData.end());
+    output.insert(output.end(), optTemp.value().begin(), optTemp.value().end());
     return KM_ERROR_OK;
 }
 
@@ -283,12 +285,12 @@ keymaster_error_t JavacardKeyMintOperation::sendFinish(const vector<uint8_t>& da
     if (err != KM_ERROR_OK) {
         return err;
     }
-    vector<uint8_t> respData;
-    if (!cbor_.getBinaryArray(item, 1, respData)) {
+    auto optTemp = cbor_.getByteArrayVec(item, 1);
+    if (!optTemp) {
         return KM_ERROR_UNKNOWN_ERROR;
     }
     opHandle_ = 0;
-    output.insert(output.end(), respData.begin(), respData.end());
+    output.insert(output.end(), optTemp.value().begin(), optTemp.value().end());
     return KM_ERROR_OK;
 }
 

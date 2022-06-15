@@ -16,21 +16,24 @@
 
 #define LOG_TAG "javacard.keymint.device.strongbox-impl"
 #include "JavacardKeyMintDevice.h"
+
+#include <regex.h>
+
+#include <algorithm>
+#include <iostream>
+#include <iterator>
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "JavacardKeyMintOperation.h"
 #include "JavacardSharedSecret.h"
 #include <JavacardKeyMintUtils.h>
-#include <algorithm>
 #include <android-base/logging.h>
 #include <android-base/properties.h>
 #include <hardware/hw_auth_token.h>
-#include <iostream>
-#include <iterator>
 #include <keymaster/android_keymaster_messages.h>
 #include <keymaster/wrapped_key.h>
-#include <memory>
-#include <regex.h>
-#include <string>
-#include <vector>
 
 namespace aidl::android::hardware::security::keymint {
 using km_utils::KmParamSet;
@@ -48,24 +51,28 @@ ScopedAStatus JavacardKeyMintDevice::defaultHwInfo(KeyMintHardwareInfo* info) {
 
 
 ScopedAStatus JavacardKeyMintDevice::getHardwareInfo(KeyMintHardwareInfo* info) {
-    uint64_t tsRequired = 1;
     auto [item, err] = card_->sendRequest(Instruction::INS_GET_HW_INFO_CMD);
-    uint32_t secLevel;
-    uint32_t version;
-    if (err != KM_ERROR_OK || !cbor_.getUint64<uint32_t>(item, 1, version) ||
-        !cbor_.getUint64<uint32_t>(item, 2, secLevel) ||
-        !cbor_.getBinaryArray(item, 3, info->keyMintName) ||
-        !cbor_.getBinaryArray(item, 4, info->keyMintAuthorName) ||
-        !cbor_.getUint64<uint64_t>(item, 5, tsRequired)) {
+    std::optional<string> optKeyMintName;
+    std::optional<string> optKeyMintAuthorName;
+    std::optional<uint32_t> optSecLevel;
+    std::optional<uint32_t> optVersion;
+    std::optional<uint64_t> optTsRequired;
+    if (err != KM_ERROR_OK || !(optVersion = cbor_.getUint64<uint32_t>(item, 1)) ||
+        !(optSecLevel = cbor_.getUint64<uint32_t>(item, 2)) ||
+        !(optKeyMintName = cbor_.getByteArrayStr(item, 3)) ||
+        !(optKeyMintAuthorName = cbor_.getByteArrayStr(item, 4)) ||
+        !(optTsRequired = cbor_.getUint64<uint64_t>(item, 5))) {
         // TODO should we return HARDWARE_NOT_YET_AVAILABLE instead of default Hardware Info.
         LOG(ERROR) << "Error in response of getHardwareInfo.";
         LOG(INFO) << "Returning defaultHwInfo in getHardwareInfo.";
         return defaultHwInfo(info);
     }
     card_->initializeJavacard();
-    info->timestampTokenRequired = (tsRequired == 1);
-    info->securityLevel = static_cast<SecurityLevel>(secLevel);
-    info->versionNumber = static_cast<int32_t>(version);
+    info->keyMintName = std::move(optKeyMintName.value());
+    info->keyMintAuthorName = std::move(optKeyMintAuthorName.value());
+    info->timestampTokenRequired = (optTsRequired.value() == 1);
+    info->securityLevel = static_cast<SecurityLevel>(std::move(optSecLevel.value()));
+    info->versionNumber = static_cast<int32_t>(std::move(optVersion.value()));
     return ScopedAStatus::ok();
 }
 
@@ -82,12 +89,16 @@ ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& key
         LOG(ERROR) << "Error in sending generateKey.";
         return km_utils::kmError2ScopedAStatus(err);
     }
-    if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
-        !cbor_.getKeyCharacteristics(item, 2, creationResult->keyCharacteristics) ||
-        !cbor_.getCertificateChain(item, 3, creationResult->certificateChain)) {
+    auto optKeyBlob = cbor_.getByteArrayVec(item, 1);
+    auto optKeyChars = cbor_.getKeyCharacteristics(item, 2);
+    auto optCertChain = cbor_.getCertificateChain(item, 3);
+    if (!optKeyBlob || !optKeyChars || !optCertChain) {
         LOG(ERROR) << "Error in decoding og response in generateKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    creationResult->keyCharacteristics = std::move(optKeyChars.value());
+    creationResult->certificateChain = std::move(optCertChain.value());
+    creationResult->keyBlob = std::move(optKeyBlob.value());
     return ScopedAStatus::ok();
 }
 
@@ -123,12 +134,16 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
         LOG(ERROR) << "Error in sending data in importKey.";
         return km_utils::kmError2ScopedAStatus(err);
     }
-    if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
-        !cbor_.getKeyCharacteristics(item, 2, creationResult->keyCharacteristics) ||
-        !cbor_.getCertificateChain(item, 3, creationResult->certificateChain)) {
+    auto optKeyBlob = cbor_.getByteArrayVec(item, 1);
+    auto optKeyChars = cbor_.getKeyCharacteristics(item, 2);
+    auto optCertChain = cbor_.getCertificateChain(item, 3);
+    if (!optKeyBlob || !optKeyChars || !optCertChain) {
         LOG(ERROR) << "Error in decoding response in importKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    creationResult->keyCharacteristics = std::move(optKeyChars.value());
+    creationResult->certificateChain = std::move(optCertChain.value());
+    creationResult->keyBlob = std::move(optKeyBlob.value());
     return ScopedAStatus::ok();
 }
 
@@ -172,12 +187,16 @@ ScopedAStatus JavacardKeyMintDevice::importWrappedKey(const vector<uint8_t>& wra
         LOG(ERROR) << "Error in send finish import wrapped key in importWrappedKey.";
         return km_utils::kmError2ScopedAStatus(errorCode);
     }
-    if (!cbor_.getBinaryArray(item, 1, creationResult->keyBlob) ||
-        !cbor_.getKeyCharacteristics(item, 2, creationResult->keyCharacteristics) ||
-        !cbor_.getCertificateChain(item, 3, creationResult->certificateChain)) {
+    auto optKeyBlob = cbor_.getByteArrayVec(item, 1);
+    auto optKeyChars = cbor_.getKeyCharacteristics(item, 2);
+    auto optCertChain = cbor_.getCertificateChain(item, 3);
+    if (!optKeyBlob || !optKeyChars || !optCertChain) {
         LOG(ERROR) << "Error in decoding the response in importWrappedKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    creationResult->keyCharacteristics = std::move(optKeyChars.value());
+    creationResult->certificateChain = std::move(optCertChain.value());
+    creationResult->keyBlob = std::move(optKeyBlob.value());
     return ScopedAStatus::ok();
 }
 
@@ -225,10 +244,12 @@ ScopedAStatus JavacardKeyMintDevice::upgradeKey(const vector<uint8_t>& keyBlobTo
         LOG(ERROR) << "Error in sending in upgradeKey.";
         return km_utils::kmError2ScopedAStatus(err);
     }
-    if (!cbor_.getBinaryArray(item, 1, *keyBlob)) {
+    auto optKeyBlob = cbor_.getByteArrayVec(item, 1);
+    if (!optKeyBlob) {
         LOG(ERROR) << "Error in decoding the response in upgradeKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    *keyBlob = std::move(optKeyBlob.value());
     return ScopedAStatus::ok();
 }
 
@@ -284,20 +305,20 @@ ScopedAStatus JavacardKeyMintDevice::begin(KeyPurpose purpose, const std::vector
         return km_utils::kmError2ScopedAStatus(err);
     }
     // return the result
-    uint64_t opHandle;
-    uint8_t bufMode;
-    uint16_t macLength;
-    if (!cbor_.getKeyParameters(item, 1, result->params) ||
-        !cbor_.getUint64<uint64_t>(item, 2, opHandle) ||
-        !cbor_.getUint64<uint8_t>(item, 3, bufMode) ||
-        !cbor_.getUint64<uint16_t>(item, 4, macLength)) {
+    auto keyParams = cbor_.getKeyParameters(item, 1);
+    auto optOpHandle = cbor_.getUint64<uint64_t>(item, 2);
+    auto optBufMode = cbor_.getUint64<uint8_t>(item, 3);
+    auto optMacLength = cbor_.getUint64<uint16_t>(item, 4);
+    
+    if (!keyParams || !optOpHandle || !optBufMode || !optMacLength) {
         LOG(ERROR) << "Error in decoding the response in begin.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
-    result->challenge = opHandle;
+    result->params = std::move(keyParams.value());
+    result->challenge = optOpHandle.value();
     result->operation = ndk::SharedRefBase::make<JavacardKeyMintOperation>(
-        static_cast<keymaster_operation_handle_t>(opHandle), static_cast<BufferingMode>(bufMode),
-        macLength, card_);
+        static_cast<keymaster_operation_handle_t>(optOpHandle.value()), static_cast<BufferingMode>(optBufMode.value()),
+        optMacLength.value(), card_);
     return ScopedAStatus::ok();
 }
 
@@ -350,10 +371,12 @@ ScopedAStatus JavacardKeyMintDevice::getKeyCharacteristics(
         LOG(ERROR) << "Error in sending in getKeyCharacteristics.";
         return km_utils::kmError2ScopedAStatus(err);
     }
-    if (!cbor_.getKeyCharacteristics(item, 1, *result)) {
+    auto optKeyChars = cbor_.getKeyCharacteristics(item, 1);
+    if (!optKeyChars) {
         LOG(ERROR) << "Error in sending in upgradeKey.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    *result = std::move(optKeyChars.value());
     return ScopedAStatus::ok();
 }
 

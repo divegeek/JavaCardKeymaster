@@ -15,6 +15,7 @@
  */
 
 #include "JavacardKeyMintUtils.h"
+
 #include <android-base/logging.h>
 #include <cppbor.h>
 

@@ -16,18 +16,20 @@
 
 #define LOG_TAG "javacard.keymint.device.strongbox-impl"
 #include "JavacardSecureElement.h"
-#include "keymint_utils.h"
 
 #include <algorithm>
-#include <android-base/logging.h>
-#include <android-base/properties.h>
 #include <iostream>
 #include <iterator>
-#include <keymaster/android_keymaster_messages.h>
 #include <memory>
 #include <regex.h>
 #include <string>
 #include <vector>
+
+#include "keymint_utils.h"
+#include <android-base/logging.h>
+#include <android-base/properties.h>
+#include <keymaster/android_keymaster_messages.h>
+
 
 namespace keymint::javacard {
 

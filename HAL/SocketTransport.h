@@ -15,9 +15,10 @@
  ** limitations under the License.
  */
 #pragma once
-#include "ITransport.h"
 #include <memory>
 #include <vector>
+
+#include "ITransport.h"
 
 namespace keymint::javacard {
 using std::shared_ptr;

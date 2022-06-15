@@ -16,6 +16,7 @@
 
 #pragma once
 #include <vector>
+#include <string>
 
 //#include <aidl/android/hardware/security/keymint/HardwareAuthToken.h>
 

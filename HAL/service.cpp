@@ -19,7 +19,6 @@
 #include <android-base/logging.h>
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
-
 #include "JavacardKeyMintDevice.h"
 #include <aidl/android/hardware/security/keymint/SecurityLevel.h>
 #include <android-base/properties.h>
@@ -27,8 +26,8 @@
 #include "JavacardSharedSecret.h"
 #include "keymint_utils.h"
 #include "JavacardRemotelyProvisionedComponentDevice.h"
-#include <SocketTransport.h>
-#include <OmapiTransport.h>
+#include "SocketTransport.h"
+#include "OmapiTransport.h"
 
 using aidl::android::hardware::security::keymint::JavacardKeyMintDevice;
 using aidl::android::hardware::security::keymint::JavacardSharedSecret;

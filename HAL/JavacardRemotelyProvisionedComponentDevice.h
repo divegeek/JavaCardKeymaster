@@ -16,15 +16,14 @@
 
 #pragma once
 
+#include "CborConverter.h"
+#include "JavacardSecureElement.h"
 #include <aidl/android/hardware/security/keymint/BnRemotelyProvisionedComponent.h>
 #include <aidl/android/hardware/security/keymint/RpcHardwareInfo.h>
 #include <aidl/android/hardware/security/keymint/SecurityLevel.h>
 #include <cppbor.h>
 #include <keymaster/UniquePtr.h>
 #include <keymaster/android_keymaster.h>
-
-#include "CborConverter.h"
-#include "JavacardSecureElement.h"
 
 namespace aidl::android::hardware::security::keymint {
 using namespace ::keymint::javacard;

@@ -1,4 +1,7 @@
 #pragma once
+#include <map>
+#include <memory>
+#include <vector>
 
 #include "ITransport.h"
 #include <aidl/android/se/omapi/BnSecureElementListener.h>
@@ -8,9 +11,6 @@
 #include <aidl/android/se/omapi/ISecureElementService.h>
 #include <aidl/android/se/omapi/ISecureElementSession.h>
 #include <android/binder_manager.h>
-#include <map>
-#include <memory>
-#include <vector>
 
 namespace keymint::javacard {
 using std::vector;

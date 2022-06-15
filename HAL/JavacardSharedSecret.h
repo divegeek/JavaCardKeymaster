@@ -1,12 +1,11 @@
 #pragma once
+#include <memory>
+#include <vector>
 
 #include "CborConverter.h"
 #include "JavacardSecureElement.h"
-
 #include <aidl/android/hardware/security/sharedsecret/BnSharedSecret.h>
 #include <aidl/android/hardware/security/sharedsecret/SharedSecretParameters.h>
-#include <memory>
-#include <vector>
 
 namespace aidl::android::hardware::security::sharedsecret {
 using namespace ::keymint::javacard;
