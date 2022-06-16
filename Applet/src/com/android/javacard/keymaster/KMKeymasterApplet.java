@@ -1984,7 +1984,20 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
           KMByteBlob.cast(data[OUTPUT_DATA]).getStartOff());
     } catch (CryptoException e) {
       if (e.getReason() == CryptoException.ILLEGAL_USE) {
-        KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+        // As per VTS, zero length input on AES/DES with PADDING_NONE Should return a zero length
+        // output. But JavaCard fails with CryptoException.ILLEGAL_USE if no input data is
+        // provided via update() method. So ignore this exception in case if all below conditions
+        // are satisfied and simply return empty output.
+        // 1. padding mode is PADDING_NONE.
+        // 2. No input  message is processed in update().
+        // 3. Zero length input data is passed in finish operation.
+        if ((op.getPadding() == KMType.PADDING_NONE) &&
+            !op.isInputMsgProcessed() &&
+            (KMByteBlob.cast(data[INPUT_DATA]).length() == 0)) {
+          len = 0;
+        } else {
+          KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+        }
       }
     }
 
@@ -2435,6 +2448,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
                     KMByteBlob.cast(data[OUTPUT_DATA]).getStartOff());
       } catch (CryptoException e) {
         KMException.throwIt(KMError.INVALID_TAG);
+      }
+      if (KMByteBlob.cast(data[INPUT_DATA]).length() > 0) {
+        // This flag is used to denote that an input data of length > 0 is received and processed
+        // successfully in update command. This flag is later used in the finish operation
+        // to handle a particular use case, where a zero length input data on AES/DES algorithm
+        // with PADDING_NONE should return a zero length output with OK response.
+        op.setProcessedInputMsg(true);
       }
       // Adjust the Output data if it is not equal to input data.
       // This happens in case of JCardSim provider.
