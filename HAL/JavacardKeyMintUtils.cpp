@@ -15,8 +15,10 @@
  */
 
 #include "JavacardKeyMintUtils.h"
-#include <android-base/logging.h>
+
 #include <cppbor.h>
+
+#include <android-base/logging.h>
 
 namespace aidl::android::hardware::security::keymint::km_utils {
 
