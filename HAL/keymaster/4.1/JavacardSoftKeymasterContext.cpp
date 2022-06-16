@@ -14,23 +14,28 @@
  * limitations under the License.
  */
 
-#include <openssl/evp.h>
-#include <openssl/rsa.h>
-#include <openssl/ec.h>
-#include <openssl/bn.h>
-#include <openssl/nid.h>
+#include "JavacardSoftKeymasterContext.h"
+
 #include <memory>
+
+#include <openssl/bn.h>
+#include <openssl/ec.h>
+#include <openssl/evp.h>
+#include <openssl/nid.h>
+#include <openssl/rsa.h>
+
 #include <keymaster/km_openssl/asymmetric_key.h>
-#include <keymaster/km_openssl/openssl_utils.h>
-#include <keymaster/km_openssl/openssl_err.h>
 #include <keymaster/km_openssl/ec_key_factory.h>
+#include <keymaster/km_openssl/openssl_err.h>
+#include <keymaster/km_openssl/openssl_utils.h>
 #include <keymaster/km_openssl/rsa_key_factory.h>
-#include <JavacardSoftKeymasterContext.h>
-#include <CborConverter.h>
-#include <CommonUtils.h>
+
+#include "CborConverter.h"
+#include "CommonUtils.h"
 
 using std::unique_ptr;
 using ::keymaster::V4_1::javacard::KmParamSet;
+using namespace cppbor;
 
 namespace keymaster {
 
@@ -190,7 +195,10 @@ keymaster_error_t JavaCardSoftKeymasterContext::ParseKeyBlob(const KeymasterKeyB
         uint64_t version = 0;
         int pubKeyOffset;
         int keyCharsOffset;
-        cc.getUint64(item, 0, version);
+        auto optVersion = cc.getUint64(item, 0);
+        if (optVersion) {
+            version = optVersion.value();
+        }
         switch (version) {
         case 0:
             pubKeyOffset = 4;
@@ -203,13 +211,15 @@ keymaster_error_t JavaCardSoftKeymasterContext::ParseKeyBlob(const KeymasterKeyB
         default:
             return KM_ERROR_INVALID_KEY_BLOB;
         }
-        std::vector<uint8_t> temp(0);
-        if(cc.getBinaryArray(item, pubKeyOffset, temp)) {
-            key_material = {temp.data(), temp.size()};
-            temp.clear();
+        auto optTemp = cc.getByteArrayVec(item, pubKeyOffset);
+        if (optTemp) {
+            key_material = {optTemp->data(), optTemp->size()};
         }
         KeyCharacteristics keyCharacteristics;
-        cc.getKeyCharacteristics(item, keyCharsOffset, keyCharacteristics);
+        auto optKeyChars = cc.getKeyCharacteristics(item, keyCharsOffset);
+        if (optKeyChars) {
+            keyCharacteristics = optKeyChars.value();
+        }
 
         sw_enforced.Reinitialize(KmParamSet(keyCharacteristics.softwareEnforced));
         hw_enforced.Reinitialize(KmParamSet(keyCharacteristics.hardwareEnforced));

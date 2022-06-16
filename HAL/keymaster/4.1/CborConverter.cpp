@@ -15,300 +15,314 @@
  ** limitations under the License.
  */
 
-#include <CborConverter.h>
+#include "CborConverter.h"
+
 #include <android-base/logging.h>
+
+#include "CommonUtils.h"
+
+using namespace ::keymaster::V4_1::javacard;
+using namespace cppbor;
+
+constexpr int SW_ENFORCED = 0;
+constexpr int HW_ENFORCED = 1;
+
+
+std::optional<uint64_t> CborConverter::getUint64(const std::unique_ptr<Item>& item) {
+    if ((item == nullptr) || (MajorType::UINT != getType(item))) {
+        return std::nullopt;
+    }
+    const Uint *uintVal = item.get()->asUint();
+    return uintVal->value();
+}
+
+std::optional<uint64_t> CborConverter::getUint64(const std::unique_ptr<Item>& item, const uint32_t pos) {
+    auto uintItem = getItemAtPos(item, pos);
+    if (!uintItem) {
+        return std::nullopt;
+    }
+    return getUint64(*uintItem);
+}
 
 bool CborConverter::addKeyparameters(Array& array, const android::hardware::hidl_vec<KeyParameter>& keyParams) {
     Map map;
     std::map<uint64_t, std::vector<uint8_t>> enum_repetition;
     std::map<uint64_t, Array> uint_repetition;
-    for(size_t i = 0; i < keyParams.size(); i++) {
-        KeyParameter param = keyParams[i];
-        TagType tagType = static_cast<TagType>(param.tag & (0xF << 28));
+    for (size_t i = 0; i < keyParams.size(); i++) {
+        keymaster_tag_type_t tagType = typeFromTag(legacy_enum_conversion(keyParams[i].tag));
         switch(tagType) {
-            case TagType::ENUM:
-            case TagType::UINT:
-                map.add(static_cast<uint64_t>(param.tag), param.f.integer);
+            case KM_ENUM:
+            case KM_UINT:
+                map.add(static_cast<uint64_t>(keyParams[i].tag), keyParams[i].f.integer);
                 break;
-            case TagType::UINT_REP:
-                uint_repetition[static_cast<uint64_t>(param.tag)].add(param.f.integer);
+            case KM_UINT_REP:
+                uint_repetition[static_cast<uint64_t>(keyParams[i].tag)]
+                    .add(keyParams[i].f.integer);
                 break;
-            case TagType::ENUM_REP:
-                enum_repetition[static_cast<uint64_t>(param.tag)].push_back(static_cast<uint8_t>(param.f.integer));
+            case KM_ENUM_REP:
+                enum_repetition[static_cast<uint64_t>(keyParams[i].tag)]
+                    .push_back(static_cast<uint8_t>(keyParams[i].f.integer));
                 break;
-            case TagType::ULONG:
-                map.add(static_cast<uint64_t>(param.tag), param.f.longInteger);
+            case KM_ULONG:
+                map.add(static_cast<uint64_t>(keyParams[i].tag), keyParams[i].f.longInteger);
                 break;
-            case TagType::ULONG_REP:
-                uint_repetition[static_cast<uint64_t>(param.tag)].add(param.f.longInteger);
+            case KM_ULONG_REP:
+                uint_repetition[static_cast<uint64_t>(keyParams[i].tag)]
+                    .add(keyParams[i].f.longInteger);
                 break;
-            case TagType::DATE:
-                map.add(static_cast<uint64_t>(param.tag), param.f.dateTime);
+            case KM_DATE:
+                map.add(static_cast<uint64_t>(keyParams[i].tag), keyParams[i].f.dateTime);
                 break;
-            case TagType::BOOL:
-                map.add(static_cast<uint64_t>(param.tag), static_cast<uint8_t>(param.f.boolValue));
+            case KM_BOOL:
+                map.add(static_cast<uint64_t>(keyParams[i].tag),
+                        static_cast<uint8_t>(keyParams[i].f.boolValue));
                 break;
-            case TagType::BIGNUM:
-            case TagType::BYTES:
-                map.add(static_cast<uint64_t>(param.tag), (std::vector<uint8_t>(param.blob)));
+            case KM_BIGNUM:
+            case KM_BYTES:
+                map.add(static_cast<uint64_t>(keyParams[i].tag),
+                        (std::vector<uint8_t>(keyParams[i].blob)));
                 break;
-            default: 
-                /* Invalid skip */
+            case KM_INVALID:
                 break;
         }
     }
-    if(0 < enum_repetition.size()) {
-        for( auto const& [key, val] : enum_repetition ) {
-            Bstr bstr(val);
-            map.add(key, std::move(bstr));
-        }
+    for (auto const& [key, val] : enum_repetition ) {
+        Bstr bstr(val);
+        map.add(key, std::move(bstr));
     }
-    if(0 < uint_repetition.size()) {
-        for( auto & [key, val] : uint_repetition ) {
-            map.add(key, std::move(val));
-        }
+    for (auto & [key, val] : uint_repetition ) {
+        map.add(key, std::move(val));
     }
     array.add(std::move(map));
     return true;
 }
 
-bool CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, const uint32_t pos,
-        KeyCharacteristics& keyCharacteristics) {
-    bool ret = false;
-    std::unique_ptr<Item> arrayItem(nullptr);
-    getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
-        return ret;
+std::optional<KeyCharacteristics>
+CborConverter::getKeyCharacteristics(const std::unique_ptr<Item> &item, const uint32_t pos) {
+    KeyCharacteristics keyCharacteristics;
+    auto arrayItem = getItemAtPos(item, pos);
+    if (!arrayItem || (MajorType::ARRAY != getType(*arrayItem)))
+        return std::nullopt;
 
-    if (!getKeyParameters(arrayItem, 0, keyCharacteristics.softwareEnforced)) {
-        return ret;
+    auto optSwEnf = getKeyParameters(*arrayItem, SW_ENFORCED);
+    if (!optSwEnf) {
+        return std::nullopt;
     }
+    keyCharacteristics.softwareEnforced = std::move(*optSwEnf);
 
-    if (!getKeyParameters(arrayItem, 1, keyCharacteristics.hardwareEnforced)) {
-        return ret;
+    auto optHwEnf = getKeyParameters(*arrayItem, HW_ENFORCED);
+    if (!optHwEnf) {
+        return std::nullopt;
     }
-    //success
-    ret = true;
-    return ret;
+    keyCharacteristics.hardwareEnforced = std::move(*optHwEnf);
+    return keyCharacteristics;
+
 }
 
-bool CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&,
-        const std::unique_ptr<Item>&> pair, std::vector<KeyParameter>& keyParams) {
-    bool ret = false;
-    uint64_t key;
-    uint64_t value;
+std::optional<std::vector<KeyParameter>>
+CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&,
+                const std::unique_ptr<Item>&> pair) {
+    std::vector<KeyParameter> keyParams;
+    Tag key;
 
-    if(!getUint64(pair.first, key)) {
-        return ret;
+    auto optKey = getUint64(pair.first);
+    if (!optKey) {
+        return std::nullopt;
     }
+    key = static_cast<Tag>(optKey.value());
 
     /* Get the TagType from the Tag */
-    TagType tagType = static_cast<TagType>(key & (0xF << 28));
+   keymaster_tag_type_t tagType = typeFromTag(legacy_enum_conversion(key));
     switch(tagType) {
-        case TagType::ENUM_REP:
+        case KM_ENUM_REP:
             {
-                /* ENUM_REP contains values encoded in a Binary string */
+                /* ENUM_REP contains values encoded in a Byte string */
                 const Bstr* bstr = pair.second.get()->asBstr();
-                if(bstr == nullptr) return ret;
+                if(bstr == nullptr) return std::nullopt;
                 for (auto bchar : bstr->value()) {
                     KeyParameter keyParam;
-                    keyParam.tag = static_cast<Tag>(key);
+                    keyParam.tag = key;
                     keyParam.f.integer = bchar;
                     keyParams.push_back(std::move(keyParam));
                 }
-                return true;
+                return keyParams;
             }
             break;
-        case TagType::ENUM:
-        case TagType::UINT:
+        case KM_ENUM:
+        case KM_UINT:
             {
                 KeyParameter keyParam;
-                keyParam.tag = static_cast<Tag>(key);
-                if(!getUint64(pair.second, value)) {
-                    return ret;
+                keyParam.tag = key;
+                auto optVal = getUint64(pair.second);
+                if(!optVal) {
+                    return std::nullopt;
                 }
-                keyParam.f.integer = static_cast<uint32_t>(value);
+                keyParam.f.integer = static_cast<uint32_t>(optVal.value());
                 keyParams.push_back(std::move(keyParam));
-                return true;
+                return keyParams;
             }
             break;
-        case TagType::ULONG:
+        case KM_ULONG:
             {
                 KeyParameter keyParam;
-                keyParam.tag = static_cast<Tag>(key);
-                if(!getUint64(pair.second, value)) {
-                    return ret;
+                keyParam.tag = key;
+                auto optVal = getUint64(pair.second);
+                if(!optVal) {
+                    return std::nullopt;
                 }
-                keyParam.f.longInteger = value;
+                keyParam.f.longInteger = optVal.value();
                 keyParams.push_back(std::move(keyParam));
-                return true;
+                return keyParams;
             }
             break;
-        case TagType::UINT_REP:
+        case KM_UINT_REP:
             {
                 /* UINT_REP contains values encoded in a Array */
                 Array* array = const_cast<Array*>(pair.second.get()->asArray());
-                if(array == nullptr) return ret;
+                if(array == nullptr) return std::nullopt;
                 for(int i = 0; i < array->size(); i++) {
                     KeyParameter keyParam;
-                    keyParam.tag = static_cast<Tag>(key);
-                    std::unique_ptr<Item> item = std::move((*array)[i]);
-                    if(!getUint64(item, value)) {
-                        return ret;
+                    keyParam.tag = key;
+                    const std::unique_ptr<Item>& item = array->get(i);
+                    auto optVal = getUint64(item);
+                    if(!optVal) {
+                        return std::nullopt;
                     }
-                    keyParam.f.integer = static_cast<uint32_t>(value);
+                    keyParam.f.integer = static_cast<uint32_t>(optVal.value());
                     keyParams.push_back(std::move(keyParam));
 
                 }
-                return true;
+                return keyParams;
             }
             break;
-        case TagType::ULONG_REP:
+        case KM_ULONG_REP:
             {
                 /* ULONG_REP contains values encoded in a Array */
                 Array* array = const_cast<Array*>(pair.second.get()->asArray());
-                if(array == nullptr) return ret;
+                if(array == nullptr) return std::nullopt;
                 for(int i = 0; i < array->size(); i++) {
                     KeyParameter keyParam;
-                    keyParam.tag = static_cast<Tag>(key);
-                    std::unique_ptr<Item> item = std::move((*array)[i]);
-                    if(!getUint64(item, keyParam.f.longInteger)) {
-                        return ret;
+                    keyParam.tag = key;
+                    const std::unique_ptr<Item>& item = array->get(i);
+                    auto optVal = getUint64(item);
+                    if(!optVal) {
+                        return std::nullopt;
                     }
+                    keyParam.f.longInteger = optVal.value();
                     keyParams.push_back(std::move(keyParam));
 
                 }
-                return true;
+                return keyParams;
             }
             break;
-        case TagType::DATE:
+        case KM_DATE:
             {
                 KeyParameter keyParam;
-                keyParam.tag = static_cast<Tag>(key);
-                if(!getUint64(pair.second, value)) {
-                    return ret;
+                keyParam.tag = key;
+                auto optVal = getUint64(pair.second);
+                if(!optVal) {
+                    return std::nullopt;
                 }
-                keyParam.f.dateTime = value;
+                keyParam.f.dateTime = optVal.value();
                 keyParams.push_back(std::move(keyParam));
-                return true;
+                return keyParams;
             }
             break;
-        case TagType::BOOL:
+        case KM_BOOL:
             {
                 KeyParameter keyParam;
-                keyParam.tag = static_cast<Tag>(key);
-                if(!getUint64(pair.second, value)) {
-                    return ret;
+                keyParam.tag = key;
+                auto optVal = getUint64(pair.second);
+                if(!optVal) {
+                    return std::nullopt;
                 }
-                keyParam.f.boolValue = static_cast<bool>(value);
+                keyParam.f.boolValue = static_cast<bool>(optVal.value());
                 keyParams.push_back(std::move(keyParam));
-                return true;
+                return keyParams;
             }
             break;
-        case TagType::BYTES:
+        case KM_BYTES:
             {
                 KeyParameter keyParam;
-                keyParam.tag = static_cast<Tag>(key);
+                keyParam.tag = key;
                 const Bstr* bstr = pair.second.get()->asBstr();
-                if(bstr == nullptr) return ret;
+                if(bstr == nullptr) return std::nullopt;
                 keyParam.blob = bstr->value();
                 keyParams.push_back(std::move(keyParam));
-                return true;
+                return keyParams;
             }
             break;
-        default:
-            /* Invalid skip */
+        case KM_INVALID:
+        case KM_BIGNUM:
             break;
     }
-    return ret;
+    return std::nullopt;
 }
 
-
-bool CborConverter::getMultiBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
-        std::vector<std::vector<uint8_t>>& data) {
-    bool ret = false;
-    std::unique_ptr<Item> arrayItem(nullptr);
-
-    getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
-        return ret;
-    const Array* arr = arrayItem.get()->asArray();
-    size_t arrSize = arr->size();
+std::optional<std::vector<std::vector<uint8_t>>>
+CborConverter::getCertChain(const std::unique_ptr<Item>& item, const uint32_t pos) {
+    std::vector<std::vector<uint8_t>> data;
+    auto arrayItem = getItemAtPos(item, pos);
+    if (!arrayItem  || (MajorType::ARRAY != getType(*arrayItem))) {
+        return std::nullopt;
+    }
+    size_t arrSize = arrayItem->get()->asArray()->size();
     for (int i = 0; i < arrSize; i++) {
-        std::vector<uint8_t> temp;
-        if (!getBinaryArray(arrayItem, i, temp))
-            return ret;
-        data.push_back(std::move(temp));
+        auto optTemp = getByteArrayVec(*arrayItem, i);
+        if (!optTemp) {
+            return std::nullopt;
+        }
+        data.push_back(std::move(*optTemp));
     }
-    ret = true; // success
-    return ret;
+    return data;
 }
 
-bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
-        ::android::hardware::hidl_vec<uint8_t>& value) {
-    bool ret = false;
-    std::unique_ptr<Item> strItem(nullptr);
-    getItemAtPos(item, pos, strItem);
-    if ((strItem == nullptr) || (MajorType::BSTR != getType(strItem)))
-        return ret;
+std::optional<::android::hardware::hidl_vec<uint8_t>>
+CborConverter::getByteArrayHidlVec(const std::unique_ptr<Item>& item, const uint32_t pos) {
+    auto strItem = getItemAtPos(item, pos);
+    if (!strItem || (MajorType::BSTR != getType(*strItem)))
+        return std::nullopt;
 
-    const Bstr* bstr = strItem.get()->asBstr();
-    value = bstr->value();
-    ret = true;
-    return ret;
+    return strItem->get()->asBstr()->value();
 }
 
-bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos,
-        ::android::hardware::hidl_string& value) {
-    std::vector<uint8_t> vec;
-    std::string str;
-    if(!getBinaryArray(item, pos, vec)) {
-        return false;
+std::optional<::android::hardware::hidl_string>
+CborConverter::getByteArrayHidlStr(const std::unique_ptr<Item>& item, const uint32_t pos) {
+    auto vec = getByteArrayVec(item, pos);
+    if(!vec) {
+        return std::nullopt;
     }
-    for(auto ch : vec) {
-        str += ch;
-    }
-    value = str;
-    return true;
+    std::string str(vec->begin(), vec->end());
+    return str;
 }
 
-bool CborConverter::getBinaryArray(const std::unique_ptr<Item>& item, const uint32_t pos, std::vector<uint8_t>& value) {
-    bool ret = false;
-    std::unique_ptr<Item> strItem(nullptr);
-    getItemAtPos(item, pos, strItem);
-    if ((strItem == nullptr) || (MajorType::BSTR != getType(strItem)))
-        return ret;
+std::optional<std::vector<uint8_t>>
+CborConverter::getByteArrayVec(const std::unique_ptr<Item>& item, const uint32_t pos) {
+    auto strItem = getItemAtPos(item, pos);
+    if (!strItem || (MajorType::BSTR != getType(*strItem)))
+        return std::nullopt;
 
-    const Bstr* bstr = strItem.get()->asBstr();
-    for (auto bchar : bstr->value()) {
-        value.push_back(bchar);
-    }
-    ret = true;
-    return ret;
+    return strItem->get()->asBstr()->value();
 }
 
-bool CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos, HmacSharingParameters& params) {
+std::optional<HmacSharingParameters>
+CborConverter::getHmacSharingParameters(const std::unique_ptr<Item>& item, const uint32_t pos) {
     std::vector<uint8_t> paramValue;
-    bool ret = false;
-    std::unique_ptr<Item> arrayItem(nullptr);
-
+    HmacSharingParameters params;
     //1. Get ArrayItem
+    auto arrayItem = getItemAtPos(item, pos);
     //2. First item in the array seed; second item in the array is nonce.
+    if (!arrayItem || (MajorType::ARRAY != getType(*arrayItem)))
+        return std::nullopt;
 
-    getItemAtPos(item, pos, arrayItem);
-    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem)))
-        return ret;
-
-    //Seed
-    if (!getBinaryArray(arrayItem, 0, params.seed))
-        return ret;
-
-    //nonce
-    if (!getBinaryArray(arrayItem, 1, paramValue))
-        return ret;
-    memcpy(params.nonce.data(), paramValue.data(), paramValue.size());
-    ret = true;
-    return ret;
+    auto optSeed = getByteArrayHidlVec(*arrayItem, 0);
+    auto optNonce = getByteArrayVec(*arrayItem, 1);
+    if (!optSeed || !optNonce) {
+        return std::nullopt;
+    }
+    params.seed = std::move(*optSeed);
+    memcpy(params.nonce.data(), optNonce->data(), optNonce->size());
+    return params;
 }
 
 bool CborConverter::addVerificationToken(Array& array, const VerificationToken&
@@ -336,77 +350,75 @@ bool CborConverter::addHardwareAuthToken(Array& array, const HardwareAuthToken&
     return true;
 }
 
-bool CborConverter::getHardwareAuthToken(const std::unique_ptr<Item>& item, const uint32_t pos, HardwareAuthToken& token) {
-    bool ret = false;
-    //challenge
-    if (!getUint64<uint64_t>(item, pos, token.challenge))
-        return ret;
-    //userId
-    if (!getUint64<uint64_t>(item, pos+1, token.userId))
-        return ret;
-    //AuthenticatorId
-    if (!getUint64<uint64_t>(item, pos+2, token.authenticatorId))
-        return ret;
-    //AuthType
-    uint64_t authType;
-    if (!getUint64<uint64_t>(item, pos+3, authType))
-        return ret;
-    token.authenticatorType = static_cast<HardwareAuthenticatorType>(authType);
-    //Timestamp
-    if (!getUint64<uint64_t>(item, pos+4, token.timestamp))
-        return ret;
-    //MAC
-    if (!getBinaryArray(item, pos+5, token.mac))
-        return ret;
-    ret = true;
-    return ret;
-}
-
-bool CborConverter::getVerificationToken(const std::unique_ptr<Item>& item, const uint32_t pos, VerificationToken&
-        token) {
-    bool ret = false;
-    //challenge
-    if (!getUint64<uint64_t>(item, pos, token.challenge))
-        return ret;
-
-    //timestamp
-    if (!getUint64<uint64_t>(item, pos+1, token.timestamp))
-        return ret;
-
-    //List of KeyParameters
-    if (!getKeyParameters(item, pos+2, token.parametersVerified))
-        return ret;
-
-    //AuthenticatorId
-    uint64_t val;
-    if (!getUint64<uint64_t>(item, pos+3, val))
-        return ret;
-    token.securityLevel = static_cast<SecurityLevel>(val);
-
-    //MAC
-    if (!getBinaryArray(item, pos+4, token.mac))
-        return ret;
-    ret = true;
-    return ret;
-
-}
-
-bool CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos, android::hardware::hidl_vec<KeyParameter>& keyParams) {
-    bool ret = false;
-    std::unique_ptr<Item> mapItem(nullptr);
+std::optional<android::hardware::hidl_vec<KeyParameter>>
+CborConverter::getKeyParameters(const std::unique_ptr<Item>& item, const uint32_t pos) {
+    android::hardware::hidl_vec<KeyParameter> hidlVecParams;
     std::vector<KeyParameter> params;
-    getItemAtPos(item, pos, mapItem);
-    if ((mapItem == nullptr) || (MajorType::MAP != getType(mapItem)))
-        return ret;
-    const Map* map = mapItem.get()->asMap();
+    auto mapItem = getItemAtPos(item, pos);
+    if (!mapItem || (MajorType::MAP != getType(*mapItem)))
+        return std::nullopt;
+
+    const Map* map = mapItem->get()->asMap();
     size_t mapSize = map->size();
     for (int i = 0; i < mapSize; i++) {
-        if (!getKeyParameter((*map)[i], params)) {
-            return ret;
+        auto optKeyParams = getKeyParameter((*map)[i]);
+        if (optKeyParams) {
+            params.insert(params.end(), optKeyParams->begin(), optKeyParams->end());
+        } else {
+            return std::nullopt;
         }
     }
-    keyParams.resize(params.size());
-    keyParams = params;
-    ret = true;
-    return ret;
+    hidlVecParams.resize(params.size());
+    hidlVecParams = params;
+    return hidlVecParams;
+}
+
+std::tuple<std::unique_ptr<cppbor::Item>, ErrorCode>
+CborConverter::decodeData(const std::vector<uint8_t> &response, bool hasErrorCode) {
+    const uint8_t *pos;
+    std::unique_ptr<cppbor::Item> item(nullptr);
+    std::string message;
+    ErrorCode errorCode = ErrorCode::OK;
+
+    std::tie(item, pos, message) = cppbor::parse(response);
+
+    if (item != nullptr && hasErrorCode) {
+        if (cppbor::MajorType::ARRAY == getType(item)) {
+            auto optErr  = getErrorCode(item, 0);
+            if (!optErr) {
+                item = nullptr;
+            } else {
+                errorCode = optErr.value();
+            }
+
+        } else if (cppbor::MajorType::UINT == getType(item)) {
+            auto optErr  = getUint64(item);
+            if (optErr) {
+                errorCode = static_cast<ErrorCode>(optErr.value());
+            }
+            item = nullptr; /*Already read the errorCode. So no need of sending item to client */
+        }
+    }
+    return {std::move(item), errorCode};
+}
+
+std::optional<std::unique_ptr<Item>>
+CborConverter::getItemAtPos(const std::unique_ptr<cppbor::Item> &item, const uint32_t pos) {
+    if (cppbor::MajorType::ARRAY != getType(item)) {
+        return std::nullopt;
+    }
+    Array *arr = item.get()->asArray();
+    if (arr->size() < (pos + 1)) {
+        return std::nullopt;
+    }
+    return std::move(arr->get(pos));
+}
+
+std::optional<ErrorCode> 
+CborConverter::getErrorCode(const std::unique_ptr<cppbor::Item> &item, const uint32_t pos) {
+    auto optErrorVal = getUint64(item, pos);
+    if (!optErrorVal) {
+        return std::nullopt;
+    }
+    return static_cast<ErrorCode>(*optErrorVal);
 }

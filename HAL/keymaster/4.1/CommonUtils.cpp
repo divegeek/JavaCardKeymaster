@@ -15,21 +15,23 @@
  ** limitations under the License.
  */
 
-#include <CommonUtils.h>
+#include "CommonUtils.h"
+
 #include <regex.h>
-#include <regex.h>
-#include <android-base/properties.h>
-#include <openssl/evp.h>
-#include <openssl/rsa.h>
-#include <openssl/ec.h>
-#include <openssl/bn.h>
-#include <openssl/nid.h>
+
 #include <android-base/logging.h>
+#include <android-base/properties.h>
+
+#include <openssl/bn.h>
+#include <openssl/ec.h>
+#include <openssl/evp.h>
+#include <openssl/nid.h>
+#include <openssl/rsa.h>
+
+#include <keymaster/km_openssl/ec_key.h>
 #include <keymaster/km_openssl/openssl_err.h>
 #include <keymaster/km_openssl/openssl_utils.h>
 #include <keymaster/km_openssl/rsa_key.h>
-#include <keymaster/km_openssl/ec_key.h>
-#include <android-base/logging.h>
 
 #define TAG_SEQUENCE 0x30
 #define LENGTH_MASK 0x80
@@ -160,21 +162,22 @@ ErrorCode getEcCurve(const EC_GROUP *group, EcCurve& ecCurve) {
 ErrorCode ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>&
 publicKey, EcCurve& ecCurve) {
     ErrorCode errorCode = ErrorCode::INVALID_KEY_BLOB;
-    EVP_PKEY *pkey = nullptr;
     const uint8_t *data = pkcs8Blob.data();
 
-    d2i_PrivateKey(EVP_PKEY_EC, &pkey, &data, pkcs8Blob.size());
-    if(!pkey) {
+    EVP_PKEY* evpKey = d2i_PrivateKey(EVP_PKEY_EC, nullptr /* pkey */, &data,
+                                    pkcs8Blob.size());
+    if (!evpKey) {
         return legacy_enum_conversion(TranslateLastOpenSslError());
     }
+    UniquePtr<EVP_PKEY, EVP_PKEY_Delete> pkey(evpKey);
 
-    UniquePtr<EC_KEY, EC_KEY_Delete> ec_key(EVP_PKEY_get1_EC_KEY(pkey));
+    UniquePtr<EC_KEY, EC_KEY_Delete> ec_key(EVP_PKEY_get1_EC_KEY(pkey.get()));
     if(!ec_key.get())
         return legacy_enum_conversion(TranslateLastOpenSslError());
 
     //Get EC Group
     const EC_GROUP *group = EC_KEY_get0_group(ec_key.get());
-    if(group == NULL)
+    if(group == nullptr)
         return errorCode;
 
     if(ErrorCode::OK != (errorCode = getEcCurve(group, ecCurve))) {
@@ -183,57 +186,83 @@ publicKey, EcCurve& ecCurve) {
 
     //Extract private key.
     const BIGNUM *privBn = EC_KEY_get0_private_key(ec_key.get());
-    int privKeyLen = BN_num_bytes(privBn);
-    std::unique_ptr<uint8_t[]> privKey(new uint8_t[privKeyLen]);
-    BN_bn2bin(privBn, privKey.get());
-    secret.insert(secret.begin(), privKey.get(), privKey.get()+privKeyLen);
+    if (privBn == nullptr) {
+        return errorCode;
+    }
+    // Note that this may return fewer than 32 bytes so pad with zeroes since we
+    // want to always return 32 bytes.
+    size_t numBytes = BN_num_bytes(privBn);
+    if (numBytes > 32) {
+        LOG(ERROR) << "Size is " << numBytes << ", expected this to be 32 or less";
+        return errorCode;
+    }
+    secret.resize(32);
+    for (size_t n = 0; n < 32 - numBytes; n++) {
+        secret[n] = 0x00;
+    }
+    BN_bn2bin(privBn, secret.data() + 32 - numBytes);
 
     //Extract public key.
     const EC_POINT *point = EC_KEY_get0_public_key(ec_key.get());
-    int pubKeyLen=0;
-    pubKeyLen = EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
-    std::unique_ptr<uint8_t[]> pubKey(new uint8_t[pubKeyLen]);
-    EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED, pubKey.get(), pubKeyLen, NULL);
-    publicKey.insert(publicKey.begin(), pubKey.get(), pubKey.get()+pubKeyLen);
+    int size = EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED, nullptr, 0,
+                                  nullptr);
+    if (size == 0) {
+        LOG(ERROR) << "Error generating public key encoding";
+        return errorCode;
+    }
 
-    EVP_PKEY_free(pkey);
+    publicKey.resize(size);
+    EC_POINT_point2oct(group, point, POINT_CONVERSION_UNCOMPRESSED, publicKey.data(),
+                       publicKey.size(), nullptr);
+
     return ErrorCode::OK;
 }
 
 ErrorCode rsaRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& privateExp, std::vector<uint8_t>&
 pubModulus) {
     ErrorCode errorCode = ErrorCode::INVALID_KEY_BLOB;
-    const BIGNUM *n=NULL, *e=NULL, *d=NULL;
-    EVP_PKEY *pkey = nullptr;
+    const BIGNUM *n = nullptr, *d = nullptr;
     const uint8_t *data = pkcs8Blob.data();
 
-    d2i_PrivateKey(EVP_PKEY_RSA, &pkey, &data, pkcs8Blob.size());
-    if(!pkey) {
+    EVP_PKEY* evpKey = d2i_PrivateKey(EVP_PKEY_RSA, nullptr /* pkey */, &data,
+                                    pkcs8Blob.size());
+    if (!evpKey) {
         return legacy_enum_conversion(TranslateLastOpenSslError());
     }
+    UniquePtr<EVP_PKEY, EVP_PKEY_Delete> pkey(evpKey);
 
-    UniquePtr<RSA, RSA_Delete> rsa_key(EVP_PKEY_get1_RSA(pkey));
+    UniquePtr<RSA, RSA_Delete> rsa_key(EVP_PKEY_get1_RSA(pkey.get()));
     if(!rsa_key.get()) {
         return legacy_enum_conversion(TranslateLastOpenSslError());
     }
 
-    RSA_get0_key(rsa_key.get(), &n, &e, &d);
-    if(d != NULL && n != NULL) {
+    RSA_get0_key(rsa_key.get(), &n, nullptr, &d);
+    if(d != nullptr && n != nullptr) {
         /*private exponent */
         int privExpLen = BN_num_bytes(d);
-        std::unique_ptr<uint8_t[]> privExp(new uint8_t[privExpLen]);
-        BN_bn2bin(d, privExp.get());
+        if (privExpLen > 256) {
+            LOG(ERROR) << "Size is " << privExpLen << ", expected this to be 256 or less";
+            return errorCode;
+        }
+        privateExp.resize(256);
+        for (size_t n = 0; n < 256 - privExpLen; n++) {
+            privateExp[n] = 0x00;
+        }
+        BN_bn2bin(d, privateExp.data() + 256 - privExpLen);
         /* public modulus */
         int pubModLen = BN_num_bytes(n);
-        std::unique_ptr<uint8_t[]> pubMod(new uint8_t[pubModLen]);
-        BN_bn2bin(n, pubMod.get());
-
-        privateExp.insert(privateExp.begin(), privExp.get(), privExp.get()+privExpLen);
-        pubModulus.insert(pubModulus.begin(), pubMod.get(), pubMod.get()+pubModLen);
+        if (pubModLen > 256) {
+            LOG(ERROR) << "Size is " << pubModLen << ", expected this to be 256 or less";
+            return errorCode;
+        }
+        pubModulus.resize(256);
+        for (size_t n = 0; n < 256 - pubModLen; n++) {
+            pubModulus[n] = 0x00;
+        }
+        BN_bn2bin(n, pubModulus.data() + 256 - pubModLen);
     } else {
         return errorCode;
     }
-    EVP_PKEY_free(pkey);
     return ErrorCode::OK;
 }
 

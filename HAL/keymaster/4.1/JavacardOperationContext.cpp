@@ -15,7 +15,8 @@
  ** limitations under the License.
  */
 
-#include <JavacardOperationContext.h>
+#include "JavacardOperationContext.h"
+
 #include <algorithm>
 
 #define MAX_ALLOWED_INPUT_SIZE 256
@@ -25,9 +26,7 @@
 #define EC_INPUT_MSG_LEN        32
 #define MAX_EC_BUFFER_SIZE      32
 
-namespace keymaster {
-namespace V4_1 {
-namespace javacard {
+namespace keymaster::V4_1::javacard {
 
 enum class Operation {
     Update = 0,
@@ -378,6 +377,4 @@ ErrorCode OperationContext::handleInternalUpdate(uint64_t operHandle, std::vecto
 }
 
 
-}  // namespace javacard
-}  // namespace V4_1
-}  // namespace keymaster
+}

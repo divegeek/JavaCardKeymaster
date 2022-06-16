@@ -14,8 +14,7 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  */
-#ifndef __SE_TRANSPORT_FACTORY__
-#define __SE_TRANSPORT_FACTORY__
+#pragma once
 
 #include "Transport.h"
 
@@ -73,4 +72,3 @@ class TransportFactory {
 
 };
 }
-#endif /* __SE_TRANSPORT_FACTORY__ */
