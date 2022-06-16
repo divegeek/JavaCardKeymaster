@@ -446,7 +446,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   @Override
   public void process(APDU apdu) {
     try {
-      resetData();
+      resetTransientBuffers();
       repository.onProcess();
       // If this is select applet apdu which is selecting this applet then return
       if (apdu.isISOInterindustryCLA()) {
@@ -462,7 +462,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       switch (apduIns) {
         case INS_INIT_STRONGBOX_CMD:
           processInitStrongBoxCmd(apdu);
-          sendError(apdu, KMError.OK);
+          sendResponse(apdu, KMError.OK);
           return;
         case INS_GENERATE_KEY_CMD:
           processGenerateKey(apdu);
@@ -546,19 +546,19 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } catch (KMException exception) {
       freeOperations();
       resetWrappingKey();
-      sendError(apdu, KMException.reason());
+      sendResponse(apdu, KMException.reason());
     } catch (ISOException exp) {
       freeOperations();
       resetWrappingKey();
-      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
+      sendResponse(apdu, mapISOErrorToKMError(exp.getReason()));
     } catch (CryptoException e) {
       freeOperations();
       resetWrappingKey();
-      sendError(apdu, mapCryptoErrorToKMError(e.getReason()));
+      sendResponse(apdu, mapCryptoErrorToKMError(e.getReason()));
     } catch (Exception e) {
       freeOperations();
       resetWrappingKey();
-      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
+      sendResponse(apdu, KMError.GENERIC_UNKNOWN_ERROR);
     } finally {
       repository.clean();
     }
@@ -603,7 +603,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processEarlyBootEndedCmd(APDU apdu) {
     kmDataStore.setEarlyBootEndedStatus(true);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private short deviceLockedCmd(APDU apdu){
@@ -626,13 +626,13 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short verTime = KMVerificationToken.cast(verToken).getTimestamp();
     short lastDeviceLockedTime = kmDataStore.getDeviceTimeStamp();
     if (KMInteger.compare(verTime, lastDeviceLockedTime) > 0) {
-      Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 8, (byte) 0);
-      KMInteger.cast(verTime).getValue(scratchPad, (short) 0, (short) 8);
+      Util.arrayFillNonAtomic(scratchPad, (short) 0, KMInteger.UINT_64, (byte) 0);
+      KMInteger.cast(verTime).getValue(scratchPad, (short) 0, KMInteger.UINT_64);
       kmDataStore.setDeviceLock(true);
       kmDataStore.setDeviceLockPasswordOnly(passwordOnly == 0x01);
-      kmDataStore.setDeviceLockTimestamp(scratchPad, (short) 0, (short) 8);
+      kmDataStore.setDeviceLockTimestamp(scratchPad, (short) 0, KMInteger.UINT_64);
     }
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void resetWrappingKey(){
@@ -658,7 +658,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return KMByteBlob.instance(wrappingKey,(short)1,WRAPPING_KEY_SIZE);
   }
 
-  protected void resetData() {
+  protected void resetTransientBuffers() {
     short index = 0;
     while (index < data.length) {
       data[index] = KMType.INVALID_VALUE;
@@ -781,7 +781,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             JavacardKeymintDevice, (short) 0, (short) JavacardKeymintDevice.length));
     resp.add((short) 4, KMByteBlob.instance(Google, (short) 0, (short) Google.length));
     resp.add((short)5, KMInteger.uint_8((byte)1));
-    // send buffer to master
+    // send buffer to host
     sendOutgoing(apdu, respPtr);
   }
 
@@ -793,7 +793,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processAddRngEntropyCmd(APDU apdu) {
-    // Receive the incoming request fully from the master.
+    // Receive the incoming request fully from the host.
     short cmd = addRngEntropyCmd(apdu);
     // Process
     KMByteBlob blob = KMByteBlob.cast(KMArray.cast(cmd).get((short) 0));
@@ -802,7 +802,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     seProvider.addRngEntropy(blob.getBuffer(), blob.getStartOff(), blob.length());
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private short getKeyCharacteristicsCmd(APDU apdu){
@@ -814,7 +814,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processGetKeyCharacteristicsCmd(APDU apdu) {
-    // Receive the incoming request fully from the master.
+    // Receive the incoming request fully from the host.
     short cmd = getKeyCharacteristicsCmd(apdu);
     // Re-purpose the apdu buffer as scratch pad.
     byte[] scratchPad = apdu.getBuffer();
@@ -861,7 +861,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private void processDeleteAllKeysCmd(APDU apdu) {
     // No arguments
     // Send ok
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private short createKeyBlobExp(short version) {
@@ -921,7 +921,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processDeleteKeyCmd(APDU apdu) {
     // Send ok
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private short computeSharedHmacCmd(APDU apdu){
@@ -933,7 +933,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processComputeSharedHmacCmd(APDU apdu) {
-    // Receive the incoming request fully from the master into buffer.
+    // Receive the incoming request fully from the host into buffer.
     short cmd = computeSharedHmacCmd(apdu);
     byte[] scratchPad = apdu.getBuffer();
     data[HMAC_SHARING_PARAMS] = KMArray.cast(cmd).get((short) 0);
@@ -1114,7 +1114,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processUpgradeKeyCmd(APDU apdu) {
-    // Receive the incoming request fully from the master into buffer.
+    // Receive the incoming request fully from the host into buffer.
     short cmd = upgradeKeyCmd(apdu);
     byte[] scratchPad = apdu.getBuffer();
 
@@ -1166,7 +1166,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processExportKeyCmd(APDU apdu) {
-    sendError(apdu, KMError.UNIMPLEMENTED);
+    sendResponse(apdu, KMError.UNIMPLEMENTED);
   }
 
   private void processWrappingKeyBlob(short keyBlob, short wrapParams, byte[] scratchPad) {
@@ -1249,7 +1249,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processBeginImportWrappedKeyCmd(APDU apdu) {
-    // Receive the incoming request fully from the master into buffer.
+    // Receive the incoming request fully from the host into buffer.
     short cmd = beginImportWrappedKeyCmd(apdu);
     byte[] scratchPad = apdu.getBuffer();
     // Step -1 parse the wrapping key blob
@@ -1267,7 +1267,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     setWrappingKey(transportKey);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
   private short aesGCMEncrypt(short aesSecret, short input, short nonce, short authData, short authTag,byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short) 0, KMByteBlob.cast(input).length(), (byte) 0);
@@ -1627,11 +1627,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processDestroyAttIdsCmd(APDU apdu) {
     kmDataStore.deleteAttestationIds();
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void processVerifyAuthorizationCmd(APDU apdu) {
-    sendError(apdu, KMError.UNIMPLEMENTED);
+    sendResponse(apdu, KMError.UNIMPLEMENTED);
   }
 
   private short abortOperationCmd(APDU apdu){
@@ -1645,10 +1645,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[OP_HANDLE] = KMArray.cast(cmd).get((short) 0);
     KMOperationState op = findOperation(data[OP_HANDLE]);
     if (op == null) {
-      sendError(apdu,KMError.INVALID_OPERATION_HANDLE);
+      sendResponse(apdu,KMError.INVALID_OPERATION_HANDLE);
     }else {
       releaseOperation(op);
-      sendError(apdu, KMError.OK);
+      sendResponse(apdu, KMError.OK);
     }
   }
 
@@ -2019,16 +2019,16 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // concatenate challenge - 8 bytes
     short ptr = KMVerificationToken.cast(verToken).getChallenge();
     KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
-    len += 8;
+        .value(scratchPad, (short) (len + (short) (KMInteger.UINT_64 - KMInteger.cast(ptr).length())));
+    len += KMInteger.UINT_64;
     // concatenate timestamp -8 bytes
     ptr = KMVerificationToken.cast(verToken).getTimestamp();
     KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
-    len += 8;
+        .value(scratchPad, (short) (len + (short) (KMInteger.UINT_64 - KMInteger.cast(ptr).length())));
+    len += KMInteger.UINT_64;
     // concatenate security level - 4 bytes
     scratchPad[(short) (len + 3)] = TRUSTED_ENVIRONMENT;
-    len += 4;
+    len += KMInteger.UINT_32;
     // hmac the data
     ptr = KMVerificationToken.cast(verToken).getMac();
 
@@ -2225,7 +2225,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processBeginOperationCmd(APDU apdu) {
-    // Receive the incoming request fully from the master into buffer.
+    // Receive the incoming request fully from the host into buffer.
     short cmd = beginOperationCmd(apdu);
     byte[] scratchPad = apdu.getBuffer();
     short purpose = KMArray.cast(cmd).get((short) 0);
@@ -2942,27 +2942,27 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // concatenate challenge - 8 bytes
     short ptr = KMHardwareAuthToken.cast(hwToken).getChallenge();
     KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
-    len += 8;
+        .value(scratchPad, (short) (len + (short) (KMInteger.UINT_64 - KMInteger.cast(ptr).length())));
+    len += KMInteger.UINT_64;
     // concatenate user id - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getUserId();
     KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
-    len += 8;
+        .value(scratchPad, (short) (len + (short) (KMInteger.UINT_64 - KMInteger.cast(ptr).length())));
+    len += KMInteger.UINT_64;
     // concatenate authenticator id - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getAuthenticatorId();
     KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
-    len += 8;
+        .value(scratchPad, (short) (len + (short) (KMInteger.UINT_64 - KMInteger.cast(ptr).length())));
+    len += KMInteger.UINT_64;
     // concatenate authenticator type - 4 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getHwAuthenticatorType();
     scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
-    len += 4;
+    len += KMInteger.UINT_32;
     // concatenate timestamp -8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
     KMInteger.cast(ptr)
-        .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
-    len += 8;
+        .value(scratchPad, (short) (len + (short) (KMInteger.UINT_64 - KMInteger.cast(ptr).length())));
+    len += KMInteger.UINT_64;
 
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
 
@@ -2986,24 +2986,24 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // concatenate challenge - 8 bytes
     short ptr = KMHardwareAuthToken.cast(hwToken).getChallenge();
     KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
-    len += 8;
+    len += KMInteger.UINT_64;
     // concatenate user id - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getUserId();
     KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
-    len += 8;
+    len += KMInteger.UINT_64;
     // concatenate authenticator id - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getAuthenticatorId();
     KMInteger.cast(ptr).toLittleEndian(scratchPad, len);
-    len += 8;
+    len += KMInteger.UINT_64;
     // concatenate authenticator type - 4 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getHwAuthenticatorType();
     scratchPad[(short) (len + 3)] = KMEnum.cast(ptr).getVal();
-    len += 4;
+    len += KMInteger.UINT_32;
     // concatenate timestamp - 8 bytes
     ptr = KMHardwareAuthToken.cast(hwToken).getTimestamp();
     KMInteger.cast(ptr)
         .value(scratchPad, (short) (len + (short) (8 - KMInteger.cast(ptr).length())));
-    len += 8;
+    len += KMInteger.UINT_64;
 
     ptr = KMHardwareAuthToken.cast(hwToken).getMac();
 
@@ -3045,7 +3045,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processImportKeyCmd(APDU apdu) {
-    // Receive the incoming request fully from the master into buffer.
+    // Receive the incoming request fully from the host into buffer.
     short cmd = importKeyCmd(apdu);
     byte[] scratchPad = apdu.getBuffer();
     data[KEY_PARAMETERS] = KMArray.cast(cmd).get((short) 0);
@@ -3504,7 +3504,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private void processGenerateKey(APDU apdu) {
-    // Receive the incoming request fully from the master into buffer.
+    // Receive the incoming request fully from the host into buffer.
     short cmd = generateKeyCmd(apdu);
     // Re-purpose the apdu buffer as scratch pad.
     byte[] scratchPad = apdu.getBuffer();
@@ -4276,7 +4276,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return len;
   }
 
-  public static void sendError(APDU apdu, short err) {
+  public static void sendResponse(APDU apdu, short err) {
     short resp = KMArray.instance((short)1);
     err = KMError.translate(err);
     short error = KMInteger.uint_16(err);
