@@ -15,17 +15,13 @@
  ** limitations under the License.
  */
 
-
-#ifndef KEYMASTER_V4_1_JAVACARD_COMMONUTILS_H_
-#define KEYMASTER_V4_1_JAVACARD_COMMONUTILS_H_
+#pragma once
 
 #include <android/hardware/keymaster/4.1/types.h>
-#include <keymaster/serializable.h>
 #include <hardware/keymaster_defs.h>
+#include <keymaster/serializable.h>
 
-namespace keymaster {
-namespace V4_1 {
-namespace javacard {
+namespace keymaster::V4_1::javacard {
 using ::android::hardware::hidl_vec;
 using ::android::hardware::keymaster::V4_0::ErrorCode;
 using ::android::hardware::keymaster::V4_0::Tag;
@@ -98,7 +94,4 @@ class KmParamSet : public keymaster_key_param_set_t {
         ~KmParamSet() { delete[] params; }
 };
 
-}  // namespace javacard
-}  // namespace V4_1
-}  // namespace keymaster
-#endif //KEYMASTER_V4_1_JAVACARD_COMMONUTILS_H_
+}  // namespace javacard::V4_1::keymaster

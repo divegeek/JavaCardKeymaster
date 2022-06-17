@@ -14,16 +14,19 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  */
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <android-base/logging.h>
-#include <vector>
+
 #include "Transport.h"
+
+#include <arpa/inet.h>
 #include <errno.h>
+#include <sys/socket.h>
+
+#include <vector>
+
+#include <android-base/logging.h>
 
 #define PORT    8080
-#define IPADDR  "192.168.0.29"
-//#define IPADDR  "192.168.0.5"
+#define IPADDR  "192.168.0.5"
 #define MAX_RECV_BUFFER_SIZE 2500
 
 namespace se_transport {

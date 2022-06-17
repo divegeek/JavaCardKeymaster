@@ -14,8 +14,9 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  */
-#ifndef __SE_TRANSPORT__
-#define __SE_TRANSPORT__
+#pragma once
+
+#include <map>
 
 #include <aidl/android/se/omapi/BnSecureElementListener.h>
 #include <aidl/android/se/omapi/ISecureElementChannel.h>
@@ -23,9 +24,9 @@
 #include <aidl/android/se/omapi/ISecureElementReader.h>
 #include <aidl/android/se/omapi/ISecureElementService.h>
 #include <aidl/android/se/omapi/ISecureElementSession.h>
+
 #include <android/binder_manager.h>
 
-#include <map>
 
 namespace se_transport {
 
@@ -131,4 +132,3 @@ private:
 };
 
 }
-#endif /* __SE_TRANSPORT__ */

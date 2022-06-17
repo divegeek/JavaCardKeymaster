@@ -15,25 +15,25 @@
  ** limitations under the License.
  */
 
-#ifndef KEYMASTER_V4_1_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
-#define KEYMASTER_V4_1_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
+#pragma once
 
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
-#include <android-base/properties.h>
-#include "CborConverter.h"
-#include "TransportFactory.h"
+
 #include <cppbor.h>
 #include <cppbor_parse.h>
+
 #include <keymaster/keymaster_configuration.h>
 #include <keymaster/contexts/pure_soft_keymaster_context.h>
 #include <keymaster/android_keymaster.h>
-#include <JavacardOperationContext.h>
 
-namespace keymaster {
-namespace V4_1 {
-namespace javacard {
+#include "CborConverter.h"
+#include "JavacardOperationContext.h"
+#include "TransportFactory.h"
+
+namespace keymaster::V4_1::javacard {
+
 #define INS_BEGIN_KM_CMD 0x00
 #define INS_END_KM_PROVISION_CMD 0x20
 #define INS_END_KM_CMD 0x7F
@@ -144,6 +144,8 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
                                    hidl_vec<KeyParameter>& outParams, uint64_t& operationHandle,
                                    OperationType& operType);
 
+    ErrorCode getFactoryAttestCertChain(std::vector<std::vector<uint8_t>>& certChain);
+
     ErrorCode abortOperation(uint64_t operationHandle, OperationType operType);
 
     ErrorCode abortPublicKeyOperation(uint64_t operationHandle);
@@ -161,8 +163,4 @@ class JavacardKeymaster4Device : public IKeymasterDevice {
     CborConverter cborConverter_;
 };
 
-}  // namespace javacard
-}  // namespace V4_1
-}  // namespace keymaster
-
-#endif  // KEYMASTER_V4_1_JAVACARD_JAVACARDKEYMASTER4DEVICE_H_
+}  // namespace javacard::V4_1::keymaster
