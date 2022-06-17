@@ -112,6 +112,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private static final short HMAC_MAX_OPERATIONS = 8;
   private static final short COMPUTED_HMAC_KEY_SIZE = 32;
   public static final short INVALID_DATA_VERSION = 0x7FFF;
+  public static final short KM_APPLET_PACKAGE_VERSION_2_0 = 0x0200; // 2.0
   
   private static final short CERT_CHAIN_OFFSET = 0;
   private static final short CERT_ISSUER_OFFSET = KMConfigurations.CERT_CHAIN_MAX_SIZE;
@@ -1305,10 +1306,13 @@ public class KMAndroidSEProvider implements KMSEProvider {
     attestationKey = KMECPrivateKey.onRestore(element);
     preSharedKey = KMHmacKey.onRestore(element);
     computedHmacKey = KMHmacKey.onRestore(element);
-    if (oldVersion == 0x200) {
+    switch(oldVersion) {
+    case KM_APPLET_PACKAGE_VERSION_2_0:
       createOemRootPublicKey();
-    } else {
+      break;
+    default:
       oemRootPublicKey = (byte[]) element.readObject();
+      break;
     }
   }
 

@@ -71,7 +71,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     keymasterState = element.readByte();
     repository.onRestore(element, oldPackageVersion, KM_APPLET_PACKAGE_VERSION);
     seProvider.onRestore(element, oldPackageVersion, KM_APPLET_PACKAGE_VERSION);
-    handleDataUpgrade();
+    handleDataUpgrade(oldPackageVersion);
   }
 
   @Override
@@ -99,38 +99,32 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   }
 
   public boolean isUpgradeAllowed(short oldVersion) {
-    boolean upgradeAllowed = false;
-    short oldMajorVersion = (short) ((oldVersion >> 8) & 0x00FF);
-    short oldMinorVersion = (short) (oldVersion & 0x00FF);
-    short currentMajorVersion = (short) (KM_APPLET_PACKAGE_VERSION >> 8 & 0x00FF);
-    short currentMinorVersion = (short) (KM_APPLET_PACKAGE_VERSION & 0x00FF);
     // Downgrade of the Applet is not allowed.
-    // Upgrade is not allowed to a next version which is not immediate.
-    if ((short) (currentMajorVersion - oldMajorVersion) == 1) {
-      if (currentMinorVersion == 0) {
-        upgradeAllowed = true;
-      }
-    } else if ((short) (currentMajorVersion - oldMajorVersion) == 0) {
-      if (currentMinorVersion >= oldMinorVersion) {
-        upgradeAllowed = true;
-      }
+    if (oldVersion > KM_APPLET_PACKAGE_VERSION) {
+      return false;
     }
-    return upgradeAllowed;
+    return true;
   }
   
-  public void handleDataUpgrade() {
-    // In version 3.0, two new provisionStatus states are introduced
-    // 1. PROVISION_STATUS_SE_LOCKED - bit 6 of provisionStatus
-    // 2. PROVISION_STATUS_OEM_PUBLIC_KEY - bit 7 of provisionStatus
-    // In the process of upgrade from 2.0 to 3.0 OEM PUBLIC Key is provisioned
-    // in SEProvider.so update the state of the provision status by making
-    // 7th bit HIGH.
-    provisionStatus |= PROVISION_STATUS_OEM_ROOT_PUBLIC_KEY;
-    // Check if the provisioning is already locked. If so update
-    // the state of the provisionStatus by making 6th bit HIGH.
-    // Lock the SE Factory provisioning as well.
-    if ( 0 != (provisionStatus & PROVISION_STATUS_OEM_PROVISIONING_LOCKED)) {
-      provisionStatus |= PROVISION_STATUS_SE_FACTORY_PROVISIONING_LOCKED;
+  public void handleDataUpgrade(short oldVersion) {
+    switch (oldVersion) {
+    case KM_APPLET_PACKAGE_VERSION_2_0:
+      // In version 3.0, two new provisionStatus states are introduced
+      // 1. PROVISION_STATUS_SE_LOCKED - bit 6 of provisionStatus
+      // 2. PROVISION_STATUS_OEM_PUBLIC_KEY - bit 7 of provisionStatus
+      // In the process of upgrade from 2.0 to 3.0 OEM PUBLIC Key is provisioned
+      // in SEProvider.so update the state of the provision status by making
+      // 7th bit HIGH.
+      provisionStatus |= PROVISION_STATUS_OEM_ROOT_PUBLIC_KEY;
+      // Check if the provisioning is already locked. If so update
+      // the state of the provisionStatus by making 6th bit HIGH.
+      // Lock the SE Factory provisioning as well.
+      if (0 != (provisionStatus & PROVISION_STATUS_OEM_PROVISIONING_LOCKED)) {
+        provisionStatus |= PROVISION_STATUS_SE_FACTORY_PROVISIONING_LOCKED;
+      }
+      break;
+    default:
+      break;
     }
   }
 }
