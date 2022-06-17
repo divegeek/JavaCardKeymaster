@@ -18,9 +18,9 @@
 
 #include <aidl/android/hardware/security/keymint/SecurityLevel.h>
 
-#include <android-base/logging.h>
 #include <android/binder_manager.h>
 #include <android/binder_process.h>
+#include <android-base/logging.h>
 #include <android-base/properties.h>
 
 #include "JavacardKeyMintDevice.h"

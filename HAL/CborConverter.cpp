@@ -109,7 +109,7 @@ bool CborConverter::addKeyparameters(Array& array, const vector<KeyParameter>& k
 std::optional<vector<KeyCharacteristics>> CborConverter::getKeyCharacteristics(const unique_ptr<Item>& item, const uint32_t pos) {
     vector<KeyCharacteristics> keyCharacteristics;
     auto arrayItem = getItemAtPos(item, pos);
-    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem.value()))) {
+    if (!arrayItem || (MajorType::ARRAY != getType(arrayItem.value()))) {
         return std::nullopt;
     }
     KeyCharacteristics swEnf{SecurityLevel::KEYSTORE, {}};
@@ -258,7 +258,7 @@ CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&,
 std::optional<vector<Certificate>> CborConverter::getCertificateChain(const std::unique_ptr<Item>& item, const uint32_t pos) {
     vector<Certificate> certChain;
     auto arrayItem = getItemAtPos(item, pos);
-    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem.value()))) return std::nullopt;
+    if (!arrayItem || (MajorType::ARRAY != getType(arrayItem.value()))) return std::nullopt;
 
     const Array* arr = arrayItem.value().get()->asArray();
     for (int i = 0; i < arr->size(); i++) {
@@ -282,7 +282,7 @@ std::optional<string> CborConverter::getByteArrayStr(const unique_ptr<Item>& ite
 
 std::optional<std::vector<uint8_t>> CborConverter::getByteArrayVec(const unique_ptr<Item>& item, const uint32_t pos) {
     auto strItem = getItemAtPos(item, pos);
-    if ((strItem == nullptr) || (MajorType::BSTR != getType(strItem.value()))) {
+    if (!strItem || (MajorType::BSTR != getType(strItem.value()))) {
         return std::nullopt;
     }
     const Bstr* bstr = strItem.value().get()->asBstr();
@@ -293,7 +293,7 @@ std::optional<SharedSecretParameters> CborConverter::getSharedSecretParameters(c
     SharedSecretParameters params;
     // Array [seed, nonce]
     auto arrayItem = getItemAtPos(item, pos);
-    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem.value()))) {
+    if (!arrayItem || (MajorType::ARRAY != getType(arrayItem.value()))) {
         return std::nullopt;
     }
     auto optSeed = getByteArrayVec(arrayItem.value(), 0);
@@ -359,7 +359,7 @@ std::optional<TimeStampToken> CborConverter::getTimeStampToken(const unique_ptr<
 std::optional<Array> CborConverter::getArrayItem(const std::unique_ptr<Item>& item, const uint32_t pos) {
     Array array;
     auto arrayItem = getItemAtPos(item, pos);
-    if ((arrayItem == nullptr) || (MajorType::ARRAY != getType(arrayItem.value()))) {
+    if (!arrayItem || (MajorType::ARRAY != getType(arrayItem.value()))) {
         return std::nullopt;
     }
     array = std::move(*(arrayItem.value().get()->asArray()));
@@ -369,7 +369,7 @@ std::optional<Array> CborConverter::getArrayItem(const std::unique_ptr<Item>& it
 std::optional<Map> CborConverter::getMapItem(const std::unique_ptr<Item>& item, const uint32_t pos) {
     Map map;
     auto mapItem = getItemAtPos(item, pos);
-    if ((mapItem == nullptr) || (MajorType::MAP != getType(mapItem.value()))) {
+    if (!mapItem || (MajorType::MAP != getType(mapItem.value()))) {
         return std::nullopt;
     }
     map = std::move(*(mapItem.value().get()->asMap()));
@@ -379,7 +379,7 @@ std::optional<Map> CborConverter::getMapItem(const std::unique_ptr<Item>& item, 
 std::optional<vector<KeyParameter>> CborConverter::getKeyParameters(const unique_ptr<Item>& item, const uint32_t pos) {
     vector<KeyParameter> params;
     auto mapItem = getItemAtPos(item, pos);
-    if ((mapItem == nullptr) || (MajorType::MAP != getType(mapItem.value()))) return std::nullopt;
+    if (!mapItem || (MajorType::MAP != getType(mapItem.value()))) return std::nullopt;
     const Map* map = mapItem.value().get()->asMap();
     size_t mapSize = map->size();
     for (int i = 0; i < mapSize; i++) {
