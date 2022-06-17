@@ -1,8 +1,9 @@
 #define LOG_TAG "javacard.strongbox.keymint.operation-impl"
+#include "JavacardSharedSecret.h"
+
 #include <android-base/logging.h>
 
-#include "JavacardSharedSecret.h"
-#include <JavacardKeyMintUtils.h>
+#include "JavacardKeyMintUtils.h"
 
 namespace aidl::android::hardware::security::sharedsecret {
 using namespace ::keymint::javacard;
@@ -22,10 +23,12 @@ ScopedAStatus JavacardSharedSecret::getSharedSecretParameters(SharedSecretParame
         LOG(ERROR) << "Error in sending in getSharedSecretParameters.";
         return km_utils::kmError2ScopedAStatus(err);
     }
-    if (!cbor_.getSharedSecretParameters(item, 1, *params)) {
+    auto optSSParams = cbor_.getSharedSecretParameters(item, 1);
+    if (!optSSParams) {
         LOG(ERROR) << "Error in sending in getSharedSecretParameters.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    *params = std::move(optSSParams.value());
     return ScopedAStatus::ok();
 }
 
@@ -45,10 +48,12 @@ JavacardSharedSecret::computeSharedSecret(const std::vector<SharedSecretParamete
         LOG(ERROR) << "Error in sending in computeSharedSecret.";
         return km_utils::kmError2ScopedAStatus(err);
     }
-    if (!cbor_.getBinaryArray(item, 1, *secret)) {
+    auto optSecret = cbor_.getByteArrayVec(item, 1);
+    if (!optSecret) {
         LOG(ERROR) << "Error in decoding the response in computeSharedSecret.";
         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    *secret = std::move(optSecret.value());
     return ScopedAStatus::ok();
 }
 

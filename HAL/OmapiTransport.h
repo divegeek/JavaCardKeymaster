@@ -1,16 +1,20 @@
 #pragma once
 
-#include "ITransport.h"
+#include <map>
+#include <memory>
+#include <vector>
+
+
 #include <aidl/android/se/omapi/BnSecureElementListener.h>
 #include <aidl/android/se/omapi/ISecureElementChannel.h>
 #include <aidl/android/se/omapi/ISecureElementListener.h>
 #include <aidl/android/se/omapi/ISecureElementReader.h>
 #include <aidl/android/se/omapi/ISecureElementService.h>
 #include <aidl/android/se/omapi/ISecureElementSession.h>
+
 #include <android/binder_manager.h>
-#include <map>
-#include <memory>
-#include <vector>
+
+#include "ITransport.h"
 
 namespace keymint::javacard {
 using std::vector;
