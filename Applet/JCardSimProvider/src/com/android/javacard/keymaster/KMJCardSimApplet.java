@@ -93,13 +93,13 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
           case INS_PROVISION_ATTEST_IDS_CMD:
             processProvisionAttestIdsCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_ATTEST_IDS);
-            sendError(apdu, KMError.OK);
+            sendResponse(apdu, KMError.OK);
             break;
 
           case INS_PROVISION_PRESHARED_SECRET_CMD:
             processProvisionPreSharedSecretCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_PRESHARED_SECRET);
-            sendError(apdu, KMError.OK);
+            sendResponse(apdu, KMError.OK);
             break;
 
           case INS_GET_PROVISION_STATUS_CMD:
@@ -120,13 +120,13 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
           
           case INS_SE_FACTORY_PROVISIONING_LOCK_CMD:
             kmDataStore.setProvisionStatus(PROVISION_STATUS_SE_LOCKED);
-            sendError(apdu, KMError.OK);
+            sendResponse(apdu, KMError.OK);
             break;
 
           case INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD:
             processProvisionOEMRootPublicKeyCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_OEM_PUBLIC_KEY);
-            sendError(apdu, KMError.OK);
+            sendResponse(apdu, KMError.OK);
             break;
 
           case INS_OEM_LOCK_PROVISIONING_CMD:
@@ -145,13 +145,13 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     	ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
       }
     } catch (KMException exception) {
-      sendError(apdu, KMException.reason());
+      sendResponse(apdu, KMException.reason());
     } catch (ISOException exp) {
-      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
+      sendResponse(apdu, mapISOErrorToKMError(exp.getReason()));
     } catch (CryptoException e) {
-      sendError(apdu, mapCryptoErrorToKMError(e.getReason()));
+      sendResponse(apdu, mapCryptoErrorToKMError(e.getReason()));
     } catch (Exception e) {
-      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
+      sendResponse(apdu, KMError.GENERIC_UNKNOWN_ERROR);
     } finally {
       repository.clean();
     }
@@ -241,7 +241,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     authenticateOEM(OEM_UNLOCK_PROVISION_VERIFICATION_LABEL, apdu);
     kmDataStore.setProvisionLock(false);
     kmDataStore.unlockProvision(PROVISION_STATUS_PROVISIONING_LOCKED);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void processOEMLockProvisionCmd(APDU apdu) {
@@ -249,7 +249,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     // Enable the lock bit in provision status.
     kmDataStore.setProvisionLock(true);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void authenticateOEM(byte[] plainMsg, APDU apdu) {
@@ -354,7 +354,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private static void processProvisionRkpAdditionalCertChain(APDU apdu) {
@@ -403,7 +403,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
     //reclaim memory
     repository.reclaimMemory(bufferLength);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void processProvisionAttestIdsCmd(APDU apdu) {
@@ -555,7 +555,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     super.reboot();
     kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS);
     seProvider.clearDeviceBooted(false);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private boolean isProvisioningComplete() {
@@ -588,7 +588,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
 
     // Validate P1P2.
     if (P1P2 != KMKeymasterApplet.KM_HAL_VERSION) {
-      sendError(apdu, KMError.INVALID_P1P2);
+      sendResponse(apdu, KMError.INVALID_P1P2);
       return KMType.INVALID_VALUE;
     }
     return apduBuffer[ISO7816.OFFSET_INS];

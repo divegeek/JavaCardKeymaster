@@ -307,7 +307,7 @@ public class RemotelyProvisionedComponentDevice {
       createEntry(GENERATE_CSR_PHASE, BYTE_SIZE);
       updateState(BEGIN);
       // Send response.
-      KMKeymasterApplet.sendError(apdu, KMError.OK);
+      KMKeymasterApplet.sendResponse(apdu, KMError.OK);
     } catch (Exception e) {
       clearDataTable();
       releaseOperation();
@@ -350,7 +350,7 @@ public class RemotelyProvisionedComponentDevice {
       // Update the csr state
       updateState(UPDATE);
       // Send response.
-      KMKeymasterApplet.sendError(apdu, KMError.OK);
+      KMKeymasterApplet.sendResponse(apdu, KMError.OK);
     } catch (Exception e) {
       clearDataTable();
       releaseOperation();
@@ -393,7 +393,7 @@ public class RemotelyProvisionedComponentDevice {
       Util.arrayCopyNonAtomic(scratchPad, (short) 0, data, dataEntryIndex, len);
       // Update the state
       updateState(UPDATE);
-      KMKeymasterApplet.sendError(apdu, KMError.OK);
+      KMKeymasterApplet.sendResponse(apdu, KMError.OK);
     } catch (Exception e) {
       clearDataTable();
       releaseOperation();
@@ -420,7 +420,7 @@ public class RemotelyProvisionedComponentDevice {
       );
       // Update the state
       updateState(UPDATE);
-      KMKeymasterApplet.sendError(apdu, KMError.OK);
+      KMKeymasterApplet.sendResponse(apdu, KMError.OK);
     } catch (Exception e) {
       clearDataTable();
       releaseOperation();
