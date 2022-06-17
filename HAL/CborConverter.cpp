@@ -150,7 +150,7 @@ CborConverter::getKeyParameter(const std::pair<const std::unique_ptr<Item>&,
     key = static_cast<keymaster_tag_t>(optValue.value());
     switch (keymaster_tag_get_type(key)) {
     case KM_ENUM_REP: {
-        /* ENUM_REP contains values encoded in a Bit string */
+        /* ENUM_REP contains values encoded in a Byte string */
         const Bstr* bstr = pair.second.get()->asBstr();
         if (bstr == nullptr) {
             return std::nullopt;
