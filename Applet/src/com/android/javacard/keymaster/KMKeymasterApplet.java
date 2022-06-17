@@ -46,6 +46,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // MSB byte is for Major version and LSB byte is for Minor version.
   // Whenever there is an applet upgrade change the version.
   public static final short KM_APPLET_PACKAGE_VERSION = 0x0300; // 3.0
+  public static final short KM_APPLET_PACKAGE_VERSION_2_0 = 0x0200; // 2.0
 
   // "Keymaster HMAC Verification" - used for HMAC key verification.
   public static final byte[] sharingCheck = {
