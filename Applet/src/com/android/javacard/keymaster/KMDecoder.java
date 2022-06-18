@@ -170,6 +170,7 @@ public class KMDecoder {
     short tagClass;
     short allowedType;
     short obj;
+    short arrPos = 0;
     // For each tag in payload ...
     while (index < payloadLength) {
       tagFound = false;
@@ -183,7 +184,7 @@ public class KMDecoder {
         if (tagType == allowedType) {
           // then decodeByteBlob and add that to the array.
           obj = decode(tagClass);
-          KMArray.cast(vals).add(index, obj);
+          KMArray.cast(vals).add(arrPos++, obj);
           tagFound = true;
           break;
         }
@@ -195,6 +196,7 @@ public class KMDecoder {
         index++;
       }
     }
+    KMArray.cast(vals).setLength(arrPos);
     return KMKeyParameters.instance(vals);
   }
 
@@ -467,6 +469,23 @@ public class KMDecoder {
 
     readMajorTypeWithPayloadLength(BYTES_TYPE);
     return scratchBuf[START_OFFSET];
+  }
+  
+  public short readKeyblobVersion(byte[] buf, short bufOffset, short bufLen) {
+    bufferRef[0] = buf;
+    scratchBuf[START_OFFSET] = bufOffset;
+    scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
+    short arrayLen = readMajorTypeWithPayloadLength(ARRAY_TYPE);
+    if (arrayLen == 0) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short version = KMType.INVALID_VALUE;
+    try {
+      version = decodeInteger(KMInteger.exp());
+    } catch(Exception e) {
+      // Fail to decode Integer. It can happen if it is an old KeyBlob.
+    }
+    return version;
   }
 
 }

@@ -20,6 +20,7 @@
 #include <sstream>
 #include <unistd.h>
 #include <vector>
+#include <string.h>
 #include <memory>
 #include <climits>
 #include <getopt.h>
@@ -28,6 +29,8 @@
 #include <json/value.h>
 #include <openssl/bn.h>
 #include <openssl/err.h>
+#include <openssl/ecdsa.h>
+ #include <openssl/sha.h>
 #include <constants.h>
 #include <utils.h>
 #include "cppbor/cppbor.h"
@@ -51,6 +54,8 @@ static int processAttestationCertificateData();
 static int processAttestationIds();
 static int processSharedSecret();
 static int processSetBootParameters();
+static int processOEMRootPublicKey();
+static int processSEFactoryProvisioningLock();
 static int readDataFromFile(const char *fileName, std::vector<uint8_t>& data);
 static int addApduHeader(const int ins, std::vector<uint8_t>& inputData);
 static int ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret, std::vector<uint8_t>&publicKey);
@@ -59,6 +64,13 @@ static int getNotAfter(X509* x509, std::vector<uint8_t>& notAfterDate);
 static int getDerSubjectName(X509* x509, std::vector<uint8_t>& subject);
 static int getBootParameterIntValue(Json::Value& bootParamsObj, const char* key, uint32_t *value);
 static int getBootParameterBlobValue(Json::Value& bootParamsObj, const char* key, std::vector<uint8_t>& blob);
+static int signEcdsaDigest(const std::vector<uint8_t>& key, const std::vector<uint8_t>& data,
+                    std::vector<uint8_t>& out);
+static int sha256(const std::vector<uint8_t>& data, std::vector<uint8_t>& out);
+static int sendOEMAuthenticationToken(const char* toBeSigned, int oemCmd,  const char* mapKey);
+static int processOEMFactoryProvisioningLock();
+static int processOEMFactoryProvisioningUnLock();
+static int processGetProvisionStatus();
 
 
 // Print usage.
@@ -156,6 +168,54 @@ int getBootParameterBlobValue(Json::Value& bootParamsObj, const char* key, std::
     return SUCCESS;
 }
 
+std::vector<uint8_t> sha256(const std::vector<uint8_t>& data) {
+    std::vector<uint8_t> ret(32); // SHA256 digest output len
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
+    SHA256_Update(&ctx, data.data(), data.size());
+    SHA256_Final((unsigned char*)ret.data(), &ctx);
+    return ret;
+}
+
+// TODO use unique_ptr
+int signEcdsaDigest(const std::vector<uint8_t>& key, const std::vector<uint8_t>& data,
+                    std::vector<uint8_t>& out) {
+    size_t len;
+    unsigned char* p = nullptr;
+    ECDSA_SIG *sig = nullptr;
+    EC_KEY *ec_key = nullptr;
+    std::vector<uint8_t> signature;
+    int result = FAILURE;
+    BIGNUM *bn = BN_bin2bn(key.data(), key.size(), nullptr);
+    if (bn == nullptr) {
+        printf("Error creating BIGNUM");
+        goto exit;
+    }
+
+    ec_key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+    if (EC_KEY_set_private_key(ec_key, bn) != 1) {
+        printf("Error setting private key from BIGNUM");
+        goto exit;
+    }
+
+    sig = ECDSA_do_sign(data.data(), data.size(), ec_key);
+    if (sig == nullptr) {
+        printf("Error signing digest");
+        goto exit;
+    }
+    len = i2d_ECDSA_SIG(sig, nullptr);
+    signature.resize(len);
+    p = (unsigned char*)signature.data();
+    i2d_ECDSA_SIG(sig, &p);
+    out = signature;
+    result = SUCCESS;
+exit:
+    if (bn != nullptr) BN_free(bn);
+    if (ec_key != nullptr) EC_KEY_free(ec_key);
+    if (sig != nullptr) ECDSA_SIG_free(sig);
+    return result;
+}
+
 
 // Parses the input json file. Prepares the apdu for each entry in the json
 // file and dump all the apdus into the output json file.
@@ -170,6 +230,11 @@ int processInputFile() {
         0 != processAttestationCertificateData() ||
         0 != processAttestationIds() ||
         0 != processSharedSecret() ||
+        0 != processOEMRootPublicKey() ||
+        0 != processOEMFactoryProvisioningLock() ||
+        0 != processOEMFactoryProvisioningUnLock() ||
+        0 != processGetProvisionStatus() ||
+        0 != processSEFactoryProvisioningLock() ||
         0 != processSetBootParameters()) {
       return FAILURE;
     }
@@ -177,6 +242,118 @@ int processInputFile() {
         return FAILURE;
     }
     printf("\n Successfully written json to outfile: %s\n ", outputFileName.c_str());
+    return SUCCESS;
+}
+
+int sendOEMAuthenticationToken(const char* toBeSigned, int oemCmd,  const char* mapKey) {
+    Json::Value keyFile = root.get(kOEMRootKey, Json::Value::nullRef);
+    if (!keyFile.isNull()) {
+        std::vector<uint8_t> data;
+        std::vector<uint8_t> privateKey;
+        std::vector<uint8_t> publicKey;
+        std::vector<uint8_t> signature;
+        std::vector<uint8_t> plainMsg(toBeSigned, toBeSigned + strlen(toBeSigned));
+
+        std::string keyFileName = keyFile.asString();
+        if(SUCCESS != readDataFromFile(keyFileName.data(), data)) {
+            printf("\n Failed to read the oem root key from the file.\n");
+            return FAILURE;
+        }
+        if (SUCCESS != ecRawKeyFromPKCS8(data, privateKey, publicKey)) {
+            return FAILURE;
+        }
+        if (SUCCESS != signEcdsaDigest(privateKey, sha256(plainMsg), signature)) {
+            printf("\n Failed to sign the message.\n");
+            return FAILURE;
+        }
+        // Prepare cbor input.
+        Array input;
+        input.add(signature);
+        std::vector<uint8_t> cborData = input.encode();
+
+        if(SUCCESS != addApduHeader(oemCmd, cborData)) {
+            return FAILURE;
+        }
+        // Write to json.
+        writerRoot[mapKey] = getHexString(cborData);
+    } else {
+        printf("\n Improper value for oem_root_key in json file \n");
+        return FAILURE;
+    }
+    const char *lockCmd = (oemCmd == kOemLockProvisionCmd) ? "lock" : "unlock";
+    printf("\n Constructed OEM Factory provision %s successfully. \n", lockCmd);
+    return SUCCESS;
+}
+
+int processOEMFactoryProvisioningLock() {
+    return sendOEMAuthenticationToken(kOemProvisioningLock, kOemLockProvisionCmd, kLockProvision);
+}
+
+int processOEMFactoryProvisioningUnLock() {
+    return sendOEMAuthenticationToken(kEnableRma, kOemUnLockProvisionCmd, kUnLockProvision);
+}
+
+int processGetProvisionStatus() {
+    std::vector<uint8_t> cborData;
+    if (SUCCESS != addApduHeader(kGetProvisionStatusCmd, cborData)) {
+        return FAILURE;
+    }
+    // Write to json.
+    writerRoot[kProvisionStatus] = getHexString(cborData);
+    printf("\n Constructed get Provision status APDU successfully. \n");
+    return SUCCESS;
+}
+
+int processSEFactoryProvisioningLock() {
+    std::vector<uint8_t> cborData;
+    if (SUCCESS != addApduHeader(kSeFactoryLockCmd, cborData)) {
+        return FAILURE;
+    }
+    // Write to json.
+    writerRoot[kSeFactoryProvisionLock] = getHexString(cborData);
+    printf("\n Constructed SE factory lock APDU successfully. \n");
+    return SUCCESS;
+}
+
+int processOEMRootPublicKey() {
+    Json::Value keyFile = root.get(kOEMRootKey, Json::Value::nullRef);
+    if (!keyFile.isNull()) {
+        std::vector<uint8_t> data;
+        std::vector<uint8_t> privateKey;
+        std::vector<uint8_t> publicKey;
+
+        std::string keyFileName = keyFile.asString();
+        if(SUCCESS != readDataFromFile(keyFileName.data(), data)) {
+            printf("\n Failed to read the oem root key from the file.\n");
+            return FAILURE;
+        }
+        if (SUCCESS != ecRawKeyFromPKCS8(data, privateKey, publicKey)) {
+            return FAILURE;
+        }
+
+        // Prepare cbor input.
+        Array input;
+        Map map;
+        map.add(kTagAlgorithm, kAlgorithmEc);
+        map.add(kTagDigest, std::vector<uint8_t>({kDigestSha256}));
+        map.add(kTagCurve, kCurveP256);
+        map.add(kTagPurpose, std::vector<uint8_t>({kPurposeVerify}));
+        // Add elements inside cbor array.
+        input.add(std::move(map));
+        input.add(kKeyFormatRaw);
+        input.add(publicKey);
+        std::vector<uint8_t> cborData = input.encode();
+
+        if(SUCCESS != addApduHeader(kOemRootPublicKeyCmd, cborData)) {
+            return FAILURE;
+        }
+        // Write to json.
+        writerRoot[kOEMRootKey] = getHexString(cborData);
+    } else {
+        printf("\n Improper value for oem_root_key in json file \n");
+        return FAILURE;
+    }
+    printf("\n Constructed OemRootPublicKey APDU successfully. \n");
     return SUCCESS;
 }
 

@@ -22,6 +22,7 @@ import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
 import com.android.javacard.keymaster.KMComputedHmacKey;
 import com.android.javacard.keymaster.KMConfigurations;
+import com.android.javacard.keymaster.KMECPrivateKey;
 import com.android.javacard.keymaster.KMHmacKey;
 import com.android.javacard.keymaster.KMJCardSimApplet;
 import com.android.javacard.keymaster.KMJCardSimulator;
@@ -45,8 +46,11 @@ import com.android.javacard.keymaster.KMVerificationToken;
 import com.licel.jcardsim.smartcardio.CardSimulator;
 import com.licel.jcardsim.utils.AIDUtil;
 
+import java.lang.reflect.Field;
 import javacard.framework.AID;
+import javacard.framework.ISO7816;
 import javacard.framework.Util;
+import javacard.security.ECPrivateKey;
 import javacard.security.ECPublicKey;
 import javacard.security.KeyBuilder;
 import javacard.security.KeyPair;
@@ -81,7 +85,10 @@ import javax.crypto.spec.PSource;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.ResponseAPDU;
 
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class KMFunctionalTest {
@@ -95,6 +102,9 @@ public class KMFunctionalTest {
   private static final byte INS_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 6; //0x07
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_BEGIN_KM_CMD + 7; //0x08
   private static final byte INS_SET_VERSION_PATCHLEVEL_CMD = INS_BEGIN_KM_CMD + 8; //0x09
+  private static final byte INS_SE_LOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 10; //0x0A
+  private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_BEGIN_KM_CMD + 11; //0x0B
+  private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_BEGIN_KM_CMD + 12; //0x0C
   // Top 32 commands are reserved for provisioning.
   private static final byte INS_END_KM_PROVISION_CMD = 0x20;
 
@@ -652,6 +662,16 @@ public class KMFunctionalTest {
       (byte) 0xe9, (byte) 0x77, (byte) 0x4c, (byte) 0x45, (byte) 0xc3, (byte) 0xa3, (byte) 0xcf,
       (byte) 0x0d, (byte) 0x16, (byte) 0x10, (byte) 0xe4, (byte) 0x79, (byte) 0x43, (byte) 0x3a,
       (byte) 0x21, (byte) 0x5a, (byte) 0x30, (byte) 0xcf};
+
+  // OEM lock / unlock verification constants.
+  private static final byte[] OEM_LOCK_PROVISION_VERIFICATION_LABEL = { // "OEM Provisioning Lock"
+      0x4f, 0x45, 0x4d, 0x20, 0x50, 0x72, 0x6f, 0x76, 0x69, 0x73, 0x69, 0x6f, 0x6e, 0x69, 0x6e,
+      0x67, 0x20, 0x4c, 0x6f, 0x63, 0x6b
+  };
+  private static final byte[] OEM_UNLOCK_PROVISION_VERIFICATION_LABEL = { // "Enable RMA"
+      0x45, 0x6e, 0x61, 0x62, 0x6c, 0x65, 0x20, 0x52, 0x4d, 0x41
+  };
+
   private static final int OS_VERSION = 1;
   private static final int OS_PATCH_LEVEL = 1;
   private static final int VENDOR_PATCH_LEVEL = 1;
@@ -673,6 +693,19 @@ public class KMFunctionalTest {
     simulator = new CardSimulator();
     encoder = new KMEncoder();
     decoder = new KMDecoder();
+  }
+
+  @Before
+  public void resetStaticVariables() throws Exception {
+    // Set provisionStatus to default
+    Field provisionStatusField = KMKeymasterApplet.class.getDeclaredField("provisionStatus");
+    provisionStatusField.setAccessible(true);
+    provisionStatusField.setByte(null, (byte) 0 /* NOT_PROVISIONED */ );
+
+    // Set keymasterState to default.
+    Field keymasterStateField = KMKeymasterApplet.class.getDeclaredField("keymasterState");
+    keymasterStateField.setAccessible(true);
+    keymasterStateField.setByte(null, (byte) 1 /* ILLEGAL_STATE */ );
   }
 
   private void init() {
@@ -738,7 +771,7 @@ public class KMFunctionalTest {
 
   }
 
-  private void provisionSigningCertificate(CardSimulator simulator) {
+  private ResponseAPDU provisionSigningCertificate(CardSimulator simulator) {
     short arrPtr = KMArray.instance((short) 3);
 
     short byteBlobPtr = KMByteBlob.instance(
@@ -765,10 +798,44 @@ public class KMFunctionalTest {
         (byte) INS_PROVISION_ATTESTATION_CERT_DATA_CMD, arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
+    return response;
   }
 
-  private void provisionSigningKey(CardSimulator simulator) {
+  private ResponseAPDU provisionOEMRootPublicKey(CardSimulator simulator) {
+    // KeyParameters.
+    short arrPtr = KMArray.instance((short) 4);
+    short ecCurve = KMEnumTag.instance(KMType.ECCURVE, KMType.P_256);
+    short byteBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.SHA2_256);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
+    short byteBlob2 = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob2).add((short) 0, KMType.VERIFY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob2);
+    KMArray.cast(arrPtr).add((short) 0, ecCurve);
+    KMArray.cast(arrPtr).add((short) 1, digest);
+    KMArray.cast(arrPtr).add((short) 2,
+        KMEnumTag.instance(KMType.ALGORITHM, KMType.EC));
+    KMArray.cast(arrPtr).add((short) 3, purpose);
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    // Note: VTS uses PKCS8 KeyFormat RAW
+    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.RAW);
+
+    // Key
+    short signKeyPtr = KMByteBlob.instance(kEcPubKey, (short) 0, (short) kEcPubKey.length);
+
+    short finalArrayPtr = KMArray.instance((short) 3);
+    KMArray.cast(finalArrayPtr).add((short) 0, keyParams);
+    KMArray.cast(finalArrayPtr).add((short) 1, keyFormatPtr);
+    KMArray.cast(finalArrayPtr).add((short) 2, signKeyPtr);
+
+    CommandAPDU apdu = encodeApdu((byte) INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD,
+        finalArrayPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return response;
+  }
+
+  private ResponseAPDU provisionSigningKey(CardSimulator simulator) {
     // KeyParameters.
     short arrPtr = KMArray.instance((short) 4);
     short ecCurve = KMEnumTag.instance(KMType.ECCURVE, KMType.P_256);
@@ -806,10 +873,10 @@ public class KMFunctionalTest {
         finalArrayPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
+    return response;
   }
 
-  private void provisionSharedSecret(CardSimulator simulator) {
+  private ResponseAPDU provisionSharedSecret(CardSimulator simulator) {
     byte[] sharedKeySecret = {
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -822,10 +889,10 @@ public class KMFunctionalTest {
         arrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
+    return response;
   }
 
-  private void provisionAttestIds(CardSimulator simulator) {
+  private ResponseAPDU provisionAttestIds(CardSimulator simulator) {
     short arrPtr = KMArray.instance((short) 8);
 
     byte[] buf = "Attestation Id".getBytes();
@@ -861,28 +928,121 @@ public class KMFunctionalTest {
         outerArrPtr);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
-    Assert.assertEquals(0x9000, response.getSW());
+    return response;
   }
 
-  private void provisionLocked(CardSimulator simulator) {
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_LOCK_PROVISIONING_CMD,
+  private ResponseAPDU provisionLocked(CardSimulator simulator) {
+    // Sign the Lock message
+    byte[] signature = new byte[120];
+    ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(
+        KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
+    key.setS(kEcPrivKey, (short) 0, (short) kEcPrivKey.length);
+    Signature ecSigner = Signature.getInstance(Signature.ALG_ECDSA_SHA_256, false);
+    ecSigner.init(key, Signature.MODE_SIGN);
+    short len =
+        ecSigner.sign(
+            OEM_LOCK_PROVISION_VERIFICATION_LABEL,
+            (short) 0,
+            (short) OEM_LOCK_PROVISION_VERIFICATION_LABEL.length,
+            signature,
+            (short) 0);
+
+    short arr = KMArray.instance((short) 1);
+    KMArray.cast(arr).add((short) 0, KMByteBlob.instance(signature, (short) 0, len));
+
+    CommandAPDU apdu = encodeApdu((byte) INS_LOCK_PROVISIONING_CMD,
+        arr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return response;
+  }
+
+  private ResponseAPDU provisionOemUnLock(CardSimulator simulator) {
+    // Sign the Lock message
+    byte[] signature = new byte[120];
+    ECPrivateKey key = (ECPrivateKey) KeyBuilder.buildKey(
+        KeyBuilder.TYPE_EC_FP_PRIVATE, KeyBuilder.LENGTH_EC_FP_256, false);
+    key.setS(kEcPrivKey, (short) 0, (short) kEcPrivKey.length);
+    Signature ecSigner = Signature.getInstance(Signature.ALG_ECDSA_SHA_256, false);
+    ecSigner.init(key, Signature.MODE_SIGN);
+    short len =
+        ecSigner.sign(
+            OEM_UNLOCK_PROVISION_VERIFICATION_LABEL,
+            (short) 0,
+            (short) OEM_UNLOCK_PROVISION_VERIFICATION_LABEL.length,
+            signature,
+            (short) 0);
+
+    short arr = KMArray.instance((short) 1);
+    KMArray.cast(arr).add((short) 0, KMByteBlob.instance(signature, (short) 0, len));
+
+    CommandAPDU apdu = encodeApdu((byte) INS_OEM_UNLOCK_PROVISIONING_CMD,
+        arr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return response;
+  }
+
+  private ResponseAPDU provisionSeLocked(CardSimulator simulator) {
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_SE_LOCK_PROVISIONING_CMD,
         0x40, 0x00);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
-    Assert.assertEquals(0x9000, response.getSW());
+    return response;
+  }
+
+  private ResponseAPDU computeSharedSecret(CardSimulator simulator) {
+    short ret = getHmacSharingParams();
+    short error = KMInteger.cast(KMArray.cast(ret).get((short) 0)).getShort();
+    KMHmacSharingParameters params = KMHmacSharingParameters.cast(KMArray.cast(ret).get((short) 1));
+    short seed = params.getSeed();
+    short nonce = params.getNonce();
+
+    short params1 = KMHmacSharingParameters.instance();
+    KMHmacSharingParameters.cast(params1).setSeed(KMByteBlob.instance((short) 0));
+    short num = KMByteBlob.instance((short) 32);
+    Util.arrayCopyNonAtomic(
+        KMByteBlob.cast(nonce).getBuffer(),
+        KMByteBlob.cast(nonce).getStartOff(),
+        KMByteBlob.cast(num).getBuffer(),
+        KMByteBlob.cast(num).getStartOff(),
+        KMByteBlob.cast(num).length());
+
+    KMHmacSharingParameters.cast(params1).setNonce(num);
+    short params2 = KMHmacSharingParameters.instance();
+    KMHmacSharingParameters.cast(params2).setSeed(KMByteBlob.instance((short) 0));
+    num = KMByteBlob.instance((short) 32);
+    cryptoProvider.newRandomNumber(
+        KMByteBlob.cast(num).getBuffer(),
+        KMByteBlob.cast(num).getStartOff(),
+        KMByteBlob.cast(num).length());
+    KMHmacSharingParameters.cast(params2).setNonce(num);
+    short arr = KMArray.instance((short) 2);
+    KMArray.cast(arr).add((short) 0, params1);
+    KMArray.cast(arr).add((short) 1, params2);
+    short arrPtr = KMArray.instance((short) 1);
+    KMArray.cast(arrPtr).add((short) 0, arr);
+    CommandAPDU apdu = encodeApdu((byte) INS_COMPUTE_SHARED_HMAC_CMD, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return response;
   }
 
   private void provisionCmd(CardSimulator simulator) {
-    provisionSigningKey(simulator);
-    provisionSigningCertificate(simulator);
-    provisionSharedSecret(simulator);
-    provisionAttestIds(simulator);
+    Assert.assertEquals(0x9000, provisionSigningKey(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSigningCertificate(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSeLocked(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSharedSecret(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionAttestIds(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionOEMRootPublicKey(simulator).getSW());
     // set bootup parameters
     setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
     // set android system properties
     setAndroidOSSystemProperties(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
       (short) VENDOR_PATCH_LEVEL);
-    provisionLocked(simulator);
+    Assert.assertEquals(0x9000, provisionLocked(simulator).getSW());
+    // negotiate shared secret.
+    Assert.assertEquals(0x9000, computeSharedSecret(simulator).getSW());
   }
 
   private void cleanUp() {
@@ -1033,11 +1193,9 @@ public class KMFunctionalTest {
     cleanUp();
   }
 
-  @Test
-  public void testRsaImportKeySuccess() {
-    init();
+  public ResponseAPDU importRsaKey(boolean includeAttestKeyPurpose) {
     byte[] pub = new byte[]{0x00, 0x01, 0x00, 0x01};
-    short arrPtr = KMArray.instance((short) 6);
+    short arrPtr = KMArray.instance((short) 7);
     short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
     short keySize = KMIntegerTag
         .instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short) 2048));
@@ -1049,12 +1207,19 @@ public class KMFunctionalTest {
     byteBlob = KMByteBlob.instance((short) 1);
     KMByteBlob.cast(byteBlob).add((short) 0, KMType.RSA_PSS);
     short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
+    short purposeLength = (short) (includeAttestKeyPurpose ? 2 : 1);
+    byteBlob = KMByteBlob.instance((short) purposeLength);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.SIGN);
+    if (includeAttestKeyPurpose)
+      KMByteBlob.cast(byteBlob).add((short) 1, KMType.ATTEST_KEY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
     KMArray.cast(arrPtr).add((short) 0, boolTag);
     KMArray.cast(arrPtr).add((short) 1, keySize);
     KMArray.cast(arrPtr).add((short) 2, digest);
     KMArray.cast(arrPtr).add((short) 3, rsaPubExpTag);
     KMArray.cast(arrPtr).add((short) 4, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
     KMArray.cast(arrPtr).add((short) 5, padding);
+    KMArray.cast(arrPtr).add((short) 6, purpose);
     short keyParams = KMKeyParameters.instance(arrPtr);
     short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.PKCS8);
     short keyBlob = KMByteBlob.instance(rsa_key_pkcs8, (short) 0, (short) rsa_key_pkcs8.length);
@@ -1065,7 +1230,14 @@ public class KMFunctionalTest {
     arg.add((short) 2, keyBlob);
     CommandAPDU apdu = encodeApdu((byte) INS_IMPORT_KEY_CMD, arrPtr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return simulator.transmitCommand(apdu);
+  }
+
+  @Test
+  public void testRsaImportKeySuccess() {
+    init();
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = importRsaKey(false);
     short ret = KMArray.instance((short) 3);
     KMArray.cast(ret).add((short) 0, KMInteger.exp());
     KMArray.cast(ret).add((short) 1, KMByteBlob.exp());
@@ -1340,20 +1512,22 @@ public class KMFunctionalTest {
   }
 
   private short extractKeyBlobArray(byte[] buf, short off, short buflen) {
-    short ret = KMArray.instance((short) 5);
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_SECRET, KMByteBlob.exp());
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, KMByteBlob.exp());
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_NONCE, KMByteBlob.exp());
-    short ptr = KMKeyCharacteristics.exp();
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_KEYCHAR, ptr);
-    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_PUB_KEY, KMByteBlob.exp());
+    short byteBlobExp = KMByteBlob.exp();
+    short keyChar = KMKeyCharacteristics.exp();
+    short keyParam = KMKeyParameters.exp();
+    short ret  = KMArray.instance(KMKeymasterApplet.ASYM_KEY_BLOB_SIZE_V1);
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_VERSION_OFFSET, KMInteger.exp());// Version
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_SECRET, byteBlobExp);// Secret
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_NONCE, byteBlobExp);// Nonce
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, byteBlobExp);// AuthTag
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_KEYCHAR, keyChar);// KeyChars
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_CUSTOM_TAGS, keyParam);// KeyChars
+    KMArray.cast(ret).add(KMKeymasterApplet.KEY_BLOB_PUB_KEY, byteBlobExp);// PubKey
+
     ret =
         decoder.decodeArray(
             ret,
             buf, off, buflen);
-    short len = KMArray.cast(ret).length();
-    ptr = KMArray.cast(ret).get((short) 4);
-//    print(KMByteBlob.cast(ptr).getBuffer(),KMByteBlob.cast(ptr).getStartOff(),KMByteBlob.cast(ptr).length());
     return ret;
   }
 
@@ -1438,6 +1612,9 @@ public class KMFunctionalTest {
         // Simulate reboot using set boot parameters.
         // Clear the rate limited keys from the flash memory
         setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
+        setAndroidOSSystemProperties(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
+            (short) VENDOR_PATCH_LEVEL);
+        computeSharedSecret(simulator);
       }
       short rsaKeyArr = generateRsaKey(null, null, KMInteger.uint_8((byte) 1));
       Assert.assertEquals(KMInteger.cast(KMArray.cast(rsaKeyArr).get((short) 0)).getShort(),
@@ -2062,9 +2239,7 @@ public class KMFunctionalTest {
     return ret;
   }
 
-  @Test
-  public void testImportWrappedKey() {
-    init();
+  public ResponseAPDU importWrappedKey(boolean includePurposeAttestKey) {
     byte[] wrappedKey = new byte[16];
     cryptoProvider.newRandomNumber(wrappedKey, (short) 0, (short) 16);
     byte[] encWrappedKey = new byte[16];
@@ -2114,9 +2289,12 @@ public class KMFunctionalTest {
     KMByteBlob.cast(byteBlob).add((short) 0, KMType.PKCS7);
     KMByteBlob.cast(byteBlob).add((short) 1, KMType.PADDING_NONE);
     short paddingMode = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
-    byteBlob = KMByteBlob.instance((short) 2);
+    short purposeLength = (short) (includePurposeAttestKey ? 3 : 2);
+    byteBlob = KMByteBlob.instance((short) purposeLength);
     KMByteBlob.cast(byteBlob).add((short) 0, KMType.ENCRYPT);
     KMByteBlob.cast(byteBlob).add((short) 1, KMType.DECRYPT);
+    if (includePurposeAttestKey)
+      KMByteBlob.cast(byteBlob).add((short) 2, KMType.ATTEST_KEY);
     short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
     short tagIndex = 0;
     KMArray.cast(arrPtr).add(tagIndex++, boolTag);
@@ -2151,7 +2329,13 @@ public class KMFunctionalTest {
     KMArray.cast(arr).add((short) 11, KMInteger.uint_8((byte) 0)); // Biometric Sid
     CommandAPDU apdu = encodeApdu((byte) INS_IMPORT_WRAPPED_KEY_CMD, arr);
     // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return simulator.transmitCommand(apdu);
+  }
+
+  @Test
+  public void testImportWrappedKeySuccess() {
+    init();
+    ResponseAPDU response = importWrappedKey(false);
     short ret = KMArray.instance((short) 3);
     KMArray.cast(ret).add((short) 0, KMInteger.exp());
     KMArray.cast(ret).add((short) 1, KMByteBlob.exp());
@@ -2179,6 +2363,84 @@ public class KMFunctionalTest {
     Assert.assertEquals(KMEnumTag.cast(tag).getValue(), KMType.AES);
     tag = KMKeyParameters.findTag(KMType.ENUM_TAG, KMType.ORIGIN, hwParams);
     Assert.assertEquals(KMEnumTag.cast(tag).getValue(), KMType.SECURELY_IMPORTED);
+    cleanUp();
+  }
+
+  @Test
+  public void testImportWrappedKeyAttestKeyFailure() {
+    // Keymaster does not support ATTEST_KEY
+    init();
+    ResponseAPDU response = importWrappedKey(true);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    Assert.assertEquals(KMError.UNSUPPORTED_PURPOSE, KMInteger.cast(ret).getShort());
+    cleanUp();
+  }
+
+  @Test
+  public void testImportKeyAttestKeyFailure() {
+    // Keymaster does not support ATTEST_KEY
+    init();
+    ResponseAPDU response = importRsaKey(true);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    Assert.assertEquals(KMError.UNSUPPORTED_PURPOSE, KMInteger.cast(ret).getShort());
+    cleanUp();
+  }
+
+  @Test
+  public void testGenerateAttestKeyFailure() {
+    // Keymaster does not support ATTEST_KEY
+    init();
+    byte[] activeAndCreationDateTime = {0, 0, 0x01, 0x73, 0x51, 0x7C, (byte) 0xCC, 0x00};
+    short arrPtr = KMArray.instance((short) 9);
+    short keySize = KMIntegerTag
+        .instance(KMType.UINT_TAG, KMType.KEYSIZE, KMInteger.uint_16((short) 2048));
+    short byteBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.DIGEST_NONE);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
+    byteBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.PADDING_NONE);
+    short padding = KMEnumArrayTag.instance(KMType.PADDING, byteBlob);
+    byteBlob = KMByteBlob.instance((short) 6);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.SIGN);
+    KMByteBlob.cast(byteBlob).add((short) 1, KMType.VERIFY);
+    KMByteBlob.cast(byteBlob).add((short) 2, KMType.ENCRYPT);
+    KMByteBlob.cast(byteBlob).add((short) 3, KMType.DECRYPT);
+    KMByteBlob.cast(byteBlob).add((short) 4, KMType.WRAP_KEY);
+    KMByteBlob.cast(byteBlob).add((short) 5, KMType.ATTEST_KEY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob);
+    byte[] pub = {0, 1, 0, 1};
+    short rsaPubExpTag = KMIntegerTag
+        .instance(KMType.ULONG_TAG, KMType.RSA_PUBLIC_EXPONENT, KMInteger.uint_32(pub, (short) 0));
+    short boolTag = KMBoolTag.instance(KMType.NO_AUTH_REQUIRED);
+    short tagIndex = 0;
+    KMArray.cast(arrPtr).add(tagIndex++, purpose);
+    KMArray.cast(arrPtr).add(tagIndex++, boolTag);
+    KMArray.cast(arrPtr).add(tagIndex++, keySize);
+    KMArray.cast(arrPtr).add(tagIndex++, digest);
+    KMArray.cast(arrPtr).add(tagIndex++, rsaPubExpTag);
+    KMArray.cast(arrPtr).add(tagIndex++, KMEnumTag.instance(KMType.ALGORITHM, KMType.RSA));
+    KMArray.cast(arrPtr).add(tagIndex++, padding);
+    short dateTag = KMInteger.uint_64(activeAndCreationDateTime, (short) 0);
+    KMArray.cast(arrPtr)
+        .add(tagIndex++, KMIntegerTag.instance(KMType.DATE_TAG, KMType.ACTIVE_DATETIME, dateTag));
+    KMArray.cast(arrPtr)
+        .add(tagIndex++, KMIntegerTag.instance(KMType.DATE_TAG, KMType.CREATION_DATETIME, dateTag));
+
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    arrPtr = KMArray.instance((short) 1);
+    KMArray arg = KMArray.cast(arrPtr);
+    arg.add((short) 0, keyParams);
+    CommandAPDU apdu = encodeApdu((byte) INS_GENERATE_KEY_CMD, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    Assert.assertEquals(KMError.UNSUPPORTED_PURPOSE, KMInteger.cast(ret).getShort());
     cleanUp();
   }
 
@@ -2467,7 +2729,7 @@ public class KMFunctionalTest {
   @Test
   public void testWithRsaSha1Oaep() {
     init();
-    testEncryptDecryptWithRsa(KMType.SHA1, KMType.RSA_OAEP);
+    testEncryptDecryptWithRsa(KMType.SHA2_256, KMType.RSA_OAEP);
     cleanUp();
   }
 
@@ -2504,7 +2766,7 @@ public class KMFunctionalTest {
       byte[] pubKey, short pubKeyOff) {
     short keyBlobPtr = extractKeyBlobArray(keyBlob, off, len);
     short arrayLen = KMArray.cast(keyBlobPtr).length();
-    if (arrayLen < 5) {
+    if (arrayLen < KMKeymasterApplet.ASYM_KEY_BLOB_SIZE_V1) {
       return 0;
     }
     short pubKeyPtr = KMArray.cast(keyBlobPtr).get(
@@ -2879,7 +3141,8 @@ public class KMFunctionalTest {
 
       // PKCS1 v1.5 randomizes padding so every result should be different.
       Assert.assertFalse(Arrays.equals(cipherText1, cipherText2));
-
+      //Clean the heap.
+      KMRepository.instance().clean();
       pkcs1Params = getRsaParams(KMType.DIGEST_NONE,
           KMType.RSA_PKCS1_1_5_ENCRYPT);
       byte[] plainText = DecryptMessage(cipherText1, pkcs1Params, keyBlob);
@@ -2963,6 +3226,177 @@ public class KMFunctionalTest {
   public void testSignVerifyWithRsaSHA256Pkcs1WithUpdate() {
     init();
     testSignVerifyWithRsa(KMType.SHA2_256, KMType.RSA_PKCS1_1_5_SIGN, true, true);
+    cleanUp();
+  }
+
+  @Test
+  public void testVerifyOemLockWithOutSeLockFailure() {
+    AID appletAID1 = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID1, KMJCardSimApplet.class);
+    // Select applet
+    simulator.selectApplet(appletAID1);
+    // provision attest key
+    Assert.assertEquals(0x9000, provisionSigningKey(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSigningCertificate(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSharedSecret(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionAttestIds(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionOEMRootPublicKey(simulator).getSW());
+    ResponseAPDU response = provisionLocked(simulator);
+    Assert.assertEquals(0x9000, response.getSW());
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    short error = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(error, KMError.CMD_NOT_ALLOWED);
+    cleanUp();
+  }
+
+  @Test
+  public void testVerifyOemUnLockAfterOemLockSuccess() {
+    AID appletAID1 = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID1, KMJCardSimApplet.class);
+    // Select applet
+    simulator.selectApplet(appletAID1);
+    // provision attest key
+    Assert.assertEquals(0x9000, provisionSigningKey(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSigningCertificate(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSeLocked(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSharedSecret(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionAttestIds(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionOEMRootPublicKey(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionLocked(simulator).getSW());
+    // set bootup parameters
+    setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
+    // set android system properties
+    setAndroidOSSystemProperties(simulator, (short) OS_VERSION, (short) OS_PATCH_LEVEL,
+        (short) VENDOR_PATCH_LEVEL);
+    computeSharedSecret(simulator);
+    Assert.assertEquals(0x9000, provisionOemUnLock(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSharedSecret(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionAttestIds(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionLocked(simulator).getSW());
+    // try generating key
+    generateRsaKey(null, null);
+    cleanUp();
+  }
+
+  @Test
+  public void testVerifyOemLockWithOutOemRootKeyFailure() {
+    AID appletAID1 = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID1, KMJCardSimApplet.class);
+    // Select applet
+    simulator.selectApplet(appletAID1);
+    // provision attest key
+    Assert.assertEquals(0x9000, provisionSigningKey(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSigningCertificate(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSeLocked(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSharedSecret(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionAttestIds(simulator).getSW());
+    ResponseAPDU response = provisionLocked(simulator);
+    Assert.assertEquals(0x9000, response.getSW());
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    short error = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(error, KMError.CMD_NOT_ALLOWED);
+    cleanUp();
+  }
+
+  @Test
+  public void testVerifySeLockWithOutSigningKeyFailure() {
+    AID appletAID1 = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID1, KMJCardSimApplet.class);
+    // Select applet
+    simulator.selectApplet(appletAID1);
+    // provision attest key
+    Assert.assertEquals(0x9000, provisionSigningCertificate(simulator).getSW());
+    ResponseAPDU response = provisionSeLocked(simulator);
+    Assert.assertEquals(0x9000, response.getSW());
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    short error = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(error, KMError.CMD_NOT_ALLOWED);
+    cleanUp();
+  }
+
+  @Test
+  public void testVerifySeLockWithOutCertDataFailure() {
+    AID appletAID1 = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID1, KMJCardSimApplet.class);
+    // Select applet
+    simulator.selectApplet(appletAID1);
+    // provision attest key
+    Assert.assertEquals(0x9000, provisionSigningKey(simulator).getSW());
+    ResponseAPDU response = provisionSeLocked(simulator);
+    Assert.assertEquals(0x9000, response.getSW());
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    short error = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(error, KMError.CMD_NOT_ALLOWED);
+    cleanUp();
+  }
+
+  @Test
+  public void testVerifyProvisionSeDataAfterSeLockFailure() {
+    AID appletAID1 = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID1, KMJCardSimApplet.class);
+    // Select applet
+    simulator.selectApplet(appletAID1);
+    // provision attest key
+    Assert.assertEquals(0x9000, provisionSigningKey(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSigningCertificate(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSeLocked(simulator).getSW());
+    ResponseAPDU response = provisionSigningKey(simulator);
+    Assert.assertEquals(0x9000, response.getSW());
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    short error = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(error, KMError.CMD_NOT_ALLOWED);
+
+    response = provisionSigningCertificate(simulator);
+    Assert.assertEquals(0x9000, response.getSW());
+    respBuf = response.getBytes();
+    len = (short) respBuf.length;
+    ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    error = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(error, KMError.CMD_NOT_ALLOWED);
+    cleanUp();
+  }
+
+  @Test
+  public void testVerifyOemProvisionAfterOemLockFailure() {
+    AID appletAID1 = AIDUtil.create("A000000062");
+    simulator.installApplet(appletAID1, KMJCardSimApplet.class);
+    // Select applet
+    simulator.selectApplet(appletAID1);
+    // provision attest key
+    Assert.assertEquals(0x9000, provisionSigningKey(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSigningCertificate(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSeLocked(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionSharedSecret(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionAttestIds(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionOEMRootPublicKey(simulator).getSW());
+    Assert.assertEquals(0x9000, provisionLocked(simulator).getSW());
+    // set bootup parameters
+    setBootParams(simulator, (short) BOOT_PATCH_LEVEL);
+    ResponseAPDU response = provisionSharedSecret(simulator);
+    Assert.assertEquals(0x9000, response.getSW());
+    byte[] respBuf = response.getBytes();
+    short len = (short) respBuf.length;
+    short ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    short error = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(error, KMError.CMD_NOT_ALLOWED);
+
+    response = provisionAttestIds(simulator);
+    Assert.assertEquals(0x9000, response.getSW());
+    respBuf = response.getBytes();
+    len = (short) respBuf.length;
+    ret = decoder.decode(KMInteger.exp(), respBuf, (short) 0, len);
+    error = KMInteger.cast(ret).getShort();
+    Assert.assertEquals(error, KMError.CMD_NOT_ALLOWED);
     cleanUp();
   }
 
@@ -3074,6 +3508,7 @@ public class KMFunctionalTest {
       setBootParams(simulator, (short) test_data[i][3]);
       setAndroidOSSystemProperties(simulator, (short) test_data[i][0], (short) test_data[i][1],
           (short) test_data[i][2]);
+      computeSharedSecret(simulator);
       ret = upgradeKey(
         KMByteBlob.instance(keyBlob, (short) 0, (short) keyBlob.length),
         null, null, test_data[i][5]);

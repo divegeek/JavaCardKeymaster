@@ -27,6 +27,7 @@ import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
 
+import javacard.framework.APDU;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
@@ -94,6 +95,7 @@ public class KMJCardSimulator implements KMSEProvider {
   private KMECPrivateKey attestationKey;
   private KMHmacKey preSharedKey;
   private KMHmacKey computedHmacKey;
+  private byte[] oemRootPublicKey;
 
   private static KMJCardSimulator jCardSimulator = null;
 
@@ -123,6 +125,7 @@ public class KMJCardSimulator implements KMSEProvider {
     short totalLen = (short) (6 +  KMConfigurations.CERT_CHAIN_MAX_SIZE +
         KMConfigurations.CERT_ISSUER_MAX_SIZE + KMConfigurations.CERT_EXPIRY_MAX_SIZE);
     provisionData = new byte[totalLen];
+    oemRootPublicKey = new byte[65];
     jCardSimulator = this;
   }
 
@@ -1403,6 +1406,50 @@ public class KMJCardSimulator implements KMSEProvider {
 
     }
     return len;
+  }
+
+  @Override
+  public void persistOEMRootPublicKey(byte[] inBuff, short inOffset, short inLength) {
+    if (inLength != 65) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    Util.arrayCopy(inBuff, inOffset, oemRootPublicKey, (short) 0, inLength);
+  }
+
+  @Override
+  public short readOEMRootPublicKey(byte[] buf, short off) {
+    Util.arrayCopyNonAtomic(oemRootPublicKey, (short) 0, buf, off, (short) oemRootPublicKey.length);
+    return (short) oemRootPublicKey.length;
+  }
+
+  @Override
+  public boolean ecVerify256(byte[] keyBuf, short keyBufStart, short keyBufLen, byte[] inputDataBuf,
+      short inputDataStart, short inputDataLength, byte[] signatureDataBuf,
+      short signatureDataStart, short signatureDataLen) {
+    KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+    ECPublicKey ecPublicKey = (ECPublicKey) ecKeyPair.getPublic();
+    ecPublicKey.setW(keyBuf, keyBufStart, keyBufLen);
+    Signature signer = Signature
+        .getInstance(Signature.ALG_ECDSA_SHA_256, false);
+    signer.init(ecPublicKey, Signature.MODE_VERIFY);
+    return signer.verify(inputDataBuf, inputDataStart, inputDataLength,
+        signatureDataBuf, signatureDataStart, signatureDataLen);
+  }
+
+  @Override
+  public boolean isValidCLA(APDU apdu) {
+    /**
+     * Returns whether the current APDU command CLA byte is valid. The CLA byte is invalid
+     * if the CLA bits (b8,b7,b6) is %b001, which is a CLA encoding reserved for future use(RFU),
+     * or if CLA is 0xFF which is an invalid value as defined in the ISO 7816-4:2013 specification.
+     */
+    byte[] apduBuffer = apdu.getBuffer();
+    short apduClass = (short) (apduBuffer[ISO7816.OFFSET_CLA] & 0x00FF);
+    if (((apduClass & 0x00E0) == 0x0020) ||
+        (apduClass == 0x00FF)) {
+      return false;
+    }
+    return true;
   }
 
 }

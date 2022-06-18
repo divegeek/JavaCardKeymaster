@@ -16,8 +16,6 @@
 
 package com.android.javacard.keymaster;
 
-import javacard.framework.ISO7816;
-import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
@@ -57,6 +55,7 @@ public class KMOperationState {
   private static final byte SECURE_USER_ID_REQD = 2;
   private static final byte AUTH_TIMEOUT_VALIDATED = 4;
   private static final byte AES_GCM_UPDATE_ALLOWED = 8;
+  private static final byte PROCESSED_INPUT_MSG = 16;
   private static final byte MAX_SECURE_USER_IDS = 5;
 
   // Object References
@@ -155,6 +154,10 @@ public class KMOperationState {
     persist();
   }
 
+  public boolean isInputMsgProcessed() {
+    return (data[FLAGS] & PROCESSED_INPUT_MSG) != 0;
+  }
+
   public KMOperation getOperation() {
     return (KMOperation) objRefs[OPERATION];
   }
@@ -228,6 +231,15 @@ public class KMOperationState {
           KMInteger.cast(obj).length()
       );
       index++;
+    }
+    dataUpdated();
+  }
+
+  public void setProcessedInputMsg(boolean flag) {
+    if (flag) {
+      data[FLAGS] = (byte) (data[FLAGS] | PROCESSED_INPUT_MSG);
+    } else {
+      data[FLAGS] = (byte) (data[FLAGS] & (~PROCESSED_INPUT_MSG));
     }
     dataUpdated();
   }

@@ -15,11 +15,6 @@
  */
 package com.android.javacard.keymaster;
 
-import com.android.javacard.keymaster.KMAESKey;
-import com.android.javacard.keymaster.KMByteBlob;
-import com.android.javacard.keymaster.KMECPrivateKey;
-import com.android.javacard.keymaster.KMMasterKey;
-
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.AESKey;
@@ -75,10 +70,10 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final short[] swTagIds = {
       KMType.ATTESTATION_APPLICATION_ID,
       KMType.CREATION_DATETIME,
+      KMType.ALLOW_WHILE_ON_BODY,
       KMType.USAGE_EXPIRE_DATETIME,
       KMType.ORIGINATION_EXPIRE_DATETIME,
-      KMType.ACTIVE_DATETIME,
-      KMType.UNLOCKED_DEVICE_REQUIRED
+      KMType.ACTIVE_DATETIME
   };
 
   // Below are the allowed hardwareEnforced Authorization tags inside the attestation certificate's extension.
@@ -89,8 +84,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
       KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
       KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
-      KMType.ORIGIN, KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE,
-      KMType.NO_AUTH_REQUIRED, KMType.USER_SECURE_ID,
+      KMType.ORIGIN, KMType.UNLOCKED_DEVICE_REQUIRED,
+      KMType.TRUSTED_CONFIRMATION_REQUIRED, KMType.AUTH_TIMEOUT,
+      KMType.USER_AUTH_TYPE, KMType.NO_AUTH_REQUIRED,
       KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE, KMType.MIN_MAC_LENGTH,
       KMType.CALLER_NONCE, KMType.PADDING, KMType.DIGEST, KMType.BLOCK_MODE,
       KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE};
@@ -143,7 +139,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static byte verifiedState;
   private static short verifiedHash;
   private static short issuer;
-  private static short signPriv;
 
   private KMAttestationCertImpl() {
   }
@@ -186,7 +181,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     verifiedState = 0;
     rsaCert = true;
     deviceLocked = 0;
-    signPriv = 0;
   }
 
   @Override
@@ -227,10 +221,10 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   public KMAttestationCert notAfter(short usageExpiryTimeObj,
       short certExpirtyTimeObj, byte[] scratchPad, short tmpVar) {
     if (usageExpiryTimeObj != KMType.INVALID_VALUE) {
-      // compare if the expiry time is greater then 2051 then use generalized
+      // compare if the expiry time is greater then 2050 then use generalized
       // time format else use utc time format.
       usageExpiryTimeObj = KMIntegerTag.cast(usageExpiryTimeObj).getValue();
-      tmpVar = KMInteger.uint_64(KMUtils.firstJan2051, (short) 0);
+      tmpVar = KMInteger.uint_64(KMUtils.firstJan2050, (short) 0);
       if (KMInteger.compare(usageExpiryTimeObj, tmpVar) >= 0) {
         usageExpiryTimeObj = KMUtils.convertToDate(usageExpiryTimeObj, scratchPad,
             false);
@@ -887,7 +881,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
     timeOffset = KMByteBlob.instance((short) 32);
     //Get the key data from the master key and use it for HMAC Sign.
-    AESKey aesKey = ((KMAESKey) masterKey).getKey();
+    AESKey aesKey = ((KMAESKey) masterKey).aesKey;
     short mKeyData = KMByteBlob.instance((short) (aesKey.getSize() / 8));
     aesKey.getKey(
         KMByteBlob.cast(mKeyData).getBuffer(),

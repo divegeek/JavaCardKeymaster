@@ -16,9 +16,11 @@
 */
 
 #include <android-base/logging.h>
+
 #include <android/hardware/keymaster/4.1/IKeymasterDevice.h>
 #include <hidl/HidlTransportSupport.h>
-#include <JavacardKeymaster4Device.h>
+
+#include "JavacardKeymaster4Device.h"
 
 int main() {
     ::android::hardware::configureRpcThreadpool(1, true);

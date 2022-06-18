@@ -17,30 +17,15 @@ package com.android.javacard.keymaster;
 
 import org.globalplatform.upgrade.Element;
 
-import com.android.javacard.keymaster.KMAESKey;
-import com.android.javacard.keymaster.KMAttestationCert;
-import com.android.javacard.keymaster.KMAttestationKey;
-
-import javacard.security.AESKey;
 import javacard.security.ECPrivateKey;
 import javacard.security.KeyPair;
 
 public class KMECPrivateKey implements KMAttestationKey {
 
-  private KeyPair ecKeyPair;
+  public KeyPair ecKeyPair;
 
   public KMECPrivateKey(KeyPair ecPair) {
     ecKeyPair = ecPair;
-  }
-
-  public void setS(byte[] buffer, short offset, short length) {
-    ECPrivateKey ecPriv = (ECPrivateKey) ecKeyPair.getPrivate();
-    ecPriv.setS(buffer, offset, length);
-  }
-
-  public short getS(byte[] buffer, short offset) {
-    ECPrivateKey ecPriv = (ECPrivateKey) ecKeyPair.getPrivate();
-    return ecPriv.getS(buffer, offset);
   }
 
   public ECPrivateKey getPrivateKey() {

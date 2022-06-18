@@ -35,7 +35,6 @@ public class KMKeyParameters extends KMType {
 
   private static final short[] hwEnforcedTagArr = {
       // HW Enforced
-      KMType.ENUM_TAG, KMType.ORIGIN,
       KMType.ENUM_ARRAY_TAG, KMType.PURPOSE,
       KMType.ENUM_TAG, KMType.ALGORITHM,
       KMType.UINT_TAG, KMType.KEYSIZE,
@@ -54,7 +53,6 @@ public class KMKeyParameters extends KMType {
       KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE,
       KMType.ENUM_TAG, KMType.USER_AUTH_TYPE,
       KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
-      KMType.BOOL_TAG, KMType.RESET_SINCE_ID_ROTATION,
       KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
       KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
       KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,
@@ -234,9 +232,6 @@ public class KMKeyParameters extends KMType {
         .instance(KMType.UINT_TAG, KMType.BOOT_PATCH_LEVEL, bootPatchObjPtr);
     Util.setShort(scratchPad, arrInd, bootPatchTag);
     arrInd += 2;
-    // Add custom tags at the end of the array. So it becomes easy to
-    // delete them when sending key characteristics back to HAL.
-    arrInd = addCustomTags(keyParamsPtr, scratchPad, arrInd);
     return createKeyParameters(scratchPad, (short) (arrInd / 2));
   }
 
@@ -276,11 +271,19 @@ public class KMKeyParameters extends KMType {
     short appId = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_ID, keyParamsPtr);
     if (appId != KMTag.INVALID_VALUE) {
       appId = KMByteTag.cast(appId).getValue();
+      if (KMByteBlob.cast(appId).length() == 0) {
+        // Treat empty as INVALID.
+        return KMType.INVALID_VALUE;
+      }
     }
     short appData =
         KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.APPLICATION_DATA, keyParamsPtr);
     if (appData != KMTag.INVALID_VALUE) {
       appData = KMByteTag.cast(appData).getValue();
+      if (KMByteBlob.cast(appData).length() == 0) {
+        // Treat empty as INVALID.
+        return KMType.INVALID_VALUE;
+      }
     }
     return makeHidden(appId, appData, rootOfTrustBlob, scratchPad);
   }
@@ -331,42 +334,30 @@ public class KMKeyParameters extends KMType {
     return KMKeyParameters.instance(arrPtr);
   }
 
-  public static short addCustomTags(short keyParams, byte[] scratchPad, short offset) {
+  public static short makeCustomTags(short keyParams, byte[] scratchPad) {
     short index = 0;
     short tagPtr;
+    short offset = 0;
     short len = (short) customTags.length;
     short tagType;
     while (index < len) {
       tagType = customTags[(short) (index + 1)];
       switch(tagType) {
-      case KMType.AUTH_TIMEOUT_MILLIS:
-        short authTimeOutTag =
-          KMKeyParameters.cast(keyParams).findTag(KMType.UINT_TAG, KMType.AUTH_TIMEOUT);
-        if (authTimeOutTag != KMType.INVALID_VALUE) {
-          tagPtr = createAuthTimeOutMillisTag(authTimeOutTag, scratchPad, offset);
-          Util.setShort(scratchPad, offset, tagPtr);
-          offset += 2;
-        }
-        break;
-      default:
-        break;
+        case KMType.AUTH_TIMEOUT_MILLIS:
+          short authTimeOutTag =
+              KMKeyParameters.cast(keyParams).findTag(KMType.UINT_TAG, KMType.AUTH_TIMEOUT);
+          if (authTimeOutTag != KMType.INVALID_VALUE) {
+            tagPtr = createAuthTimeOutMillisTag(authTimeOutTag, scratchPad, offset);
+            Util.setShort(scratchPad, offset, tagPtr);
+            offset += 2;
+          }
+          break;
+        default:
+          break;
       }
       index += 2;
     }
-    return offset;
-  }
-
-  public void deleteCustomTags() {
-    short arrPtr = getVals();
-    short index = (short) (customTags.length - 1);
-    short obj;
-    while (index >= 0) {
-      obj = findTag(customTags[(short) (index - 1)], customTags[index]);
-      if (obj != KMType.INVALID_VALUE) {
-        KMArray.cast(arrPtr).deleteLastEntry();
-      }
-      index -= 2;
-    }
+    return createKeyParameters(scratchPad, (short) (offset / 2));
   }
 
   public static short createAuthTimeOutMillisTag(short authTimeOutTag, byte[] scratchPad, short offset) {

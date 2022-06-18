@@ -15,6 +15,7 @@
  */
 package com.android.javacard.keymaster;
 
+import javacard.framework.APDU;
 import org.globalplatform.upgrade.Element;
 
 /**
@@ -611,4 +612,59 @@ public interface KMSEProvider extends KMUpgradable {
   short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
       short outOffset);
 
+  /**
+   *  This function persists the root public key of the OEM.
+   *
+   * @param inBuff is the public key buffer.
+   * @param inOffset is the start offset of the public key buffer.
+   * @param inLength is the length of the public key buffer.
+   */
+  void persistOEMRootPublicKey(byte[] inBuff, short inOffset, short inLength);
+
+  /**
+   * Returns the persisted OEM Root Public Key buffer.
+   *
+   * @return returns the persisted OEM Root Public Key buffer.
+   */
+  /**
+   * Returns the persisted OEM Root EC P256 Public Key.
+   *
+   * @param buf is the output buffer where public key is copied.
+   * @param off is the start of the output buffer
+   * @return length of the public key.
+   */
+  short readOEMRootPublicKey(byte[] buf, short off);
+
+  /**
+   * The function verifies the EC 256 signature.
+   *
+   * @param keyBuf is the public key buffer.
+   * @param keyBufStart is the start of the public key buffer.
+   * @param keyBufLen is the length of the public key buffer.
+   * @param inputDataBuf is the buffer containing the input data.
+   * @param inputDataStart is the start offset of the input data.
+   * @param inputDataLength is the length of the input data.
+   * @param signature is the buffer containing the signature.
+   * @param signatureOff is the start offset of the signature buffer.
+   * @param signatureLen is the length of the signature buffer.
+   * @return true if signature verification is successful, otherwise false.
+   */
+  boolean ecVerify256(
+      byte[] keyBuf,
+      short keyBufStart,
+      short keyBufLen,
+      byte[] inputDataBuf,
+      short inputDataStart,
+      short inputDataLength,
+      byte[] signature,
+      short signatureOff,
+      short signatureLen);
+
+  /**
+   * Validates the CLA in the APDU.
+   *
+   * @param apdu instance of the APDU class.
+   * @return true if CLA is valid, false otherwise.
+   */
+  boolean isValidCLA(APDU apdu);
 }

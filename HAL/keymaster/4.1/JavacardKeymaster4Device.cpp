@@ -15,26 +15,27 @@
  ** limitations under the License.
  */
 
-#include <climits>
+#include "JavacardKeymaster4Device.h"
+
 #include <time.h>
-#include <CborConverter.h>
-#include <Transport.h>
-#include <keymaster/key_blob_utils/software_keyblobs.h>
+
+#include <climits>
+
+#include <android-base/logging.h>
+#include <android-base/properties.h>
+
 #include <keymaster/android_keymaster_utils.h>
-#include <keymaster/wrapped_key.h>
+#include <keymaster/key_blob_utils/software_keyblobs.h>
 #include <keymaster/km_openssl/attestation_record.h>
 #include <keymaster/km_openssl/openssl_err.h>
 #include <keymaster/km_openssl/openssl_utils.h>
-#include <openssl/aes.h>
+#include <keymaster/wrapped_key.h>
 
-#include <JavacardKeymaster4Device.h>
-#include <JavacardSoftKeymasterContext.h>
-#include <CommonUtils.h>
-#include <android-base/logging.h>
-#include <openssl/x509.h>
-#include <openssl/x509v3.h>
-#include <openssl/bio.h>
-#include <openssl/asn1.h>
+#include "CborConverter.h"
+#include "CommonUtils.h"
+#include "JavacardSoftKeymasterContext.h"
+#include "Transport.h"
+
 
 #define JAVACARD_KEYMASTER_NAME      "JavacardKeymaster4.1Device v1.0"
 #define JAVACARD_KEYMASTER_AUTHOR    "Android Open Source Project"
@@ -52,9 +53,9 @@
 #define SB_KM_OPR 1UL
 #define SE_POWER_RESET_STATUS_FLAG ( 1 << 30)
 
-namespace keymaster {
-namespace V4_1 {
-namespace javacard {
+namespace keymaster::V4_1::javacard {
+
+using namespace cppbor;
 
 static std::unique_ptr<se_transport::TransportFactory> pTransportFactory = nullptr;
 constexpr size_t kOperationTableSize = 4;
@@ -125,9 +126,8 @@ static inline bool getTag(const hidl_vec<KeyParameter>& params, Tag tag, KeyPara
     return false;
 }
 
-template<typename T = ErrorCode>
-static T translateExtendedErrorsToHalErrors(T& errorCode) {
-    T err;
+static ErrorCode translateExtendedErrorsToHalErrors(ErrorCode& errorCode) {
+    ErrorCode err;
     switch(static_cast<int32_t>(errorCode)) {
         case SW_CONDITIONS_NOT_SATISFIED:
         case UNSUPPORTED_CLA:
@@ -138,18 +138,18 @@ static T translateExtendedErrorsToHalErrors(T& errorCode) {
         case CRYPTO_INVALID_INIT:
         case CRYPTO_UNINITIALIZED_KEY:
         case GENERIC_UNKNOWN_ERROR:
-            err = T::UNKNOWN_ERROR;
+            err = ErrorCode::UNKNOWN_ERROR;
             break;
         case CRYPTO_NO_SUCH_ALGORITHM:
-            err = T::UNSUPPORTED_ALGORITHM;
+            err = ErrorCode::UNSUPPORTED_ALGORITHM;
             break;
         case UNSUPPORTED_INSTRUCTION:
         case CMD_NOT_ALLOWED:
         case SW_WRONG_LENGTH:
-            err = T::UNIMPLEMENTED;
+            err = ErrorCode::UNIMPLEMENTED;
             break;
         default:
-            err = static_cast<T>(errorCode);
+            err = errorCode;
             break;
     }
     return err;
@@ -211,22 +211,21 @@ static uint32_t handleErrorCode(const std::unique_ptr<OperationContext>& oprCtx,
     return errorCode;
 }
 
-template<typename T = ErrorCode>
-static std::tuple<std::unique_ptr<Item>, T> decodeData(CborConverter& cb, const std::vector<uint8_t>& response, bool
+static std::tuple<std::unique_ptr<Item>, ErrorCode> decodeData(CborConverter& cb, const std::vector<uint8_t>& response, bool
         hasErrorCode, const std::unique_ptr<OperationContext>& oprCtx) {
     std::unique_ptr<Item> item(nullptr);
-    T errorCode = T::OK;
-    std::tie(item, errorCode) = cb.decodeData<T>(response, hasErrorCode);
+    ErrorCode errorCode = ErrorCode::OK;
+    std::tie(item, errorCode) = cb.decodeData(response, hasErrorCode);
 
     uint32_t tempErrCode = handleErrorCode(oprCtx, static_cast<uint32_t>(errorCode));
 
     // SE sends errocode as unsigned value so convert the unsigned value
     // into a signed value of same magnitude and copy back to errorCode.
-    errorCode = static_cast<T>(get2sCompliment(tempErrCode));
+    errorCode = static_cast<ErrorCode>(get2sCompliment(tempErrCode));
 
-    if (T::OK != errorCode) {
+    if (ErrorCode::OK != errorCode) {
         LOG(ERROR) << "error in decodeData: " << (int32_t) errorCode;
-        errorCode = translateExtendedErrorsToHalErrors<T>(errorCode);
+        errorCode = translateExtendedErrorsToHalErrors(errorCode);
     }
     LOG(DEBUG) << "decodeData status: " << (int32_t) errorCode;
     return {std::move(item), errorCode};
@@ -464,13 +463,17 @@ Return<void> JavacardKeymaster4Device::getHardwareInfo(getHardwareInfo_cb _hidl_
                 false, oprCtx_);
         if (item != nullptr) {
             std::vector<uint8_t> temp;
-            if(!cborConverter_.getUint64(item, 0, securityLevel) ||
-                    !cborConverter_.getBinaryArray(item, 1, jcKeymasterName) ||
-                    !cborConverter_.getBinaryArray(item, 2, jcKeymasterAuthor)) {
+            auto optSecurityLevel = cborConverter_.getUint64(item, 0);
+            auto optKeymasterName = cborConverter_.getByteArrayHidlStr(item, 1);
+            auto optKeymasterAuthor = cborConverter_.getByteArrayHidlStr(item, 2);
+            if (!optSecurityLevel || !optKeymasterName || !optKeymasterAuthor) {
                 LOG(ERROR) << "Failed to convert cbor data of INS_GET_HW_INFO_CMD";
-                _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
+                _hidl_cb(SecurityLevel::STRONGBOX, JAVACARD_KEYMASTER_NAME, JAVACARD_KEYMASTER_AUTHOR);
                 return Void();
             }
+            securityLevel = optSecurityLevel.value();
+            jcKeymasterName = std::move(*optKeymasterName);
+            jcKeymasterAuthor = std::move(*optKeymasterAuthor);
         }
         _hidl_cb(static_cast<SecurityLevel>(securityLevel), jcKeymasterName, jcKeymasterAuthor);
         return Void();
@@ -495,12 +498,15 @@ Return<void> JavacardKeymaster4Device::getHmacSharingParameters(getHmacSharingPa
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborData.begin(), cborData.end()-2),
                 true, oprCtx_);
         if (item != nullptr) {
-            if(!cborConverter_.getHmacSharingParameters(item, 1, hmacSharingParameters)) {
+            auto optHmacSharingParams = cborConverter_.getHmacSharingParameters(item, 1);
+            if(!optHmacSharingParams) {
                 LOG(ERROR) << "javacard strongbox : Failed to convert cbor data of INS_GET_HMAC_SHARING_PARAM_CMD";
                 errorCode = ErrorCode::UNKNOWN_ERROR;
+            } else {
+                LOG(DEBUG) << "javacard strongbox : received getHmacSharingParameter from Javacard - successful";
+                hmacSharingParameters = std::move(*optHmacSharingParams);
             }
         }
-        LOG(DEBUG) << "javacard strongbox : received getHmacSharingParameter from Javacard - successful";
         // Send earlyBootEnded if there is any pending earlybootEnded event.
         handleSendEarlyBootEndedEvent();
     }
@@ -556,18 +562,16 @@ Return<void> JavacardKeymaster4Device::computeSharedHmac(const hidl_vec<HmacShar
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true, oprCtx_);
         if (item != nullptr) {
-            std::vector<uint8_t> bstr;
-            if(!cborConverter_.getBinaryArray(item, 1, bstr)) {
+            auto optHidlVec = cborConverter_.getByteArrayHidlVec(item, 1);
+            if(!optHidlVec) {
                 LOG(ERROR) << "INS_COMPUTE_SHARED_HMAC_CMD: failed to convert cbor sharing check value";
                 errorCode = ErrorCode::UNKNOWN_ERROR;
             } else {
-                sharingCheck = bstr;
+                LOG(ERROR) << "javacard strongbox : computeSharedHmac - sending sharingCheckToKeystore";
+                sharingCheck = std::move(*optHidlVec);
             }
         }
     }
-
-    LOG(ERROR) << "javacard strongbox : computeSharedHmac - sending sharingCheckToKeystore";
-
     _hidl_cb(errorCode, sharingCheck);
     return Void();
 }
@@ -627,14 +631,18 @@ Return<void> JavacardKeymaster4Device::generateKey(const hidl_vec<KeyParameter>&
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true, oprCtx_);
         if (item != nullptr) {
-            if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
-                    !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+            auto optKeyBlob = cborConverter_.getByteArrayHidlVec(item, 1);
+            auto optKeyCharacteristics = cborConverter_.getKeyCharacteristics(item, 2);
+            if (!optKeyBlob || !optKeyCharacteristics) {
                 //Clear the buffer.
                 keyBlob.setToExternal(nullptr, 0);
                 keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
                 keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
                 errorCode = ErrorCode::UNKNOWN_ERROR;
                 LOG(ERROR) << "INS_GENERATE_KEY_CMD: error while converting cbor data: " << (int32_t) errorCode;
+            } else {
+                keyBlob = std::move(*optKeyBlob);
+                keyCharacteristics = std::move(*optKeyCharacteristics);
             }
         }
     }
@@ -649,16 +657,25 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
     std::vector<uint8_t> cborOutData;
     ErrorCode errorCode = ErrorCode::UNKNOWN_ERROR;
     KeyCharacteristics keyCharacteristics;
+    hidl_vec<KeyParameter> updatedParams(keyParams);
     cppbor::Array subArray;
     // Send earlyBootEnded if there is any pending earlybootEnded event.
     handleSendEarlyBootEndedEvent();
+    if(!findTag(keyParams, Tag::CREATION_DATETIME) &&
+            !findTag(keyParams, Tag::ACTIVE_DATETIME)) {
+        //Add CREATION_DATETIME in HAL, as secure element is not having clock.
+        size_t size = keyParams.size();
+        updatedParams.resize(size+1);
+        updatedParams[size].tag = Tag::CREATION_DATETIME;
+        updatedParams[size].f.dateTime = java_time(time(nullptr));
+    }
 
     if(keyFormat != KeyFormat::PKCS8 && keyFormat != KeyFormat::RAW) {
         LOG(ERROR) << "INS_IMPORT_KEY_CMD unsupported key format " << (int32_t)keyFormat;
         _hidl_cb(ErrorCode::UNSUPPORTED_KEY_FORMAT, keyBlob, keyCharacteristics);
         return Void();
     }
-    cborConverter_.addKeyparameters(array, keyParams);
+    cborConverter_.addKeyparameters(array, updatedParams);
     array.add(static_cast<uint32_t>(keyFormat)); //javacard accepts only RAW.
   
     array.add(std::vector<uint8_t>(keyData));
@@ -671,14 +688,18 @@ Return<void> JavacardKeymaster4Device::importKey(const hidl_vec<KeyParameter>& k
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true, oprCtx_);
         if (item != nullptr) {
-            if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
-                    !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+            auto optKeyBlob = cborConverter_.getByteArrayHidlVec(item, 1);
+            auto optKeyCharacteristics = cborConverter_.getKeyCharacteristics(item, 2);
+            if (!optKeyBlob || !optKeyCharacteristics) {
                 //Clear the buffer.
                 keyBlob.setToExternal(nullptr, 0);
                 keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
                 keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
                 errorCode = ErrorCode::UNKNOWN_ERROR;
-                LOG(ERROR) << "INS_IMPORT_KEY_CMD: error while converting cbor data, status: " << (int32_t) errorCode;
+                LOG(ERROR) << "INS_IMPORT_KEY_CMD: error while converting cbor data: " << (int32_t) errorCode;
+            } else {
+                keyBlob = std::move(*optKeyBlob);
+                keyCharacteristics = std::move(*optKeyCharacteristics);
             }
         }
     }
@@ -708,7 +729,16 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
         _hidl_cb(errorCode, keyBlob, keyCharacteristics);
         return Void();
     }
-    cborConverter_.addKeyparameters(array, authList);
+    hidl_vec<KeyParameter> updatedParams(authList);
+    if(!findTag(authList, Tag::CREATION_DATETIME) &&
+            !findTag(authList, Tag::ACTIVE_DATETIME)) {
+        //Add CREATION_DATETIME in HAL, as secure element is not having clock.
+        size_t size = authList.size();
+        updatedParams.resize(size+1);
+        updatedParams[size].tag = Tag::CREATION_DATETIME;
+        updatedParams[size].f.dateTime = java_time(time(nullptr));
+    }
+    cborConverter_.addKeyparameters(array, updatedParams);
     array.add(static_cast<uint64_t>(keyFormat));
     array.add(secureKey);
     array.add(tag);
@@ -729,14 +759,18 @@ Return<void> JavacardKeymaster4Device::importWrappedKey(const hidl_vec<uint8_t>&
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true, oprCtx_);
         if (item != nullptr) {
-            if(!cborConverter_.getBinaryArray(item, 1, keyBlob) ||
-                    !cborConverter_.getKeyCharacteristics(item, 2, keyCharacteristics)) {
+            auto optKeyBlob = cborConverter_.getByteArrayHidlVec(item, 1);
+            auto optKeyCharacteristics = cborConverter_.getKeyCharacteristics(item, 2);
+            if (!optKeyBlob || !optKeyCharacteristics) {
                 //Clear the buffer.
                 keyBlob.setToExternal(nullptr, 0);
                 keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
                 keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
                 errorCode = ErrorCode::UNKNOWN_ERROR;
-                LOG(ERROR) << "INS_IMPORT_WRAPPED_KEY_CMD: error while converting cbor data, status: " << (int32_t) errorCode;
+                LOG(ERROR) << "INS_IMPORT_WRAPPED_KEY_CMD: error while converting cbor data: " << (int32_t) errorCode;
+            } else {
+                keyBlob = std::move(*optKeyBlob);
+                keyCharacteristics = std::move(*optKeyCharacteristics);
             }
         }
     }
@@ -762,11 +796,14 @@ Return<void> JavacardKeymaster4Device::getKeyCharacteristics(const hidl_vec<uint
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true, oprCtx_);
         if (item != nullptr) {
-            if(!cborConverter_.getKeyCharacteristics(item, 1, keyCharacteristics)) {
+            auto optKeyCharacteristics = cborConverter_.getKeyCharacteristics(item, 1);
+            if (!optKeyCharacteristics) {
                 keyCharacteristics.softwareEnforced.setToExternal(nullptr, 0);
                 keyCharacteristics.hardwareEnforced.setToExternal(nullptr, 0);
                 errorCode = ErrorCode::UNKNOWN_ERROR;
                 LOG(ERROR) << "INS_GET_KEY_CHARACTERISTICS_CMD: error while converting cbor data, status: " << (int32_t) errorCode;
+            } else {
+                keyCharacteristics = std::move(*optKeyCharacteristics);
             }
         }
     }
@@ -811,7 +848,29 @@ Return<void> JavacardKeymaster4Device::exportKey(KeyFormat exportFormat, const h
     return Void();
 }
 
-
+ErrorCode JavacardKeymaster4Device::getFactoryAttestCertChain(std::vector<std::vector<uint8_t>>& certChain) {
+    std::vector<uint8_t> cborData;
+    std::vector<uint8_t> cborOutData;
+    std::unique_ptr<Item> item;
+    ErrorCode errorCode = sendData(Instruction::INS_GET_CERT_CHAIN_CMD, cborData, cborOutData);
+    if (errorCode == ErrorCode::OK) {
+        // Skip last 2 bytes in cborData, it contains status.
+        std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end() - 2),
+                                               true, oprCtx_);
+        if (item != nullptr) {
+            std::vector<uint8_t> asn1CertChain;
+            auto optChain = cborConverter_.getByteArrayVec(item, 1);
+            if (!optChain) {
+                errorCode = ErrorCode::UNKNOWN_ERROR;
+                LOG(ERROR) << "INS_GET_CERT_CHAIN_CMD: errorn in converting cbor data, status: " << (int32_t)errorCode;
+            } else {
+                asn1CertChain = std::move(*optChain);
+                errorCode = getCertificateChain(asn1CertChain, certChain);
+            }
+        }
+    }
+    return errorCode;
+}
 
 Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToAttest, const hidl_vec<KeyParameter>& attestParams, attestKey_cb _hidl_cb) {
     cppbor::Array array;
@@ -833,33 +892,18 @@ Return<void> JavacardKeymaster4Device::attestKey(const hidl_vec<uint8_t>& keyToA
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true, oprCtx_);
         if (item != nullptr) {
-            if(!cborConverter_.getMultiBinaryArray(item, 1, temp)) {
+            auto optTemp = cborConverter_.getCertChain(item, 1);
+            if (!optTemp) {
                 errorCode = ErrorCode::UNKNOWN_ERROR;
                 LOG(ERROR) << "INS_ATTEST_KEY_CMD: error in converting cbor data, status: " << (int32_t) errorCode;
             } else {
-                cborData.clear();
-                cborOutData.clear();
-                errorCode = sendData(Instruction::INS_GET_CERT_CHAIN_CMD, cborData, cborOutData);
-                if(errorCode == ErrorCode::OK) {
-                    //Skip last 2 bytes in cborData, it contains status.
-                    std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(),
-                    cborOutData.end()-2),
-                            true, oprCtx_);
-                    if (item != nullptr) {
-                        std::vector<uint8_t> chain;
-                        if(!cborConverter_.getBinaryArray(item, 1, chain)) {
-                            errorCode = ErrorCode::UNKNOWN_ERROR;
-                            LOG(ERROR) << "attestkey INS_GET_CERT_CHAIN_CMD: errorn in converting cbor data, status: " << (int32_t) errorCode;
-                        } else {
-                            if(ErrorCode::OK == (errorCode = getCertificateChain(chain, temp))) {
-                                certChain.resize(temp.size());
-                                for(int i = 0; i < temp.size(); i++) {
-                                    certChain[i] = temp[i];
-                                }
-                            } else {
-                                LOG(ERROR) << "Error in attestkey getCertificateChain: " << (int32_t) errorCode;
-                            }
-                        }
+                temp = std::move(*optTemp);
+                // Request the factory attest certificate chain from SE.
+                errorCode = getFactoryAttestCertChain(temp);
+                if (ErrorCode::OK == errorCode) {
+                    certChain.resize(temp.size());
+                    for (int i = 0; i < temp.size(); i++) {
+                        certChain[i] = temp[i];
                     }
                 }
             }
@@ -887,9 +931,12 @@ Return<void> JavacardKeymaster4Device::upgradeKey(const hidl_vec<uint8_t>& keyBl
         std::tie(item, errorCode) = decodeData(cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2),
                 true, oprCtx_);
         if (item != nullptr) {
-            if(!cborConverter_.getBinaryArray(item, 1, upgradedKeyBlob)) {
+            auto optKeyBlob = cborConverter_.getByteArrayHidlVec(item, 1);
+            if (!optKeyBlob) {
                 errorCode = ErrorCode::UNKNOWN_ERROR;
                 LOG(ERROR) << "INS_UPGRADE_KEY_CMD: error in converting cbor data, status: " << (int32_t) errorCode;
+            } else {
+                upgradedKeyBlob = std::move(*optKeyBlob);
             }
         }
     }
@@ -1075,8 +1122,9 @@ ErrorCode JavacardKeymaster4Device::handleBeginPrivateKeyOperation(
                                std::vector<uint8_t>(cborOutData.begin(), cborOutData.end() - 2),
                                true, oprCtx_);
                 if (item != nullptr) {
-                    if (!cborConverter_.getKeyParameters(item, 1, outParams) ||
-                        !cborConverter_.getUint64(item, 2, operationHandle)) {
+                    auto optOutParams = cborConverter_.getKeyParameters(item, 1);
+                    auto optOperationHandle = cborConverter_.getUint64(item, 2);
+                    if (!optOperationHandle || !optOutParams) {
                         errorCode = ErrorCode::UNKNOWN_ERROR;
                         outParams.setToExternal(nullptr, 0);
                         operationHandle = 0;
@@ -1084,6 +1132,8 @@ ErrorCode JavacardKeymaster4Device::handleBeginPrivateKeyOperation(
                                       "data, status: "
                                    << (int32_t)errorCode;
                     } else {
+                        outParams = std::move(*optOutParams);
+                        operationHandle = optOperationHandle.value();
                         /* Store the operationInfo */
                         oprCtx_->setOperationInfo(operationHandle, purpose, param.f.algorithm,
                                                   inParams);
@@ -1217,18 +1267,22 @@ JavacardKeymaster4Device::update(uint64_t operationHandle, const hidl_vec<KeyPar
                     // This callback function may gets called multiple times so parse and get the
                     // outParams only once. Otherwise there can be chance of duplicate entries in
                     // outParams. Use tempOut to collect all the cipher text and finally copy it to
-                    // the output. getBinaryArray function appends the new cipher text at the end of
+                    // the output. getByteArrayVec function appends the new cipher text at the end of
                     // the tempOut(std::vector<uint8_t>).
-                    if ((outParams.size() == 0 &&
-                         !cborConverter_.getKeyParameters(item, 2, outParams)) ||
-                        !cborConverter_.getBinaryArray(item, 3, tempOut)) {
-                        outParams.setToExternal(nullptr, 0);
-                        tempOut.clear();
+                    auto optOutParams = cborConverter_.getKeyParameters(item, 2);
+                    auto optTempOut = cborConverter_.getByteArrayVec(item, 3);
+                    if (!optOutParams || !optTempOut) {
                         errorCode = ErrorCode::UNKNOWN_ERROR;
-                        LOG(ERROR) << "sendDataCallback: INS_UPDATE_OPERATION_CMD: error while "
+                            tempOut.clear();
+                            LOG(ERROR) << "sendDataCallback: INS_UPDATE_OPERATION_CMD: error while "
                                       "converting cbor data, status: "
                                    << (int32_t)errorCode;
+                            return errorCode;
                     }
+                    if (outParams.size() == 0) {
+                        outParams = std::move(*optOutParams);
+                    }
+                    tempOut.insert(tempOut.end(), optTempOut->begin(), optTempOut->end());
                 }
             }
             return errorCode;
@@ -1372,18 +1426,22 @@ JavacardKeymaster4Device::finish(uint64_t operationHandle, const hidl_vec<KeyPar
                     // the input data size is larger the MAX_ALLOWED_INPUT_SIZE (Refer
                     // OperationContext) so parse and get the outParams only once. Otherwise there
                     // can be chance of duplicate entries in outParams. Use tempOut to collect all
-                    // the cipher text and finally copy it to the output. getBinaryArray function
+                    // the cipher text and finally copy it to the output. getByteArrayVec function
                     // appends the new cipher text at the end of the tempOut(std::vector<uint8_t>).
-                    if ((outParams.size() == 0 &&
-                         !cborConverter_.getKeyParameters(item, keyParamPos, outParams)) ||
-                        !cborConverter_.getBinaryArray(item, outputPos, tempOut)) {
-                        outParams.setToExternal(nullptr, 0);
-                        tempOut.clear();
+                    auto optOutParams = cborConverter_.getKeyParameters(item, keyParamPos);
+                    auto optTempOut = cborConverter_.getByteArrayVec(item, outputPos);
+                    if (!optOutParams || !optTempOut) {
                         errorCode = ErrorCode::UNKNOWN_ERROR;
-                        LOG(ERROR)
-                            << "sendDataCallback: error while converting cbor data in operation: "
-                            << (int32_t)ins << " decodeData, status: " << (int32_t)errorCode;
+                            tempOut.clear();
+                            LOG(ERROR) << "sendDataCallback: INS_FINISH_OPERATION_CMD: error while "
+                                      "converting cbor data, status: "
+                                   << (int32_t)errorCode;
+                            return errorCode;
                     }
+                    if (outParams.size() == 0) {
+                        outParams = std::move(*optOutParams);
+                    }
+                    tempOut.insert(tempOut.end(), optTempOut->begin(), optTempOut->end());
                 }
             }
             return errorCode;
@@ -1483,7 +1541,7 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
     }
 
     /* Convert input data to cbor format */
-    array.add(passwordOnly);
+    array.add((passwordOnly ? 1 : 0));
     cborConverter_.addVerificationToken(array, verificationToken, asn1ParamsVerified);
     std::vector<uint8_t> cborData = array.encode();
 
@@ -1491,8 +1549,10 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
 
     if(errorCode == V41ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = decodeData<V41ErrorCode>(
+        ErrorCode err;
+        std::tie(item, err) = decodeData(
                 cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true, oprCtx_);
+        errorCode = static_cast<V41ErrorCode>(err);
     }
     return errorCode;
 }
@@ -1508,8 +1568,10 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
 
     if(errorCode == V41ErrorCode::OK) {
         //Skip last 2 bytes in cborData, it contains status.
-        std::tie(item, errorCode) = decodeData<V41ErrorCode>(
+        ErrorCode err;
+        std::tie(item, err) = decodeData(
                 cborConverter_, std::vector<uint8_t>(cborOutData.begin(), cborOutData.end()-2), true, oprCtx_);
+        errorCode = static_cast<V41ErrorCode>(err);
     } else {
         // Incase of failure cache the event and send in the next immediate request to Applet.
         isEarlyBootEventPending = true;
@@ -1517,6 +1579,4 @@ Return<::android::hardware::keymaster::V4_1::ErrorCode> JavacardKeymaster4Device
     return errorCode;
 }
 
-}  // javacard
-}  // namespace V4_1
-}  // namespace keymaster
+}

@@ -21,9 +21,13 @@ import org.globalplatform.upgrade.UpgradeManager;
 
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.Util;
 
 public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeListener {
+  // provisionStatus - 1 byte
+  // keymasterState  - 1 byte
+  // MagicNumber     - 1 byte
+  // Applet package version - 2 bytes.
+  private static final byte PRIMITIVE_DATA_STORAGE_SIZE = 0x05;
 
   KMAndroidSEApplet() {
     super(new KMAndroidSEProvider());
@@ -52,21 +56,22 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   public void onRestore(Element element) {
     element.initRead();
     byte firstByte = element.readByte();
-    short packageVersion_ = 0;
-    byte provisionStatus_ = firstByte;
+    short oldPackageVersion = 0;
     if (firstByte == KMKeymasterApplet.KM_MAGIC_NUMBER) {
-      packageVersion_ = element.readShort();
-      provisionStatus_ = element.readByte();
-    }
-    if (0 != packageVersion_ && !isUpgradeAllowed(packageVersion_)) {
+      oldPackageVersion = element.readShort();
+      provisionStatus = element.readByte();
+    } else {
+      // MAGIC_NUMBER is introduced in version 2.0. Upgrade is
+      // not allowed for Applets having version less than 2.0
       ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
-    packageVersion = packageVersion_;
-    provisionStatus = provisionStatus_;
+    if (!isUpgradeAllowed(oldPackageVersion)) {
+      ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+    }
     keymasterState = element.readByte();
-    repository.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
-    seProvider.onRestore(element, packageVersion, CURRENT_PACKAGE_VERSION);
-    handleDataUpgradeToVersion2_0();
+    repository.onRestore(element, oldPackageVersion, KM_APPLET_PACKAGE_VERSION);
+    seProvider.onRestore(element, oldPackageVersion, KM_APPLET_PACKAGE_VERSION);
+    handleDataUpgrade(oldPackageVersion);
   }
 
   @Override
@@ -78,8 +83,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     primitiveCount += repository.getBackupPrimitiveByteCount();
     objectCount += repository.getBackupObjectCount();
     //KMKeymasterApplet count
-    primitiveCount += computePrimitveDataSize();
-    objectCount += computeObjectCount();
+    primitiveCount += PRIMITIVE_DATA_STORAGE_SIZE;
+    // No objects to be stored in KMAndroidSEApplet.
 
     // Create element.
     Element element = UpgradeManager.createElement(Element.TYPE_SIMPLE,
@@ -93,113 +98,34 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     return element;
   }
 
-  private short computePrimitveDataSize() {
-    // provisionStatus + keymasterState + magic byte + version
-    return (short) 5;
-  }
-
-  private short computeObjectCount() {
-    return (short) 0;
-  }
-
-  public boolean isUpgradeAllowed(short version) {
-    boolean upgradeAllowed = false;
-    short oldMajorVersion = (short) ((version >> 8) & 0x00FF);
-    short oldMinorVersion = (short) (version & 0x00FF);
-    short currentMajorVersion = (short) (CURRENT_PACKAGE_VERSION >> 8 & 0x00FF);
-    short currentMinorVersion = (short) (CURRENT_PACKAGE_VERSION & 0x00FF);
+  public boolean isUpgradeAllowed(short oldVersion) {
     // Downgrade of the Applet is not allowed.
-    // Upgrade is not allowed to a next version which is not immediate.
-    if ((short) (currentMajorVersion - oldMajorVersion) == 1) {
-      if (currentMinorVersion == 0) {
-        upgradeAllowed = true;
-      }
-    } else if ((short) (currentMajorVersion - oldMajorVersion) == 0) {
-      if ((short) (currentMinorVersion - oldMinorVersion) == 1) {
-        upgradeAllowed = true;
-      }
+    if (oldVersion > KM_APPLET_PACKAGE_VERSION) {
+      return false;
     }
-    return upgradeAllowed;
+    return true;
   }
-
-  public void handleDataUpgradeToVersion2_0() {
-    
-    if (packageVersion != 0) {
-      // No Data upgrade required.
-      return;
+  
+  public void handleDataUpgrade(short oldVersion) {
+    switch (oldVersion) {
+    case KM_APPLET_PACKAGE_VERSION_2_0:
+      // In version 3.0, two new provisionStatus states are introduced
+      // 1. PROVISION_STATUS_SE_LOCKED - bit 6 of provisionStatus
+      // 2. PROVISION_STATUS_OEM_PUBLIC_KEY - bit 7 of provisionStatus
+      // In the process of upgrade from 2.0 to 3.0 OEM PUBLIC Key is provisioned
+      // in SEProvider.so update the state of the provision status by making
+      // 7th bit HIGH.
+      provisionStatus |= PROVISION_STATUS_OEM_ROOT_PUBLIC_KEY;
+      // Check if the provisioning is already locked. If so update
+      // the state of the provisionStatus by making 6th bit HIGH.
+      // Lock the SE Factory provisioning as well.
+      if (0 != (provisionStatus & PROVISION_STATUS_OEM_PROVISIONING_LOCKED)) {
+        provisionStatus |= PROVISION_STATUS_SE_FACTORY_PROVISIONING_LOCKED;
+      }
+      break;
+    default:
+      break;
     }
-    byte status = provisionStatus;
-    // In the current version of the applet set boot parameters is removed from
-    // provision status so readjust the provision locked flag.
-    // 0x40 is provision locked flag in the older applet.
-    // Unset the 5th bit. setboot parameters flag.
-    status = (byte)  (status & 0xDF);
-    // Readjust the lock provisioned status flag.
-    if ((status & 0x40) == 0x40) {
-      // 0x40 to 0x20
-      // Unset 6th bit
-      status = (byte) (status & 0xBF);
-      // set the 5th bit
-      status = (byte) (status | 0x20);
-    }
-    provisionStatus = status;
-    packageVersion = CURRENT_PACKAGE_VERSION;
-
-    short certExpiryLen = 0;
-    short issuerLen = 0;
-    short certExpiry = repository.getCertExpiryTime();
-    if (certExpiry != KMType.INVALID_VALUE) {
-      certExpiryLen = KMByteBlob.cast(certExpiry).length();
-    }
-    short issuer = repository.getIssuer();
-    if (issuer != KMType.INVALID_VALUE) {
-      issuerLen = KMByteBlob.cast(issuer).length();
-    }
-    short certChainLen = seProvider.getProvisionedDataLength(KMSEProvider.CERTIFICATE_CHAIN);
-    short offset = repository.allocReclaimableMemory((short) (certExpiryLen + issuerLen + certChainLen));
-    // Get the start offset of the certificate chain.
-    short certChaionOff =
-        decoder.getCborBytesStartOffset(
-            repository.getHeap(),
-            offset,
-            seProvider.readProvisionedData(KMSEProvider.CERTIFICATE_CHAIN, repository.getHeap(), offset));
-    certChainLen -= (short) (certChaionOff - offset);
-    Util.arrayCopyNonAtomic(
-        KMByteBlob.cast(issuer).getBuffer(),
-        KMByteBlob.cast(issuer).getStartOff(),
-        repository.getHeap(),
-        (short) (certChaionOff + certChainLen),
-        issuerLen);
-    Util.arrayCopyNonAtomic(
-        KMByteBlob.cast(certExpiry).getBuffer(),
-        KMByteBlob.cast(certExpiry).getStartOff(),
-        repository.getHeap(),
-        (short) (certChaionOff + certChainLen + issuerLen),
-        certExpiryLen);
-
-    seProvider.persistProvisionData(
-        repository.getHeap(),
-        certChaionOff, // cert chain offset
-        certChainLen,
-        (short) (certChaionOff + certChainLen), // issuer offset
-        issuerLen,
-        (short) (certChaionOff + certChainLen + issuerLen), // cert expiry offset
-        certExpiryLen);
-
-    // Update computed HMAC key.
-    short blob = repository.getComputedHmacKey();
-    if (blob != KMType.INVALID_VALUE) {
-      seProvider.createComputedHmacKey(
-          KMByteBlob.cast(blob).getBuffer(),
-          KMByteBlob.cast(blob).getStartOff(),
-          KMByteBlob.cast(blob).length()
-          );
-    } else {
-      // Initialize the Key object.
-      Util.arrayFillNonAtomic(repository.getHeap(), offset, (short) 32, (byte) 0);
-      seProvider.createComputedHmacKey(repository.getHeap(), offset,(short) 32);
-    }
-    repository.reclaimMemory((short) (certExpiryLen + issuerLen + certChainLen));
   }
 }
 
