@@ -1922,6 +1922,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       op.setAuthTimeoutValidated(true);
     } else if (op.isAuthPerOperationReqd()) { // If Auth per operation is required
+      if (!validateHwToken(data[HW_TOKEN], scratchPad)) {
+        KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
+      }
       tmpVariables[0] = KMHardwareAuthToken.cast(data[HW_TOKEN]).getChallenge();
       if (KMInteger.compare(data[OP_HANDLE], tmpVariables[0]) != 0) {
         KMException.throwIt(KMError.KEY_USER_NOT_AUTHENTICATED);
@@ -1983,7 +1986,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED, data[HW_PARAMETERS]);
 
     if (ptr != KMType.INVALID_VALUE && kmDataStore.getDeviceLock()) {
-      if (!validateHwToken(data[HW_TOKEN], scratchPad)) {
+      if (data[HW_TOKEN] == KMType.INVALID_VALUE) {
         KMException.throwIt(KMError.DEVICE_LOCKED);
       }
       ptr = KMHardwareAuthToken.cast(data[HW_TOKEN]).getTimestamp();
@@ -2592,6 +2595,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     authorizeDigest(op);
     authorizePadding(op);
     authorizeBlockModeAndMacLength(op);
+    if (!validateHwToken(data[HW_TOKEN], scratchPad)) {
+      data[HW_TOKEN] = KMType.INVALID_VALUE;
+    }
     authorizeUserSecureIdAuthTimeout(op, scratchPad);
     authorizeDeviceUnlock(scratchPad);
     authorizeKeyUsageForCount(scratchPad);
@@ -2861,7 +2867,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private boolean authTokenMatches(short userSecureIdsPtr, short authType,
       byte[] scratchPad) {
-    if (!validateHwToken(data[HW_TOKEN], scratchPad)) {
+    if (data[HW_TOKEN] == KMType.INVALID_VALUE) {
       return false;
     }
     if (!isHwAuthTokenContainsMatchingSecureId(data[HW_TOKEN], userSecureIdsPtr)) {
