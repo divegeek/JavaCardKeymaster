@@ -35,7 +35,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   // Magic number version
   private static final byte KM_MAGIC_NUMBER = (byte) 0x82;
   // MSB byte is for Major version and LSB byte is for Minor version.
-  private static final short KM_APPLET_PACKAGE_VERSION = 0x0200;
+  private static final short KM_APPLET_PACKAGE_VERSION = 0x0102;
 
   private static final byte KM_BEGIN_STATE = 0x00;
   private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
@@ -223,35 +223,26 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   }
   
   private boolean isSeFactoryProvisioningLocked() {
-    short dInex = repository.allocReclaimableMemory((short)2);
-    byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dInex);
-    short pStatus = Util.getShort(data, dInex);
+    short pStatus  = kmDataStore.getProvisionStatus();
     boolean result = false;
     if ((0 != (pStatus & PROVISION_STATUS_SE_LOCKED))) {
     	result = true;
     }
-    repository.reclaimMemory((short)2);
     return result;
   }
 
   private boolean isSeFactoryProvisioningComplete() {
-    short dIndex = repository.allocReclaimableMemory((short)2);
-	byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dIndex);
-    short pStatus = Util.getShort(data, dIndex);
+    short pStatus = kmDataStore.getProvisionStatus();
     boolean result = false;
     if ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
             && (0 != ((pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)))) {
       result = true;
     }
-    repository.reclaimMemory((short)2);
     return result;
   }
 
   private void processOEMUnlockProvisionCmd(APDU apdu) {
     authenticateOEM(OEM_UNLOCK_PROVISION_VERIFICATION_LABEL, apdu);
-    kmDataStore.setProvisionLock(false);
     kmDataStore.unlockProvision(PROVISION_STATUS_PROVISIONING_LOCKED);
     sendResponse(apdu, KMError.OK);
   }
@@ -259,7 +250,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private void processOEMLockProvisionCmd(APDU apdu) {
    authenticateOEM(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
     // Enable the lock bit in provision status.
-    kmDataStore.setProvisionLock(true);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
     sendResponse(apdu, KMError.OK);
   }
@@ -500,7 +490,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private void processGetProvisionStatusCmd(APDU apdu) {
     byte[] scratchpad = apdu.getBuffer();
-    kmDataStore.getProvisionStatus(scratchpad, (short) 0);
+    short pStatus = kmDataStore.getProvisionStatus();
+    Util.setShort(scratchpad, (short)0, pStatus);
     short resp = KMArray.instance((short) 2);
     KMArray.cast(resp).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(resp).add((short) 1, KMInteger.instance(scratchpad, (short)0, (short)2));
@@ -571,10 +562,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   }
 
   private boolean isProvisioningComplete() {
-    short dInex = repository.allocReclaimableMemory((short)2);
-    byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dInex);
-    short pStatus = Util.getShort(data, dInex);
+    short pStatus = kmDataStore.getProvisionStatus();
     boolean result = false;
     if (kmDataStore.isProvisionLocked() || ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
         && (0 != (pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
@@ -582,7 +570,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         && (0 != (pStatus  & PROVISION_STATUS_ATTEST_IDS)))) {
     	result = true;
     }
-    repository.reclaimMemory((short)2);
     return result;
   }
 
@@ -596,20 +583,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   
   private boolean isUpgradeAllowed(short oldVersion) {
     boolean upgradeAllowed = false;
-    short oldMajorVersion = (short) ((oldVersion >> 8) & 0x00FF);
-    short oldMinorVersion = (short) (oldVersion & 0x00FF);
-    short currentMajorVersion = (short) (KM_APPLET_PACKAGE_VERSION >> 8 & 0x00FF);
-    short currentMinorVersion = (short) (KM_APPLET_PACKAGE_VERSION & 0x00FF);
     // Downgrade of the Applet is not allowed.
-    // Upgrade is not allowed to a next version which is not immediate.
-    if ((short) (currentMajorVersion - oldMajorVersion) == 1) {
-      if (currentMinorVersion == 0) {
-        upgradeAllowed = true;
-      }
-    } else if ((short) (currentMajorVersion - oldMajorVersion) == 0) {
-      if (currentMinorVersion >= oldMinorVersion) {
-        upgradeAllowed = true;
-      }
+    if (KM_APPLET_PACKAGE_VERSION >= oldVersion) { 
+      upgradeAllowed = true;
     }
     return upgradeAllowed;
   }
