@@ -579,6 +579,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
        case INS_GET_HMAC_SHARING_PARAM_CMD:
        case INS_COMPUTE_SHARED_HMAC_CMD:
        case INS_INIT_STRONGBOX_CMD:
+       case INS_EARLY_BOOT_ENDED_CMD:
          return true;
        default:
          break;
