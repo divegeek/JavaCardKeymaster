@@ -204,50 +204,39 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
       default:
         // Allow other commands only if provision is completed.  
     	if (!isProvisioningComplete()) {
-          result = false;
+    	  result = false;
     	}   	          
     }
     return result;
   }
   
   private boolean isSeFactoryProvisioningLocked() {
-    short dInex = repository.allocReclaimableMemory((short)2);
-    byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dInex);
-    short pStatus = Util.getShort(data, dInex);
+    short pStatus  = kmDataStore.getProvisionStatus();
     boolean result = false;
     if ((0 != (pStatus & PROVISION_STATUS_SE_LOCKED))) {
     	result = true;
     }
-    repository.reclaimMemory((short)2);
     return result;
   }
 
   private boolean isSeFactoryProvisioningComplete() {
-    short dIndex = repository.allocReclaimableMemory((short)2);
-	byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dIndex);
-    short pStatus = Util.getShort(data, dIndex);
-    boolean result = false;
-    if ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
-            && (0 != ((pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)))) {
-      result = true;
+    short pStatus = kmDataStore.getProvisionStatus();
+    short seCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN;
+    if (seCompleteStatus == (pStatus & seCompleteStatus)) {
+      return true;
     }
-    repository.reclaimMemory((short)2);
-    return result;
+    return false;
   }
 
   private void processOEMUnlockProvisionCmd(APDU apdu) {
     authenticateOEM(OEM_UNLOCK_PROVISION_VERIFICATION_LABEL, apdu);
-    kmDataStore.setProvisionLock(false);
-    kmDataStore.unlockProvision(PROVISION_STATUS_PROVISIONING_LOCKED);
+    kmDataStore.unlockProvision();
     sendResponse(apdu, KMError.OK);
   }
 
   private void processOEMLockProvisionCmd(APDU apdu) {
-   authenticateOEM(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
+    authenticateOEM(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
     // Enable the lock bit in provision status.
-    kmDataStore.setProvisionLock(true);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
     sendResponse(apdu, KMError.OK);
   }
@@ -488,7 +477,8 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
 
   private void processGetProvisionStatusCmd(APDU apdu) {
     byte[] scratchpad = apdu.getBuffer();
-    kmDataStore.getProvisionStatus(scratchpad, (short) 0);
+    short pStatus = kmDataStore.getProvisionStatus();
+    Util.setShort(scratchpad, (short)0, pStatus);
     short resp = KMArray.instance((short) 2);
     KMArray.cast(resp).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(resp).add((short) 1, KMInteger.instance(scratchpad, (short)0, (short)2));
@@ -559,19 +549,13 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   }
 
   private boolean isProvisioningComplete() {
-    short dInex = repository.allocReclaimableMemory((short)2);
-    byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dInex);
-    short pStatus = Util.getShort(data, dInex);
-    boolean result = false;
-    if (kmDataStore.isProvisionLocked() || ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
-        && (0 != (pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
-        && (0 != (pStatus  & PROVISION_STATUS_PRESHARED_SECRET))
-        && (0 != (pStatus  & PROVISION_STATUS_ATTEST_IDS)))) {
-    	result = true;
+    short pStatus = kmDataStore.getProvisionStatus();
+    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
+    		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS;
+    if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
+      return true;
     }
-    repository.reclaimMemory((short)2);
-    return result;
+    return false;
   }
 
   private short validateApdu(APDU apdu) {
