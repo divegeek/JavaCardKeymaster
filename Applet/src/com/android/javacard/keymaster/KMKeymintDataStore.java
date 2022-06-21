@@ -42,8 +42,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   public static final short DATA_MEM_SIZE = 300;
 
   // Old Data table offsets
-  private static final byte OLD_PROVISIONED_LOCKED = 17;
-  private static final byte OLD_PROVISIONED_STATUS = 18;
+  private static final byte OLD_PROVISIONED_STATUS_OFFSET = 18;
   
   // Data table offsets
   public static final byte HMAC_NONCE = 0;
@@ -350,9 +349,9 @@ public class KMKeymintDataStore implements KMUpgradable {
 	short offset = repository.allocReclaimableMemory(DEVICE_STATUS_FLAG_SIZE);
 	byte[] buf = repository.getHeap();
 	getDeviceBootStatus(buf, offset);
-    if ((0 != (buf[offset] & SET_BOOT_PARAMS_SUCCESS))
-            && (0 != (buf[offset]  & SET_SYSTEM_PROPERTIES_SUCCESS))
-            && (0 != (buf[offset]  & NEGOTIATED_SHARED_SECRET_SUCCESS))) {
+	byte bootCompleteStatus = SET_BOOT_PARAMS_SUCCESS | SET_SYSTEM_PROPERTIES_SUCCESS |
+			SET_SYSTEM_PROPERTIES_SUCCESS;
+    if (bootCompleteStatus == (buf[offset] & bootCompleteStatus)) {
       result = true;
     }
     repository.reclaimMemory(DEVICE_STATUS_FLAG_SIZE);
@@ -826,15 +825,19 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
   
   public void setProvisionStatus(short pStatus) {
+    JCSystem.beginTransaction();
     provisionStatus |= pStatus;
+    JCSystem.commitTransaction();
   }
   
   public short getProvisionStatus() {
     return provisionStatus;
   }
   
-  public void unlockProvision(short unlockOffset) {
-    provisionStatus &= ~unlockOffset;
+  public void unlockProvision() {
+    JCSystem.beginTransaction();
+    provisionStatus &= ~KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED;
+    JCSystem.commitTransaction();
   }
 
   public void persistOEMRootPublicKey(byte[] inBuff, short inOffset, short inLength) {
@@ -881,13 +884,13 @@ public class KMKeymintDataStore implements KMUpgradable {
   @Override
   public void onRestore(Element element, short oldVersion, short currentVersion) {
     if (oldVersion != currentVersion) {
-      handlePrevisionVersionUpgrade(element);
+      handlePreviousVersionUpgrade(element);
     } else {
       handleCurrentVersionUpgrade(element);
     }
   }
 
-  private void handlePrevisionVersionUpgrade(Element element) {
+  private void handlePreviousVersionUpgrade(Element element) {
     // Read Primitives
     //restore old data table index
     short oldDataIndex = element.readShort(); 
@@ -945,18 +948,20 @@ public class KMKeymintDataStore implements KMUpgradable {
 
   public void getProvisionStatus(byte[] dataTable, byte[] scratchpad, short offset) {
     Util.setShort(scratchpad, offset, (short)0);
-    readDataEntry(dataTable, OLD_PROVISIONED_STATUS, scratchpad, offset);
+    readDataEntry(dataTable, OLD_PROVISIONED_STATUS_OFFSET, scratchpad, offset);
   }
 
   void handleProvisionStatusUpgrade(byte[] dataTable, short dataTableIndex){
     short dInex = repository.allocReclaimableMemory((short)2);
     byte data[] = repository.getHeap();
     getProvisionStatus(dataTable, data, dInex);
+    JCSystem.beginTransaction();
     provisionStatus = (short)( data[dInex] & 0x00ff);
     if( KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED 
     		== (provisionStatus & KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED)) {
       provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SE_LOCKED;
     }
+    JCSystem.commitTransaction();
     repository.reclaimMemory((short)2);
   }
   

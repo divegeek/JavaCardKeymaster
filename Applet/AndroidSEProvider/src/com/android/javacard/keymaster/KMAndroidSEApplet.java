@@ -35,7 +35,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   // Magic number version
   private static final byte KM_MAGIC_NUMBER = (byte) 0x82;
   // MSB byte is for Major version and LSB byte is for Minor version.
-  private static final short KM_APPLET_PACKAGE_VERSION = 0x0102;
+  private static final short KM_APPLET_PACKAGE_VERSION = 0x0200;
 
   private static final byte KM_BEGIN_STATE = 0x00;
   private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
@@ -233,22 +233,21 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isSeFactoryProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    boolean result = false;
-    if ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
-            && (0 != ((pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)))) {
-      result = true;
+    short seCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN;
+    if (seCompleteStatus == (pStatus & seCompleteStatus)) {
+      return true;
     }
-    return result;
+    return false;
   }
 
   private void processOEMUnlockProvisionCmd(APDU apdu) {
     authenticateOEM(OEM_UNLOCK_PROVISION_VERIFICATION_LABEL, apdu);
-    kmDataStore.unlockProvision(PROVISION_STATUS_PROVISIONING_LOCKED);
+    kmDataStore.unlockProvision();
     sendResponse(apdu, KMError.OK);
   }
 
   private void processOEMLockProvisionCmd(APDU apdu) {
-   authenticateOEM(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
+    authenticateOEM(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
     // Enable the lock bit in provision status.
     kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
     sendResponse(apdu, KMError.OK);
@@ -563,14 +562,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    boolean result = false;
-    if (kmDataStore.isProvisionLocked() || ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
-        && (0 != (pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
-        && (0 != (pStatus  & PROVISION_STATUS_PRESHARED_SECRET))
-        && (0 != (pStatus  & PROVISION_STATUS_ATTEST_IDS)))) {
-    	result = true;
+    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
+    		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS;
+    if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
+      return true;
     }
-    return result;
+    return false;
   }
 
   @Override
