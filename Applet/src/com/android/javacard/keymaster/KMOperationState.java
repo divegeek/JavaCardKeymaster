@@ -56,6 +56,7 @@ public class KMOperationState {
   private static final short SECURE_USER_ID_REQD = 2;
   private static final short AUTH_TIMEOUT_VALIDATED = 4;
   private static final short AES_GCM_UPDATE_ALLOWED = 8;
+  private static final byte PROCESSED_INPUT_MSG = 16;
   // Max user secure ids.
   private static final byte MAX_SECURE_USER_IDS = 5;
 
@@ -122,6 +123,10 @@ public class KMOperationState {
     data[PURPOSE] = purpose;
   }
 
+  public boolean isInputMsgProcessed() {
+    return (data[FLAGS] & PROCESSED_INPUT_MSG) != 0;
+  }
+
   public void setOperation(KMOperation op) {
     operations[OPERATION] = op;
   }
@@ -148,6 +153,14 @@ public class KMOperationState {
 
   public void setAuthTime(byte[] timeBuf, short start) {
     Util.arrayCopyNonAtomic(timeBuf, start, authTime, (short) 0, AUTH_TIME_SIZE);
+  }
+
+  public void setProcessedInputMsg(boolean flag) {
+    if (flag) {
+      data[FLAGS] = (byte) (data[FLAGS] | PROCESSED_INPUT_MSG);
+    } else {
+      data[FLAGS] = (byte) (data[FLAGS] & (~PROCESSED_INPUT_MSG));
+    }
   }
 
   public void setOneTimeAuthReqd(boolean flag) {
