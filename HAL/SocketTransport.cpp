@@ -15,13 +15,17 @@
  ** limitations under the License.
  */
 #include "SocketTransport.h"
-#include "ITransport.h"
-#include <android-base/logging.h>
+
 #include <arpa/inet.h>
 #include <errno.h>
+
 #include <memory>
-#include <sys/socket.h>
 #include <vector>
+
+#include <android-base/logging.h>
+#include <sys/socket.h>
+
+#include "ITransport.h"
 
 #define PORT 8080
 #define IPADDR  "192.168.7.239"

@@ -14,6 +14,8 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  */
+#include "OmapiTransport.h"
+
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,8 +24,6 @@
 #include <vector>
 
 #include <android-base/logging.h>
-
-#include "OmapiTransport.h"
 
 namespace keymint::javacard {
 

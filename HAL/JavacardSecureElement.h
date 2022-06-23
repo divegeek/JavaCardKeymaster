@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include "CborConverter.h"
 #include <ITransport.h>
+
+#include "CborConverter.h"
 
 #define APDU_CLS 0x80
 #define APDU_P1 0x50
