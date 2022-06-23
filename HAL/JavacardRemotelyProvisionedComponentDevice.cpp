@@ -15,12 +15,16 @@
  */
 
 #define LOG_TAG "javacard.keymint.device.rkp.strongbox-impl"
-#include <JavacardRemotelyProvisionedComponentDevice.h>
-#include <android-base/logging.h>
-#include <JavacardKeyMintUtils.h>
+
+#include "JavacardRemotelyProvisionedComponentDevice.h"
+
 #include <aidl/android/hardware/security/keymint/MacedPublicKey.h>
+
+#include <android-base/logging.h>
 #include <keymaster/cppcose/cppcose.h>
 #include <keymaster/remote_provisioning_utils.h>
+
+#include "JavacardKeyMintUtils.h"
 
 namespace aidl::android::hardware::security::keymint {
 using namespace cppcose;
@@ -82,18 +86,20 @@ uint32_t coseKeyEncodedSize(const std::vector<MacedPublicKey>& keysToSign) {
 ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::getHardwareInfo(RpcHardwareInfo* info) {
     auto [item, err] = card_->sendRequest(Instruction::INS_GET_RKP_HARDWARE_INFO);
-    uint32_t versionNumber;
-    uint32_t supportedEekCurve;
+    std::optional<uint32_t> optVersionNumber;
+    std::optional<uint32_t> optSupportedEekCurve;
+    std::optional<string> optRpcAuthorName;
     if (err != KM_ERROR_OK ||
-        !cbor_.getUint64<uint32_t>(item, 1, versionNumber) ||
-        !cbor_.getBinaryArray(item, 2, info->rpcAuthorName ) ||
-        !cbor_.getUint64<uint32_t>(item, 3, supportedEekCurve)) {
+        !(optVersionNumber = cbor_.getUint64<uint32_t>(item, 1)) ||
+        !(optRpcAuthorName = cbor_.getByteArrayStr(item, 2)) ||
+        !(optSupportedEekCurve = cbor_.getUint64<uint32_t>(item, 3))) {
         LOG(ERROR) << "Error in response of getHardwareInfo.";
         LOG(INFO) << "Returning defaultHwInfo in getHardwareInfo.";
         return defaultHwInfo(info);
     }
-    info->versionNumber = static_cast<int32_t>(versionNumber);
-    info->supportedEekCurve = static_cast<int32_t>(supportedEekCurve);
+    info->rpcAuthorName = std::move(optRpcAuthorName.value());
+    info->versionNumber = static_cast<int32_t>(std::move(optVersionNumber.value()));
+    info->supportedEekCurve = static_cast<int32_t>(std::move(optSupportedEekCurve.value()));
     return ScopedAStatus::ok();
 }
 
@@ -108,11 +114,15 @@ JavacardRemotelyProvisionedComponentDevice::generateEcdsaP256KeyPair(bool testMo
         LOG(ERROR) << "Error in sending generateEcdsaP256KeyPair.";
         return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
-    if (!cbor_.getBinaryArray(item, 1, macedPublicKey->macedKey) ||
-        !cbor_.getBinaryArray(item, 2, *privateKeyHandle)) {
+    std::optional<std::vector<uint8_t>> optMacedKey;
+    std::optional<std::vector<uint8_t>> optPKeyHandle;
+    if (!(optMacedKey = cbor_.getByteArrayVec(item, 1)) ||
+        !(optPKeyHandle = cbor_.getByteArrayVec(item, 2))) {
          LOG(ERROR) << "Error in decoding og response in generateEcdsaP256KeyPair.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    *privateKeyHandle = std::move(optPKeyHandle.value());
+    macedPublicKey->macedKey = std::move(optMacedKey.value());
     return ScopedAStatus::ok();
 }
 
@@ -178,24 +188,29 @@ JavacardRemotelyProvisionedComponentDevice::finishSendData(
     std::vector<uint8_t>& coseEncryptProtectedHeader, cppbor::Map& coseEncryptUnProtectedHeader,
     std::vector<uint8_t>& partialCipheredData, uint32_t& respFlag) {
 
-    std::vector<uint8_t> decodedKeysToSignMac;
-    std::vector<uint8_t> decodedDeviceInfo;
     auto [item, err] = card_->sendRequest(Instruction::INS_FINISH_SEND_DATA_CMD);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in finishSendData.";
         return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
-    if (!cbor_.getBinaryArray(item, 1, decodedKeysToSignMac) ||
-        !cbor_.getBinaryArray(item, 2, decodedDeviceInfo) ||
-        !cbor_.getBinaryArray(item, 3, coseEncryptProtectedHeader) ||
-        !cbor_.getMapItem(item, 4, coseEncryptUnProtectedHeader) ||
-        !cbor_.getBinaryArray(item, 5, partialCipheredData) ||
-        !cbor_.getUint64(item, 6, respFlag)) {
+    auto optDecodedKeysToSignMac = cbor_.getByteArrayVec(item, 1);
+    auto optDecodedDeviceInfo = cbor_.getByteArrayVec(item, 2);
+    auto optCEncryptProtectedHeader = cbor_.getByteArrayVec(item, 3);
+    auto optCEncryptUnProtectedHeader = cbor_.getMapItem(item, 4);
+    auto optPCipheredData = cbor_.getByteArrayVec(item, 5);
+    auto optRespFlag = cbor_.getUint64<uint32_t>(item, 6);
+    if (!optDecodedKeysToSignMac || !optDecodedDeviceInfo ||
+        !optCEncryptProtectedHeader || !optCEncryptUnProtectedHeader ||
+        !optPCipheredData || !optRespFlag) {
          LOG(ERROR) << "Error in decoding og response in finishSendData.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
-    *keysToSignMac = decodedKeysToSignMac;
-    deviceInfo->deviceInfo = decodedDeviceInfo;
+    *keysToSignMac = std::move(optDecodedKeysToSignMac.value());
+    deviceInfo->deviceInfo = std::move(optDecodedDeviceInfo.value());
+    coseEncryptProtectedHeader = std::move(optCEncryptProtectedHeader.value());
+    coseEncryptUnProtectedHeader = std::move(optCEncryptUnProtectedHeader.value());
+    partialCipheredData.insert(partialCipheredData.end(), optPCipheredData->begin(), optPCipheredData->end());
+    respFlag = std::move(optRespFlag.value());
     return ScopedAStatus::ok();
 }
 
@@ -208,12 +223,16 @@ JavacardRemotelyProvisionedComponentDevice::getResponse(
         LOG(ERROR) << "Error in getResponse.";
         return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
-    if (!cbor_.getBinaryArray(item, 1, partialCipheredData) ||
-        !cbor_.getArrayItem(item, 2, recepientStructure) ||
-        !cbor_.getUint64(item, 3, respFlag)) {
+    auto optPCipheredData = cbor_.getByteArrayVec(item, 1);
+    auto optArray = cbor_.getArrayItem(item, 2);
+    auto optRespFlag = cbor_.getUint64<uint32_t>(item, 3);
+    if (!optPCipheredData || !optArray || !optRespFlag) {
          LOG(ERROR) << "Error in decoding og response in getResponse.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
+    recepientStructure = std::move(optArray.value());
+    partialCipheredData.insert(partialCipheredData.end(), optPCipheredData->begin(), optPCipheredData->end());
+    respFlag = std::move(optRespFlag.value()); 
     return ScopedAStatus::ok();
 }
 

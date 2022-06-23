@@ -16,13 +16,14 @@
 
 #pragma once
 
-#include "CborConverter.h"
-#include "JavacardSecureElement.h"
+#include <vector>
 
 #include <aidl/android/hardware/security/keymint/BnKeyMintOperation.h>
 #include <aidl/android/hardware/security/secureclock/ISecureClock.h>
 #include <hardware/keymaster_defs.h>
-#include <vector>
+
+#include "CborConverter.h"
+#include "JavacardSecureElement.h"
 
 #define AES_BLOCK_SIZE 16
 #define DES_BLOCK_SIZE 8

@@ -184,13 +184,13 @@ public class KMPoolManager {
 	  }
   
   private KMPoolManager() {
-	initStatics();  
-    cipherPool = new Object[(short) (CIPHER_ALGS.length * 4)];
- // Extra 4 algorithms are used to support TRUSTED_CONFIRMATION_REQUIRED feature.
-    signerPool = new Object[(short) ((SIG_ALGS.length * 4) + 4)];
-    keyAgreementPool = new Object[(short) (KEY_AGREE_ALGS.length * 4)];
+    initStatics();  
+    cipherPool = new Object[(short) (CIPHER_ALGS.length * MAX_OPERATION_INSTANCES)];
+    // Extra 4 algorithms are used to support TRUSTED_CONFIRMATION_REQUIRED feature.
+    signerPool = new Object[(short) ((SIG_ALGS.length * MAX_OPERATION_INSTANCES) + MAX_OPERATION_INSTANCES)];
+    keyAgreementPool = new Object[(short) (KEY_AGREE_ALGS.length * MAX_OPERATION_INSTANCES)];
     
-    keysPool = new Object[(short) ((KEY_ALGS.length * 4) + 4)];
+    keysPool = new Object[(short) ((KEY_ALGS.length * MAX_OPERATION_INSTANCES) + MAX_OPERATION_INSTANCES)];
     operationPool = new Object[MAX_OPERATION_INSTANCES];
     hmacSignOperationPool = new Object[MAX_OPERATION_INSTANCES];
     /* Initialize pools */
@@ -202,9 +202,8 @@ public class KMPoolManager {
     initializeKeysPool();
     // Initialize the Crypto and Key objects required for RKP flow.
     initializeRKpObjects();
-    
   }
-  
+
   private void initializeRKpObjects() {
     rkpOPeration = new KMOperationImpl();
     rkpAesGcm = Cipher.getInstance(AEADCipher.ALG_AES_GCM, false);
@@ -214,58 +213,46 @@ public class KMPoolManager {
   }
 
   private void initializeKeysPool() {
-    short index = 0;
-    while (index < KEY_ALGS.length) {
+    for(short index = 0; index < KEY_ALGS.length; index++) {
       keysPool[index] = createKeyObjectInstance(KEY_ALGS[index]);
-      index++;
     }
   }
   
   private void initializeOperationPool() {
-    short index = 0;
-    while (index < MAX_OPERATION_INSTANCES) {
+    for(short index = 0; index < MAX_OPERATION_INSTANCES; index++) {
       operationPool[index] = new KMOperationImpl();
-      index++;
     }
   }
 
   private void initializeHmacSignOperationPool() {
-    short index = 0;
-    while (index < MAX_OPERATION_INSTANCES) {
+    for(short index = 0; index < MAX_OPERATION_INSTANCES; index++) {
       hmacSignOperationPool[index] = new KMOperationImpl();
-      index++;
     }
   }
   
   // Create a signature instance of each algorithm once.
-  private void initializeSignerPool() {
-    short index = 0;
-    while (index < SIG_ALGS.length) {
+  private void initializeSignerPool() { 
+    short index;
+    for(index = 0; index < SIG_ALGS.length; index++) {
       signerPool[index] = getSignatureInstance(SIG_ALGS[index]);
-      index++;
     }
+
     // Allocate extra 4 HMAC signer instances required for trusted confirmation
-    short len = (short) (index + 4);
-    while (index < len) {
+    for(short len = (short) (index + 4); index < len; index++) {
       signerPool[index] = getSignatureInstance(Signature.ALG_HMAC_SHA_256);
-      index++;
     }
   }
 
   //Create a cipher instance of each algorithm once.
   private void initializeCipherPool() {
-    short index = 0;
-    while (index < CIPHER_ALGS.length) {
+    for(short index = 0; index < CIPHER_ALGS.length; index++) {
       cipherPool[index] = getCipherInstance(CIPHER_ALGS[index]);
-      index++;
     }
   }
 
   private void initializeKeyAgreementPool() {
-    short index = 0;
-    while (index < KEY_AGREE_ALGS.length) {
+    for(short index = 0; index < KEY_AGREE_ALGS.length; index++) {
       keyAgreementPool[index] = getKeyAgreementInstance(KEY_AGREE_ALGS[index]);
-      index++;
     }
   }
 

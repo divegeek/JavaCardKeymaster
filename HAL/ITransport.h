@@ -15,8 +15,10 @@
  ** limitations under the License.
  */
 #pragma once
+
 #include <memory>
 #include <vector>
+
 #include <hardware/keymaster_defs.h>
 
 namespace keymint::javacard {

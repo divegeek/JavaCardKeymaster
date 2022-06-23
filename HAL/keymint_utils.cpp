@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "keymint_utils.h"
+
+#include <regex.h>
 
 #include <android-base/properties.h>
-#include <keymint_utils.h>
-#include <regex.h>
 
 namespace keymint::javacard {
 

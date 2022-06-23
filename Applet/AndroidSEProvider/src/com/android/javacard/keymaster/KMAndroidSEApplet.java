@@ -105,13 +105,13 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           case INS_PROVISION_ATTEST_IDS_CMD:
             processProvisionAttestIdsCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_ATTEST_IDS);
-            sendError(apdu, KMError.OK);
+            sendResponse(apdu, KMError.OK);
             break;
 
           case INS_PROVISION_PRESHARED_SECRET_CMD:
             processProvisionPreSharedSecretCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_PRESHARED_SECRET);
-            sendError(apdu, KMError.OK);
+            sendResponse(apdu, KMError.OK);
             break;
 
           case INS_GET_PROVISION_STATUS_CMD:
@@ -132,13 +132,13 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           
           case INS_SE_FACTORY_PROVISIONING_LOCK_CMD:
             kmDataStore.setProvisionStatus(PROVISION_STATUS_SE_LOCKED);
-            sendError(apdu, KMError.OK);
+            sendResponse(apdu, KMError.OK);
             break;
 
           case INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD:
             processProvisionOEMRootPublicKeyCmd(apdu);
             kmDataStore.setProvisionStatus(PROVISION_STATUS_OEM_PUBLIC_KEY);
-            sendError(apdu, KMError.OK);
+            sendResponse(apdu, KMError.OK);
             break;
 
           case INS_OEM_LOCK_PROVISIONING_CMD:
@@ -157,13 +157,13 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     	ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
       }
     } catch (KMException exception) {
-      sendError(apdu, KMException.reason());
+      sendResponse(apdu, KMException.reason());
     } catch (ISOException exp) {
-      sendError(apdu, mapISOErrorToKMError(exp.getReason()));
+      sendResponse(apdu, mapISOErrorToKMError(exp.getReason()));
     } catch (CryptoException e) {
-      sendError(apdu, mapCryptoErrorToKMError(e.getReason()));
+      sendResponse(apdu, mapCryptoErrorToKMError(e.getReason()));
     } catch (Exception e) {
-      sendError(apdu, KMError.GENERIC_UNKNOWN_ERROR);
+      sendResponse(apdu, KMError.GENERIC_UNKNOWN_ERROR);
     } finally {
       repository.clean();
     }
@@ -223,45 +223,34 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   }
   
   private boolean isSeFactoryProvisioningLocked() {
-    short dInex = repository.allocReclaimableMemory((short)2);
-    byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dInex);
-    short pStatus = Util.getShort(data, dInex);
+    short pStatus  = kmDataStore.getProvisionStatus();
     boolean result = false;
     if ((0 != (pStatus & PROVISION_STATUS_SE_LOCKED))) {
     	result = true;
     }
-    repository.reclaimMemory((short)2);
     return result;
   }
 
   private boolean isSeFactoryProvisioningComplete() {
-    short dIndex = repository.allocReclaimableMemory((short)2);
-	byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dIndex);
-    short pStatus = Util.getShort(data, dIndex);
-    boolean result = false;
-    if ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
-            && (0 != ((pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)))) {
-      result = true;
+    short pStatus = kmDataStore.getProvisionStatus();
+    short seCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN;
+    if (seCompleteStatus == (pStatus & seCompleteStatus)) {
+      return true;
     }
-    repository.reclaimMemory((short)2);
-    return result;
+    return false;
   }
 
   private void processOEMUnlockProvisionCmd(APDU apdu) {
     authenticateOEM(OEM_UNLOCK_PROVISION_VERIFICATION_LABEL, apdu);
-    kmDataStore.setProvisionLock(false);
-    kmDataStore.unlockProvision(PROVISION_STATUS_PROVISIONING_LOCKED);
-    sendError(apdu, KMError.OK);
+    kmDataStore.unlockProvision();
+    sendResponse(apdu, KMError.OK);
   }
 
   private void processOEMLockProvisionCmd(APDU apdu) {
-   authenticateOEM(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
+    authenticateOEM(OEM_LOCK_PROVISION_VERIFICATION_LABEL, apdu);
     // Enable the lock bit in provision status.
-    kmDataStore.setProvisionLock(true);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_PROVISIONING_LOCKED);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void authenticateOEM(byte[] plainMsg, APDU apdu) {
@@ -366,7 +355,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private static void processProvisionRkpAdditionalCertChain(APDU apdu) {
@@ -415,7 +404,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
     //reclaim memory
     repository.reclaimMemory(bufferLength);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void processProvisionAttestIdsCmd(APDU apdu) {
@@ -500,7 +489,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private void processGetProvisionStatusCmd(APDU apdu) {
     byte[] scratchpad = apdu.getBuffer();
-    kmDataStore.getProvisionStatus(scratchpad, (short) 0);
+    short pStatus = kmDataStore.getProvisionStatus();
+    Util.setShort(scratchpad, (short)0, pStatus);
     short resp = KMArray.instance((short) 2);
     KMArray.cast(resp).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(resp).add((short) 1, KMInteger.instance(scratchpad, (short)0, (short)2));
@@ -567,23 +557,17 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     super.reboot();
     kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS);
     seProvider.clearDeviceBooted(false);
-    sendError(apdu, KMError.OK);
+    sendResponse(apdu, KMError.OK);
   }
 
   private boolean isProvisioningComplete() {
-    short dInex = repository.allocReclaimableMemory((short)2);
-    byte data[] = repository.getHeap();
-    kmDataStore.getProvisionStatus(data, dInex);
-    short pStatus = Util.getShort(data, dInex);
-    boolean result = false;
-    if (kmDataStore.isProvisionLocked() || ((0 != (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR))
-        && (0 != (pStatus & PROVISION_STATUS_ADDITIONAL_CERT_CHAIN))
-        && (0 != (pStatus  & PROVISION_STATUS_PRESHARED_SECRET))
-        && (0 != (pStatus  & PROVISION_STATUS_ATTEST_IDS)))) {
-    	result = true;
+    short pStatus = kmDataStore.getProvisionStatus();
+    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
+    		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS;
+    if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
+      return true;
     }
-    repository.reclaimMemory((short)2);
-    return result;
+    return false;
   }
 
   @Override
@@ -596,20 +580,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   
   private boolean isUpgradeAllowed(short oldVersion) {
     boolean upgradeAllowed = false;
-    short oldMajorVersion = (short) ((oldVersion >> 8) & 0x00FF);
-    short oldMinorVersion = (short) (oldVersion & 0x00FF);
-    short currentMajorVersion = (short) (KM_APPLET_PACKAGE_VERSION >> 8 & 0x00FF);
-    short currentMinorVersion = (short) (KM_APPLET_PACKAGE_VERSION & 0x00FF);
     // Downgrade of the Applet is not allowed.
-    // Upgrade is not allowed to a next version which is not immediate.
-    if ((short) (currentMajorVersion - oldMajorVersion) == 1) {
-      if (currentMinorVersion == 0) {
-        upgradeAllowed = true;
-      }
-    } else if ((short) (currentMajorVersion - oldMajorVersion) == 0) {
-      if (currentMinorVersion >= oldMinorVersion) {
-        upgradeAllowed = true;
-      }
+    if (KM_APPLET_PACKAGE_VERSION >= oldVersion) { 
+      upgradeAllowed = true;
     }
     return upgradeAllowed;
   }
@@ -656,7 +629,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
     // Validate P1P2.
     if (P1P2 != KMKeymasterApplet.KM_HAL_VERSION) {
-      sendError(apdu, KMError.INVALID_P1P2);
+      sendResponse(apdu, KMError.INVALID_P1P2);
       return KMType.INVALID_VALUE;
     }
     return apduBuffer[ISO7816.OFFSET_INS];
