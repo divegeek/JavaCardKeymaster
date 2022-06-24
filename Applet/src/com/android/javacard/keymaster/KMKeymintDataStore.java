@@ -345,12 +345,12 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
 
   public boolean isDeviceReady() {
-	boolean result = false;
-	short offset = repository.allocReclaimableMemory(DEVICE_STATUS_FLAG_SIZE);
-	byte[] buf = repository.getHeap();
-	getDeviceBootStatus(buf, offset);
-	byte bootCompleteStatus = SET_BOOT_PARAMS_SUCCESS | SET_SYSTEM_PROPERTIES_SUCCESS |
-			SET_SYSTEM_PROPERTIES_SUCCESS;
+    boolean result = false;
+    short offset = repository.allocReclaimableMemory(DEVICE_STATUS_FLAG_SIZE);
+    byte[] buf = repository.getHeap();
+    getDeviceBootStatus(buf, offset);
+    byte bootCompleteStatus = (SET_BOOT_PARAMS_SUCCESS | SET_SYSTEM_PROPERTIES_SUCCESS |
+        NEGOTIATED_SHARED_SECRET_SUCCESS);
     if (bootCompleteStatus == (buf[offset] & bootCompleteStatus)) {
       result = true;
     }
