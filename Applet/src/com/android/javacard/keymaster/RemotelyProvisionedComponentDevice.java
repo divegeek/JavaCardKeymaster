@@ -998,8 +998,7 @@ public class RemotelyProvisionedComponentDevice {
         value = storeDataInst.getOsPatch();
         break;
       case BOOT_PATCH_LEVEL_ID:
-        short len = storeDataInst.getBootPatchLevel(scratchPad, (short) 0);
-        value = KMByteBlob.instance(scratchPad, (short) 0, len);
+        value = storeDataInst.getBootPatchLevel();
         break;
       case VENDOR_PATCH_LEVEL_ID:
         value = storeDataInst.getVendorPatchLevel();

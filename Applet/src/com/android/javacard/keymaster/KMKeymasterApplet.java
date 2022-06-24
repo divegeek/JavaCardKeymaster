@@ -456,7 +456,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       byte[] apduBuffer = apdu.getBuffer();
       byte apduIns = apduBuffer[ISO7816.OFFSET_INS];
-      if (!isKeymintReady(apduIns)) {
+      if (!isKeyMintReady(apduIns)) {
           ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
       }
       switch (apduIns) {
@@ -568,7 +568,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // 1. boot parameters are set,
   // 2. system properties are set and
   // 3. computed the shared secret successfully.
-  private boolean isKeymintReady(byte apduIns) {
+  private boolean isKeyMintReady(byte apduIns) {
     if(kmDataStore.isDeviceReady()) {
       return true;
     }
@@ -1073,7 +1073,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (version < KEYBLOB_CURRENT_VERSION) {
       return true;
     }
-    short bootPatchLevel = getBootPatchLevel(scratchPad);
+    short bootPatchLevel = kmDataStore.getBootPatchLevel();
     // Fill the key-value properties in the scratchpad
     Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 16, (byte) 0);
     Util.setShort(scratchPad, (short) 0, KMType.OS_VERSION);
@@ -3840,15 +3840,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB] = createKeyBlobInstance(SYM_KEY_TYPE);
   }
 
-  protected static short getBootPatchLevel(byte[] scratchPad){
-    Util.arrayFillNonAtomic(scratchPad,(short)0, BOOT_PATCH_LVL_SIZE, (byte)0);
-    short len = kmDataStore.getBootPatchLevel(scratchPad,(short)0);
-    if(len != BOOT_PATCH_LVL_SIZE){
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
-    return KMInteger.uint_32(scratchPad, (short)0);
-  }
-
   // This function is only called from processUpgradeKey command.
   // 1. Update the latest values of OSVersion, OSPatch, VendorPatch and BootPatch in the
   //    KeyBlob's KeyCharacteristics.
@@ -3863,7 +3854,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short osVersion = kmDataStore.getOsVersion();
     short osPatch = kmDataStore.getOsPatch();
     short vendorPatch = kmDataStore.getVendorPatchLevel();
-    short bootPatch = getBootPatchLevel(scratchPad);
+    short bootPatch = kmDataStore.getBootPatchLevel();
     data[SB_PARAMETERS] = KMKeyParameters.makeSbEnforced(
         hwParams, (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
     data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(hwParams, scratchPad);
@@ -3874,7 +3865,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short osVersion = kmDataStore.getOsVersion();
     short osPatch = kmDataStore.getOsPatch();
     short vendorPatch = kmDataStore.getVendorPatchLevel();
-    short bootPatch = getBootPatchLevel(scratchPad);
+    short bootPatch = kmDataStore.getBootPatchLevel();
     data[SB_PARAMETERS] = KMKeyParameters.makeSbEnforced(
         data[KEY_PARAMETERS], (byte) data[ORIGIN], osVersion, osPatch, vendorPatch, bootPatch, scratchPad);
     data[TEE_PARAMETERS] = KMKeyParameters.makeTeeEnforced(data[KEY_PARAMETERS], scratchPad);
