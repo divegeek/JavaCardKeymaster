@@ -18,6 +18,7 @@ public class KMAsn1Parser {
   public static final byte ASN1_PRINTABLE_STRING = 0x13;
   public static final byte ASN1_UNIVERSAL_STRING = 0x1C;
   public static final byte ASN1_BMP_STRING = 0x1E;
+  public static final byte IA5_STRING = 0x16;
 
   public static final byte[] EC_CURVE = {
       0x06,0x08,0x2a,(byte)0x86,0x48,(byte)0xce,0x3d,0x03,
@@ -38,6 +39,12 @@ public class KMAsn1Parser {
   public byte[] COMMON_OID = new byte[] {
     0x06, 0x03, 0x55, 0x04
   };
+
+  public byte[] EMAIL_ADDRESS_OID = new byte[] {
+      0x06, 0x09, 0x2A, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xF7, 0x0D, 0x01, 0x09, 0x01
+  };
+  public static final short MAX_EMAIL_ADD_LEN = 255;
+
   // This array contains the last byte of OID for each oid type.
   // The first 4 bytes are common as shown above in COMMON_OID
   private static final byte[] attributeOIds = {
@@ -49,7 +56,8 @@ public class KMAsn1Parser {
       0x08, /* stateOrProviince COMMON_OID.8 */  
       0x0A, /* organizationName COMMON_OID.10 */ 
       0x0B, /* organizationalUnitName COMMON_OID.11 */  
-      0x0C, /* title COMMON_OID.10 */  
+      0x0C, /* title COMMON_OID.10 */
+      0x29, /* name COMMON_OID.41 */
       0x2A, /* givenName COMMON_OID.42 */ 
       0x2B, /* initials COMMON_OID.43 */  
       0x2C, /* generationQualifier COMMON_OID.44 */  
@@ -59,6 +67,8 @@ public class KMAsn1Parser {
   // https://datatracker.ietf.org/doc/html/rfc5280, RFC 5280, Page 124
   // TODO Specification does not mention about the DN_QUALIFIER_OID max length.
   // So the max limit is set at 64.
+  // For name the RFC 5280 supports up to 32768, as Javacard doesn't support
+  // that much length, the max limit for name is set to 128.
   private static final byte[] attributeValueMaxLen = {
       0x40, /* 1-64 commonName */
       0x28, /* 1-40 surname */
@@ -69,6 +79,7 @@ public class KMAsn1Parser {
       0x40, /* 1-64 organization */
       0x40, /* 1-64 organization unit*/
       0x40, /* 1-64 title */
+      0x29, /* 1-128 name */
       0x10, /* 1-16 givenName */
       0x05, /* 1-5 initials */
       0x03, /* 1-3 gen qualifier */
@@ -97,7 +108,19 @@ public class KMAsn1Parser {
     decodeCommon((short)0, EC_ALGORITHM);
     return decodeEcPrivateKey((short)1);
   }
-  
+
+  /*
+     Name ::= CHOICE { -- only one possibility for now --
+         rdnSequence  RDNSequence }
+     RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
+     RelativeDistinguishedName ::=
+         SET SIZE (1..MAX) OF AttributeTypeAndValue
+     AttributeTypeAndValue ::= SEQUENCE {
+       type     AttributeType,
+       value    AttributeValue }
+     AttributeType ::= OBJECT IDENTIFIER
+     AttributeValue ::= ANY -- DEFINED BY AttributeType
+  */
   public void validateDerSubject(short blob) {
     init(blob);
     header(ASN1_SEQUENCE);
@@ -247,44 +270,54 @@ public class KMAsn1Parser {
     if(Util.arrayCompare(data, cur, EC_CURVE, (short)0, len) != 0) KMException.throwIt(KMError.UNKNOWN_ERROR);
     incrementCursor(len);
   }
-  
+
   private void validateAttributeTypeAndValue() {
-    short start = cur;
-    if (getByte() != OBJECT_IDENTIFIER) {
+    // First byte should be OBJECT_IDENTIFIER, otherwise it is not well-formed DER Subject.
+    if (data[cur] != OBJECT_IDENTIFIER) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
-    short length = getLength();
-    if (length != 3) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    // Check if the OID matches the email address
+    if ((Util.arrayCompare(data, cur, EMAIL_ADDRESS_OID, (short) 0,
+        (short) EMAIL_ADDRESS_OID.length) == 0)) {
+      incrementCursor((short) EMAIL_ADDRESS_OID.length);
+      // Validate the length of the attribute value.
+      if (getByte() != IA5_STRING) {
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
+      }
+      short emailLength = getLength();
+      if (emailLength <= 0 && emailLength > MAX_EMAIL_ADD_LEN) {
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
+      }
+      incrementCursor(emailLength);
+      return;
     }
-    cur = start;
-    boolean found = false;
-    for(short i = 0; i < (short) attributeOIds.length; i++) {
-      if ((Util.arrayCompare(data, cur, COMMON_OID, (short)0, (short) COMMON_OID.length) == 0) &&
-          (attributeOIds[i] == data[(short)(cur + COMMON_OID.length)])) {
+    // Check other OIDs.
+    for (short i = 0; i < (short) attributeOIds.length; i++) {
+      if ((Util.arrayCompare(data, cur, COMMON_OID, (short) 0, (short) COMMON_OID.length) == 0) &&
+          (attributeOIds[i] == data[(short) (cur + COMMON_OID.length)])) {
         incrementCursor((short) (COMMON_OID.length + 1));
         // Validate the length of the attribute value.
         short tag = getByte();
-        if(tag != ASN1_UTF8_STRING &&
+        if (tag != ASN1_UTF8_STRING &&
             tag != ASN1_TELETEX_STRING &&
             tag != ASN1_PRINTABLE_STRING &&
             tag != ASN1_UNIVERSAL_STRING &&
             tag != ASN1_BMP_STRING) {
-           KMException.throwIt(KMError.UNKNOWN_ERROR);
-         }
-        length = getLength();
-        if (length <= 0 && length > attributeValueMaxLen[i]) {
           KMException.throwIt(KMError.UNKNOWN_ERROR);
         }
-        incrementCursor(length);
-        found = true;
-        break;
+        short attrValueLength = getLength();
+        if (attrValueLength <= 0 && attrValueLength > attributeValueMaxLen[i]) {
+          KMException.throwIt(KMError.UNKNOWN_ERROR);
+        }
+        incrementCursor(attrValueLength);
+        return;
       }
     }
-    if (!found) {
-      // None of the attributes matches.
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
+    // If no match is found above then move the cursor to next element.
+    getByte(); // Move Cursor by one byte (OID)
+    incrementCursor(getLength()); // Move cursor to AtrributeTag
+    getByte(); // Move cursor to AttributeValue
+    incrementCursor(getLength()); // Move cursor to next SET element
   }
 
   private short header(short tag){
