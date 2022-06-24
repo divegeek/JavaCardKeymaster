@@ -770,13 +770,11 @@ public class KMKeymintDataStore implements KMUpgradable {
     return deviceBootLocked;
   }
 
-  public short getBootPatchLevel(byte[] buffer, short start) {
+  public short getBootPatchLevel() {
     if (bootPatchLevel == null) {
       KMException.throwIt(KMError.INVALID_DATA);
     }
-    Util.arrayCopyNonAtomic(bootPatchLevel, (short) 0, buffer, start,
-        (short) bootPatchLevel.length);
-    return (short) bootPatchLevel.length;
+    return KMInteger.uint_32(bootPatchLevel, (short) 0);
   }
 
   public void setVerifiedBootHash(byte[] buffer, short start, short length) {

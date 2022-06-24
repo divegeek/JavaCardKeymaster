@@ -57,11 +57,9 @@ public class KMKeyParameters extends KMType {
 	        KMType.ENUM_TAG, KMType.ECCURVE,
 	        KMType.BOOL_TAG, KMType.INCLUDE_UNIQUE_ID,
 	        KMType.BOOL_TAG, KMType.ROLLBACK_RESISTANCE,
-	        KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
 	        KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
 	        KMType.BOOL_TAG, KMType.BOOTLOADER_ONLY,
 	        KMType.UINT_TAG, KMType.MAX_USES_PER_BOOT,
-	        KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
 	    };
 
   private static final short[] swEnforcedTagsArr = {
@@ -79,6 +77,8 @@ public class KMKeyParameters extends KMType {
 	        KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID,
 	        KMType.UINT_TAG, KMType.AUTH_TIMEOUT,
 	        KMType.ENUM_TAG, KMType.USER_AUTH_TYPE,
+          KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
+          KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
 	    };
 
   private static final short[] invalidTagsArr = {

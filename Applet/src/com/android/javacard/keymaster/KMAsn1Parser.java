@@ -18,6 +18,7 @@ public class KMAsn1Parser {
   public static final byte ASN1_PRINTABLE_STRING = 0x13;
   public static final byte ASN1_UNIVERSAL_STRING = 0x1C;
   public static final byte ASN1_BMP_STRING = 0x1E;
+  public static final byte IA5_STRING = 0x16;
 
   public static final byte[] EC_CURVE = {
       0x06,0x08,0x2a,(byte)0x86,0x48,(byte)0xce,0x3d,0x03,
@@ -38,6 +39,12 @@ public class KMAsn1Parser {
   public byte[] COMMON_OID = new byte[] {
     0x06, 0x03, 0x55, 0x04
   };
+
+  public byte[] EMAIL_ADDRESS_OID = new byte[] {
+      0x06, 0x09, 0x2A, (byte) 0x86, 0x48, (byte) 0x86, (byte) 0xF7, 0x0D, 0x01, 0x09, 0x01
+  };
+  public static final short MAX_EMAIL_ADD_LEN = 255;
+
   // This array contains the last byte of OID for each oid type.
   // The first 4 bytes are common as shown above in COMMON_OID
   private static final byte[] attributeOIds = {
@@ -49,7 +56,8 @@ public class KMAsn1Parser {
       0x08, /* stateOrProviince COMMON_OID.8 */  
       0x0A, /* organizationName COMMON_OID.10 */ 
       0x0B, /* organizationalUnitName COMMON_OID.11 */  
-      0x0C, /* title COMMON_OID.10 */  
+      0x0C, /* title COMMON_OID.10 */
+      0x29, /* name COMMON_OID.41 */
       0x2A, /* givenName COMMON_OID.42 */ 
       0x2B, /* initials COMMON_OID.43 */  
       0x2C, /* generationQualifier COMMON_OID.44 */  
@@ -59,6 +67,8 @@ public class KMAsn1Parser {
   // https://datatracker.ietf.org/doc/html/rfc5280, RFC 5280, Page 124
   // TODO Specification does not mention about the DN_QUALIFIER_OID max length.
   // So the max limit is set at 64.
+  // For name the RFC 5280 supports up to 32768, as Javacard doesn't support
+  // that much length, the max limit for name is set to 128.
   private static final byte[] attributeValueMaxLen = {
       0x40, /* 1-64 commonName */
       0x28, /* 1-40 surname */
@@ -69,6 +79,7 @@ public class KMAsn1Parser {
       0x40, /* 1-64 organization */
       0x40, /* 1-64 organization unit*/
       0x40, /* 1-64 title */
+      0x29, /* 1-128 name */
       0x10, /* 1-16 givenName */
       0x05, /* 1-5 initials */
       0x03, /* 1-3 gen qualifier */
@@ -254,24 +265,44 @@ public class KMAsn1Parser {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     short length = getLength();
-    if (length != 3) {
+    // Neither email address OID or Common OID return error.
+    if (length != 3 && length != 9) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     cur = start;
     boolean found = false;
-    for(short i = 0; i < (short) attributeOIds.length; i++) {
-      if ((Util.arrayCompare(data, cur, COMMON_OID, (short)0, (short) COMMON_OID.length) == 0) &&
-          (attributeOIds[i] == data[(short)(cur + COMMON_OID.length)])) {
+    if (length == 9) { // Email Address.
+      // Check email address
+      if ((Util.arrayCompare(data, cur, EMAIL_ADDRESS_OID, (short) 0,
+          (short) EMAIL_ADDRESS_OID.length) == 0)) {
+        incrementCursor((short) EMAIL_ADDRESS_OID.length);
+        // Validate the length of the attribute value.
+        if (getByte() != IA5_STRING) {
+          KMException.throwIt(KMError.UNKNOWN_ERROR);
+        }
+        length = getLength();
+        if (length <= 0 && length > MAX_EMAIL_ADD_LEN) {
+          KMException.throwIt(KMError.UNKNOWN_ERROR);
+        }
+        incrementCursor(length);
+        return;
+      }
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    // Check other OIDs.
+    for (short i = 0; i < (short) attributeOIds.length; i++) {
+      if ((Util.arrayCompare(data, cur, COMMON_OID, (short) 0, (short) COMMON_OID.length) == 0) &&
+          (attributeOIds[i] == data[(short) (cur + COMMON_OID.length)])) {
         incrementCursor((short) (COMMON_OID.length + 1));
         // Validate the length of the attribute value.
         short tag = getByte();
-        if(tag != ASN1_UTF8_STRING &&
+        if (tag != ASN1_UTF8_STRING &&
             tag != ASN1_TELETEX_STRING &&
             tag != ASN1_PRINTABLE_STRING &&
             tag != ASN1_UNIVERSAL_STRING &&
             tag != ASN1_BMP_STRING) {
-           KMException.throwIt(KMError.UNKNOWN_ERROR);
-         }
+          KMException.throwIt(KMError.UNKNOWN_ERROR);
+        }
         length = getLength();
         if (length <= 0 && length > attributeValueMaxLen[i]) {
           KMException.throwIt(KMError.UNKNOWN_ERROR);
