@@ -1459,7 +1459,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } catch (KMException e) {
       KMException.throwIt(KMError.INVALID_ISSUER_SUBJECT_NAME);
     }
-    if (KMByteBlob.cast(issuer).length() > KMType.MAX_SUBJECT_DER_LEN) {
+    if (KMByteBlob.cast(issuer).length() > KMConfigurations.MAX_SUBJECT_DER_LEN) {
       KMException.throwIt(KMError.INVALID_ISSUER_SUBJECT_NAME);
     }
     // If issuer is not present then it is an error
