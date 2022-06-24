@@ -456,7 +456,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       }
       byte[] apduBuffer = apdu.getBuffer();
       byte apduIns = apduBuffer[ISO7816.OFFSET_INS];
-      if (!isKeymintReady(apduIns)) {
+      if (!isKeyMintReady(apduIns)) {
           ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
       }
       switch (apduIns) {
@@ -568,7 +568,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // 1. boot parameters are set,
   // 2. system properties are set and
   // 3. computed the shared secret successfully.
-  private boolean isKeymintReady(byte apduIns) {
+  private boolean isKeyMintReady(byte apduIns) {
     if(kmDataStore.isDeviceReady()) {
       return true;
     }
