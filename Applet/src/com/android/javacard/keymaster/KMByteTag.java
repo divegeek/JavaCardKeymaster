@@ -105,7 +105,7 @@ public class KMByteTag extends KMTag {
         break;
       case CERTIFICATE_SUBJECT_NAME:
       {
-        if (valueLen > MAX_SUBJECT_DER_LEN) {
+        if (valueLen > KMConfigurations.MAX_SUBJECT_DER_LEN) {
           return false;
         }
         KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
