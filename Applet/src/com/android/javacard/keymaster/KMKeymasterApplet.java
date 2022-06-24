@@ -4146,11 +4146,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         data[NONCE]= KMArray.cast(parsedKeyBlob).get((short) 2);
         data[AUTH_TAG] = KMArray.cast(parsedKeyBlob).get((short) 3);
         data[KEY_CHARACTERISTICS] = KMArray.cast(parsedKeyBlob).get((short) 4);
+        data[PUB_KEY] = KMType.INVALID_VALUE;
         if (KMArray.cast(parsedKeyBlob).length() == ASYM_KEY_BLOB_SIZE_V1) {
           data[PUB_KEY] = KMArray.cast(parsedKeyBlob).get((short) 5);
         }
-        data[CUSTOM_TAGS] = KMType.INVALID_VALUE;
-        data[PUB_KEY] = KMType.INVALID_VALUE;
         break;
       case (short) 2:
         data[SECRET] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_SECRET);
