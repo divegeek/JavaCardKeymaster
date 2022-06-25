@@ -282,7 +282,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   public void clean() {
-    Util.arrayFillNonAtomic(tmpArray, (short) 0, (short) 256, (byte) 0);
+    Util.arrayFillNonAtomic(tmpArray, (short) 0, TMP_ARRAY_SIZE, (byte) 0);
   }
 
   private void initECKey(KeyPair ecKeyPair) {
