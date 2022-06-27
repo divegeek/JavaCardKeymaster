@@ -17,8 +17,10 @@
 package com.android.javacard.keymaster;
 
 import com.android.javacard.seprovider.KMAttestationCert;
+import com.android.javacard.seprovider.KMDataStoreConstants;
 import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMException;
+import com.android.javacard.seprovider.KMOperation;
 import com.android.javacard.seprovider.KMSEProvider;
 import javacard.framework.APDU;
 import javacard.framework.Applet;
@@ -28,6 +30,7 @@ import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
+import javacard.security.Signature;
 import javacardx.apdu.ExtendedLength;
 
 /**
@@ -247,12 +250,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // the KeyBlobs if it is changed. please increment this
   // version number whenever you change anything related to
   // KeyBlob (structure, encryption algorithm etc).
-  public static final short KEYBLOB_CURRENT_VERSION = 2;
+  public static final short KEYBLOB_CURRENT_VERSION = 3;
   // KeyBlob Verion 1 constant.
   public static final short KEYBLOB_VERSION_1 = 1;
   // KeyBlob array size constants.
-  public static final byte SYM_KEY_BLOB_SIZE_V2 = 6;
-  public static final byte ASYM_KEY_BLOB_SIZE_V2 = 7;
+  public static final byte SYM_KEY_BLOB_SIZE_V2_V3 = 6;
+  public static final byte ASYM_KEY_BLOB_SIZE_V2_V3 = 7;
   public static final byte SYM_KEY_BLOB_SIZE_V1 = 5;
   public static final byte ASYM_KEY_BLOB_SIZE_V1 = 6;
   public static final byte SYM_KEY_BLOB_SIZE_V0 = 4;
@@ -895,7 +898,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMArray.cast(keyBlob).add((short) 5, byteBlobExp);// PubKey
         break;
       case (short) 2:
-        keyBlob = KMArray.instance(ASYM_KEY_BLOB_SIZE_V2);
+      case (short) 3:  
+        keyBlob = KMArray.instance(ASYM_KEY_BLOB_SIZE_V2_V3);
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_VERSION_OFFSET, KMInteger.exp());
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_SECRET, byteBlobExp);
         KMArray.cast(keyBlob).add(KMKeymasterApplet.KEY_BLOB_AUTH_TAG, byteBlobExp);
@@ -914,10 +918,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short arrayLen = 0;
     switch (keyType) {
       case ASYM_KEY_TYPE:
-        arrayLen = ASYM_KEY_BLOB_SIZE_V2;
+        arrayLen = ASYM_KEY_BLOB_SIZE_V2_V3;
         break;
       case SYM_KEY_TYPE:
-        arrayLen = SYM_KEY_BLOB_SIZE_V2;
+        arrayLen = SYM_KEY_BLOB_SIZE_V2_V3;
         break;
       default:
         KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
@@ -1140,11 +1144,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       byte keyType = getKeyType(data[HW_PARAMETERS]);
       switch (keyType) {
         case ASYM_KEY_TYPE:
-          data[KEY_BLOB] = KMArray.instance(ASYM_KEY_BLOB_SIZE_V2);
+          data[KEY_BLOB] = KMArray.instance(ASYM_KEY_BLOB_SIZE_V2_V3);
           KMArray.cast(data[KEY_BLOB]).add(KEY_BLOB_PUB_KEY, data[PUB_KEY]);
           break;
         case SYM_KEY_TYPE:
-          data[KEY_BLOB] = KMArray.instance(SYM_KEY_BLOB_SIZE_V2);
+          data[KEY_BLOB] = KMArray.instance(SYM_KEY_BLOB_SIZE_V2_V3);
           break;
         default:
           KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
@@ -2630,7 +2634,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     		KMError.INVALID_KEY_BLOB);
 
     //Validate early boot
-    //VTS expects error code EARLY_BOOT_ONLY during begin operation if eary boot ended tag is present
+    //VTS expects error code EARLY_BOOT_ONLY during begin operation if early boot ended tag is present
     if (kmDataStore.getEarlyBootEndedStatus()) {
       KMTag.assertAbsence(data[HW_PARAMETERS], KMType.BOOL_TAG, KMType.EARLY_BOOT_ONLY,
           KMError.EARLY_BOOT_ENDED);
@@ -3889,8 +3893,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[KEY_BLOB_VERSION_DATA_OFFSET] = KMInteger.uint_16(KEYBLOB_CURRENT_VERSION);
     // create custom tags
     data[CUSTOM_TAGS] = KMKeyParameters.makeCustomTags(data[HW_PARAMETERS], scratchPad);
-    // make authorization data
-    makeAuthData(KEYBLOB_CURRENT_VERSION, scratchPad);
     // encrypt the secret and cryptographically attach that to authorization data
     encryptSecret(scratchPad);
     // create key blob array
@@ -3993,6 +3995,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         }
         break;
       case (short) 2:
+      case (short) 3:
         data[SECRET] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_SECRET);
         data[NONCE]= KMArray.cast(parsedKeyBlob).get(KEY_BLOB_NONCE);
         data[AUTH_TAG] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_AUTH_TAG);
@@ -4002,7 +4005,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         data[CUSTOM_TAGS] = KMArray.cast(parsedKeyBlob).get(
             KEY_BLOB_CUSTOM_TAGS);
         data[PUB_KEY] = KMType.INVALID_VALUE;
-        if (KMArray.cast(parsedKeyBlob).length() == ASYM_KEY_BLOB_SIZE_V2) {
+        if (KMArray.cast(parsedKeyBlob).length() == ASYM_KEY_BLOB_SIZE_V2_V3) {
           data[PUB_KEY] = KMArray.cast(parsedKeyBlob).get(KEY_BLOB_PUB_KEY);
         }
         break;
@@ -4026,7 +4029,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       minArraySize = SYM_KEY_BLOB_SIZE_V1;
       break;
     case 2:
-      minArraySize = SYM_KEY_BLOB_SIZE_V2;
+    case 3:	
+      minArraySize = SYM_KEY_BLOB_SIZE_V2_V3;
       break;
     default:
       KMException.throwIt(KMError.INVALID_KEY_BLOB);
@@ -4045,10 +4049,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[HW_PARAMETERS] = KMKeyParameters.makeHwEnforced(data[SB_PARAMETERS], data[TEE_PARAMETERS]);
 
     data[HIDDEN_PARAMETERS] = KMKeyParameters.makeHidden(appId, appData, data[ROT], scratchPad);
-    // make auth data
-    makeAuthData(version, scratchPad);
     // Decrypt Secret and verify auth tag
-    decryptSecret(scratchPad);
+    decryptSecret(scratchPad, version);
     short keyBlobSecretOff = 0;
     switch(version) {
     case 0:
@@ -4075,6 +4077,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       keyBlobSecretOff = (short) 1;
       break;
     case 2:
+    case 3:	
       // V2 KeyBlob
       // KEY_BLOB = [
       //     VERSION,   
@@ -4130,10 +4133,31 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return KMByteBlob.instance(scratchPad, (short) 0, len);
   }
 
-  private void decryptSecret(byte[] scratchPad) {
+  private void decryptSecret(byte[] scratchPad, short version) {
     // derive master key - stored in derivedKey
-    short len = deriveKey(scratchPad);
-        if (!seProvider.aesGCMDecrypt(
+    short len;
+    short authDataOff = 0;
+    short authDataLen = 0;
+    byte[] authDataBuff = null;
+    switch (version) {
+      case 3:
+    	len = deriveKey(scratchPad);
+    	break;
+      
+      case 2:
+      case 1:
+      case 0:
+    	makeAuthData(version, scratchPad);
+    	len = deriveKeyForOldKeyBlobs(scratchPad);
+    	authDataBuff = repository.getHeap();
+    	authDataOff = data[AUTH_DATA];
+      	authDataLen = data[AUTH_DATA_LENGTH];
+      	break;
+     default:
+       KMException.throwIt(KMError.INVALID_KEY_BLOB);
+    	  
+    }
+    if (!seProvider.aesGCMDecrypt(
             KMByteBlob.cast(data[DERIVED_KEY]).getBuffer(),
             KMByteBlob.cast(data[DERIVED_KEY]).getStartOff(),
             KMByteBlob.cast(data[DERIVED_KEY]).length(),
@@ -4144,7 +4168,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(data[NONCE]).getBuffer(),
         KMByteBlob.cast(data[NONCE]).getStartOff(),
         KMByteBlob.cast(data[NONCE]).length(),
-        repository.getHeap(), data[AUTH_DATA], data[AUTH_DATA_LENGTH],
+        authDataBuff, authDataOff, authDataLen,
         KMByteBlob.cast(data[AUTH_TAG]).getBuffer(),
         KMByteBlob.cast(data[AUTH_TAG]).getStartOff(),
         KMByteBlob.cast(data[AUTH_TAG]).length())) {
@@ -4165,7 +4189,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMByteBlob.cast(data[NONCE]).length());
     // derive master key - stored in derivedKey
     short len = deriveKey(scratchPad);
-        len = seProvider.aesGCMEncrypt(
+    len = seProvider.aesGCMEncrypt(
             KMByteBlob.cast(data[DERIVED_KEY]).getBuffer(),
             KMByteBlob.cast(data[DERIVED_KEY]).getStartOff(),
             KMByteBlob.cast(data[DERIVED_KEY]).length(),
@@ -4177,9 +4201,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMByteBlob.cast(data[NONCE]).getBuffer(),
             KMByteBlob.cast(data[NONCE]).getStartOff(),
             KMByteBlob.cast(data[NONCE]).length(),
-            repository.getHeap(),
-            data[AUTH_DATA],
-            data[AUTH_DATA_LENGTH],
+            null,
+            (short)0,
+            (short)0,
             KMByteBlob.cast(data[AUTH_TAG]).getBuffer(),
             KMByteBlob.cast(data[AUTH_TAG]).getStartOff(),
             KMByteBlob.cast(data[AUTH_TAG]).length());
@@ -4275,7 +4299,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     data[AUTH_DATA_LENGTH] = len;
   }
 
-  private static short deriveKey(byte[] scratchPad) {
+  private static short deriveKeyForOldKeyBlobs(byte[] scratchPad) {
     // KeyDerivation:
     // 1. Do HMAC Sign, Auth data.
     // 2. HMAC Sign generates an output of 32 bytes length.
@@ -4296,6 +4320,77 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     return len;
   }
 
+  private static short deriveKey(byte[] scratchPad) {
+    // For KeyBlob V3: Auth Data includes HW_PARAMETERS, HIDDEN_PARAMETERS, CUSTOM_TAGS, VERSION and PUB_KEY.
+    short index = 0;
+    Util.arrayFillNonAtomic(scratchPad, (short) 0, (short) 10, (byte) 0);
+    byte keyType = getKeyType(data[HW_PARAMETERS]);
+    // Copy the relevant parameters in the scratchPad in the order
+    // 1. HW_PARAMETERS
+    // 2. HIDDEN_PARAMETERS
+    // 3. CUSTOM_TAGS
+    // 3. VERSION ( Only Version >= 1)
+    // 4. PUB_KEY ( Only for Asymmetric Keys)
+    short numParams = 4;
+    Util.setShort(scratchPad, (short) 0, KMKeyParameters.cast(data[HW_PARAMETERS]).getVals());
+    Util.setShort(scratchPad, (short) 2, KMKeyParameters.cast(data[HIDDEN_PARAMETERS]).getVals());
+    Util.setShort(scratchPad, (short) 4, KMKeyParameters.cast(data[CUSTOM_TAGS]).getVals());
+    Util.setShort(scratchPad, (short) 6, data[KEY_BLOB_VERSION_DATA_OFFSET]);
+    // For Asymmetric Keys include the PUB_KEY.
+    if (keyType == ASYM_KEY_TYPE) {
+      numParams = 5;
+      Util.setShort(scratchPad, (short) 8, data[PUB_KEY]);
+    }
+    short prevReclaimIndex = repository.getHeapReclaimIndex();
+    short authIndex = repository.allocReclaimableMemory(MAX_AUTH_DATA_SIZE);
+    Util.arrayFillNonAtomic(repository.getHeap(), authIndex, MAX_AUTH_DATA_SIZE, (byte) 0);
+    short len = 0;
+    KMOperation operation = null;
+    try {
+      operation = seProvider.initSymmetricOperation(
+			KMType.SIGN,
+			KMType.HMAC,
+			KMType.SHA2_256,
+			KMType.PADDING_NONE,
+			(byte)KMType.INVALID_VALUE,
+            (Object)kmDataStore.getMasterKey(),
+            KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY,
+            (byte[])null,
+            (short)0,
+            (short)0,
+            (short)0, false);
+
+      byte arrayHeader = (byte) 0x80;
+      arrayHeader |= (byte) numParams;
+      ((byte[])repository.getHeap())[authIndex] = arrayHeader;
+      operation.update(repository.getHeap(), authIndex, (short) 1);
+
+      while (index < numParams) {
+        short tag = Util.getShort(scratchPad, (short) (index * 2));
+        len = encoder.encode(tag, repository.getHeap(), (short) authIndex, prevReclaimIndex);
+        operation.update(repository.getHeap(), authIndex, len);
+        index++;
+      }
+      repository.reclaimMemory(MAX_AUTH_DATA_SIZE);
+      // KeyDerivation:
+      // 1. Do HMAC Sign, Auth data.
+      // 2. HMAC Sign generates an output of 32 bytes length.
+      // Consume only first 16 bytes as derived key.
+      // Hmac sign.
+      len = operation.sign(scratchPad, (short)0, (short)0, scratchPad, (short)0);
+    } finally {
+      if (operation != null) {
+        operation.abort();	
+      }
+    }
+    if (len < 16) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
+    len = 16;
+    data[DERIVED_KEY] = KMByteBlob.instance(scratchPad, (short)0, len);
+    return len;
+  }
+   
   public static void sendResponse(APDU apdu, short err) {
     short resp = KMArray.instance((short)1);
     err = KMError.translate(err);
