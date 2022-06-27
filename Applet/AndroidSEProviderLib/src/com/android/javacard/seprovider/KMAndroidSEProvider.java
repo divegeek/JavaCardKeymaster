@@ -80,6 +80,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   private KMRsaOAEPEncoding rsaOaepDecipher;
   private KMPoolManager poolMgr;
 
+  private KMOperationImpl globalOperation;
   // Entropy
   private RandomData rng;
 
@@ -112,6 +113,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     kdf = Signature.getInstance(Signature.ALG_AES_CMAC_128, false);
     hmacSignature = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
 
+    globalOperation = new KMOperationImpl(); 
+
     // Temporary transient array created to use locally inside functions.
     tmpArray = JCSystem.makeTransientByteArray(TMP_ARRAY_SIZE,
         JCSystem.CLEAR_ON_DESELECT);
@@ -131,7 +134,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   public void clean() {
-    Util.arrayFillNonAtomic(tmpArray, (short) 0, (short) 256, (byte) 0);
+    Util.arrayFillNonAtomic(tmpArray, (short) 0, TMP_ARRAY_SIZE, (byte) 0);
   }
 
   public AESKey createAESKey(short keysize) {
@@ -352,7 +355,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
           false);
     }
     aesGcmCipher.init(key, Cipher.MODE_ENCRYPT, nonce, nonceStart, nonceLen);
-    aesGcmCipher.updateAAD(authData, authDataStart, authDataLen);
+    if (authDataLen != 0) {
+      aesGcmCipher.updateAAD(authData, authDataStart, authDataLen);
+    }
     short ciphLen = aesGcmCipher.doFinal(secret, secretStart, secretLen,
         encSecret, encSecretStart);
     aesGcmCipher.retrieveTag(authTag, authTagStart, authTagLen);
@@ -398,7 +403,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
     boolean verification = false;
     AESKey key = createAESKey(aesKey, aesKeyStart, aesKeyLen);
     aesGcmCipher.init(key, Cipher.MODE_DECRYPT, nonce, nonceStart, nonceLen);
-    aesGcmCipher.updateAAD(authData, authDataStart, authDataLen);
+    if (authDataLen != 0) {
+      aesGcmCipher.updateAAD(authData, authDataStart, authDataLen);
+    }
     // encrypt the secret
     aesGcmCipher.doFinal(encSecret, encSecretStart, encSecretLen, secret,
         secretStart);
@@ -479,9 +486,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
     try {
       KMAESKey aesKey = (KMAESKey) masterkey;
       short keyLen = (short) (aesKey.getKeySizeBits() / 8);
-      byte[] keyData = new byte[keyLen];
-      aesKey.getKey(keyData, (short) 0);
-      return hmacSign(keyData, (short) 0, keyLen, data, dataStart, dataLength,
+      aesKey.getKey(tmpArray, (short) 0);
+      return hmacSign(tmpArray, (short) 0, keyLen, data, dataStart, dataLength,
           signature, signatureStart);
     } finally {
       clean();
@@ -696,6 +702,43 @@ public class KMAndroidSEProvider implements KMSEProvider {
     }
     return opr;
   }
+
+  @Override
+  public KMOperation initSymmetricOperation(byte purpose, byte alg, byte digest, byte padding, byte blockMode,
+	      Object key, byte interfaceType, byte[] ivBuf, short ivStart, short ivLength, short macLength,
+	      boolean oneShot) {
+    short keyLen = 0;
+    globalOperation.setPurpose(purpose);
+    globalOperation.setAlgorithmType(alg);
+    globalOperation.setPaddingAlgorithm(padding);
+    globalOperation.setBlockMode(blockMode);
+    try {
+      switch (interfaceType) {
+        case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
+	  KMAESKey aesKey = (KMAESKey) key;
+	  keyLen = (short) (aesKey.getKeySizeBits() / 8);
+	  aesKey.getKey(tmpArray, (short) 0);
+	  break;
+	
+	default:
+	  KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+	
+      switch (alg) {
+        case KMType.HMAC:
+	  HMACKey hmackey = createHMACKey(tmpArray, (short)0, keyLen);
+	  globalOperation.setSignature(hmacSignature);
+	  globalOperation.init(hmackey, digest, null, (short)0, (short)0);
+	  break;
+	
+	default:
+	  KMException.throwIt(KMError.INVALID_ARGUMENT);  
+      }  
+    } finally {
+      clean();
+    }
+    return globalOperation;
+  }  
 
   @Override
   public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {

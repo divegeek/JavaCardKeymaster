@@ -359,10 +359,12 @@ public class KMJCardSimulator implements KMSEProvider {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
     }
-    // Create auth data
-    byte[] aad = new byte[authDataLen];
-    Util.arrayCopyNonAtomic(authData, authDataStart, aad, (short) 0, authDataLen);
-    cipher.updateAAD(aad);
+    if (authDataLen != 0) {
+      // Create auth data
+      byte[] aad = new byte[authDataLen];
+      Util.arrayCopyNonAtomic(authData, authDataStart, aad, (short) 0, authDataLen);
+      cipher.updateAAD(aad);
+    }
     // Encrypt secret
     short len = 0;
     byte[] outputBuf = new byte[cipher.getOutputSize(secretLen)];
@@ -444,11 +446,13 @@ public class KMJCardSimulator implements KMSEProvider {
       e.printStackTrace();
       CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
     }
-    // Create auth data
-    byte[] aad = new byte[authDataLen];
-    Util.arrayCopyNonAtomic(authData, authDataStart, aad, (short) 0,
+    if (authDataLen != 0) {
+      // Create auth data
+      byte[] aad = new byte[authDataLen];
+      Util.arrayCopyNonAtomic(authData, authDataStart, aad, (short) 0,
         authDataLen);
-    cipher.updateAAD(aad);
+      cipher.updateAAD(aad);
+    }
     // Append the auth tag at the end of data
     byte[] inputBuf = new byte[(short) (encSecretLen + authTagLen)];
     Util.arrayCopyNonAtomic(encSecret, encSecretStart, inputBuf, (short) 0,
@@ -664,6 +668,39 @@ public class KMJCardSimulator implements KMSEProvider {
         CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
     }
     return null;
+  }
+
+  @Override
+  public KMOperation initSymmetricOperation(byte purpose, byte alg, byte digest, byte padding, byte blockMode,
+	      Object key, byte interfaceType, byte[] ivBuf, short ivStart, short ivLength, short macLength,
+	      boolean oneShot) {
+    KMOperationImpl operation = null;
+    short keyLen = 0;
+    byte[] keyData = null;
+   
+    switch (interfaceType) {
+      case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
+        KMAESKey aesKey = (KMAESKey) key;
+    	keyLen = (short) (aesKey.getKeySizeBits() / 8);
+        keyData = new byte[keyLen];
+        aesKey.getKey(keyData, (short) 0);
+        break;
+
+      default:
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+
+    switch (alg){
+      case KMType.HMAC:
+        Signature signerVerifier = createHmacSignerVerifier(purpose, digest, keyData, (short)0,
+    	            keyLen);
+        operation =  new KMOperationImpl(signerVerifier);
+        break;
+
+      default:
+        KMException.throwIt(KMError.INVALID_ARGUMENT);  
+    }
+    return operation;    
   }
 
   @Override
