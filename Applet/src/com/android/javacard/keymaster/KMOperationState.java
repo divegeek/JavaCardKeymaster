@@ -311,8 +311,9 @@ public class KMOperationState {
     short padding = getPadding();
     short blockMode = getBlockMode();
 
-    if (alg == KMType.RSA && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN) {
-      return KMType.BUF_RSA_NO_DIGEST;
+    if (alg == KMType.RSA && ((digest == KMType.DIGEST_NONE && purpose == KMType.SIGN) ||
+    				purpose == KMType.DECRYPT)) {
+      return KMType.BUF_RSA_DECRYPT_OR_NO_DIGEST;
     }
 
     if (alg == KMType.EC && digest == KMType.DIGEST_NONE && purpose == KMType.SIGN) {

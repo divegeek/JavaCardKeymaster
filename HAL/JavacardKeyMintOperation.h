@@ -41,11 +41,11 @@ using std::vector;
 
 // Bufferig modes for update
 enum class BufferingMode : int32_t {
-    NONE = 0,           // Send everything to javacard - most of the assymteric operations
-    RSA_NO_DIGEST = 1,  // Buffer everything in update upto 256 bytes and send in finish. If
-                        // input data is greater then 256 bytes then it is an error. Javacard
-                        // will further check according to exact key size and crypto provider.
-    EC_NO_DIGEST = 2,   // Buffer upto 65 bytes and then truncate. Javacard will further truncate
+    NONE = 0,                     // Send everything to javacard - most of the assymteric operations
+    RSA_DECRYPT_OR_NO_DIGEST = 1, // Buffer everything in update upto 256 bytes and send in finish. If
+                                  // input data is greater then 256 bytes then it is an error. Javacard
+                                  // will further check according to exact key size and crypto provider.
+    EC_NO_DIGEST = 2,             // Buffer upto 65 bytes and then truncate. Javacard will further truncate
                         // upto exact keysize.
     BUF_AES_ENCRYPT_PKCS7_BLOCK_ALIGNED = 3, // Buffer 16 bytes.
     BUF_AES_DECRYPT_PKCS7_BLOCK_ALIGNED = 4, // Buffer 16 bytes.

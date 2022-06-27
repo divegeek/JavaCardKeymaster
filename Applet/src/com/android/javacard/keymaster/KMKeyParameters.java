@@ -77,8 +77,8 @@ public class KMKeyParameters extends KMType {
 	        KMType.ULONG_ARRAY_TAG, KMType.USER_SECURE_ID,
 	        KMType.UINT_TAG, KMType.AUTH_TIMEOUT,
 	        KMType.ENUM_TAG, KMType.USER_AUTH_TYPE,
-          KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
-          KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
+                KMType.BOOL_TAG, KMType.UNLOCKED_DEVICE_REQUIRED,
+                KMType.BOOL_TAG, KMType.TRUSTED_CONFIRMATION_REQUIRED,
 	    };
 
   private static final short[] invalidTagsArr = {
