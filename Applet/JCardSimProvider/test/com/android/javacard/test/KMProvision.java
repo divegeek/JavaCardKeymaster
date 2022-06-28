@@ -260,8 +260,8 @@ public class KMProvision {
         );
     Assert.assertEquals(lengths[1], 65);
     Assert.assertTrue("Private key length should not be > 32", (lengths[0] <= 32));
-    Util.arrayCopyNonAtomic(privKey, (short) 0, RKP_DK_PRIV, (short) (32 - lengths[0]), (short) 32);
-    Util.arrayCopyNonAtomic(pubKey, (short) 0, RKP_DK_PUB, (short) 0, (short) 65);
+    Util.arrayCopyNonAtomic(privKey, (short) 0, RKP_DK_PRIV, (short) (32 - lengths[0]), lengths[0]);
+    Util.arrayCopyNonAtomic(pubKey, (short) 0, RKP_DK_PUB, (short) 0, lengths[1]);
     short arr = KMArray.instance((short) 1);
     KMArray.cast(arr).add((short) 0, coseKey);
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder,
