@@ -2509,6 +2509,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
               KMException.throwIt(KMError.UNSUPPORTED_MGF_DIGEST);
             }
             op.setMgfDigest((byte) mgfDigest);
+          } else {
+            op.setMgfDigest(KMType.SHA1);
           }
         }
         op.setPadding((byte) param);
