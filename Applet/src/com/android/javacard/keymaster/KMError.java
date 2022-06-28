@@ -123,12 +123,12 @@ public class KMError {
       case CRYPTO_INVALID_INIT:
       case CRYPTO_UNINITIALIZED_KEY:
       case GENERIC_UNKNOWN_ERROR:
+      case CMD_NOT_ALLOWED:
       case UNKNOWN_ERROR:
         return UNKNOWN_ERROR;
       case CRYPTO_NO_SUCH_ALGORITHM:
         return UNSUPPORTED_ALGORITHM;
       case UNSUPPORTED_INSTRUCTION:
-      case CMD_NOT_ALLOWED:
       case SW_WRONG_LENGTH:
         return UNIMPLEMENTED;
     }
