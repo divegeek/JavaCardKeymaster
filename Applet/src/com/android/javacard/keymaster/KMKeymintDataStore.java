@@ -910,7 +910,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     element.readObject(); // pop verifiedHash
     element.readObject(); //pop bootKey
     element.readObject(); // pop bootPatchLevel
-    additionalCertChain = (byte[]) element.readObject(); //
+    additionalCertChain = (byte[]) element.readObject();
     bcc = (byte[]) element.readObject();
 
     // Read Key Objects
@@ -953,12 +953,13 @@ public class KMKeymintDataStore implements KMUpgradable {
     short dInex = repository.allocReclaimableMemory((short)2);
     byte data[] = repository.getHeap();
     getProvisionStatus(dataTable, data, dInex);
-    JCSystem.beginTransaction();
-    provisionStatus = (short)( data[dInex] & 0x00ff);
+    short pStatus = (short)( data[dInex] & 0x00ff);
     if( KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED 
-    		== (provisionStatus & KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED)) {
-      provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SE_LOCKED;
+          == (pStatus & KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED)) {
+      pStatus |= KMKeymasterApplet.PROVISION_STATUS_SE_LOCKED;
     }
+    JCSystem.beginTransaction();
+    provisionStatus = pStatus;
     JCSystem.commitTransaction();
     repository.reclaimMemory((short)2);
   }
@@ -980,12 +981,10 @@ public class KMKeymintDataStore implements KMUpgradable {
     // BCC - 1
     // oemRootPublicKey - 1
     return (short) (11 +
-        seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY) +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY) +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY) +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR) +
-            		seProvider.getBackupObjectCount(
-            		        KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY));
+        seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY));
   }
   
 }
