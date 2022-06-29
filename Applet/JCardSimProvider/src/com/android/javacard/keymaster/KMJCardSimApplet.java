@@ -71,9 +71,19 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     new KMJCardSimApplet().register();
   }
 
+  public void handleDeviceBooted() {
+    if(seProvider.isBootSignalEventSupported() &&
+        seProvider.isDeviceRebooted()) {
+      kmDataStore.clearDeviceBootStatus();
+      super.reboot();
+      seProvider.clearDeviceBooted(true);
+    }
+  }
+
   @Override
   public void process(APDU apdu) {
     try {
+      handleDeviceBooted();
       // If this is select applet apdu which is selecting this applet then return
       if (apdu.isISOInterindustryCLA()) {
         if (selectingApplet()) {

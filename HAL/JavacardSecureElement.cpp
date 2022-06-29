@@ -45,6 +45,21 @@ keymaster_error_t JavacardSecureElement::initializeJavacard() {
     return err;
 }
 
+keymaster_error_t JavacardSecureElement::sendEarlyBootEndedEvent(bool eventTriggered) {
+    isEarlyBootEventPending |= eventTriggered;
+    if (!isEarlyBootEventPending) {
+        return KM_ERROR_OK;
+    }
+    auto [item, err] = sendRequest(Instruction::INS_EARLY_BOOT_ENDED_CMD);
+    if (err != KM_ERROR_OK) {
+        // Incase of failure cache the event and send in the next immediate request to Applet.
+        isEarlyBootEventPending = true;
+        return err;
+    }
+    isEarlyBootEventPending = false;
+    return KM_ERROR_OK;
+}
+
 keymaster_error_t JavacardSecureElement::constructApduMessage(Instruction& ins,
                                                               std::vector<uint8_t>& inputData,
                                                               std::vector<uint8_t>& apduOut) {

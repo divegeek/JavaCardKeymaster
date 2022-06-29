@@ -31,6 +31,7 @@ public class KMDecoder {
   private static final short ARRAY_TYPE = 0x80;
   private static final short MAP_TYPE = 0xA0;
   private static final short SIMPLE_VALUE_TYPE = 0xE0;
+  private static final short SEMANTIC_TAG_TYPE = 0xC0;
 
   // masks
   private static final short ADDITIONAL_MASK = 0x1F;
@@ -98,6 +99,8 @@ public class KMDecoder {
         return decodeInteger(exp);
       case KMType.SIMPLE_VALUE_TYPE:
         return decodeSimpleValue(exp);
+      case KMType.SEMANTIC_TAG_TYPE:
+        return decodeSemanticTagValue(exp);
       case KMType.NEG_INTEGER_TYPE:
         return decodeNegInteger(exp);
       case KMType.ARRAY_TYPE:
@@ -442,7 +445,7 @@ public class KMDecoder {
     short type;
     short obj;
     // check whether array contains one type of objects or multiple types
-    if (KMArray.cast(exp).containedType() == 0) {// multiple types specified by expression.
+    if (KMArray.cast(exp).containedType() == KMType.INVALID_VALUE) {// multiple types specified by expression.
       if (KMArray.cast(exp).length() != KMArray.ANY_ARRAY_LENGTH) {
         if (KMArray.cast(exp).length() != payloadLength) {
           ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -534,7 +537,6 @@ public class KMDecoder {
   }
 
   private short decodeSimpleValue(short exp) {
-    short inst;
     short startOff = scratchBuf[START_OFFSET];
     byte[] buffer = (byte[]) bufferRef[0];
     if ((buffer[startOff] & MAJOR_TYPE_MASK) != SIMPLE_VALUE_TYPE) {
@@ -545,15 +547,23 @@ public class KMDecoder {
     return KMSimpleValue.instance(addInfo);
   }
 
-  private short decodeInteger(short exp) {
+  private short decodeSemanticTagValue(short exp) {
+    // Decode tag.
+    short tag = readMajorTypeWithInteger(exp, SEMANTIC_TAG_TYPE, UINT32_LENGTH);
+    // Decode value pointer.
+    short valuePtr = decode(KMSemanticTag.cast(exp).getValuePtr());
+    return KMSemanticTag.instance(tag, valuePtr);
+  }
+
+  private short readMajorTypeWithInteger(short exp, short majorType, short maxLimit) {
     short inst;
     short startOff = scratchBuf[START_OFFSET];
     byte[] buffer = (byte[]) bufferRef[0];
-    if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE) {
+    if ((buffer[startOff] & MAJOR_TYPE_MASK) != majorType) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
     short len = (short) (buffer[startOff] & ADDITIONAL_MASK);
-    if (len > UINT64_LENGTH) {
+    if (len > maxLimit) {
       ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
     }
     incrementStartOff((short) 1);
@@ -576,6 +586,10 @@ public class KMDecoder {
       incrementStartOff((short) 8);
     }
     return inst;
+  }
+
+  private short decodeInteger(short exp) {
+    return readMajorTypeWithInteger(exp, UINT_TYPE, UINT64_LENGTH);
   }
 
   private short decodeNegIntegerValue(byte addInfo, byte[] buf, short startOffset) {

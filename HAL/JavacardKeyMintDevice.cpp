@@ -43,7 +43,7 @@ using namespace ::keymaster;
 using namespace ::keymint::javacard;
 
 ScopedAStatus JavacardKeyMintDevice::defaultHwInfo(KeyMintHardwareInfo* info) {
-    info->versionNumber = 1;
+    info->versionNumber = 2;
     info->keyMintAuthorName = "Google";
     info->keyMintName = "JavacardKeymintDevice";
     info->securityLevel = securitylevel_;
@@ -299,7 +299,10 @@ ScopedAStatus JavacardKeyMintDevice::begin(KeyPurpose purpose, const std::vector
     cbor_.addHardwareAuthToken(array, token);
 
     // Send earlyBootEnded if there is any pending earlybootEnded event.
-    handleSendEarlyBootEndedEvent();
+    auto retErr = card_->sendEarlyBootEndedEvent(false);
+    if (retErr != KM_ERROR_OK) {
+        return km_utils::kmError2ScopedAStatus(retErr);;
+    }
 
     auto [item, err] = card_->sendRequest(Instruction::INS_BEGIN_OPERATION_CMD, array);
     if (err != KM_ERROR_OK) {
@@ -342,20 +345,10 @@ JavacardKeyMintDevice::deviceLocked(bool passwordOnly,
     return ScopedAStatus::ok();
 }
 
-void JavacardKeyMintDevice::handleSendEarlyBootEndedEvent() {
-    if (isEarlyBootEventPending) {
-        LOG(INFO) << "JavacardKeyMintDevice::handleSendEarlyBootEndedEvent send earlyBootEnded Event.";
-        if (earlyBootEnded().isOk()) {
-            isEarlyBootEventPending = false;
-        }
-    }
-}
-
 ScopedAStatus JavacardKeyMintDevice::earlyBootEnded() {
-    auto [item, err] = card_->sendRequest(Instruction::INS_EARLY_BOOT_ENDED_CMD);
+    auto err = card_->sendEarlyBootEndedEvent(true);
     if (err != KM_ERROR_OK) {
-        // Incase of failure cache the event and send in the next immediate request to Applet.
-        isEarlyBootEventPending = true;
+        LOG(ERROR) << "Error in sending earlyBootEndedEvent.";
         return km_utils::kmError2ScopedAStatus(err);
     }
     return ScopedAStatus::ok();
@@ -421,4 +414,40 @@ ScopedAStatus JavacardKeyMintDevice::convertStorageKeyToEphemeral(
     std::vector<uint8_t>* /* ephemeralKeyBlob */) {
     return km_utils::kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED);
 }
+
+ScopedAStatus JavacardKeyMintDevice::getRootOfTrustChallenge(
+    array<uint8_t, 16>* challenge) {
+    auto [item, err] = card_->sendRequest(Instruction::INS_GET_ROT_CHALLENGE_CMD);
+    if (err != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in sending in getRootOfTrustChallenge.";
+        return km_utils::kmError2ScopedAStatus(err);
+    }
+    auto optChallenge = cbor_.getByteArrayVec(item, 1);
+    if (!optChallenge) {
+        LOG(ERROR) << "Error in sending in upgradeKey.";
+        return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+    }
+    LOG(ERROR) << "JavacardKeyMintDevice::getRootOfTrustChallenge success";
+    std::move(optChallenge->begin(), optChallenge->begin() + 16, challenge->begin());
+    return ScopedAStatus::ok();
+}
+
+ScopedAStatus JavacardKeyMintDevice::getRootOfTrust(const array<uint8_t, 16>& /*challenge*/,
+                                 vector<uint8_t>* /*rootOfTrust*/) {
+    return km_utils::kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED);
+}
+
+ScopedAStatus JavacardKeyMintDevice::sendRootOfTrust(const vector<uint8_t>& rootOfTrust) {
+    cppbor::Array request;
+    request.add(EncodedItem(rootOfTrust)); // taggedItem.
+    LOG(ERROR) << "JavacardKeyMintDevice::sendRootOfTrust";
+    auto [item, err] = card_->sendRequest(Instruction::INS_SEND_ROT_DATA_CMD, request);
+    if (err != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in sending in sendRootOfTrust.";
+        return km_utils::kmError2ScopedAStatus(err);
+    }
+    LOG(ERROR) << "JavacardKeyMintDevice::sendRootOfTrust success";
+    return ScopedAStatus::ok();
+}
+
 }  // namespace aidl::android::hardware::security::keymint

@@ -41,7 +41,7 @@ public class KMInteger extends KMType {
     KMType.instanceTable[KM_INTEGER_OFFSET] = ptr;
     return prototype;
   }
-
+   //| TYPE(1) | LEN(2) | DATA(4 / 8) |
   public static short exp() {
     return KMType.exp(INTEGER_TYPE);
   }

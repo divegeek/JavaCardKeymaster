@@ -85,6 +85,10 @@ public class KMJCardSimulator implements KMSEProvider {
   private static byte[] entropyPool;
   private static byte[] rndNum;
   private KMHmacKey preSharedKey;
+  // Below two flags are added for Functional test.
+  public static boolean isDeviceRebooted = false;
+  public static boolean isBootEventSignalSupported = false;
+
 
   private static KMJCardSimulator jCardSimulator = null;
 
@@ -1510,21 +1514,20 @@ public KMOperation getRkpOperation(byte purpose, byte alg,
       break;
     }
     return opr;
-}
+  }
 
-@Override
-public boolean isBootSignalEventSupported() {
-	return false;
-}
+  @Override
+  public boolean isBootSignalEventSupported() {
+    return isBootEventSignalSupported;
+  }
 
-@Override
-public boolean isDeviceRebooted() {
-	return false;
-}
+  @Override
+  public boolean isDeviceRebooted() {
+    return isDeviceRebooted;
+  }
 
-@Override
-public void clearDeviceBooted(boolean resetBootFlag) {
-	// TODO Auto-generated method stub
-	
-}
+  @Override
+  public void clearDeviceBooted(boolean resetBootFlag) {
+    isDeviceRebooted = false;
+  }
 }

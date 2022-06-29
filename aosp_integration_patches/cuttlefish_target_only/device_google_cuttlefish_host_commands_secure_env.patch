@@ -1,0 +1,176 @@
+diff --git a/host/commands/secure_env/Android.bp b/host/commands/secure_env/Android.bp
+index cd6e5a00b..38476019a 100644
+--- a/host/commands/secure_env/Android.bp
++++ b/host/commands/secure_env/Android.bp
+@@ -51,6 +51,7 @@ cc_defaults {
+     ],
+     cflags: [
+         "-fno-rtti", // Required for libkeymaster_portable
++        "-DSW_KM_ENFORCEMENT"
+     ],
+ }
+ 
+diff --git a/host/commands/secure_env/tpm_keymaster_enforcement.cpp b/host/commands/secure_env/tpm_keymaster_enforcement.cpp
+index 82d08d9a9..c5d441044 100644
+--- a/host/commands/secure_env/tpm_keymaster_enforcement.cpp
++++ b/host/commands/secure_env/tpm_keymaster_enforcement.cpp
+@@ -18,13 +18,26 @@
+ #include <android-base/endian.h>
+ #include <android-base/logging.h>
+ 
++#ifdef SW_KM_ENFORCEMENT
++#include <openssl/hmac.h>
++
++#include <keymaster/UniquePtr.h>
++#include <keymaster/km_openssl/ckdf.h>
++#include <keymaster/km_openssl/openssl_err.h>
++#include <keymaster/km_openssl/openssl_utils.h>
++#endif
+ #include "host/commands/secure_env/primary_key_builder.h"
+ #include "host/commands/secure_env/tpm_hmac.h"
+ #include "host/commands/secure_env/tpm_key_blob_maker.h"
+ #include "host/commands/secure_env/tpm_random_source.h"
+ 
+ namespace cuttlefish {
+-
++#ifdef SW_KM_ENFORCEMENT
++using keymaster::OpenSslObjectDeleter;
++using keymaster::TranslateLastOpenSslError;
++using keymaster::UniquePtr;
++using keymaster::KeymasterKeyBlob;
++#endif
+ using keymaster::HmacSharingParameters;
+ using keymaster::HmacSharingParametersArray;
+ using keymaster::KeymasterBlob;
+@@ -32,7 +45,45 @@ using keymaster::KeymasterEnforcement;
+ using keymaster::km_id_t;
+ using keymaster::VerifyAuthorizationRequest;
+ using keymaster::VerifyAuthorizationResponse;
++#ifdef SW_KM_ENFORCEMENT
++constexpr uint8_t kFakeKeyAgreementKey[32] = {};
++constexpr const char* kSharedHmacLabel = "KeymasterSharedMac";
++constexpr const char* kMacVerificationString = "Keymaster HMAC Verification";
++#endif
+ namespace {
++#ifdef SW_KM_ENFORCEMENT
++DEFINE_OPENSSL_OBJECT_POINTER(HMAC_CTX);
++
++keymaster_error_t hmacSha256(const keymaster_key_blob_t& key, const keymaster_blob_t data_chunks[],
++                             size_t data_chunk_count, KeymasterBlob* output) {
++    if (!output) return KM_ERROR_UNEXPECTED_NULL_POINTER;
++
++    unsigned digest_len = SHA256_DIGEST_LENGTH;
++    if (!output->Reset(digest_len)) return KM_ERROR_MEMORY_ALLOCATION_FAILED;
++
++    HMAC_CTX_Ptr ctx(HMAC_CTX_new());
++    if (!HMAC_Init_ex(ctx.get(), key.key_material, key.key_material_size, EVP_sha256(),
++                      nullptr /* engine*/)) {
++        return TranslateLastOpenSslError();
++    }
++
++    for (size_t i = 0; i < data_chunk_count; i++) {
++        auto& chunk = data_chunks[i];
++        if (!HMAC_Update(ctx.get(), chunk.data, chunk.data_length)) {
++            return TranslateLastOpenSslError();
++        }
++    }
++
++    if (!HMAC_Final(ctx.get(), output->writable_data(), &digest_len)) {
++        return TranslateLastOpenSslError();
++    }
++
++    if (digest_len != output->data_length) return KM_ERROR_UNKNOWN_ERROR;
++
++    return KM_ERROR_OK;
++}
++#endif
++
+ inline bool operator==(const keymaster_blob_t& a, const keymaster_blob_t& b) {
+   if (!a.data_length && !b.data_length) return true;
+   if (!(a.data && b.data)) return a.data == b.data;
+@@ -175,6 +226,38 @@ keymaster_error_t TpmKeymasterEnforcement::GetHmacSharingParameters(
+ 
+ keymaster_error_t TpmKeymasterEnforcement::ComputeSharedHmac(
+     const HmacSharingParametersArray& hmac_array, KeymasterBlob* sharingCheck) {
++#ifdef SW_KM_ENFORCEMENT
++  size_t num_chunks = hmac_array.num_params * 2;
++  UniquePtr<keymaster_blob_t[]> context_chunks(new (std::nothrow) keymaster_blob_t[num_chunks]);
++  if (!context_chunks.get()) return KM_ERROR_MEMORY_ALLOCATION_FAILED;
++  bool found_mine = false;
++  auto context_chunks_pos = context_chunks.get();
++  for (auto& params :
++       array_range(hmac_array.params_array, hmac_array.num_params)) {
++    *context_chunks_pos++ = params.seed;
++    *context_chunks_pos++ = {params.nonce, sizeof(params.nonce)};
++    found_mine = found_mine || params == saved_params_;
++  }
++  assert(context_chunks_pos - num_chunks == context_chunks.get());
++
++  if (!found_mine) return KM_ERROR_INVALID_ARGUMENT;
++
++  if (!hmac_key_.Reset(SHA256_DIGEST_LENGTH))
++    return KM_ERROR_MEMORY_ALLOCATION_FAILED;
++  keymaster_error_t error =
++      ckdf(KeymasterKeyBlob(kFakeKeyAgreementKey, sizeof(kFakeKeyAgreementKey)),
++           KeymasterBlob(reinterpret_cast<const uint8_t*>(kSharedHmacLabel),
++                         strlen(kSharedHmacLabel)),
++           context_chunks.get(), num_chunks,
++           &hmac_key_);
++  if (error != KM_ERROR_OK) return error;
++
++  keymaster_blob_t data = {
++      reinterpret_cast<const uint8_t*>(kMacVerificationString),
++      strlen(kMacVerificationString)};
++  keymaster_blob_t data_chunks[] = {data};
++  return hmacSha256(hmac_key_, data_chunks, 1, sharingCheck);
++#else
+   std::set<HmacSharingParameters, CompareHmacSharingParams> sorted_hmac_inputs;
+   bool found_mine = false;
+   for (int i = 0; i < hmac_array.num_params; i++) {
+@@ -225,6 +308,7 @@ keymaster_error_t TpmKeymasterEnforcement::ComputeSharedHmac(
+   *sharingCheck = KeymasterBlob(hmac->buffer, hmac->size);
+ 
+   return KM_ERROR_OK;
++#endif
+ }
+ 
+ VerifyAuthorizationResponse TpmKeymasterEnforcement::VerifyAuthorization(
+@@ -302,6 +386,16 @@ TpmKeymasterEnforcement::ComputeHmac(
+     const std::vector<uint8_t>& data_to_mac) const {
+   std::array<uint8_t, 32> result;
+ 
++#ifdef SW_KM_ENFORCEMENT
++  keymaster_blob_t data = {data_to_mac.data(), data_to_mac.size()};
++  keymaster_blob_t data_chunks[] = {data};
++  KeymasterBlob signature;
++  auto error = hmacSha256(hmac_key_, data_chunks, 1, &signature);
++  if (error != KM_ERROR_OK) {
++    return error;
++  }
++  std::copy(signature.begin(), signature.end(), result.begin());
++#else
+   const uint8_t* auth_token_key = nullptr;
+   uint32_t auth_token_key_len = 0;
+   if (!gatekeeper_.GetAuthTokenKey(&auth_token_key, &auth_token_key_len)) {
+@@ -312,6 +406,7 @@ TpmKeymasterEnforcement::ComputeHmac(
+   gatekeeper_.ComputeSignature(result.data(), result.size(), auth_token_key,
+                                auth_token_key_len, data_to_mac.data(),
+                                data_to_mac.size());
++#endif
+   return result;
+ }
+ 
+diff --git a/host/commands/secure_env/tpm_keymaster_enforcement.h b/host/commands/secure_env/tpm_keymaster_enforcement.h
+index 1178932b5..6e85426e8 100644
+--- a/host/commands/secure_env/tpm_keymaster_enforcement.h
++++ b/host/commands/secure_env/tpm_keymaster_enforcement.h
+@@ -65,6 +65,9 @@ class TpmKeymasterEnforcement : public keymaster::KeymasterEnforcement {
+   TpmGatekeeper& gatekeeper_;
+   bool have_saved_params_ = false;
+   keymaster::HmacSharingParameters saved_params_;
++#ifdef SW_KM_ENFORCEMENT
++  keymaster::KeymasterKeyBlob hmac_key_;
++#endif
+ };
+ 
+ }  // namespace cuttlefish

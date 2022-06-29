@@ -35,7 +35,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   // Magic number version
   private static final byte KM_MAGIC_NUMBER = (byte) 0x82;
   // MSB byte is for Major version and LSB byte is for Minor version.
-  private static final short KM_APPLET_PACKAGE_VERSION = 0x0200;
+  private static final short KM_APPLET_PACKAGE_VERSION = 0x0300;
 
   private static final byte KM_BEGIN_STATE = 0x00;
   private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
@@ -83,9 +83,19 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     new KMAndroidSEApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
   }
 
+  public void handleDeviceBooted() {
+    if(seProvider.isBootSignalEventSupported() &&
+        seProvider.isDeviceRebooted()) {
+      kmDataStore.clearDeviceBootStatus();
+      super.reboot();
+      seProvider.clearDeviceBooted(true);
+    }
+  }
+
   @Override
   public void process(APDU apdu) {
     try {
+      handleDeviceBooted();
       // If this is select applet apdu which is selecting this applet then return
       if (apdu.isISOInterindustryCLA()) {
         if (selectingApplet()) {

@@ -32,13 +32,12 @@ import javacard.security.KeyPair;
 public class KMKeymintDataStore implements KMUpgradable {
 	
   // Data table configuration
+  public static final short KM_APPLET_PACKAGE_VERSION_1 = 0x0100;
   public static final short OLD_DATA_INDEX_SIZE = 19;
   public static final short DATA_INDEX_SIZE = 17;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
-
-  //TODO reduced data table size from 2048 to 300.
   public static final short DATA_MEM_SIZE = 300;
 
   // Old Data table offsets
@@ -104,6 +103,9 @@ public class KMKeymintDataStore implements KMUpgradable {
   private byte[] bootPatchLevel;
   private boolean deviceBootLocked;
   private short bootState;
+  // Challenge for Root of trust
+  private byte[] challenge;
+
   
   private short dataIndex;
   private byte[] dataTable;
@@ -119,6 +121,11 @@ public class KMKeymintDataStore implements KMUpgradable {
   private KMRkpMacKey rkpMacKey;
   private byte[] oemRootPublicKey;
   private short provisionStatus;
+  private static KMKeymintDataStore kmDataStore;
+
+  public static KMKeymintDataStore instance() {
+    return kmDataStore;
+  }
   
   public KMKeymintDataStore(KMSEProvider provider, KMRepository repo) {
     seProvider = provider;
@@ -133,6 +140,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     }
     setDeviceLockPasswordOnly(false);
     setDeviceLock(false);
+    kmDataStore = this;
   }
   
   private void initDataTable() {
@@ -815,6 +823,25 @@ public class KMKeymintDataStore implements KMUpgradable {
     Util.arrayCopy(buffer, start, bootPatchLevel, (short) 0, (short) length);
   }
 
+  public void setChallenge(byte[] buf, short start, short length) {
+    if (challenge == null) {
+      challenge = new byte[16];
+    }
+    if (length != 16) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
+    Util.arrayCopy(buf, start, challenge, (short) 0, (short) length);
+  }
+
+  public short getChallenge(byte[] buffer, short start) {
+    if (challenge == null) {
+      KMException.throwIt(KMError.INVALID_DATA);
+    }
+    Util.arrayCopyNonAtomic(challenge, (short) 0, buffer, start,
+        (short) challenge.length);
+    return (short) challenge.length;
+  }
+
   public boolean isProvisionLocked() {
     if (0 != (provisionStatus & KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED)) {
 	  return true;
@@ -881,11 +908,12 @@ public class KMKeymintDataStore implements KMUpgradable {
 
   @Override
   public void onRestore(Element element, short oldVersion, short currentVersion) {
-    if (oldVersion != currentVersion) {
+    if (oldVersion <= KM_APPLET_PACKAGE_VERSION_1) {
+      // 1.0 to 3.0 Upgrade happens here.
       handlePreviousVersionUpgrade(element);
-    } else {
-      handleCurrentVersionUpgrade(element);
+      return;
     }
+    handleUpgrade(element);
   }
 
   private void handlePreviousVersionUpgrade(Element element) {
@@ -922,7 +950,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     handleProvisionStatusUpgrade(oldDataTable, oldDataIndex);
   }
   
-  private void handleCurrentVersionUpgrade(Element element) {
+  private void handleUpgrade(Element element) {
     // Read Primitives
     provisionStatus =  element.readShort();
     // Read Objects
