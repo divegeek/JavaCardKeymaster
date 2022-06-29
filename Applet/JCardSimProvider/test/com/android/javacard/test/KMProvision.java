@@ -257,11 +257,6 @@ public class KMProvision {
             privKey, (short) 0, lengths[0],
             false
         );
-    System.out.println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-    System.out.println("length of private key = " + lengths[0] +  " length of public key = " + lengths[1]);
-    KMTestUtils.print1(privKey, (short )0, (short) lengths[0]);
-    KMTestUtils.print1(pubKey, (short )0, (short) lengths[1]);
-    System.out.println("###########################################");
     Assert.assertEquals(lengths[1], 65);
     Assert.assertTrue("Private key length should not be > 32", (lengths[0] <= 32));
     Util.arrayFillNonAtomic(RKP_DK_PRIV, (short) 0, (short) 32, (byte) 0);

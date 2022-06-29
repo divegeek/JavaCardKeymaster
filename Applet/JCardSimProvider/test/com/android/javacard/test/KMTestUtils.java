@@ -1011,16 +1011,6 @@ public class KMTestUtils {
   }
 
   public static void print(byte[] buf, short start, short length) {
-   /*
-	  StringBuilder sb = new StringBuilder();
-    for (int i = start; i < (start + length); i++) {
-      sb.append(String.format(" 0x%02X", buf[i]));
-    }
-    System.out.println(sb.toString()); 
-    */
-  }
-  
-  public static void print1(byte[] buf, short start, short length) {
     StringBuilder sb = new StringBuilder();
     for (int i = start; i < (start + length); i++) {
       sb.append(String.format(" 0x%02X", buf[i]));

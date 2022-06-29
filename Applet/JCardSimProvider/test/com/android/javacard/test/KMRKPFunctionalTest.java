@@ -434,8 +434,6 @@ public class KMRKPFunctionalTest {
         deviceInfoBytes,
         (short) 0,
         KMByteBlob.cast(deviceInfo).length());
-    System.out.println("Printing device info@@@@@@@@@@@@@@@@");
-    KMTestUtils.print(deviceInfo);
     short deviceInfoBytesLen = KMByteBlob.cast(deviceInfo).length();
     short protectedHeader = KMArray.cast(ret).get((short) 3);
     byte[] protectedHeaderBytes = new byte[KMByteBlob.cast(protectedHeader).length()];
