@@ -645,19 +645,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short encodedLen = KMKeymasterApplet.encodeToApduBuffer(macStructure, scratchPad, (short) 0,
         KMKeymasterApplet.MAX_COSE_BUF_SIZE);
 
-    short hmacLen =
-        seProvider.hmacSign(kmDataStore.getComputedHmacKey(), scratchPad, (short) 0,
-            encodedLen, scratchPad, encodedLen);
-
-    if (hmacLen != KMByteBlob.cast(
-        KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_TAG_OFFSET)).length()) {
-      KMException.throwIt(KMError.VERIFICATION_FAILED);
-    }
-
-    if (0 != Util.arrayCompare(scratchPad, encodedLen,
+    if (!seProvider.hmacVerify(kmDataStore.getComputedHmacKey(),
+        scratchPad, (short) 0, encodedLen,
         KMByteBlob.cast(KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_TAG_OFFSET)).getBuffer(),
         KMByteBlob.cast(KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_TAG_OFFSET)).getStartOff(),
-        hmacLen)) {
+        KMByteBlob.cast(KMArray.cast(coseMacPtr).get(KMCose.COSE_MAC0_TAG_OFFSET)).length())) {
       KMException.throwIt(KMError.VERIFICATION_FAILED);
     }
     // Store the data only once after reboot.
