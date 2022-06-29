@@ -119,6 +119,11 @@ public class KMKeymintDataStore implements KMUpgradable {
   private KMRkpMacKey rkpMacKey;
   private byte[] oemRootPublicKey;
   private short provisionStatus;
+  private static KMKeymintDataStore kmDataStore;
+
+  public static KMKeymintDataStore instance() {
+    return kmDataStore;
+  }
   
   public KMKeymintDataStore(KMSEProvider provider, KMRepository repo) {
     seProvider = provider;
@@ -133,6 +138,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     }
     setDeviceLockPasswordOnly(false);
     setDeviceLock(false);
+    kmDataStore = this;
   }
   
   private void initDataTable() {

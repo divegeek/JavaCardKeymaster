@@ -442,7 +442,7 @@ public class KMDecoder {
     short type;
     short obj;
     // check whether array contains one type of objects or multiple types
-    if (KMArray.cast(exp).containedType() == 0) {// multiple types specified by expression.
+    if (KMArray.cast(exp).containedType() == KMType.INVALID_VALUE) {// multiple types specified by expression.
       if (KMArray.cast(exp).length() != KMArray.ANY_ARRAY_LENGTH) {
         if (KMArray.cast(exp).length() != payloadLength) {
           ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
