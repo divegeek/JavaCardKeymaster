@@ -1144,17 +1144,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
       return;
     }
     switch (interfaceType) {
-      case KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY:
-        KMHmacKey.onSave(element, (KMHmacKey) object);
-        break;
       case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
         KMAESKey.onSave(element, (KMAESKey) object);
         break;
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
         KMHmacKey.onSave(element, (KMHmacKey) object);
-        break;
-      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
-        KMECPrivateKey.onSave(element, (KMECPrivateKey) object);
         break;
       case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
         KMECDeviceUniqueKey.onSave(element, (KMECDeviceUniqueKey) object);
@@ -1180,8 +1174,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
         return KMAESKey.onRestore((AESKey) element.readObject());
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
         return KMHmacKey.onRestore((HMACKey) element.readObject());
-      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
-        return KMECPrivateKey.onRestore((KeyPair) element.readObject());
       case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
         return KMECDeviceUniqueKey.onRestore((KeyPair) element.readObject());
       case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
@@ -1196,17 +1188,11 @@ public class KMAndroidSEProvider implements KMSEProvider {
   public short getBackupPrimitiveByteCount(byte interfaceType) {
     short primitiveCount = 1; // interface type
     switch (interfaceType) {
-      case KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY:
-        primitiveCount += KMHmacKey.getBackupPrimitiveByteCount();
-        break;
       case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
         primitiveCount += KMAESKey.getBackupPrimitiveByteCount();
         break;
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
         primitiveCount += KMHmacKey.getBackupPrimitiveByteCount();
-        break;
-      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
-        primitiveCount += KMECPrivateKey.getBackupPrimitiveByteCount();
         break;
       case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
         primitiveCount += KMECDeviceUniqueKey.getBackupPrimitiveByteCount();
@@ -1223,14 +1209,10 @@ public class KMAndroidSEProvider implements KMSEProvider {
   @Override
   public short getBackupObjectCount(byte interfaceType) {
     switch (interfaceType) {
-      case KMDataStoreConstants.INTERFACE_TYPE_COMPUTED_HMAC_KEY:
-        return KMHmacKey.getBackupObjectCount();
       case KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY:
         return KMAESKey.getBackupObjectCount();
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
         return KMHmacKey.getBackupObjectCount();
-      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
-        return KMECPrivateKey.getBackupObjectCount();
       case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
         return KMECDeviceUniqueKey.getBackupObjectCount();
       case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
