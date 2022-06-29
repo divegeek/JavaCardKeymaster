@@ -322,10 +322,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    KMType.initialize();
    if (!isUpgrading) {
      kmDataStore.createMasterKey(MASTER_KEY_SIZE);
-     // initialize default values
-     initHmacNonceAndSeed();
-     initSystemBootParams((short)0,(short)0,(short)0,(short)0);
    }
+   // initialize default values
+   initHmacNonceAndSeed();
    rkp = new RemotelyProvisionedComponentDevice(encoder, decoder, repository, seProvider, kmDataStore);
   }
 

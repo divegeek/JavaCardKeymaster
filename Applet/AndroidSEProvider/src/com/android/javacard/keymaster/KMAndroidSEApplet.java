@@ -35,7 +35,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   // Magic number version
   private static final byte KM_MAGIC_NUMBER = (byte) 0x82;
   // MSB byte is for Major version and LSB byte is for Minor version.
-  private static final short KM_APPLET_PACKAGE_VERSION = 0x0200;
+  private static final short KM_APPLET_PACKAGE_VERSION = 0x0300;
 
   private static final byte KM_BEGIN_STATE = 0x00;
   private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;

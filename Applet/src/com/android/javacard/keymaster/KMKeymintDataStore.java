@@ -32,6 +32,7 @@ import javacard.security.KeyPair;
 public class KMKeymintDataStore implements KMUpgradable {
 	
   // Data table configuration
+  public static final short KM_APPLET_PACKAGE_VERSION_1 = 0x0100;
   public static final short OLD_DATA_INDEX_SIZE = 19;
   public static final short DATA_INDEX_SIZE = 17;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
@@ -907,11 +908,12 @@ public class KMKeymintDataStore implements KMUpgradable {
 
   @Override
   public void onRestore(Element element, short oldVersion, short currentVersion) {
-    if (oldVersion != currentVersion) {
+    if (oldVersion <= KM_APPLET_PACKAGE_VERSION_1) {
+      // 1.0 to 3.0 Upgrade happens here.
       handlePreviousVersionUpgrade(element);
-    } else {
-      handleCurrentVersionUpgrade(element);
+      return;
     }
+    handleUpgrade(element);
   }
 
   private void handlePreviousVersionUpgrade(Element element) {
@@ -948,7 +950,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     handleProvisionStatusUpgrade(oldDataTable, oldDataIndex);
   }
   
-  private void handleCurrentVersionUpgrade(Element element) {
+  private void handleUpgrade(Element element) {
     // Read Primitives
     provisionStatus =  element.readShort();
     // Read Objects
