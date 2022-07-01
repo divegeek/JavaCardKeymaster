@@ -314,14 +314,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       opTable[index] = new KMOperationState();
       index++;
     }
-   KMType.initialize();
-   if (!isUpgrading) {
-     kmDataStore.createMasterKey(MASTER_KEY_SIZE);
-     // initialize default values
-     initHmacNonceAndSeed();
-     initSystemBootParams((short)0,(short)0,(short)0,(short)0);
-   }
-   rkp = new RemotelyProvisionedComponentDevice(encoder, decoder, repository, seProvider, kmDataStore);
+    KMType.initialize();
+    if (!isUpgrading) {
+      kmDataStore.createMasterKey(MASTER_KEY_SIZE);
+    }
+    rkp = new RemotelyProvisionedComponentDevice(encoder, decoder, repository, seProvider, kmDataStore);
   }
 
   protected void initHmacNonceAndSeed(){
@@ -583,6 +580,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
        case INS_COMPUTE_SHARED_HMAC_CMD:
        case INS_INIT_STRONGBOX_CMD:
        case INS_EARLY_BOOT_ENDED_CMD:
+       case INS_GET_RKP_HARDWARE_INFO:
          return true;
        default:
          break;
@@ -3485,7 +3483,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   public void reboot() {
-    kmDataStore.clearHmacNonce();
     //flag to maintain early boot ended state
     kmDataStore.setEarlyBootEndedStatus(false);
     //Clear all the operation state.
@@ -3552,7 +3549,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // ROLLBACK_RESISTANCE not supported.
     KMTag.assertAbsence(data[KEY_PARAMETERS], KMType.BOOL_TAG,KMType.ROLLBACK_RESISTANCE, KMError.ROLLBACK_RESISTANCE_UNAVAILABLE);
 
-    // As per specification Early boot keys may be created after early boot ended.
     // Algorithm must be present
     KMTag.assertPresence(data[KEY_PARAMETERS], KMType.ENUM_TAG, KMType.ALGORITHM, KMError.INVALID_ARGUMENT);
 
@@ -3656,13 +3652,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   private  KMAttestationCert generateAttestation(short attKeyBlob, short attKeyParam, byte[] scratchPad){
-     // 1) If attestation key is present and attestation challenge is absent then it is an error.
-     // 2) If attestation key is absent and attestation challenge is present then it is an error as
-     // factory provisioned attestation key is not supported.
-     // 3) If both are present and issuer is absent or attest key purpose is not ATTEST_KEY then it is an error.
-     // 4) If the generated/imported keys are RSA or EC then validity period must be specified.
-     // Device Unique Attestation is not supported.
-    // Device unique attestation not supported
+    // 1) If attestation key is present and attestation challenge is absent then it is an error.
+    // 2) If attestation key is absent and attestation challenge is present then it is an error as
+    // factory provisioned attestation key is not supported.
+    // 3) If both are present and issuer is absent or attest key purpose is not ATTEST_KEY then it is an error.
+    // 4) If the generated/imported keys are RSA or EC then validity period must be specified.
+    // Device Unique Attestation is not supported.
     short heapStart  = repository.getHeapIndex();
     KMTag.assertAbsence(data[KEY_PARAMETERS], KMType.BOOL_TAG, KMType.DEVICE_UNIQUE_ATTESTATION,
         KMError.CANNOT_ATTEST_IDS);
