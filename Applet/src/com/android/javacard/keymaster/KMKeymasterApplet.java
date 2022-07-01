@@ -656,10 +656,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // active state. If host does not support boot signal event, then allow this
     // instruction any time.
     kmDataStore.getDeviceBootStatus(scratchPad, (short) 0);
-    boolean isBootParamsSet =
-        ((scratchPad[0] & KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS) != 0) ? true : false;
-    if (!seProvider.isBootSignalEventSupported() ||
-        !isBootParamsSet) {
+    if (((scratchPad[0] & KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS) == 0)) {
       // store the data.
       storeRootOfTrust(rotPayload, scratchPad);
       kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS);
@@ -3632,7 +3629,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
   public void reboot() {
-    kmDataStore.clearHmacNonce();
     //flag to maintain early boot ended state
     kmDataStore.setEarlyBootEndedStatus(false);
     //Clear all the operation state.
@@ -3699,7 +3695,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // ROLLBACK_RESISTANCE not supported.
     KMTag.assertAbsence(data[KEY_PARAMETERS], KMType.BOOL_TAG,KMType.ROLLBACK_RESISTANCE, KMError.ROLLBACK_RESISTANCE_UNAVAILABLE);
 
-    // As per specification Early boot keys may be created after early boot ended.
     // Algorithm must be present
     KMTag.assertPresence(data[KEY_PARAMETERS], KMType.ENUM_TAG, KMType.ALGORITHM, KMError.INVALID_ARGUMENT);
 
@@ -3928,7 +3923,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
      * must return ErrorCode::UNSUPPORTED_KEY_SIZE or ErrorCode::UNSUPPORTED_EC_CURVE.
      */
     if (ecCurve != KMType.P_256) {
-      KMException.throwIt(KMError.UNSUPPORTED_EC_CURVE);
+      KMException.throwIt(KMError.UNSUPPORTED_KEY_SIZE);
     }
     short ecKeySize = KMEnumTag.getValue(KMType.KEYSIZE, data[KEY_PARAMETERS]);
     if((ecKeySize != KMType.INVALID_VALUE) &&
