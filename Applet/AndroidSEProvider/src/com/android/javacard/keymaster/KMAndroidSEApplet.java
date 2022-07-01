@@ -48,7 +48,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       INS_KEYMINT_PROVIDER_APDU_START + 2;
   private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 4;
-  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5;
+  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5; // Unused
   private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 6;
   private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
@@ -126,10 +126,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
           case INS_GET_PROVISION_STATUS_CMD:
             processGetProvisionStatusCmd(apdu);
-            break;
-
-          case INS_SET_BOOT_PARAMS_CMD:
-            processSetBootParamsCmd(apdu);
             break;
 
           case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
@@ -219,7 +215,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         }
         break;
         
-      case INS_SET_BOOT_PARAMS_CMD:
       case INS_GET_PROVISION_STATUS_CMD:
     	break;
     	
@@ -505,69 +500,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     KMArray.cast(resp).add((short) 0, buildErrorStatus(KMError.OK));
     KMArray.cast(resp).add((short) 1, KMInteger.instance(scratchpad, (short)0, (short)2));
     sendOutgoing(apdu, resp);
-  }
-
-  private void processSetBootParamsCmd(APDU apdu) {
-    if (seProvider.isBootSignalEventSupported()
-              && (!seProvider.isDeviceRebooted())) {
-      ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-    }
-    // clear the device reboot status
-    kmDataStore.clearDeviceBootStatus();
-    short argsProto = KMArray.instance((short) 5);    
-    byte[] scratchPad = apdu.getBuffer();
-    // Array of 4 expected arguments
-    // Argument 0 Boot Patch level
-    KMArray.cast(argsProto).add((short) 0, KMInteger.exp());
-    // Argument 1 Verified Boot Key
-    KMArray.cast(argsProto).add((short) 1, KMByteBlob.exp());
-    // Argument 2 Verified Boot Hash
-    KMArray.cast(argsProto).add((short) 2, KMByteBlob.exp());
-    // Argument 3 Verified Boot State
-    KMArray.cast(argsProto).add((short) 3, KMEnum.instance(KMType.VERIFIED_BOOT_STATE));
-    // Argument 4 Device Locked
-    KMArray.cast(argsProto).add((short) 4, KMEnum.instance(KMType.DEVICE_LOCKED));
-
-    short args = receiveIncoming(apdu, argsProto);
-
-    short bootParam = KMArray.cast(args).get((short) 0);
-
-    kmDataStore.setBootPatchLevel(KMInteger.cast(bootParam).getBuffer(),
-        KMInteger.cast(bootParam).getStartOff(),
-        KMInteger.cast(bootParam).length());
-
-    bootParam = KMArray.cast(args).get((short) 1);
-    if (KMByteBlob.cast(bootParam).length() > BOOT_KEY_MAX_SIZE) {
-      KMException.throwIt(KMError.INVALID_ARGUMENT);
-    }
-    kmDataStore.setBootKey(KMByteBlob.cast(bootParam).getBuffer(),
-        KMByteBlob.cast(bootParam).getStartOff(),
-        KMByteBlob.cast(bootParam).length());
-
-    bootParam = KMArray.cast(args).get((short) 2);
-    if (KMByteBlob.cast(bootParam).length() > BOOT_HASH_MAX_SIZE) {
-      KMException.throwIt(KMError.INVALID_ARGUMENT);
-    }
-    kmDataStore.setVerifiedBootHash(KMByteBlob.cast(bootParam).getBuffer(),
-        KMByteBlob.cast(bootParam).getStartOff(),
-        KMByteBlob.cast(bootParam).length());
-
-    bootParam = KMArray.cast(args).get((short) 3);
-    byte enumVal = KMEnum.cast(bootParam).getVal();
-    kmDataStore.setBootState(enumVal);
-
-    bootParam = KMArray.cast(args).get((short) 4);
-    enumVal = KMEnum.cast(bootParam).getVal();
-    kmDataStore.setDeviceLocked(enumVal == KMType.DEVICE_LOCKED_TRUE);
-
-    // Clear the Computed SharedHmac and Hmac nonce from persistent memory.
-    Util.arrayFillNonAtomic(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE, (byte) 0);
-    kmDataStore.createComputedHmacKey(scratchPad, (short) 0, KMKeymintDataStore.COMPUTED_HMAC_KEY_SIZE);
-
-    super.reboot();
-    kmDataStore.setDeviceBootStatus(KMKeymintDataStore.SET_BOOT_PARAMS_SUCCESS);
-    seProvider.clearDeviceBooted(false);
-    sendResponse(apdu, KMError.OK);
   }
 
   private boolean isProvisioningComplete() {
