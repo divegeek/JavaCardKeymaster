@@ -23,19 +23,23 @@ cuttlefish target. Also the required certificates and keys can be found in
 
 #### Usage for construct_apdus
 <pre>
-Usage: construct_keymint_apdus options
+Usage: Please give json files with values as input to generate the apdus command. Please refer to sample_json files available in the folder for reference. Sample json files are written using hardcode parameters to be used for testing setup on cuttlefilsh emulator and goldfish emulators
+construct_keymint_apdus [options]
 Valid options are:
--h, --help                        show the help message and exit.
+-h, --help    show this help message and exit.
 -i, --input  jsonFile 	 Input json file 
 -o, --output jsonFile 	 Output json file
 </pre>
 
 #### Usage for provision
 <pre>
-Usage: provision_keymint options
-Valid options are:
--h, --help                      show the help message and exit.
--i, --input  jsonFile 	  Input json file 
--s, --provision_stautus   Prints the current provision status.
--l, --lock_provision      Locks the provision state.
+Usage: Please consturcture the apdu(s) with help of construct apdu tool and pass the output file to this utility.
+provision_keymint [options] 
+Valid options are: 
+-h, --help    show this help message and exit. 
+-i, --input  jsonFile 	 Input json file 
+-s, --provision_status jsonFile 	 Gets the provision status of applet. 
+-l, --lock_provision jsonFile 	 OEM provisioning lock. 
+-f, --se_factory_lock jsonFile 	 SE Factory provisioning lock. 
+-u, --unlock_provision jsonFile 	 Unlock OEM provisioning. 
 </pre>
