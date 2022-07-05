@@ -32,10 +32,14 @@ Valid options are:
 
 #### Usage for provision
 <pre>
-Usage: provision_keymint options
-Valid options are:
--h, --help                      show the help message and exit.
--i, --input  jsonFile 	  Input json file 
--s, --provision_stautus   Prints the current provision status.
--l, --lock_provision      Locks the provision state.
+Usage: Please consturcture the apdu(s) with help of construct apdu tool and
+pass the output file to this utility.
+provision_keymint [options] 
+Valid options are: 
+-h, --help    show this help message and exit. 
+-i, --input  jsonFile 	 Input json file 
+-s, --provision_status jsonFile  Gets the provision status of applet. 
+-l, --lock_provision jsonFile 	   OEM provisioning lock. 
+-f, --se_factory_lock jsonFile 	   SE Factory provisioning lock. 
+-u, --unlock_provision jsonFile  Unlock OEM provisioning. 
 </pre>
