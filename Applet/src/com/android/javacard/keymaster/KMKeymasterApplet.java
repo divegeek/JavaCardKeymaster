@@ -2632,30 +2632,31 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             KMException.throwIt(KMError.UNSUPPORTED_DIGEST);
           }
         }
-        //TODO d to verify whether javacard support MGF1 = SHA1 or is it equal to the OAEP scheme
-        // digest. There is no way to define any other digest.
-        if(param == KMType.RSA_OAEP){
+        if (param == KMType.RSA_OAEP) {
           short mgfDigest = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG,
               KMType.RSA_OAEP_MGF_DIGEST, data[KEY_PARAMETERS]);
-          if(mgfDigest != KMType.INVALID_VALUE) {
-            if(KMEnumArrayTag.cast(mgfDigest).length() != 1) {
+          if (mgfDigest != KMType.INVALID_VALUE) {
+            if (KMEnumArrayTag.cast(mgfDigest).length() != 1) {
               KMException.throwIt(KMError.INVALID_ARGUMENT);
             }
             mgfDigest = KMEnumArrayTag.cast(mgfDigest).get((short) 0);
             if (mgfDigest == KMType.DIGEST_NONE) {
               KMException.throwIt(KMError.UNSUPPORTED_MGF_DIGEST);
             }
-            if (!KMEnumArrayTag
-                .contains(KMType.RSA_OAEP_MGF_DIGEST, mgfDigest, data[HW_PARAMETERS])) {
-              KMException.throwIt(KMError.INCOMPATIBLE_MGF_DIGEST);
-            }
-            if (mgfDigest != KMType.SHA1 && mgfDigest != KMType.SHA2_256) {
-              KMException.throwIt(KMError.UNSUPPORTED_MGF_DIGEST);
-            }
-            op.setMgfDigest((byte) mgfDigest);
+
           } else {
-            op.setMgfDigest(KMType.SHA1);
+            mgfDigest = KMType.SHA1;
           }
+          short mgfDigestHwParams = KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG,
+              KMType.RSA_OAEP_MGF_DIGEST, data[HW_PARAMETERS]);
+          if ((mgfDigestHwParams != KMType.INVALID_VALUE) &&
+              (!KMEnumArrayTag.cast(mgfDigestHwParams).contains(mgfDigest))) {
+            KMException.throwIt(KMError.INCOMPATIBLE_MGF_DIGEST);
+          }
+          if (mgfDigest != KMType.SHA1 && mgfDigest != KMType.SHA2_256) {
+            KMException.throwIt(KMError.UNSUPPORTED_MGF_DIGEST);
+          }
+          op.setMgfDigest((byte) mgfDigest);
         }
         op.setPadding((byte) param);
         break;
