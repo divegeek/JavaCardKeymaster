@@ -1,0 +1,156 @@
+diff --git a/contexts/pure_soft_keymaster_context.cpp b/contexts/pure_soft_keymaster_context.cpp
+index 937238b..3112e2c 100644
+--- a/contexts/pure_soft_keymaster_context.cpp
++++ b/contexts/pure_soft_keymaster_context.cpp
+@@ -109,6 +109,26 @@ PureSoftKeymasterContext::SetVerifiedBootInfo(std::string_view boot_state,
+     verified_boot_state_ = boot_state;
+     bootloader_state_ = bootloader_state;
+     vbmeta_digest_ = vbmeta_digest;
++
++    vb_params_.verified_boot_hash = {vbmeta_digest_->data(),
++                                   vbmeta_digest_->size()};
++
++    if (verified_boot_state_ == "green") {
++      vb_params_.verified_boot_state = KM_VERIFIED_BOOT_VERIFIED;
++    } else if (verified_boot_state_ == "yellow") {
++      vb_params_.verified_boot_state = KM_VERIFIED_BOOT_SELF_SIGNED;
++    } else if (verified_boot_state_ == "red") {
++      vb_params_.verified_boot_state = KM_VERIFIED_BOOT_FAILED;
++    } else {  // Default to orange
++      vb_params_.verified_boot_state = KM_VERIFIED_BOOT_UNVERIFIED;
++    }
++
++    vb_params_.device_locked = bootloader_state == "locked";
++
++    static std::string fake_vb_key(32, 0);
++    vb_params_.verified_boot_key = {reinterpret_cast<uint8_t*>(fake_vb_key.data()), fake_vb_key.size()};
++
++
+     if (pure_soft_remote_provisioning_context_ != nullptr) {
+         pure_soft_remote_provisioning_context_->SetVerifiedBootInfo(boot_state, bootloader_state,
+                                                                     vbmeta_digest);
+@@ -617,6 +637,9 @@ keymaster_error_t PureSoftKeymasterContext::UnwrapKey(
+ 
+ const AttestationContext::VerifiedBootParams*
+ PureSoftKeymasterContext::GetVerifiedBootParams(keymaster_error_t* error) const {
++    *error = KM_ERROR_OK;
++    return &vb_params_;
++#if 0
+     static VerifiedBootParams params;
+     static std::string fake_vb_key(32, 0);
+     params.verified_boot_key = {reinterpret_cast<uint8_t*>(fake_vb_key.data()), fake_vb_key.size()};
+@@ -626,6 +649,7 @@ PureSoftKeymasterContext::GetVerifiedBootParams(keymaster_error_t* error) const
+     params.device_locked = false;
+     *error = KM_ERROR_OK;
+     return &params;
++#endif
+ }
+ 
+ }  // namespace keymaster
+diff --git a/include/keymaster/contexts/pure_soft_keymaster_context.h b/include/keymaster/contexts/pure_soft_keymaster_context.h
+index 834a092..3c40e82 100644
+--- a/include/keymaster/contexts/pure_soft_keymaster_context.h
++++ b/include/keymaster/contexts/pure_soft_keymaster_context.h
+@@ -48,7 +48,7 @@ class PureSoftKeymasterContext : public KeymasterContext,
+   public:
+     // Security level must only be used for testing.
+     explicit PureSoftKeymasterContext(
+-        KmVersion version, keymaster_security_level_t security_level = KM_SECURITY_LEVEL_SOFTWARE);
++        KmVersion version, keymaster_security_level_t security_level = KM_SECURITY_LEVEL_TRUSTED_ENVIRONMENT);
+     ~PureSoftKeymasterContext() override;
+ 
+     KmVersion GetKmVersion() const override { return AttestationContext::GetKmVersion(); }
+@@ -123,6 +123,9 @@ class PureSoftKeymasterContext : public KeymasterContext,
+     /*********************************************************************************************
+      * Implement AttestationContext
+      */
++    AttestationContext* attestation_context() override {
++      return this;
++    }
+ 
+     const VerifiedBootParams* GetVerifiedBootParams(keymaster_error_t* error) const override;
+ 
+@@ -145,6 +148,7 @@ class PureSoftKeymasterContext : public KeymasterContext,
+     const keymaster_security_level_t security_level_;
+     std::unique_ptr<SecureKeyStorage> pure_soft_secure_key_storage_;
+     std::unique_ptr<PureSoftRemoteProvisioningContext> pure_soft_remote_provisioning_context_;
++    VerifiedBootParams vb_params_;
+ };
+ 
+ }  // namespace keymaster
+diff --git a/include/keymaster/km_openssl/soft_keymaster_enforcement.h b/include/keymaster/km_openssl/soft_keymaster_enforcement.h
+index 31022e7..2790f8b 100644
+--- a/include/keymaster/km_openssl/soft_keymaster_enforcement.h
++++ b/include/keymaster/km_openssl/soft_keymaster_enforcement.h
+@@ -42,6 +42,9 @@ class SoftKeymasterEnforcement : public KeymasterEnforcement {
+     keymaster_error_t GetHmacSharingParameters(HmacSharingParameters* params) override;
+     keymaster_error_t ComputeSharedHmac(const HmacSharingParametersArray& params_array,
+                                         KeymasterBlob* sharingCheck) override;
++    KmErrorOr<std::array<uint8_t, 32>>
++    ComputeHmac(const std::vector<uint8_t>& /* data_to_mac */) const override;
++
+     VerifyAuthorizationResponse
+     VerifyAuthorization(const VerifyAuthorizationRequest& request) override;
+     keymaster_error_t GenerateTimestampToken(TimestampToken* token) override;
+diff --git a/km_openssl/soft_keymaster_enforcement.cpp b/km_openssl/soft_keymaster_enforcement.cpp
+index 0a3c2f6..8d4f9a2 100644
+--- a/km_openssl/soft_keymaster_enforcement.cpp
++++ b/km_openssl/soft_keymaster_enforcement.cpp
+@@ -175,6 +175,20 @@ SoftKeymasterEnforcement::ComputeSharedHmac(const HmacSharingParametersArray& pa
+     return hmacSha256(hmac_key_, data_chunks, 1, sharingCheck);
+ }
+ 
++KmErrorOr<std::array<uint8_t, 32>>
++SoftKeymasterEnforcement::ComputeHmac(const std::vector<uint8_t>& data_to_mac) const {
++  std::array<uint8_t, 32> result;
++  keymaster_blob_t data = {data_to_mac.data(), data_to_mac.size()};
++  keymaster_blob_t data_chunks[] = {data};
++  KeymasterBlob signature;
++  auto error = hmacSha256(hmac_key_, data_chunks, 1, &signature);
++  if (error != KM_ERROR_OK) {
++    return error;
++  }
++  std::copy(signature.begin(), signature.end(), result.begin());
++  return result;
++}
++
+ VerifyAuthorizationResponse
+ SoftKeymasterEnforcement::VerifyAuthorization(const VerifyAuthorizationRequest& request) {
+     // The only thing this implementation provides is timestamp and security level.  Note that this
+diff --git a/ng/AndroidKeyMintDevice.cpp b/ng/AndroidKeyMintDevice.cpp
+index 25ad463..7c193f2 100644
+--- a/ng/AndroidKeyMintDevice.cpp
++++ b/ng/AndroidKeyMintDevice.cpp
+@@ -242,7 +242,7 @@ AndroidKeyMintDevice::~AndroidKeyMintDevice() {}
+ 
+ ScopedAStatus AndroidKeyMintDevice::getHardwareInfo(KeyMintHardwareInfo* info) {
+     info->versionNumber = 2;
+-    info->securityLevel = securityLevel_;
++    info->securityLevel = SecurityLevel::TRUSTED_ENVIRONMENT;
+     info->keyMintName = "FakeKeyMintDevice";
+     info->keyMintAuthorName = "Google";
+     info->timestampTokenRequired = false;
+@@ -483,9 +483,20 @@ ScopedAStatus AndroidKeyMintDevice::getRootOfTrustChallenge(array<uint8_t, 16>*
+     return kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED);
+ }
+ 
+-ScopedAStatus AndroidKeyMintDevice::getRootOfTrust(const array<uint8_t, 16>& /* challenge */,
+-                                                   vector<uint8_t>* /* rootOfTrust */) {
+-    return kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED);
++ScopedAStatus AndroidKeyMintDevice::getRootOfTrust(const array<uint8_t, 16>&  challenge ,
++                                                   vector<uint8_t>*  rootOfTrust ) {
++    if (!rootOfTrust) {
++        return kmError2ScopedAStatus(KM_ERROR_UNEXPECTED_NULL_POINTER);
++    }
++    keymaster::GetRootOfTrustRequest request(impl_->message_version(),
++                                             {challenge.begin(), challenge.end()});
++    keymaster::GetRootOfTrustResponse response = impl_->GetRootOfTrust(request);
++    if (response.error != KM_ERROR_OK) {
++        return kmError2ScopedAStatus(response.error);
++    }
++
++    *rootOfTrust = std::move(response.rootOfTrust);
++    return ScopedAStatus::ok();
+ }
+ 
+ ScopedAStatus AndroidKeyMintDevice::sendRootOfTrust(const vector<uint8_t>& /* rootOfTrust */) {

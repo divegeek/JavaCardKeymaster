@@ -1,0 +1,13 @@
+diff --git a/security/keymint/aidl/default/service.cpp b/security/keymint/aidl/default/service.cpp
+index dc0c61891..928b262c3 100644
+--- a/security/keymint/aidl/default/service.cpp
++++ b/security/keymint/aidl/default/service.cpp
+@@ -49,7 +49,7 @@ int main() {
+     ABinderProcess_setThreadPoolMaxThreadCount(0);
+     // Add Keymint Service
+     std::shared_ptr<AndroidKeyMintDevice> keyMint =
+-            addService<AndroidKeyMintDevice>(SecurityLevel::SOFTWARE);
++            addService<AndroidKeyMintDevice>(SecurityLevel::TRUSTED_ENVIRONMENT);
+     // Add Secure Clock Service
+     addService<AndroidSecureClock>(keyMint);
+     // Add Shared Secret Service
