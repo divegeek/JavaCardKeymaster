@@ -1488,43 +1488,41 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
 
-@Override
-public KMOperation getRkpOperation(byte purpose, byte alg,
+  @Override
+  public KMOperation getRkpOperation(byte purpose, byte alg,
 	      byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart,
 	      short keyLength, byte[] ivBuf, short ivStart, short ivLength,
 	      short macLength) {
     KMOperation opr = null;
     switch (alg) {
-    case KMType.AES:
-    KMCipher aesGcm = createAesGcmCipher(purpose, macLength, keyBuf, keyStart, keyLength,
+      case KMType.AES:
+        KMCipher aesGcm = createAesGcmCipher(purpose, macLength, keyBuf, keyStart, keyLength,
                 ivBuf, ivStart, ivLength);
-      opr = new KMOperationImpl(aesGcm);
-      break;
-    case KMType.HMAC:
-      Signature signerVerifier = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart,
+        opr = new KMOperationImpl(aesGcm);
+        break;
+      case KMType.HMAC:
+        Signature signerVerifier = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart,
                 keyLength);
-      opr = new KMOperationImpl(signerVerifier);      
-      break;
-    default:
-      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-      break;
+        opr = new KMOperationImpl(signerVerifier);
+        break;
+      default:
+        CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+        break;
     }
     return opr;
-}
+  }
 
-@Override
-public boolean isBootSignalEventSupported() {
-	return false;
-}
+  @Override
+  public boolean isBootSignalEventSupported() {
+    return false;
+  }
 
-@Override
-public boolean isDeviceRebooted() {
-	return false;
-}
+  @Override
+  public boolean isDeviceRebooted() {
+    return false;
+  }
 
-@Override
-public void clearDeviceBooted(boolean resetBootFlag) {
-	// TODO Auto-generated method stub
-	
-}
+  @Override
+  public void clearDeviceBooted(boolean resetBootFlag) {
+  }
 }
