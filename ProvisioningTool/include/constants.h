@@ -101,14 +101,16 @@ constexpr char kSeFactoryProvisionLock[] = "se_factory_lock";
 constexpr char kUnLockProvision[] = "unlock_provision";
 
 // Instruction constatnts
-// TODO Modify according to keymint
-constexpr int kAttestationIdsCmd = INS_BEGIN_KM_CMD + 1;
-constexpr int kPresharedSecretCmd = INS_BEGIN_KM_CMD + 2;
-constexpr int kOemLockProvisionCmd = INS_BEGIN_KM_CMD + 3;
-constexpr int kGetProvisionStatusCmd = INS_BEGIN_KM_CMD + 4;
+constexpr int kAttestationIdsCmd = INS_BEGIN_KM_CMD + 3;
+constexpr int kPresharedSecretCmd = INS_BEGIN_KM_CMD + 4;
 constexpr int kBootParamsCmd = INS_BEGIN_KM_CMD + 5;
-constexpr int kDeviceUniqueKeyCmd = INS_BEGIN_KM_CMD + 6;
-constexpr int kAdditionalCertChainCmd = INS_BEGIN_KM_CMD + 7;
-constexpr int kSeFactoryLockCmd = INS_BEGIN_KM_CMD + 9;
-constexpr int kOemRootPublicKeyCmd = INS_BEGIN_KM_CMD + 10;
-constexpr int kOemUnLockProvisionCmd = INS_BEGIN_KM_CMD + 11;
+constexpr int kOemLockProvisionCmd = INS_BEGIN_KM_CMD + 6;
+constexpr int kGetProvisionStatusCmd = INS_BEGIN_KM_CMD + 7;
+constexpr int kSeFactoryLockCmd = INS_BEGIN_KM_CMD + 10;
+constexpr int kOemRootPublicKeyCmd = INS_BEGIN_KM_CMD + 11;
+constexpr int kOemUnLockProvisionCmd = INS_BEGIN_KM_CMD + 12;
+constexpr int kDeviceUniqueKeyCmd = INS_BEGIN_KM_CMD + 13;
+constexpr int kAdditionalCertChainCmd = INS_BEGIN_KM_CMD + 14;
+
+
+
