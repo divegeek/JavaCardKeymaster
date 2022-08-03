@@ -142,9 +142,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // which is used while creating mac for key paramters.
   public static final short MAX_KEY_PARAMS_BUF_SIZE = (short) 3072; // 3K
 
-  // Aligned INS_INIT_STRONGBOX_CMD value with INS_SET_VERSION_PATCHLEVEL_CMD value in Keymaster instruction set
-  private static final byte INS_INIT_STRONGBOX_CMD = 0x08;
-
   // Top 32 commands are reserved for provisioning.
   private static final byte KEYMINT_CMD_APDU_START = 0x20;
 
@@ -173,16 +170,17 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_UPDATE_AAD_OPERATION_CMD = KEYMINT_CMD_APDU_START + 23; //0x37
   private static final byte INS_BEGIN_IMPORT_WRAPPED_KEY_CMD = KEYMINT_CMD_APDU_START + 24; //0x38
   private static final byte INS_FINISH_IMPORT_WRAPPED_KEY_CMD = KEYMINT_CMD_APDU_START + 25; //0x39
+  private static final byte INS_INIT_STRONGBOX_CMD = KEYMINT_CMD_APDU_START + 26; //0x3A
   // RKP
-  public static final byte INS_GET_RKP_HARDWARE_INFO = KEYMINT_CMD_APDU_START + 26; //0x3A
-  public static final byte INS_GENERATE_RKP_KEY_CMD = KEYMINT_CMD_APDU_START + 27; //0x3B
-  public static final byte INS_BEGIN_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 28; //0x3C
-  public static final byte INS_UPDATE_KEY_CMD = KEYMINT_CMD_APDU_START + 29; //0x3D
-  public static final byte INS_UPDATE_EEK_CHAIN_CMD = KEYMINT_CMD_APDU_START + 30; //0x3E
-  public static final byte INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 31; //0x3F
-  public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 32; //0x40
-  public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
-  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 34; //0x42
+  public static final byte INS_GET_RKP_HARDWARE_INFO = KEYMINT_CMD_APDU_START + 27; //0x3B
+  public static final byte INS_GENERATE_RKP_KEY_CMD = KEYMINT_CMD_APDU_START + 28; //0x3C
+  public static final byte INS_BEGIN_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 29; //0x3D
+  public static final byte INS_UPDATE_KEY_CMD = KEYMINT_CMD_APDU_START + 30; //0x3E
+  public static final byte INS_UPDATE_EEK_CHAIN_CMD = KEYMINT_CMD_APDU_START + 31; //0x3F
+  public static final byte INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 32; //0x40
+  public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
+  public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34; //0x42
+  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 35; //0x43
   private static final byte INS_END_KM_CMD = 0x7F;
 
   // Data Dictionary items

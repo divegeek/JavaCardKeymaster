@@ -38,7 +38,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5;
   private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 6;
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 7;
-  //0x08 is reserved for INS_INIT_STRONGBOX_CMD
+  //0x08 was reserved for INS_INIT_STRONGBOX_CMD
   //0x09 was reserved for INS_SET_BOOT_ENDED_CMD earlier. it is unused now.
   private static final byte INS_SE_FACTORY_PROVISIONING_LOCK_CMD = INS_KEYMINT_PROVIDER_APDU_START + 10;
   private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_KEYMINT_PROVIDER_APDU_START + 11;
