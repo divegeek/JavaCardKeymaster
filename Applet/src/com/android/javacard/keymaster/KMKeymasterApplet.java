@@ -141,6 +141,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // Maximum allowed buffer size for to encode the key parameters
   // which is used while creating mac for key paramters.
   public static final short MAX_KEY_PARAMS_BUF_SIZE = (short) 3072; // 3K
+
   // Top 32 commands are reserved for provisioning.
   private static final byte KEYMINT_CMD_APDU_START = 0x20;
 

@@ -32,21 +32,21 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
 
   // Provider specific Commands
   private static final byte INS_KEYMINT_PROVIDER_APDU_START = 0x00;
-  private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 1;
+  private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
   private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 2;
-  private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
-  private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 4;
+      INS_KEYMINT_PROVIDER_APDU_START + 4;
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5;
+  private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 6;
+  private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 7;
+  //0x08 was reserved for INS_INIT_STRONGBOX_CMD
+  //0x09 was reserved for INS_SET_BOOT_ENDED_CMD earlier. it is unused now.
+  private static final byte INS_SE_FACTORY_PROVISIONING_LOCK_CMD = INS_KEYMINT_PROVIDER_APDU_START + 10;
+  private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_KEYMINT_PROVIDER_APDU_START + 11;
+  private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 12;
   private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 6;
+      INS_KEYMINT_PROVIDER_APDU_START + 13;
   private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 7;
-  private static final byte INS_SET_BOOT_ENDED_CMD = 
-		  INS_KEYMINT_PROVIDER_APDU_START + 8; //unused
-  private static final byte INS_SE_FACTORY_PROVISIONING_LOCK_CMD = INS_KEYMINT_PROVIDER_APDU_START + 9;
-  private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_KEYMINT_PROVIDER_APDU_START + 10;
-  private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 11;
+      INS_KEYMINT_PROVIDER_APDU_START + 14;
   
   private static final byte INS_KEYMINT_PROVIDER_APDU_END = 0x1F;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
@@ -551,7 +551,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private boolean isProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
     short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
-    		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS;
+		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY;
     if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
       return true;
     }
