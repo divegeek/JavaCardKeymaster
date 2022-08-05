@@ -168,20 +168,21 @@ public class KMAsn1Parser {
     len = header(ASN1_INTEGER);
     short modulus = KMByteBlob.instance(len);
     getBytes(modulus);
-    updateModulus(modulus);
+    updateRsaKeyBuffer(modulus);
     len = header(ASN1_INTEGER);
     short pubKey = KMByteBlob.instance(len);
     getBytes(pubKey);
     len = header(ASN1_INTEGER);
     short privKey = KMByteBlob.instance(len);
     getBytes(privKey);
+    updateRsaKeyBuffer(privKey);
     KMArray.cast(resp).add((short)0, modulus);
     KMArray.cast(resp).add((short)1, pubKey);
     KMArray.cast(resp).add((short)2, privKey);
     return resp;
   }
   
-  private void updateModulus(short blob) {
+  private void updateRsaKeyBuffer(short blob) {
 	  byte[] buffer = KMByteBlob.cast(blob).getBuffer();
 	  short startOff = KMByteBlob.cast(blob).getStartOff();
 	  short len = KMByteBlob.cast(blob).length();
