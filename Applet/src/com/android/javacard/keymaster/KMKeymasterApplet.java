@@ -186,6 +186,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte INS_SEND_ROT_DATA_CMD = KEYMINT_CMD_APDU_START + 47; // 0x4F
   private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 48; //0x50
   private static final byte INS_END_KM_CMD = 0x7F;
+  // Instruction values from 0xCD to 0xFF are completely reserved for Vendors to use and
+  // will never be used by the base line code in future.
+  private static final byte INS_KM_VENDOR_START_CMD = 0xCD;
+  private static final byte INS_KM_VENDOR_END_CMD = 0xFF;
 
   // Data Dictionary items
   public static final byte DATA_ARRAY_SIZE = 40;
