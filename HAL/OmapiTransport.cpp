@@ -31,7 +31,7 @@ constexpr uint8_t SELECTABLE_AID[] = {0xA0, 0x00, 0x00, 0x04, 0x76, 0x41, 0x6E, 
         0x72, 0x6F, 0x69, 0x64, 0x43, 0x54, 0x53, 0x31};
 std::string const ESE_READER_PREFIX = "eSE";
 constexpr const char omapiServiceName[] =
-        "android.system.omapi.ISecureElementService/default";
+        "android.se.omapi.ISecureElementService/default";
 
 class SEListener : public ::aidl::android::se::omapi::BnSecureElementListener {};
 
