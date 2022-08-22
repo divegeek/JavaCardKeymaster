@@ -40,23 +40,22 @@ public class KMProvision {
 
   // Provision Instructions
   private static final byte INS_KEYMINT_PROVIDER_APDU_START = 0x00;
-  private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 1;
+  private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
   private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 2;
-  private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
-  private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 4;
-  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5;
+      INS_KEYMINT_PROVIDER_APDU_START + 4;
+  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5; // Unused
+  private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 6;
+  private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 7;
+  //0x08 was reserved for INS_INIT_STRONGBOX_CMD
+  //0x09 was reserved for INS_SET_BOOT_ENDED_CMD earlier. it is unused now.
+  private static final byte INS_SE_FACTORY_PROVISIONING_LOCK_CMD = INS_KEYMINT_PROVIDER_APDU_START + 10;
+  private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_KEYMINT_PROVIDER_APDU_START + 11;
+  private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 12;
   private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 6;
+      INS_KEYMINT_PROVIDER_APDU_START + 13;
   private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 7;
-  private static final byte INS_SET_BOOT_ENDED_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 8; //unused
-  private static final byte INS_SE_FACTORY_PROVISIONING_LOCK_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 9;
-  private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 10;
-  private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 11;
+      INS_KEYMINT_PROVIDER_APDU_START + 14;
+  private static final byte INS_PROVISION_SECURE_BOOT_MODE_CMD = INS_KEYMINT_PROVIDER_APDU_START + 15;
   // Top 32 commands are reserved for provisioning.
   private static final byte INS_END_KM_PROVISION_CMD = 0x20;
 
@@ -303,6 +302,17 @@ public class KMProvision {
     return simulator.transmitCommand(apdu);
   }
 
+  public static ResponseAPDU provisionSecureBootMode(CardSimulator simulator, KMEncoder encoder,
+      KMDecoder decoder) {
+    short arrPtr = KMArray.instance((short) 1);
+    KMArray.cast(arrPtr).add((short) 0, KMInteger.uint_8((byte) 0));
+
+    CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_PROVISION_SECURE_BOOT_MODE_CMD,
+        arrPtr);
+    // print(commandAPDU.getBytes());
+    return simulator.transmitCommand(apdu);
+  }
+
   public static ResponseAPDU provisionSharedSecret(CardSimulator simulator, KMEncoder encoder,
       KMDecoder decoder) {
     byte[] sharedKeySecret = {
@@ -471,6 +481,8 @@ public class KMProvision {
         provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         provisionSharedSecret(simulator, encoder, decoder)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        provisionSecureBootMode(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         provisionAttestIds(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,

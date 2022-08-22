@@ -219,6 +219,7 @@ int processInputFile() {
     if (!isOEMProvisionLocked(provisionStatus) &&
         ((0 != provisionData(pSocket, kAttestationIds)) ||
         (0 != provisionData(pSocket, kSharedSecret)) ||
+        (0 != provisionData(pSocket, kSecureBootMode)) ||
         (0 != provisionData(pSocket, kOEMRootKey)))) {
         return FAILURE;
     }

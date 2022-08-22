@@ -99,6 +99,7 @@ constexpr char kLockProvision[] = "lock_provision";
 constexpr char kOEMRootKey[] = "oem_root_key";
 constexpr char kSeFactoryProvisionLock[] = "se_factory_lock";
 constexpr char kUnLockProvision[] = "unlock_provision";
+constexpr char kSecureBootMode[] = "secure_boot_mode";
 
 // Instruction constatnts
 constexpr int kAttestationIdsCmd = INS_BEGIN_KM_CMD + 3;
@@ -111,6 +112,7 @@ constexpr int kOemRootPublicKeyCmd = INS_BEGIN_KM_CMD + 11;
 constexpr int kOemUnLockProvisionCmd = INS_BEGIN_KM_CMD + 12;
 constexpr int kDeviceUniqueKeyCmd = INS_BEGIN_KM_CMD + 13;
 constexpr int kAdditionalCertChainCmd = INS_BEGIN_KM_CMD + 14;
+constexpr int kSecureBootModeCmd = INS_BEGIN_KM_CMD + 15;
 
 
 

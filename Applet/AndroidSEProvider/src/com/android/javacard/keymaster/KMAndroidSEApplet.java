@@ -28,6 +28,7 @@ import com.android.javacard.seprovider.KMType;
 import javacard.framework.APDU;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
 
@@ -35,7 +36,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   // Magic number version
   private static final byte KM_MAGIC_NUMBER = (byte) 0x82;
   // MSB byte is for Major version and LSB byte is for Minor version.
-  private static final short KM_APPLET_PACKAGE_VERSION = 0x0300;
+  public static final short KM_APPLET_PACKAGE_VERSION = 0x0300;
 
   private static final byte KM_BEGIN_STATE = 0x00;
   private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
@@ -58,6 +59,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       INS_KEYMINT_PROVIDER_APDU_START + 13;
   private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 14;
+ private static final byte INS_PROVISION_SECURE_BOOT_MODE_CMD = INS_KEYMINT_PROVIDER_APDU_START + 15;
 
   private static final byte INS_KEYMINT_PROVIDER_APDU_END = 0x1F;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
@@ -154,6 +156,10 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           case INS_OEM_UNLOCK_PROVISIONING_CMD:
             processOEMUnlockProvisionCmd(apdu);
             break;
+
+          case INS_PROVISION_SECURE_BOOT_MODE_CMD:
+            processSecureBootCmd(apdu);
+            break;
         
           default:
             super.process(apdu);
@@ -180,6 +186,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     switch(apduIns) {
       case INS_PROVISION_ATTEST_IDS_CMD:
       case INS_PROVISION_PRESHARED_SECRET_CMD:
+      case INS_PROVISION_SECURE_BOOT_MODE_CMD:
       case INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD:
         if(kmDataStore.isProvisionLocked()) {
           result = false;  
@@ -243,6 +250,22 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       return true;
     }
     return false;
+  }
+
+  private void processSecureBootCmd(APDU apdu) {
+    short argsProto = KMArray.instance((short) 1);
+    KMArray.cast(argsProto).add((short) 0, KMInteger.exp());
+    short args = receiveIncoming(apdu, argsProto);
+    short val = KMInteger.cast(KMArray.cast(args).get((short) 0)).getShort();
+    if (val != 1 && val != 0) {
+      KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    // Store secure boot mode value.
+    JCSystem.beginTransaction();
+    kmDataStore.secureBootMode = (byte) val;
+    JCSystem.commitTransaction();
+    kmDataStore.setProvisionStatus(PROVISION_STATUS_SECURE_BOOT_MODE);
+    sendResponse(apdu, KMError.OK);
   }
 
   private void processOEMUnlockProvisionCmd(APDU apdu) {
@@ -505,7 +528,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private boolean isProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
     short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
-		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY;
+		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
+         PROVISION_STATUS_SECURE_BOOT_MODE;
     if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
       return true;
     }

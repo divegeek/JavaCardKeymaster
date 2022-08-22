@@ -25,5 +25,6 @@
       "test_resources/intermediate_key.der"
       ]
    },
-   "oem_root_key": "test_resources/oem_root_key.der"
+   "oem_root_key": "test_resources/oem_root_key.der",
+   "secure_boot_mode": 0
 }
