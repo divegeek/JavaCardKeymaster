@@ -80,6 +80,7 @@ static int sendOEMAuthenticationToken(const char* toBeSigned, int oemCmd,  const
 static int processOEMFactoryProvisionLock();
 static int processOEMFactoryProvisionUnLock();
 static int processGetProvisionStatus();
+static int processSecureBootMode();
 
 // Print usage.
 void usage() {
@@ -302,6 +303,7 @@ int processInputFile() {
         0 != processOEMFactoryProvisionUnLock() ||
         0 != processGetProvisionStatus() ||
         0 != processSEFactoryLock() ||
+        0 != processSecureBootMode() ||
         0 != processSetBootParameters()) {
         return FAILURE;
     }
@@ -581,6 +583,33 @@ int processOEMRootPublicKey() {
     return SUCCESS;
 }
 
+int processSecureBootMode() {
+    //SecureBootMode;
+    Json::Value secureBootMode = root.get("secure_boot_mode", Json::Value::nullRef);
+    if (!secureBootMode.isNull()) {
+
+        if (!secureBootMode.isInt()) {
+            printf("\n Fail: Value for secure boot mode should be string inside the json file\n");
+            return FAILURE;
+        }
+        int value = secureBootMode.asInt();
+        // Construct apdu.
+        Array array;
+        array.add(value);
+        std::vector<uint8_t> cborData = array.encode();
+        if (SUCCESS != addApduHeader(kSecureBootModeCmd, cborData)) {
+            return FAILURE;
+        }
+        // Write to json.
+        writerRoot[kSecureBootMode] = getHexString(cborData);
+        printf("\n Constructed secure boot mode APDU successfully \n");
+
+    } else {
+        printf("\n Fail: Improper value for secure boot mode inside the json file\n");
+        return FAILURE;
+    }
+    return SUCCESS;
+}
 
 int processAttestationIds() {
     //AttestIDParams params;

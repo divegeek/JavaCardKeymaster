@@ -879,7 +879,7 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(rkpTmpVariables, metaOffset, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(rkpTmpVariables, metaOffset, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
-    updateItem(rkpTmpVariables, metaOffset, FUSED, KMInteger.uint_8((byte) 0));
+    updateItem(rkpTmpVariables, metaOffset, FUSED, KMInteger.uint_8((byte) storeDataInst.secureBootMode));
     // Create device info map.
     short map = KMMap.instance(rkpTmpVariables[1]);
     short mapIndex = 0;

@@ -1511,6 +1511,8 @@ public class KMFunctionalTest {
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSharedSecret(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        KMProvision.provisionSecureBootMode(simulator, encoder, decoder)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionAttestIds(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionOEMRootPublicKey(simulator, encoder, decoder)));
@@ -1611,6 +1613,8 @@ public class KMFunctionalTest {
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSharedSecret(simulator, encoder, decoder)));
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        KMProvision.provisionSecureBootMode(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionAttestIds(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,

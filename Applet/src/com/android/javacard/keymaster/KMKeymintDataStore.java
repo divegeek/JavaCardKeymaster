@@ -33,6 +33,8 @@ public class KMKeymintDataStore implements KMUpgradable {
 	
   // Data table configuration
   public static final short KM_APPLET_PACKAGE_VERSION_1 = 0x0100;
+  public static final short KM_APPLET_PACKAGE_VERSION_2 = 0x0200;
+  public static final short KM_APPLET_PACKAGE_VERSION_3 = 0x0300;
   public static final short OLD_DATA_INDEX_SIZE = 19;
   public static final short DATA_INDEX_SIZE = 17;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
@@ -106,6 +108,8 @@ public class KMKeymintDataStore implements KMUpgradable {
   // Challenge for Root of trust
   private byte[] challenge;
 
+  // Secure Boot Mode
+  public byte secureBootMode;
   
   private short dataIndex;
   private byte[] dataTable;
@@ -886,6 +890,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   public void onSave(Element element) {
     // Prmitives
     element.write(provisionStatus);
+    element.write(secureBootMode);
     // Objects
     element.write(attIdBrand);
     element.write(attIdDevice);
@@ -912,8 +917,17 @@ public class KMKeymintDataStore implements KMUpgradable {
       // 1.0 to 3.0 Upgrade happens here.
       handlePreviousVersionUpgrade(element);
       return;
+    } else if (oldVersion == KM_APPLET_PACKAGE_VERSION_2) {
+      handleUpgrade(element, oldVersion);
+      JCSystem.beginTransaction();
+      // While upgrading Secure Boot Mode flag from 2.0 to 3.0, implementations
+      // have to update the secureBootMode with the correct input.
+      secureBootMode = 0;
+      provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SECURE_BOOT_MODE;
+      JCSystem.commitTransaction();
+      return;
     }
-    handleUpgrade(element);
+    handleUpgrade(element, oldVersion);
   }
 
   private void handlePreviousVersionUpgrade(Element element) {
@@ -950,9 +964,12 @@ public class KMKeymintDataStore implements KMUpgradable {
     handleProvisionStatusUpgrade(oldDataTable, oldDataIndex);
   }
   
-  private void handleUpgrade(Element element) {
+  private void handleUpgrade(Element element, short oldVersion) {
     // Read Primitives
     provisionStatus =  element.readShort();
+    if (oldVersion >= KM_APPLET_PACKAGE_VERSION_3) {
+      secureBootMode = element.readByte();
+    }
     // Read Objects
     attIdBrand = (byte[]) element.readObject();
     attIdDevice = (byte[]) element.readObject();
@@ -984,9 +1001,13 @@ public class KMKeymintDataStore implements KMUpgradable {
     short pStatus = (short)( data[dInex] & 0x00ff);
     if( KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED 
           == (pStatus & KMKeymasterApplet.PROVISION_STATUS_PROVISIONING_LOCKED)) {
-      pStatus |= KMKeymasterApplet.PROVISION_STATUS_SE_LOCKED;
+      pStatus |= KMKeymasterApplet.PROVISION_STATUS_SE_LOCKED
+          | KMKeymasterApplet.PROVISION_STATUS_SECURE_BOOT_MODE;
     }
     JCSystem.beginTransaction();
+    // While upgrading Secure Boot Mode flag from 1.0 to 3.0, implementations
+    // have to update the secureBootMode with the correct input.
+    secureBootMode = 0;
     provisionStatus = pStatus;
     JCSystem.commitTransaction();
     repository.reclaimMemory((short)2);
@@ -995,7 +1016,8 @@ public class KMKeymintDataStore implements KMUpgradable {
   @Override
   public short getBackupPrimitiveByteCount() {
     // provisionStatus - 2 bytes
-    return (short) (2 +
+    // secureBootMode - 1 byte
+    return (short) (3 +
         seProvider.getBackupPrimitiveByteCount(KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY) +
         seProvider.getBackupPrimitiveByteCount(KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY) +
         seProvider.getBackupPrimitiveByteCount( KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR) + 
