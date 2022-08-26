@@ -561,6 +561,10 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private boolean isAdditionalCertificateChainPresent() {
+    if ((TRUE == data[getEntry(TEST_MODE)])) {
+      // In test mode, don't include AdditionalCertificateChain in ProtectedData.
+      return false;
+    }
     return (storeDataInst.getAdditionalCertChainLength() == 0 ? false : true);
   }
 
