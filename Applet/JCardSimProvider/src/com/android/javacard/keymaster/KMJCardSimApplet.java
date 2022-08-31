@@ -33,10 +33,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   // Provider specific Commands
   private static final byte INS_KEYMINT_PROVIDER_APDU_START = 0x00;
   private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
-  private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
-      INS_KEYMINT_PROVIDER_APDU_START + 4;
-  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 5;
-  private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 6;
+  // 4, 5 and 6 are reserved for vendor usage.
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 7;
   //0x08 was reserved for INS_INIT_STRONGBOX_CMD
   //0x09 was reserved for INS_SET_BOOT_ENDED_CMD earlier. it is unused now.
@@ -47,6 +44,10 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
       INS_KEYMINT_PROVIDER_APDU_START + 13;
   private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 14;
+  private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
+      INS_KEYMINT_PROVIDER_APDU_START + 15;
+  private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 16;
+  private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 17;
   
   private static final byte INS_KEYMINT_PROVIDER_APDU_END = 0x1F;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
