@@ -260,7 +260,7 @@ public class KMRKPFunctionalTest {
     init();
     short[] noOfKeys = {0, 5, 10};
     for (int i = 0; i < noOfKeys.length; i++) {
-      testGenerateCsr(noOfKeys[i] /*no_keys*/, (short) 2 /*eek_chain_len*/, true /*testMode*/);
+      testGenerateCsr(noOfKeys[i] /*no_keys*/, (short) 2 /*eek_chain_len*/, false /*testMode*/);
       KMRepository.instance().clean();
     }
     cleanUp();
