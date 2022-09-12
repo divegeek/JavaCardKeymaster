@@ -136,8 +136,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte keyUsageKeyAgreement = (byte) 0x08; // 4th- bit
   private static final byte keyUsageCertSign = (byte) 0x04; // 5th- bit
 
-  private static final byte KEYMASTER_VERSION = 100;
-  private static final byte ATTESTATION_VERSION = 100;
+  private static final short KEYMINT_VERSION = 200;
+  private static final short ATTESTATION_VERSION = 200;
   private static final byte[] pubExponent = {0x01, 0x00, 0x01};
   private static final byte SERIAL_NUM = (byte) 0x01;
   private static final byte X509_VERSION = (byte) 0x02;
@@ -497,9 +497,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   }
 
   // KeyDescription ::= SEQUENCE {
-  //         attestationVersion         INTEGER, # Value 3
+  //         attestationVersion         INTEGER, # Value 200
   //         attestationSecurityLevel   SecurityLevel, # See below
-  //         keymasterVersion           INTEGER, # Value 4
+  //         keymasterVersion           INTEGER, # Value 200
   //         keymasterSecurityLevel     SecurityLevel, # See below
   //         attestationChallenge       OCTET_STRING, # Tag::ATTESTATION_CHALLENGE from attestParams
   //         uniqueId                   OCTET_STRING, # Empty unless key has Tag::INCLUDE_UNIQUE_ID
@@ -523,11 +523,11 @@ public class KMAttestationCertImpl implements KMAttestationCert {
         KMByteBlob.cast(attChallenge).getStartOff(),
         KMByteBlob.cast(attChallenge).length());
     pushEnumerated(KMType.STRONGBOX);
-    pushByte(KEYMASTER_VERSION);
-    pushIntegerHeader((short) 1);
+    pushShort(KEYMINT_VERSION);
+    pushIntegerHeader((short) 2);
     pushEnumerated(KMType.STRONGBOX);
-    pushByte(ATTESTATION_VERSION);
-    pushIntegerHeader((short) 1);
+    pushShort(ATTESTATION_VERSION);
+    pushIntegerHeader((short) 2);
     pushSequenceHeader((short) (last - stackPtr));
     pushOctetStringHeader((short) (last - stackPtr));
     pushBytes(androidExtn, (short) 0, (short) androidExtn.length);
