@@ -127,8 +127,7 @@ public class KMFunctionalTest {
   public static final byte INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 32; //0x40
   public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
   public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34; //0x42
-
-  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 48; //0x50
+  private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 35; //0x43
   private static final byte INS_END_KM_CMD = 0x7F;
   private static final byte[] rsa_key_pkcs8 = {
       (byte) 0x30, (byte) 0x82, (byte) 0x04, (byte) 0xbc, (byte) 0x02, (byte) 0x01, (byte) 0x00,
