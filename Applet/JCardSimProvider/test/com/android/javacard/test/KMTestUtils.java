@@ -447,7 +447,7 @@ public class KMTestUtils {
     //  Validate the decrypted payload.
     //  payload = [signedMac + bcc + ? AdditionalCertChain]
     //--------------------------------------------
-    short payloadLength = 3;
+    short payloadLength = testMode ? (short) 2 : (short) 3;
     short additionalCertChain = 0;
     short headersExp = KMCoseHeaders.exp();
     short coseKeyExp = KMCoseKey.exp();
@@ -468,8 +468,10 @@ public class KMTestUtils {
     KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
     KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
     short coseSignArr = KMArray.exp(arrInst);
-    additionalCertChain = KMMap.instance((short) 1);
-    KMMap.cast(additionalCertChain).add((short) 0, KMTextString.exp(), coseSignArr);
+    if (!testMode) {
+      additionalCertChain = KMMap.instance((short) 1);
+      KMMap.cast(additionalCertChain).add((short) 0, KMTextString.exp(), coseSignArr);
+    }
     // protected payload exp
     short payload = KMArray.instance(payloadLength);
     KMArray.cast(payload).add((short) 0, signedMacArr);
