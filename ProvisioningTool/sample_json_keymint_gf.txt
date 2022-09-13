@@ -1,13 +1,13 @@
 {
    "attest_ids": {
       "brand": "Android",
-      "device": "generic_x86_64",
-      "product": "aosp_x86_64",
+      "device": "emulator_x86_64",
+      "product": "sdk_phone_x86_64",
       "serial": "",
       "imei": "000000000000000",
       "meid": "000000000000000",
       "manufacturer": "unknown",
-      "model": "AOSP on x86_64"
+      "model": "Android SDK built for x86_64"
    },
    "shared_secret": "0000000000000000000000000000000000000000000000000000000000000000",
    "set_boot_params": {

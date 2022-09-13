@@ -79,9 +79,9 @@ keymaster_error_t SocketTransport::sendData(const vector<uint8_t>& inData, vecto
     inDataPrependedLength.push_back(static_cast<uint8_t>(inData.size() & 0xFF));
     inDataPrependedLength.insert(inDataPrependedLength.end(), inData.begin(), inData.end());
 
-    if (0 > send(mSocket, inDataPrependedLength.data(), inDataPrependedLength.size(), 0)) {
+    if (0 > send(mSocket, inDataPrependedLength.data(), inDataPrependedLength.size(), MSG_NOSIGNAL)) {
         static int connectionResetCnt = 0; /* To avoid loop */
-        if (ECONNRESET == errno && connectionResetCnt == 0) {
+        if ((ECONNRESET == errno || EPIPE == errno) && connectionResetCnt == 0) {
             // Connection reset. Try open socket and then sendData.
             socketStatus = false;
             connectionResetCnt++;
