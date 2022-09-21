@@ -700,12 +700,12 @@ class Map : public Item {
      *
      * If the searched-for `key` is not present, returns `nullptr`.
      *
-     * Note that if the map is canonicalized (sorted), Map::get() peforms a binary search.  If your
+     * Note that if the map is canonicalized (sorted), Map::get() performs a binary search.  If your
      * map is large and you're searching in it many times, it may be worthwhile to canonicalize it
      * to make Map::get() faster.  Any use of a method that might modify the map disables the
      * speedup.
      */
-    template <typename Key, typename Enable = void>
+    template <typename Key, typename Enable>
     const std::unique_ptr<Item>& get(Key key) const;
 
     // Note that use of non-const operator[] marks the map as not canonicalized.
