@@ -88,7 +88,7 @@ public class RemotelyProvisionedComponentDevice {
   public static final byte DI_SCHEMA_VERSION = 2;
   public static final byte[] DI_SECURITY_LEVEL = {0x73, 0x74, 0x72, 0x6F, 0x6E, 0x67, 0x62, 0x6F,
       0x78};
-  private static final short MAX_SEND_DATA = 1024;
+  private static final short MAX_SEND_DATA = 512;
   
   private static final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
 
@@ -838,21 +838,21 @@ public class RemotelyProvisionedComponentDevice {
    * DeviceInfo is a CBOR Map structure described by the following CDDL.
    * <p>
    * DeviceInfo = {
-   * ? "brand" : tstr,
-   * ? "manufacturer" : tstr,
-   * ? "product" : tstr,
-   * ? "model" : tstr,
-   * ? "board" : tstr,
-   * ? "vb_state" : "green" / "yellow" / "orange",    // Taken from the AVB values
-   * ? "bootloader_state" : "locked" / "unlocked",    // Taken from the AVB values
-   * ? "vbmeta_digest": bstr,                         // Taken from the AVB values
+   *  "brand" : tstr,
+   *  "manufacturer" : tstr,
+   *  "product" : tstr,
+   *  "model" : tstr,
+   *  "device" : tstr,
+   *  "vb_state" : "green" / "yellow" / "orange",    // Taken from the AVB values
+   *  "bootloader_state" : "locked" / "unlocked",    // Taken from the AVB values
+   *  "vbmeta_digest": bstr,                         // Taken from the AVB values
    * ? "os_version" : tstr,                    // Same as android.os.Build.VERSION.release
-   * ? "system_patch_level" : uint,                   // YYYYMMDD
-   * ? "boot_patch_level" : uint,                     //YYYYMMDD
-   * ? "vendor_patch_level" : uint,                   // YYYYMMDD
-   * "version" : 1, // TheCDDL schema version
+   *  "system_patch_level" : uint,                   // YYYYMMDD
+   *  "boot_patch_level" : uint,                     //YYYYMMDD
+   *  "vendor_patch_level" : uint,                   // YYYYMMDD
+   * "version" : 2, // TheCDDL schema version
    * "security_level" : "tee" / "strongbox"
-   * "att_id_state": "locked" / "open"
+   * "fused": 1 / 0,
    * }
    */
   private short createDeviceInfo(byte[] scratchpad) {
