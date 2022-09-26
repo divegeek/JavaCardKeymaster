@@ -92,7 +92,6 @@ void usage() {
     printf("-o, --output jsonFile \t Output json file \n");
 }
 
-
 int ecRawKeyFromPKCS8(const std::vector<uint8_t>& pkcs8Blob, std::vector<uint8_t>& secret,
         std::vector<uint8_t>& pub_x, std::vector<uint8_t>& pub_y) {
     const uint8_t *data = pkcs8Blob.data();
@@ -317,9 +316,8 @@ int processInputFile() {
 int processAdditionalCertificateChain() {
     Json::Value signerInfo = root.get(kSignerInfo, Json::Value::nullRef);
     if (!signerInfo.isNull()) {
+        std::vector<uint8_t> certData;
         std::string signerName;
-        std::string signingKeyFile;
-        std::vector<uint8_t> previousKey;
         Array array;
 
         if (SUCCESS != getStringValue(signerInfo, "signer_name", signerName)) {
@@ -327,89 +325,44 @@ int processAdditionalCertificateChain() {
             return FAILURE;
         }
 
-        Json::Value keys = signerInfo.get("signing_keys", Json::Value::nullRef);
-        if (!keys.isNull()) {
-            if (!keys.isArray()) {
+        Json::Value certChainFiles = signerInfo.get("signing_keys", Json::Value::nullRef);
+        if (!certChainFiles.isNull()) {
+            if (!certChainFiles.isArray()) {
                 printf("\n Improper value for signing_keys in json file \n");
                 return FAILURE;
             }
-            for(uint32_t i = 0; i < keys.size(); i++) {
-                std::vector<uint8_t> data;
-                std::vector<uint8_t> privateKey;
-                std::vector<uint8_t> x_coord;
-                std::vector<uint8_t> y_coord;
+            for (uint32_t i = 0; i < certChainFiles.size(); i++) {
+                if(certChainFiles[i].isString()) {
+                    /* Read the certificates. */
+                    if(SUCCESS != readDataFromFile(certChainFiles[i].asString().data(), certData)) {
+                        printf("\n Failed to read the Root certificate\n");
+                        return FAILURE;
+                    }
+                    array.add(certData);
+                    certData.clear();
 
-                if (!keys[i].isString()) {
-                    printf("\n Improper value for signing_keys in json file \n");
+                } else {
+                    printf("\n Fail: Only proper certificate paths as a "
+                            "string is allowed inside the json file. \n");
                     return FAILURE;
                 }
-
-                if(SUCCESS != readDataFromFile(keys[i].asString().data(), data)) {
-                    printf("\n Failed to read the attestation key from the file.\n");
-                    return FAILURE;
-                }
-                if (SUCCESS != ecRawKeyFromPKCS8(data, privateKey, x_coord, y_coord)) {
-                    return FAILURE;
-                }
-
-                if (i == 0) {
-                    // self-signed.
-                    previousKey = privateKey;
-                }
-
-                auto rootCoseSign =
-                    cppcose::constructCoseSign1(previousKey, /* Signing key */
-                            cppbor::Map() /* Payload CoseKey */
-                            .add(CoseKey::KEY_TYPE, EC2)
-                            .add(CoseKey::ALGORITHM, ES256)
-                            .add(CoseKey::CURVE, P256)
-                            .add(CoseKey::KEY_OPS, SIGN)
-                            .add(CoseKey::PUBKEY_X, x_coord)
-                            .add(CoseKey::PUBKEY_Y, y_coord)
-                            .canonicalize()
-                            .encode(),
-                            {} /* AAD */);
-                if (!rootCoseSign) {
-                    printf("\n Failed to construct CoseSign1 %s\n", rootCoseSign.moveMessage().c_str());
-                    return FAILURE;
-                }
-
-                // Add to cbor array
-                array.add(rootCoseSign.moveValue());
-                previousKey = privateKey;
             }
-        }
-
-        std::vector<uint8_t> dk_priv;
-        std::vector<uint8_t> dk_pub_x;
-        std::vector<uint8_t> dk_pub_y;
-        if (SUCCESS == getDeviceUniqueKey(dk_priv, dk_pub_x, dk_pub_y)) {
-            auto dkCoseSign =
-                cppcose::constructCoseSign1(previousKey, /* Signing key */
-                        cppbor::Map() /* Payload CoseKey */
-                                .add(CoseKey::KEY_TYPE, EC2)
-                                .add(CoseKey::ALGORITHM, ES256)
-                                .add(CoseKey::CURVE, P256)
-                                .add(CoseKey::KEY_OPS, SIGN)
-                                .add(CoseKey::PUBKEY_X, dk_pub_x)
-                                .add(CoseKey::PUBKEY_Y, dk_pub_y)
-                                .canonicalize()
-                        .encode(),
-                        {} /* AAD */);
-            if (!dkCoseSign) {
-                printf("\n Failed to construct CoseSign1 %s\n", dkCoseSign.moveMessage().c_str());
-                return FAILURE;
-            }
-            array.add(dkCoseSign.moveValue());
-            std::vector<uint8_t> cborData = Map().add(signerName, std::move(array)).encode();
-            if(SUCCESS != addApduHeader(kAdditionalCertChainCmd, cborData)) {
-                return FAILURE;
-            }
-            // Write to json.
-            writerRoot[kAdditionalCertChain] = getHexString(cborData);
         } else {
+            printf("\n Fail: cert chain value should be an array inside the json file. \n");
             return FAILURE;
         }
+
+        // Prepare cbor input
+        cppbor::Map map;
+        map.add(signerName, std::move(array));
+        cppbor::Bstr bstr(map.encode());
+        std::vector<uint8_t> cborData = bstr.encode();
+
+        if(SUCCESS != addApduHeader(kAdditionalCertChainCmd, cborData)) {
+            return FAILURE;
+        }
+        // Write to json.
+        writerRoot[kAdditionalCertChain] = getHexString(cborData);
 
     } else {
         printf("\n Improper value for signer_info in json file \n");

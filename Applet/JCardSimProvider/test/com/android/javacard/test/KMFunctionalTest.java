@@ -1482,7 +1482,7 @@ public class KMFunctionalTest {
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAdditionalCertChain(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSharedSecret(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
@@ -1505,7 +1505,7 @@ public class KMFunctionalTest {
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAdditionalCertChain(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
@@ -1552,7 +1552,7 @@ public class KMFunctionalTest {
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAdditionalCertChain(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
@@ -1588,13 +1588,13 @@ public class KMFunctionalTest {
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAdditionalCertChain(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.UNKNOWN_ERROR, KMTestUtils.decodeError(decoder,
         KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
     Assert.assertEquals(KMError.UNKNOWN_ERROR, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAdditionalCertChain(simulator, encoder, decoder)));
     cleanUp();
   }
 
@@ -1608,7 +1608,7 @@ public class KMFunctionalTest {
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAdditionalCertChain(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,

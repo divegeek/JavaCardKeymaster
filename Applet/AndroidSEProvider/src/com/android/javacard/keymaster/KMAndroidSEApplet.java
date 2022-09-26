@@ -387,18 +387,28 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     sendResponse(apdu, KMError.OK);
   }
 
-  private static void processProvisionRkpAdditionalCertChain(APDU apdu) {
-    // Prepare the expression to decode
-    short headers = KMCoseHeaders.exp();
-    short arrInst = KMArray.instance((short) 4);
-    KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
-    KMArray.cast(arrInst).add((short) 1, headers);
-    KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
-    KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
-    short coseSignArr = KMArray.exp(arrInst);
-    short map = KMMap.instance((short) 1);
-    KMMap.cast(map).add((short) 0, KMTextString.exp(), coseSignArr);
-    // receive incoming data and decode it.
+  private void processProvisionRkpAdditionalCertChain(APDU apdu) {
+    // X509 certificate chain is received as shown below:
+    /**
+     *     x509CertChain = bstr .cbor UdsCerts
+     *
+     *     UdsCerts = {
+     *         * SignerName => UdsCertChain
+     *     }
+     *     ; SignerName is a string identifier that indicates both the signing authority as
+     *     ; well as the format of the UdsCertChain
+     *     SignerName = tstr
+     *
+     *     UdsCertChain = [
+     *         2* X509Certificate       ; Root -> ... -> Leaf. "Root" is the vendor self-signed
+     *                                  ; cert, "Leaf" contains UDS_Public. There may also be
+     *                                  ; intermediate certificates between Root and Leaf.
+     *     ]
+     *     ; A bstr containing a DER-encoded X.509 certificate (RSA, NIST P-curve, or edDSA)
+     *     X509Certificate = bstr
+     */
+    // Store the cbor encoded UdsCerts as it is in the persistent memory so cbor decoding is
+    // required here.
     byte[] srcBuffer = apdu.getBuffer();
     short recvLen = apdu.setIncomingAndReceive();
     short srcOffset = apdu.getOffsetCdata();
@@ -411,27 +421,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       index += recvLen;
       recvLen = apdu.receiveBytes(srcOffset);
     }
-    // decode
-    map = decoder.decode(map, buffer, bufferStartOffset, bufferLength);
-    arrInst = KMMap.cast(map).getKeyValue((short) 0);
-    // Validate Additional certificate chain.
-    short leafCoseKey =
-        validateCertChain(false, KMCose.COSE_ALG_ES256, KMCose.COSE_ALG_ES256, arrInst,
-            srcBuffer, null);
-    // Compare the DK_Pub.
-    short pubKeyLen = KMCoseKey.cast(leafCoseKey).getEcdsa256PublicKey(srcBuffer, (short) 0);
-    KMDeviceUniqueKeyPair uniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair(false);
-    if (uniqueKey == null) {
-      KMException.throwIt(KMError.STATUS_FAILED);
-    }
-    short uniqueKeyLen = uniqueKey.getPublicKey(srcBuffer, pubKeyLen);
-    if ((pubKeyLen != uniqueKeyLen) ||
-        (0 != Util.arrayCompare(srcBuffer, (short) 0, srcBuffer, pubKeyLen, pubKeyLen))) {
-      KMException.throwIt(KMError.STATUS_FAILED);
-    }
-    kmDataStore.persistAdditionalCertChain(buffer, bufferStartOffset, bufferLength);
+    short byteHeaderLen = decoder.readCertificateChainHeaderLen(buffer, bufferStartOffset,
+        bufferLength);
+    kmDataStore.persistAdditionalCertChain(buffer, (short) (bufferStartOffset + byteHeaderLen),
+        (short) (bufferLength - byteHeaderLen));
     kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
-    //reclaim memory
+    // reclaim memory
     repository.reclaimMemory(bufferLength);
     sendResponse(apdu, KMError.OK);
   }

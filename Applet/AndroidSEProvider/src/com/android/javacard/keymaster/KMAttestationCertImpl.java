@@ -136,8 +136,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte keyUsageKeyAgreement = (byte) 0x08; // 4th- bit
   private static final byte keyUsageCertSign = (byte) 0x04; // 5th- bit
 
-  private static final short KEYMINT_VERSION = 200;
-  private static final short ATTESTATION_VERSION = 200;
+  private static final short KEYMINT_VERSION = 300;
+  private static final short ATTESTATION_VERSION = 300;
   private static final byte[] pubExponent = {0x01, 0x00, 0x01};
   private static final byte SERIAL_NUM = (byte) 0x01;
   private static final byte X509_VERSION = (byte) 0x02;

@@ -179,6 +179,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 32; //0x40
   public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
   public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34; //0x42
+  public static final byte INS_GET_UDS_CERTS_CMD = KEYMINT_CMD_APDU_START + 35; //0x43
+  public static final byte INS_GET_DICE_CERT_CHAIN_CMD = KEYMINT_CMD_APDU_START + 36; //0x44
   // The instructions from 0x43 to 0x4C will be reserved for KeyMint 1.0 for any future use.
   // KeyMint 2.0 Instructions
   private static final byte INS_GET_ROT_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 45; // 0x4D
@@ -550,6 +552,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_FINISH_SEND_DATA_CMD:
         case INS_GET_RESPONSE_CMD:
         case INS_GET_RKP_HARDWARE_INFO:
+        case INS_GET_UDS_CERTS_CMD:
+        case INS_GET_DICE_CERT_CHAIN_CMD:	
           rkp.process(apduIns, apdu);
           break;
           //KeyMint 2.0
@@ -926,7 +930,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processGetHwInfoCmd(APDU apdu) {
     // No arguments expected
-    final byte version = 2;
+    final byte version = 3;
     // Make the response
     short respPtr = KMArray.instance((short) 6);
     KMArray resp = KMArray.cast(respPtr);
@@ -4725,8 +4729,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             (short) 0,
             temp,
             KMType.INVALID_VALUE,
-            false
-        );
+            false);
     temp = KMKeymasterApplet.encodeToApduBuffer(coseKey, scratchPad, (short) 0,
         KMKeymasterApplet.MAX_COSE_BUF_SIZE);
     // Construct payload.

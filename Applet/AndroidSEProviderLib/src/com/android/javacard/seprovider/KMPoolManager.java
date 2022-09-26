@@ -71,8 +71,10 @@ public class KMPoolManager {
   KMOperation rkpOPeration;
   Cipher rkpAesGcm;
   Signature rkpHmac;
+  Signature rkpEc;
   KMKeyObject rkpHmacKey;
   KMKeyObject rkpAesKey;
+  KMKeyObject rkpEcKey;
 
   final byte[] KEY_ALGS = {
       AES_128,
@@ -208,8 +210,10 @@ public class KMPoolManager {
     rkpOPeration = new KMOperationImpl();
     rkpAesGcm = Cipher.getInstance(AEADCipher.ALG_AES_GCM, false);
     rkpHmac = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
+    rkpEc = Signature.getInstance(Signature.ALG_ECDSA_SHA_256, false);
     rkpAesKey = createKeyObjectInstance(AES_256);
     rkpHmacKey = createKeyObjectInstance(KMType.HMAC);
+    rkpEcKey = createKeyObjectInstance(KMType.EC);
   }
 
   private void initializeKeysPool() {
@@ -454,6 +458,10 @@ public class KMPoolManager {
     case Signature.ALG_HMAC_SHA_256:
       cryptoObj = rkpHmac;
       keyObject = rkpHmacKey;
+      break;
+    case Signature.ALG_ECDSA_SHA_256:
+      cryptoObj = rkpEc;
+      keyObject = rkpEcKey;
       break;
     default:
       // Should not come here.

@@ -26,6 +26,17 @@ import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMECPrivateKey;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMSEProvider;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PublicKey;
+import java.security.SignatureException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
@@ -462,16 +473,9 @@ public class KMTestUtils {
     KMArray.cast(bccArr).add((short) 1, signedMacArr);
     //if (!testMode) {
     short headers = KMCoseHeaders.exp();
-    short arrInst = KMArray.instance((short) 4);
-    KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
-    KMArray.cast(arrInst).add((short) 1, headers);
-    KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
-    KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
-    short coseSignArr = KMArray.exp(arrInst);
-    if (!testMode) {
-      additionalCertChain = KMMap.instance((short) 1);
-      KMMap.cast(additionalCertChain).add((short) 0, KMTextString.exp(), coseSignArr);
-    }
+    short x509Arr = KMArray.exp(KMByteBlob.exp());
+    additionalCertChain = KMMap.instance((short) 1);
+    KMMap.cast(additionalCertChain).add((short) 0, KMTextString.exp(), x509Arr);
     // protected payload exp
     short payload = KMArray.instance(payloadLength);
     KMArray.cast(payload).add((short) 0, signedMacArr);
@@ -496,81 +500,63 @@ public class KMTestUtils {
     //--------------------------------------------
     //  Validate Additional certificate chain.
     //--------------------------------------------
-    if (!testMode) {
+    //if (!testMode) {
+    {
       short addCertChain = KMArray.cast(payloadPtr).get((short) 2);
       addCertChain = KMMap.cast(addCertChain).getKeyValue((short) 0);
-      Assert.assertTrue(
-          validateCertChain(cryptoProvider, encoder, decoder, KMCose.COSE_ALG_ES256,
-              KMCose.COSE_ALG_ES256, addCertChain));
+      Assert.assertTrue(validateCertChain(addCertChain));
     }
   }
 
-  public static boolean validateCertChain(KMSEProvider cryptoProvider, KMEncoder encoder,
-      KMDecoder decoder, byte expCertAlg, byte expLeafCertAlg,
-      short certChainArr) {
-    byte[] scratchPad = new byte[500];
-    short offset = 0;
-    short len = KMArray.cast(certChainArr).length();
-    short coseHeadersExp = KMCoseHeaders.exp();
-    //prepare exp for coseky
-    short coseKeyExp = KMCoseKey.exp();
-    short ptr1;
-    short ptr2;
-    short signStructure;
-    short encodedLen;
-    short prevCoseKey = 0;
-    short keySize;
-    short alg = expCertAlg;
-    short[] shortScratchBuffer = new short[20];
-    short index;
-    for (index = 0; index < len; index++) {
-      ptr1 = KMArray.cast(certChainArr).get(index);
+  public static X509Certificate decodeCert(byte[] cert, short certOff, short certLen)
+    throws IOException {
+    byte[] certificate = new byte[certLen];
+    Util.arrayCopyNonAtomic(cert, certOff, certificate, (short) 0, certLen);
+    InputStream inStream = new ByteArrayInputStream(certificate);
+    CertificateFactory certFactory;
+    try {
+      certFactory = CertificateFactory.getInstance("X.509");
+    } catch (CertificateException e) {
+      // Should not happen, as X.509 is mandatory for all providers.
+      throw new RuntimeException(e);
+    }
+    try {
+      return (X509Certificate) certFactory.generateCertificate(inStream);
+    } catch (CertificateException e) {
+      throw new IOException(e);
+    }
+  }
 
-      // validate protected Headers
-      ptr2 = KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PROTECTED_PARAMS_OFFSET);
-      ptr2 = decoder.decode(coseHeadersExp, KMByteBlob.cast(ptr2).getBuffer(),
-          KMByteBlob.cast(ptr2).getStartOff(), KMByteBlob.cast(ptr2).length());
-      if (!KMCoseHeaders.cast(ptr2).isDataValid(shortScratchBuffer, alg, KMType.INVALID_VALUE)) {
-        return false;
-      }
+  public static boolean validateCertChain(short certChainArr) {
+    short arrLen = KMArray.cast(certChainArr).length();
+    PublicKey previousKey = null;
+    for (short i = 0; i < arrLen; i++) {
+      short byteBlob = KMArray.cast(certChainArr).get((short) i);
 
-      // parse and get the public key from payload.
-      ptr2 = KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PAYLOAD_OFFSET);
-      ptr2 = decoder.decode(coseKeyExp, KMByteBlob.cast(ptr2).getBuffer(),
-          KMByteBlob.cast(ptr2).getStartOff(), KMByteBlob.cast(ptr2).length());
-      if (index == len - 1) {
-        alg = expLeafCertAlg;
+      X509Certificate x509Cert = null;
+      try {
+        x509Cert = decodeCert(KMByteBlob.cast(byteBlob).getBuffer(),
+            KMByteBlob.cast(byteBlob).getStartOff(),
+            KMByteBlob.cast(byteBlob).length());
+      } catch (IOException e) {
+        Assert.fail("Failed to parse certificate");
       }
-      if (!KMCoseKey.cast(ptr2)
-          .isDataValid(shortScratchBuffer, KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE, alg,
-              KMType.INVALID_VALUE, KMCose.COSE_ECCURVE_256)) {
-        return false;
+      if (i == 0) {
+        previousKey = x509Cert.getPublicKey();
       }
-      if (prevCoseKey == 0) {
-        prevCoseKey = ptr2;
+      try {
+        x509Cert.checkValidity();
+      } catch (CertificateException e) {
+        Assert.fail("Certificate validity expired.");
       }
-      // Get the public key.
-      keySize = KMCoseKey.cast(prevCoseKey).getEcdsa256PublicKey(scratchPad, offset);
-      if (keySize != 65) {
-        return false;
+      try {
+        x509Cert.verify(previousKey);
+      } catch (CertificateException | NoSuchAlgorithmException | InvalidKeyException |
+          NoSuchProviderException | SignatureException e) {
+        Assert.fail("Certificate verification failed.");
+        e.printStackTrace();
       }
-      // Validate signature.
-      signStructure =
-          KMCose.constructCoseSignStructure(
-              KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PROTECTED_PARAMS_OFFSET),
-              KMByteBlob.instance((short) 0),
-              KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_PAYLOAD_OFFSET));
-      encodedLen = encoder.encode(signStructure, scratchPad, (short) (offset + keySize),
-          (short) 500);
-
-      if (!cryptoProvider.ecVerify256(scratchPad, offset, keySize, scratchPad,
-          (short) (offset + keySize), encodedLen,
-          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getBuffer(),
-          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).getStartOff(),
-          KMByteBlob.cast(KMArray.cast(ptr1).get(KMCose.COSE_SIGN1_SIGNATURE_OFFSET)).length())) {
-        return false;
-      }
-      prevCoseKey = ptr2;
+      previousKey = x509Cert.getPublicKey();
     }
     return true;
   }

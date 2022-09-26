@@ -46,7 +46,7 @@ public interface KMSEProvider {
    * @param resetBootFlag is false if event has been handled
    */
   void clearDeviceBooted(boolean resetBootFlag);
-  
+
   /**
    * Create a symmetric key instance. If the algorithm and/or keysize are not supported then it
    * should throw a CryptoException.
@@ -94,7 +94,7 @@ public interface KMSEProvider {
    * @return instance of KMOperation.
    */
   KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey);
-  
+
   /**
    * Verify that the imported key is valid. If the algorithm and/or keysize are not supported then
    * it should throw a CryptoException.
@@ -297,7 +297,7 @@ public interface KMSEProvider {
       short dataLength,
       byte[] signature,
       short signatureStart);
-  
+
   /**
    * This is a oneshot operation that signs the data using hmac algorithm.
    *
@@ -310,7 +310,7 @@ public interface KMSEProvider {
    * @return length of the signature buffer in bytes.
    */
   short hmacSign(
-	  Object hmacKey,
+      Object hmacKey,
       byte[] data,
       short dataStart,
       short dataLength,
@@ -340,9 +340,7 @@ public interface KMSEProvider {
   /**
    * This is a oneshot operation that verifies the signature using hmac algorithm.
    *
-   * @param keyBuf is the buffer with hmac key.
-   * @param keyStart is the start of the buffer.
-   * @param keyLength is the length of the buffer which will be in bytes from 8 to 64.
+   * @param hmacKey is the Hmac key.
    * @param data is the buffer containing data.
    * @param dataStart is the start of the data.
    * @param dataLength is the length of the data.
@@ -600,7 +598,7 @@ public interface KMSEProvider {
       boolean oneShot);
 
   /**
-   *  This function creates an Operation instance only for RKP module.
+   * This function creates an Operation instance only for RKP module.
    *
    * @param purpose is KMType.ENCRYPT or KMType.DECRYPT for AES and DES algorithm. It will be
    * KMType.SIGN and KMType.VERIFY for HMAC algorithm
@@ -624,9 +622,7 @@ public interface KMSEProvider {
       byte digest,
       byte padding,
       byte blockMode,
-      byte[] keyBuf,
-      short keyStart,
-      short keyLength,
+      KMDeviceUniqueKeyPair ecPrivKey,
       byte[] ivBuf,
       short ivStart,
       short ivLength,
@@ -693,7 +689,8 @@ public interface KMSEProvider {
    * @param length length of the buffer.
    * @return An instance of the KMComputedHmacKey.
    */
-  KMComputedHmacKey createComputedHmacKey(KMComputedHmacKey computedHmacKey, byte[] keyData, short offset, short length);
+  KMComputedHmacKey createComputedHmacKey(KMComputedHmacKey computedHmacKey, byte[] keyData,
+      short offset, short length);
 
   /**
    * Returns true if factory provisioned attestation key is supported.
@@ -721,7 +718,7 @@ public interface KMSEProvider {
   KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
       byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff, short privKeyLen);
-  
+
   /**
    * This is a one-shot operation the does digest of the input mesage.
    *
@@ -734,7 +731,7 @@ public interface KMSEProvider {
    */
   short messageDigest256(byte[] inBuff, short inOffset, short inLength, byte[] outBuff,
       short outOffset);
-  
+
   /**
    * This function generates a HMAC key from the provided key buffers.
    *
@@ -746,7 +743,7 @@ public interface KMSEProvider {
    */
   KMPreSharedKey createPreSharedKey(KMPreSharedKey presharedKey, byte[] key, short offset,
       short length);
-  
+
   /**
    * This function saves the key objects while upgrade.
    *
@@ -755,18 +752,18 @@ public interface KMSEProvider {
    * @param object instance of the object to be saved.
    */
   void onSave(Element element, byte interfaceType, Object object);
-  
+
   /**
    * This function restores the the object from element instance.
-   * 
+   *
    * @param element instance of the Element class.
    * @return restored object.
    */
   Object onRestore(Element element);
-  
+
   /**
-   * This function returns the count of the primitive bytes required to
-   * be stored by the implementation of the interface type.
+   * This function returns the count of the primitive bytes required to be stored by the
+   * implementation of the interface type.
    *
    * @param interfaceType type interface of the parent object.
    * @return count of the primitive bytes.
@@ -774,14 +771,14 @@ public interface KMSEProvider {
   short getBackupPrimitiveByteCount(byte interfaceType);
 
   /**
-   * This function returns the object count required to be stored by the
-   * implementation of the interface type.
+   * This function returns the object count required to be stored by the implementation of the
+   * interface type.
    *
    * @param interfaceType type interface of the parent object.
    * @return count of the objects.
    */
   short getBackupObjectCount(byte interfaceType);
-  
+
   /**
    * This function creates an HMACKey and initializes the key with the provided input key data.
    *

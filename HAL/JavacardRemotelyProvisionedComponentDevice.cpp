@@ -58,7 +58,7 @@ keymaster_error_t translateRkpErrorCode(keymaster_error_t error) {
 }
 
 ScopedAStatus defaultHwInfo(RpcHardwareInfo* info) {
-    info->versionNumber = 2;
+    info->versionNumber = 3;
     info->rpcAuthorName = "Google";
     info->supportedEekCurve = RpcHardwareInfo::CURVE_P256;
     info->uniqueId = "strongbox keymint";
@@ -131,156 +131,172 @@ JavacardRemotelyProvisionedComponentDevice::generateEcdsaP256KeyPair(bool testMo
 }
 
 ScopedAStatus
-JavacardRemotelyProvisionedComponentDevice::beginSendData(
-    bool testMode, const std::vector<MacedPublicKey>& keysToSign) {
+JavacardRemotelyProvisionedComponentDevice::beginSendData(const std::vector<MacedPublicKey>& keysToSign, 
+    DeviceInfo &deviceInfo, const std::vector<uint8_t>& challenge) {
     uint32_t totalEncodedSize = coseKeyEncodedSize(keysToSign);
     cppbor::Array array;
     array.add(keysToSign.size());
     array.add(totalEncodedSize);
-    array.add(testMode);
-    auto [_, err] = card_->sendRequest(Instruction::INS_BEGIN_SEND_DATA_CMD, array);
+    array.add(challenge);
+    auto [item, err] = card_->sendRequest(Instruction::INS_BEGIN_SEND_DATA_CMD, array);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in beginSendData.";
         return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
+    auto optDecodedDeviceInfo = cbor_.getByteArrayVec(item, 1);
+    if (!optDecodedDeviceInfo) {
+         LOG(ERROR) << "Error in decoding og response in beginSendData.";
+         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+    }
+    deviceInfo.deviceInfo = std::move(optDecodedDeviceInfo.value());
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::updateMacedKey(
-    const std::vector<MacedPublicKey>& keysToSign) {
+    const std::vector<MacedPublicKey>& keysToSign, Array& coseKeys) {
     for(auto& macedPublicKey : keysToSign) {
         cppbor::Array array;
         array.add(EncodedItem(macedPublicKey.macedKey));
-        auto [_, err] = card_->sendRequest(Instruction::INS_UPDATE_KEY_CMD, array);
+        auto [item, err] = card_->sendRequest(Instruction::INS_UPDATE_KEY_CMD, array);
         if (err != KM_ERROR_OK) {
             LOG(ERROR) << "Error in updateMacedKey.";
             return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
         }
-    }
-    return ScopedAStatus::ok();
-}
-
-ScopedAStatus
-JavacardRemotelyProvisionedComponentDevice::updateChallenge(
-    const std::vector<uint8_t>& challenge) {
-    Array array;
-    array.add(challenge);
-    auto [_, err] = card_->sendRequest(Instruction::INS_UPDATE_CHALLENGE_CMD, array);
-    if (err != KM_ERROR_OK) {
-        LOG(ERROR) << "Error in updateChallenge.";
-        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
-    }
-    return ScopedAStatus::ok();
-}
-
-ScopedAStatus
-JavacardRemotelyProvisionedComponentDevice::updateEEK(
-    const std::vector<uint8_t>& endpointEncCertChain) {
-    std::vector<uint8_t> eekChain = endpointEncCertChain;
-    auto [_, err] = card_->sendRequest(Instruction::INS_UPDATE_EEK_CHAIN_CMD, eekChain);
-    if (err != KM_ERROR_OK) {
-        LOG(ERROR) << "Error in updateEEK.";
-        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
+        auto coseKeyData = cbor_.getByteArrayVec(item, 1);
+        coseKeys.add(EncodedItem(coseKeyData.value()));
     }
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::finishSendData(
-    std::vector<uint8_t>* keysToSignMac, DeviceInfo* deviceInfo,
-    std::vector<uint8_t>& coseEncryptProtectedHeader, cppbor::Map& coseEncryptUnProtectedHeader,
-    std::vector<uint8_t>& partialCipheredData, uint32_t& respFlag) {
+    std::vector<uint8_t>& coseEncryptProtectedHeader, std::vector<uint8_t>& signature, uint32_t& version, uint32_t& respFlag) {
 
     auto [item, err] = card_->sendRequest(Instruction::INS_FINISH_SEND_DATA_CMD);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in finishSendData.";
         return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
-    auto optDecodedKeysToSignMac = cbor_.getByteArrayVec(item, 1);
-    auto optDecodedDeviceInfo = cbor_.getByteArrayVec(item, 2);
-    auto optCEncryptProtectedHeader = cbor_.getByteArrayVec(item, 3);
-    auto optCEncryptUnProtectedHeader = cbor_.getMapItem(item, 4);
-    auto optPCipheredData = cbor_.getByteArrayVec(item, 5);
-    auto optRespFlag = cbor_.getUint64<uint32_t>(item, 6);
-    if (!optDecodedKeysToSignMac || !optDecodedDeviceInfo ||
-        !optCEncryptProtectedHeader || !optCEncryptUnProtectedHeader ||
-        !optPCipheredData || !optRespFlag) {
+    auto optCEncryptProtectedHeader = cbor_.getByteArrayVec(item, 1);
+    auto optSignature = cbor_.getByteArrayVec(item, 2);
+    auto optVersion = cbor_.getUint64<uint32_t>(item, 2);
+    auto optRespFlag = cbor_.getUint64<uint32_t>(item, 4);
+    if (!optCEncryptProtectedHeader || !optSignature ||
+        !optVersion || !optRespFlag) {
          LOG(ERROR) << "Error in decoding og response in finishSendData.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
-    *keysToSignMac = std::move(optDecodedKeysToSignMac.value());
-    deviceInfo->deviceInfo = std::move(optDecodedDeviceInfo.value());
+
     coseEncryptProtectedHeader = std::move(optCEncryptProtectedHeader.value());
-    coseEncryptUnProtectedHeader = std::move(optCEncryptUnProtectedHeader.value());
-    partialCipheredData.insert(partialCipheredData.end(), optPCipheredData->begin(), optPCipheredData->end());
+    signature.insert(signature.end(), optSignature->begin(), optSignature->end());
+    version = std::move(optVersion.value());
     respFlag = std::move(optRespFlag.value());
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus
-JavacardRemotelyProvisionedComponentDevice::getResponse(
-    std::vector<uint8_t>& partialCipheredData, cppbor::Array& recepientStructure,
-    uint32_t& respFlag) {
-    auto [item, err] = card_->sendRequest(Instruction::INS_GET_RESPONSE_CMD);
+JavacardRemotelyProvisionedComponentDevice::getDiceCertChain(
+    std::vector<uint8_t>& diceCertChain) {
+    auto [item, err] = card_->sendRequest(Instruction::INS_GET_DICE_CERT_CHAIN_CMD);
     if (err != KM_ERROR_OK) {
-        LOG(ERROR) << "Error in getResponse.";
+        LOG(ERROR) << "Error in getDiceCertChain.";
         return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
-    auto optPCipheredData = cbor_.getByteArrayVec(item, 1);
-    auto optArray = cbor_.getArrayItem(item, 2);
-    auto optRespFlag = cbor_.getUint64<uint32_t>(item, 3);
-    if (!optPCipheredData || !optArray || !optRespFlag) {
-         LOG(ERROR) << "Error in decoding og response in getResponse.";
+    auto optPDiceCertChain = cbor_.getByteArrayVec(item, 1);
+    auto optRespFlag = cbor_.getUint64<uint32_t>(item, 2);
+    if (!optPDiceCertChain || !optRespFlag) {
+         LOG(ERROR) << "Error in decoding og response in getDiceCertChain.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
-    recepientStructure = std::move(optArray.value());
-    partialCipheredData.insert(partialCipheredData.end(), optPCipheredData->begin(), optPCipheredData->end());
-    respFlag = std::move(optRespFlag.value()); 
+    diceCertChain.insert(diceCertChain.end(), optPDiceCertChain->begin(), optPDiceCertChain->end());
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus
-JavacardRemotelyProvisionedComponentDevice::generateCertificateRequest(bool testMode,
+JavacardRemotelyProvisionedComponentDevice::getUdsCertsChain(
+    std::vector<uint8_t>& udsCertsChain) {
+    uint32_t respFlag = 0;
+    do {
+        auto [item, err] = card_->sendRequest(Instruction::INS_GET_UDS_CERTS_CMD);
+        if (err != KM_ERROR_OK) {
+            LOG(ERROR) << "Error in getUdsCertsChain.";
+            return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
+        }
+        auto optPUdsCertData = cbor_.getByteArrayVec(item, 1);
+        auto optRespFlag = cbor_.getUint64<uint32_t>(item, 2);
+        if (!optPUdsCertData || !optRespFlag) {
+            LOG(ERROR) << "Error in decoding og response in getUdsCertsChain.";
+            return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+        }
+        respFlag = optRespFlag.value();
+        udsCertsChain.insert(udsCertsChain.end(), optPUdsCertData->begin(), optPUdsCertData->end());
+    } while (respFlag != 0);
+    return ScopedAStatus::ok();
+}
+
+ScopedAStatus
+JavacardRemotelyProvisionedComponentDevice::generateCertificateRequest(bool,
+                                        const std::vector<MacedPublicKey>&,
+                                        const std::vector<uint8_t>&,
+                                        const std::vector<uint8_t>&,
+                                        DeviceInfo*, ProtectedData*,
+                                        std::vector<uint8_t>*) {
+    return km_utils::kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED);
+}
+
+ScopedAStatus
+JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
                                         const std::vector<MacedPublicKey>& keysToSign,
-                                        const std::vector<uint8_t>& endpointEncCertChain,
                                         const std::vector<uint8_t>& challenge,
-                                        DeviceInfo* deviceInfo, ProtectedData* protectedData,
                                         std::vector<uint8_t>* keysToSignMac) {
+    uint32_t version;
+    uint32_t respFlag;
+    DeviceInfo deviceInfo;
+    Array coseKeys;
     std::vector<uint8_t> coseEncryptProtectedHeader;
     cppbor::Map coseEncryptUnProtectedHeader;
-    cppbor::Array recipients;
-    std::vector<uint8_t> cipheredData;
-    uint32_t respFlag;
-    auto ret = beginSendData(testMode, keysToSign);
+    std::vector<uint8_t> signature;
+    std::vector<uint8_t> diceCertChain;
+    std::vector<uint8_t> udsCertChain;
+    cppbor::Array payLoad;
+
+    auto ret = beginSendData(keysToSign, deviceInfo, challenge);
     if (!ret.isOk()) return ret;
 
-    ret = updateMacedKey(keysToSign);
+    ret = updateMacedKey(keysToSign, coseKeys);
     if (!ret.isOk()) return ret;
 
-    ret = updateChallenge(challenge);
+    ret = finishSendData(coseEncryptProtectedHeader, signature,
+                         version, respFlag);
     if (!ret.isOk()) return ret;
 
-    ret = updateEEK(endpointEncCertChain);
+    ret = getDiceCertChain(diceCertChain);
     if (!ret.isOk()) return ret;
 
-    ret = finishSendData(keysToSignMac, deviceInfo, coseEncryptProtectedHeader,
-                         coseEncryptUnProtectedHeader, cipheredData,
-                         respFlag);
+    ret = getUdsCertsChain(udsCertChain);
     if (!ret.isOk()) return ret;
 
-    while (respFlag != 0) { // more data is pending to receive
-        ret = getResponse(cipheredData, recipients, respFlag);
-        if (!ret.isOk()) return ret;
-    }
-    // Create ConseEncrypt structure.
-    protectedData->protectedData =
-        cppbor::Array()
-            .add(coseEncryptProtectedHeader)    // Protected
-            .add(std::move(coseEncryptUnProtectedHeader))  // Unprotected
-            .add(cipheredData)           // Payload
-            .add(std::move(recipients))
+    auto payload = cppbor::Array()
+            .add(deviceInfo.deviceInfo) // deviceinfo
+            .add(challenge)  // Challenge
+            .add(std::move(coseKeys))  // KeysToSign
             .encode();
+
+    auto signedData = cppbor::Array()
+        .add(std::move(coseEncryptProtectedHeader))
+        .add(cppbor::Map() /* unprotected parameters */)
+        .add(std::move(payload))
+        .add(std::move(signature))
+        .encode();
+    
+    *keysToSignMac = cppbor::Array()
+        .add(version)
+        .add(std::move(udsCertChain))
+        .add(std::move(diceCertChain))
+        .add(std::move(signedData))
+        .encode();
+
     return ScopedAStatus::ok();
 }
 

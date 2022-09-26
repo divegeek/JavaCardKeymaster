@@ -1139,6 +1139,27 @@ public class KMJCardSimulator implements KMSEProvider {
     return hmacSignerVerifier;
   }
 
+@Override
+  public KMOperation getRkpOperation(byte purpose, byte alg, byte digest, byte padding, byte blockMode,
+			KMDeviceUniqueKeyPair keyPair, byte[] ivBuf, short ivStart, short ivLength, short macLength) {
+    KMOperation opr = null;
+    switch (alg) {
+    case KMType.EC:
+      // get EC private key buffer
+      byte[] tmpArray = new byte[100];
+      ECPrivateKey ecPrivKey = ((KMECDeviceUniqueKey)keyPair).getPrivateKey();
+      short ecPrivKeyLen = ecPrivKey.getS(tmpArray, (short)0);
+      Signature signer = createEcSigner(digest, tmpArray, (short)0, ecPrivKeyLen);
+      opr = new KMOperationImpl(signer);
+      break;
+    
+    default:
+      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+      break;
+    }
+    return opr;
+  }
+
   public KMCipher createAesGcmCipher(short mode, short tagLen, byte[] secret, short secretStart,
       short secretLength,
       byte[] ivBuffer, short ivStart, short ivLength) {
@@ -1489,31 +1510,6 @@ public class KMJCardSimulator implements KMSEProvider {
     }
     ((KMHmacKey)preSharedKey).setKey(keyData, offset, length);
     return (KMPreSharedKey) preSharedKey;
-  }
-
-
-@Override
-public KMOperation getRkpOperation(byte purpose, byte alg,
-	      byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart,
-	      short keyLength, byte[] ivBuf, short ivStart, short ivLength,
-	      short macLength) {
-    KMOperation opr = null;
-    switch (alg) {
-    case KMType.AES:
-    KMCipher aesGcm = createAesGcmCipher(purpose, macLength, keyBuf, keyStart, keyLength,
-                ivBuf, ivStart, ivLength);
-      opr = new KMOperationImpl(aesGcm);
-      break;
-    case KMType.HMAC:
-      Signature signerVerifier = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart,
-                keyLength);
-      opr = new KMOperationImpl(signerVerifier);      
-      break;
-    default:
-      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-      break;
-    }
-    return opr;
   }
 
   @Override

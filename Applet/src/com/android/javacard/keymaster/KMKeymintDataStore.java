@@ -74,7 +74,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   private static final short SHARED_SECRET_KEY_SIZE = 32;
   private static final byte DEVICE_STATUS_FLAG_SIZE = 1;
   
-  private static final short ADDITIONAL_CERT_CHAIN_MAX_SIZE = 512;//First 2 bytes for length.
+  private static final short ADDITIONAL_CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
   private static final short BCC_MAX_SIZE = 512;
 
  //Device boot states. Applet starts executing the

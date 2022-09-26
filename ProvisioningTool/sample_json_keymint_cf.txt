@@ -21,8 +21,9 @@
    "signer_info": {
       "signer_name": "Google",
       "signing_keys": [
-      "test_resources/ca_key.der",
-      "test_resources/intermediate_key.der"
+      "test_resources/ca_cert.der",
+      "test_resources/intermediate_cert.der",
+      "test_resources/batch_cert.der"
       ]
    },
    "oem_root_key": "test_resources/oem_root_key.der",
