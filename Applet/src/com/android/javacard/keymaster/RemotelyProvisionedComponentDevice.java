@@ -196,9 +196,8 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private void initializeDataTable() {
-    if (dataIndex[0] != 0) {
-      KMException.throwIt(KMError.INVALID_STATE);
-    }
+    clearDataTable();
+    releaseOperation();
     dataIndex[0] = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
   }
 
@@ -561,8 +560,10 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private boolean isAdditionalCertificateChainPresent() {
-    if ((TRUE == data[getEntry(TEST_MODE)])) {
-      // In test mode, don't include AdditionalCertificateChain in ProtectedData.
+    if ((0x02 == RKP_VERSION) || (TRUE == data[getEntry(TEST_MODE)])) {
+      // Don't include AdditionalCertificateChain in ProtectedData if either
+      // 1. KeyMint Version is 2 or
+      // 2. Requested CSR for test mode.
       return false;
     }
     return (storeDataInst.getAdditionalCertChainLength() == 0 ? false : true);
@@ -836,7 +837,7 @@ public class RemotelyProvisionedComponentDevice {
 
   /**
    * DeviceInfo is a CBOR Map structure described by the following CDDL.
-   * <p>
+   *
    * DeviceInfo = {
    *  "brand" : tstr,
    *  "manufacturer" : tstr,
