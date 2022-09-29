@@ -924,7 +924,13 @@ public class KMKeymintDataStore implements KMUpgradable {
       // have to update the secureBootMode with the correct input.
       secureBootMode = 0;
       provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SECURE_BOOT_MODE;
+      // Applet package Versions till 2 had CoseSign1 for additionalCertificateChain.
+      // From package version 3, the additionalCertificateChain is in X.509 format. 
+      // So Unreference the old address and allocate new persistent memory.
+      additionalCertChain = new byte[ADDITIONAL_CERT_CHAIN_MAX_SIZE];
       JCSystem.commitTransaction();
+      // Request for ObjectDeletion for unreferenced address of additionalCertChain.
+      JCSystem.requestObjectDeletion();
       return;
     }
     handleUpgrade(element, oldVersion);
@@ -952,7 +958,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     element.readObject(); // pop verifiedHash
     element.readObject(); //pop bootKey
     element.readObject(); // pop bootPatchLevel
-    element.readObject(); // pop AdditionalCertChain
+    additionalCertChain = (byte[]) element.readObject();
     bcc = (byte[]) element.readObject();
 
     // Read Key Objects
@@ -979,11 +985,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     attIdMeId = (byte[]) element.readObject();
     attIdManufacturer = (byte[]) element.readObject();
     attIdModel = (byte[]) element.readObject();
-    if (oldVersion <= KM_APPLET_PACKAGE_VERSION_2) {
-      element.readObject(); // Pop AdditionalCertificateChain.
-    } else {
-      additionalCertChain = (byte[]) element.readObject();
-    }
+    additionalCertChain = (byte[]) element.readObject();
     bcc = (byte[]) element.readObject();
     oemRootPublicKey = (byte[]) element.readObject();
     // Read Key Objects
@@ -1013,8 +1015,14 @@ public class KMKeymintDataStore implements KMUpgradable {
     // have to update the secureBootMode with the correct input.
     secureBootMode = 0;
     provisionStatus = pStatus;
+    // Applet package Versions till 2 had CoseSign1 for additionalCertificateChain.
+    // From package version 3, the additionalCertificateChain is in X.509 format. 
+    // So Unreference the old address and allocate new persistent memory.
+    additionalCertChain = new byte[ADDITIONAL_CERT_CHAIN_MAX_SIZE];
     JCSystem.commitTransaction();
     repository.reclaimMemory((short)2);
+    // Request object deletion for unreferenced address for additionalCertChain
+    JCSystem.requestObjectDeletion();
   }
   
   @Override
