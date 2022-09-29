@@ -411,13 +411,17 @@ public class RemotelyProvisionedComponentDevice {
       arr = KMKeymasterApplet.receiveIncoming(apdu, arr);
       // Store the challenge in the data table.
       short challenge = KMArray.cast(arr).get((short) 0);
-      short dataEntryIndex = createEntry(CHALLENGE, KMByteBlob.cast(challenge).length());
+      short challengeLen = KMByteBlob.cast(challenge).length();
+      if (challengeLen < 32 || challengeLen > 64) {
+        KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+      }
+      short dataEntryIndex = createEntry(CHALLENGE, challengeLen);
       Util.arrayCopyNonAtomic(
           KMByteBlob.cast(challenge).getBuffer(),
           KMByteBlob.cast(challenge).getStartOff(),
           data,
           dataEntryIndex,
-          KMByteBlob.cast(challenge).length()
+          challengeLen
       );
       // Update the state
       updateState(UPDATE);
