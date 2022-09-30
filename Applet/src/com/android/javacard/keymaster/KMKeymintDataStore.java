@@ -118,7 +118,6 @@ public class KMKeymintDataStore implements KMUpgradable {
   private byte[] additionalCertChain;
   private byte[] bcc;
   private KMMasterKey masterKey;
-  private KMDeviceUniqueKeyPair testDeviceUniqueKeyPair;
   private KMDeviceUniqueKeyPair deviceUniqueKeyPair;
   private KMPreSharedKey preSharedKey;
   private KMComputedHmacKey computedHmacKey;
@@ -595,20 +594,6 @@ public class KMKeymintDataStore implements KMUpgradable {
     }  
     return computedHmacKey;
   }
-  
-  public KMDeviceUniqueKeyPair createRkpTestDeviceUniqueKeyPair(byte[] pubKey, short pubKeyOff, short pubKeyLen,
-      byte[] privKey, short privKeyOff, short privKeyLen) {
-    if (testDeviceUniqueKeyPair == null) {
-      testDeviceUniqueKeyPair = seProvider.createRkpDeviceUniqueKeyPair(testDeviceUniqueKeyPair, pubKey, pubKeyOff,
-          pubKeyLen, privKey,
-          privKeyOff, privKeyLen);
-    } else {
-      seProvider.createRkpDeviceUniqueKeyPair(testDeviceUniqueKeyPair, pubKey, pubKeyOff, pubKeyLen, privKey,
-          privKeyOff,
-          privKeyLen);
-    }
-    return testDeviceUniqueKeyPair;
-  }
 
   public KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(byte[] pubKey, short pubKeyOff, short pubKeyLen,
       byte[] privKey, short privKeyOff,
@@ -624,8 +609,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     return deviceUniqueKeyPair;
   }
   
-  public KMDeviceUniqueKeyPair getRkpDeviceUniqueKeyPair(boolean testMode) {
-    return ((KMDeviceUniqueKeyPair) (testMode ? testDeviceUniqueKeyPair : deviceUniqueKeyPair));
+  public KMDeviceUniqueKeyPair getRkpDeviceUniqueKeyPair() {
+    return ((KMDeviceUniqueKeyPair) deviceUniqueKeyPair);
   }
   
   public void createRkpMacKey(byte[] keydata, short offset, short length) {

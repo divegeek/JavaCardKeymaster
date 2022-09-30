@@ -379,7 +379,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     //Store the Device unique Key.
     kmDataStore.createRkpDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
         pubKeyLen, privKeyLen);
-    short bcc = generateBcc(false, scratchPad);
+    short bcc = generateBcc(scratchPad);
     short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);

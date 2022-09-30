@@ -4712,11 +4712,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
 
-  public static short generateBcc(boolean testMode, byte[] scratchPad) {
-    if (!testMode && kmDataStore.isProvisionLocked()) {
+  public static short generateBcc(byte[] scratchPad) {
+    if (kmDataStore.isProvisionLocked()) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
-    KMDeviceUniqueKeyPair deviceUniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair(testMode);
+    KMDeviceUniqueKeyPair deviceUniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair();
     short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
     short coseKey =
         KMCose.constructCoseKey(rkp.rkpTmpVariables,
@@ -4728,8 +4728,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             scratchPad,
             (short) 0,
             temp,
-            KMType.INVALID_VALUE,
-            false);
+            KMType.INVALID_VALUE);
     temp = KMKeymasterApplet.encodeToApduBuffer(coseKey, scratchPad, (short) 0,
         KMKeymasterApplet.MAX_COSE_BUF_SIZE);
     // Construct payload.

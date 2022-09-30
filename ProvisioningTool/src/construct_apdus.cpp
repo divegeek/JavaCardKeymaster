@@ -325,10 +325,10 @@ int processAdditionalCertificateChain() {
             return FAILURE;
         }
 
-        Json::Value certChainFiles = signerInfo.get("signing_keys", Json::Value::nullRef);
+        Json::Value certChainFiles = signerInfo.get("public_keys", Json::Value::nullRef);
         if (!certChainFiles.isNull()) {
             if (!certChainFiles.isArray()) {
-                printf("\n Improper value for signing_keys in json file \n");
+                printf("\n Improper value for public_keys in json file \n");
                 return FAILURE;
             }
             for (uint32_t i = 0; i < certChainFiles.size(); i++) {

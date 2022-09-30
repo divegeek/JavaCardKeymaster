@@ -109,7 +109,7 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte PROCESSING_ACC_COMPLETE = 0x0A;
   // data table
   private static final short DATA_SIZE = 512;
-  private static final short DATA_INDEX_SIZE = 5;
+  private static final short DATA_INDEX_SIZE = 6;
   public static final short DATA_INDEX_ENTRY_SIZE = 4;
   public static final short DATA_INDEX_ENTRY_LENGTH = 0;
   public static final short DATA_INDEX_ENTRY_OFFSET = 2;
@@ -119,6 +119,7 @@ public class RemotelyProvisionedComponentDevice {
   private static final short GENERATE_CSR_PHASE = 2;
   private static final short RESPONSE_PROCESSING_STATE = 3;
   private static final short ACC_PROCESSED_LENGTH = 4;
+  private static final short BCC_PROCESSED_LENGTH = 5;
 
   // data item sizes
   private static final short SHORT_SIZE = 2;
@@ -128,7 +129,8 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte BEGIN = 0x01;
   private static final byte UPDATE = 0x02;
   private static final byte FINISH = 0x04;
-  private static final byte GET_RESPONSE = 0x06;
+  private static final byte GET_UDS_CERTS_RESPONSE = 0x06;
+  private static final byte GET_DICE_CERT_RESPONSE = 0x08;
 
   //RKP mac key size
   private static final short RKP_MAC_KEY_SIZE = 32;
@@ -137,7 +139,7 @@ public class RemotelyProvisionedComponentDevice {
   private static final short SHORT_PAYLOAD = 0x100;
 
   //RKP CDDL Schema version
-  private static final byte RKP_SCHEMA_VERSION = 03;
+  private static final byte RKP_SCHEMA_VERSION = 3;
 
   // variables
   private byte[] data;
@@ -174,9 +176,8 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private void initializeDataTable() {
-    if (dataIndex[0] != 0) {
-      KMException.throwIt(KMError.INVALID_STATE);
-    }
+    clearDataTable();
+    releaseOperation();
     dataIndex[0] = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
   }
 
@@ -213,11 +214,6 @@ public class RemotelyProvisionedComponentDevice {
     return Util.getShort(data, (short) (index + DATA_INDEX_ENTRY_OFFSET));
   }
 
-  private short getEntryLength(short index) {
-    index = (short) (index * DATA_INDEX_ENTRY_SIZE);
-    return Util.getShort(data, index);
-  }
-
   private void processGetRkpHwInfoCmd(APDU apdu) {
     // Make the response
     // Author name - Google.
@@ -236,16 +232,13 @@ public class RemotelyProvisionedComponentDevice {
    * blob. It then generates a COSEMac message which includes the ECDSA public key.
    */
   public void processGenerateRkpKey(APDU apdu) {
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMSimpleValue.exp());
-    arr = KMKeymasterApplet.receiveIncoming(apdu, arr);
     // Re-purpose the apdu buffer as scratch pad.
     byte[] scratchPad = apdu.getBuffer();
     KMKeymasterApplet.generateRkpKey(scratchPad, getEcAttestKeyParameters());
     short pubKey = KMKeymasterApplet.getPubKey();
     short coseMac0 = constructCoseMacForRkpKey(scratchPad, pubKey);
     // Encode the COSE_MAC0 object
-    arr = KMArray.instance((short) 3);
+    short arr = KMArray.instance((short) 3);
     KMArray.cast(arr).add((short) 0, KMInteger.uint_16(KMError.OK));
     KMArray.cast(arr).add((short) 1, coseMac0);
     KMArray.cast(arr).add((short) 2, KMKeymasterApplet.getPivateKey());
@@ -269,6 +262,9 @@ public class RemotelyProvisionedComponentDevice {
 
     // Calculate the challenge length
     short challengeLen = (short) KMByteBlob.cast(challengeByteBlob).length();
+    if (challengeLen < 32 || challengeLen > 64) {
+      KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+    }
     // Calculate the challenge byte header length
     short challengeHeaderLen = encoder.getEncodedBytesLength(challengeLen);
 
@@ -353,10 +349,9 @@ public class RemotelyProvisionedComponentDevice {
           KMInteger.cast(KMArray.cast(arr).get((short) 0)).getShort());
       // Store the current csr status, which is BEGIN.
       createEntry(GENERATE_CSR_PHASE, BYTE_SIZE);
+      updateState(BEGIN);
       if (0 == KMInteger.cast(KMArray.cast(arr).get((short) 0)).getShort()) {
         updateState(UPDATE);
-      } else {
-        updateState(BEGIN);
       }
       short len = KMKeymasterApplet.encodeToApduBuffer(deviceInfo, scratchPad,
           (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
@@ -380,10 +375,11 @@ public class RemotelyProvisionedComponentDevice {
       validateKeysToSignCount();
       short headers = KMCoseHeaders.exp();
       short arrInst = KMArray.instance((short) 4);
-      KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
+      short byteBlobExp = KMByteBlob.exp();
+      KMArray.cast(arrInst).add((short) 0, byteBlobExp);
       KMArray.cast(arrInst).add((short) 1, headers);
-      KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
-      KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
+      KMArray.cast(arrInst).add((short) 2, byteBlobExp);
+      KMArray.cast(arrInst).add((short) 3, byteBlobExp);
       short arr = KMArray.exp(arrInst);
       arr = KMKeymasterApplet.receiveIncoming(apdu, arr);
       arrInst = KMArray.cast(arr).get((short) 0);
@@ -393,12 +389,15 @@ public class RemotelyProvisionedComponentDevice {
       // Validate and extract the CoseKey from CoseMac0 message.
       short coseKey = validateAndExtractPublicKey(arrInst, scratchPad);
       // Encode CoseKey
-      short length = KMKeymasterApplet.encodeToApduBuffer(coseKey, scratchPad, (short) 0,
-          KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+      short prevReclaimIndex = repository.getHeapReclaimIndex();  
+      short offset = repository.allocReclaimableMemory(KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+      short length = encoder.encode(coseKey, repository.getHeap(), offset, prevReclaimIndex, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
 
       // Do ecSign update with input as encoded CoseKey.
-      ((KMOperation) operation[0]).update(scratchPad, (short) 0, length);
-      short encodedCoseKey = KMByteBlob.instance(scratchPad, (short) 0, length);
+      ((KMOperation) operation[0]).update(repository.getHeap(), offset, length);
+      short encodedCoseKey = KMByteBlob.instance(repository.getHeap(), offset, length);
+      //release memory
+      repository.reclaimMemory(KMKeymasterApplet.MAX_COSE_BUF_SIZE);
       // Increment the count each time this function gets executed.
       // Store the count in data table.
       short dataEntryIndex = getEntry(KEYS_TO_SIGN_COUNT);
@@ -472,37 +471,17 @@ public class RemotelyProvisionedComponentDevice {
   public void processGetDiceCertChain(APDU apdu) throws Exception {
     try {
       // The prior state should be FINISH.
-      validateState((byte) (FINISH | GET_RESPONSE));
+      validateState((byte) (GET_UDS_CERTS_RESPONSE));
       byte[] scratchPad = apdu.getBuffer();
       short len = 0;
       len = processBcc(scratchPad);
-      updateState(GET_RESPONSE);
-      short data = KMByteBlob.instance(scratchPad, (short) 0, len);
-      short arr = KMArray.instance((short) 2);
-      KMArray.cast(arr).add((short) 0, KMInteger.uint_16(KMError.OK));
-      KMArray.cast(arr).add((short) 1, data);
-      KMKeymasterApplet.sendOutgoing(apdu, arr);
-    } catch (Exception e) {
-      clearDataTable();
-      releaseOperation();
-      throw e;
-    }
-  }
-
-  public void processGetUdsCerts(APDU apdu) throws Exception {
-    try {
-      // The prior state should be FINISH.
-      validateState((byte) (FINISH | GET_RESPONSE));
-      byte[] scratchPad = apdu.getBuffer();
-      short len = processAdditionalCertificateChain(scratchPad);
-      updateState(GET_RESPONSE);
       byte moreData = MORE_DATA;
       byte state = getCurrentOutputProcessingState();
       switch (state) {
-        case PROCESSING_ACC_IN_PROGRESS:
+        case PROCESSING_BCC_IN_PROGRESS:
           moreData = MORE_DATA;
           break;
-        case PROCESSING_ACC_COMPLETE:
+        case PROCESSING_BCC_COMPLETE:
           moreData = NO_DATA;
           clearDataTable();
           break;
@@ -518,7 +497,39 @@ public class RemotelyProvisionedComponentDevice {
       KMKeymasterApplet.sendOutgoing(apdu, arr);
     } catch (Exception e) {
       clearDataTable();
-      releaseOperation();
+      throw e;
+    }
+  }
+
+  public void processGetUdsCerts(APDU apdu) throws Exception {
+    try {
+      // The prior state should be FINISH.
+      validateState((byte) (FINISH));
+      byte[] scratchPad = apdu.getBuffer();
+      short len = processAdditionalCertificateChain(scratchPad);
+      
+      byte moreData = MORE_DATA;
+      byte state = getCurrentOutputProcessingState();
+      switch (state) {
+        case PROCESSING_ACC_IN_PROGRESS:
+          moreData = MORE_DATA;
+          break;
+        case PROCESSING_ACC_COMPLETE:
+          updateState(GET_UDS_CERTS_RESPONSE);
+          moreData = NO_DATA;
+          break;
+        default:
+          KMException.throwIt(KMError.INVALID_STATE);
+      }
+      short data = KMByteBlob.instance(scratchPad, (short) 0, len);
+      short arr = KMArray.instance((short) 3);
+      KMArray.cast(arr).add((short) 0, KMInteger.uint_16(KMError.OK));
+      KMArray.cast(arr).add((short) 1, data);
+      // represents there is more output to retrieve
+      KMArray.cast(arr).add((short) 2, KMInteger.uint_8(moreData));
+      KMKeymasterApplet.sendOutgoing(apdu, arr);
+    } catch (Exception e) {
+      clearDataTable();
       throw e;
     }
   }
@@ -549,10 +560,6 @@ public class RemotelyProvisionedComponentDevice {
       default:
         ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
     }
-  }
-
-  private boolean isAdditionalCertificateChainPresent() {
-    return (storeDataInst.getAdditionalCertChainLength() == 0 ? false : true);
   }
 
   private byte getCurrentOutputProcessingState() {
@@ -600,11 +607,6 @@ public class RemotelyProvisionedComponentDevice {
         .isDataValid(rkpTmpVariables, KMCose.COSE_KEY_TYPE_EC2, KMType.INVALID_VALUE,
             KMCose.COSE_ALG_ES256, KMType.INVALID_VALUE, KMCose.COSE_ECCURVE_256)) {
       KMException.throwIt(KMError.STATUS_FAILED);
-    }
-
-    boolean isTestKey = KMCoseKey.cast(ptr).isTestKey();
-    if (isTestKey) {
-      KMException.throwIt(KMError.STATUS_TEST_KEY_IN_PRODUCTION_REQUEST);
     }
 
     // Compute CoseMac Structure and compare the macs.
@@ -663,20 +665,20 @@ public class RemotelyProvisionedComponentDevice {
    * DeviceInfo is a CBOR Map structure described by the following CDDL.
    * <p>
    * DeviceInfo = {
-   * ? "brand" : tstr,
-   * ? "manufacturer" : tstr,
-   * ? "product" : tstr,
-   * ? "model" : tstr,
-   * ? "board" : tstr,
-   * ? "vb_state" : "green" / "yellow" / "orange",    // Taken from the AVB values
-   * ? "bootloader_state" : "locked" / "unlocked",    // Taken from the AVB values
-   * ? "vbmeta_digest": bstr,                         // Taken from the AVB values
+   * "brand" : tstr,
+   * "manufacturer" : tstr,
+   * "product" : tstr,
+   * "model" : tstr,
+   * "device" : tstr,
+   * "vb_state" : "green" / "yellow" / "orange",    // Taken from the AVB values
+   * "bootloader_state" : "locked" / "unlocked",    // Taken from the AVB values
+   * "vbmeta_digest": bstr,                         // Taken from the AVB values
    * ? "os_version" : tstr,                    // Same as android.os.Build.VERSION.release
-   * ? "system_patch_level" : uint,                   // YYYYMMDD
-   * ? "boot_patch_level" : uint,                     //YYYYMMDD
-   * ? "vendor_patch_level" : uint,                   // YYYYMMDD
+   * "system_patch_level" : uint,                   // YYYYMMDD
+   * "boot_patch_level" : uint,                     //YYYYMMDD
+   * "vendor_patch_level" : uint,                   // YYYYMMDD
    * "security_level" : "tee" / "strongbox"
-   * "att_id_state": "locked" / "open"
+   * "fused": 1 / 0,
    * "cert_type": "widevine" / "keymint"
    * }
    */
@@ -851,7 +853,7 @@ public class RemotelyProvisionedComponentDevice {
 
   //----------------------------------------------------------------------------
   private void initECDSAOperation() {
-    KMDeviceUniqueKeyPair deviceUniqueKeyPair = storeDataInst.getRkpDeviceUniqueKeyPair(false);
+    KMDeviceUniqueKeyPair deviceUniqueKeyPair = storeDataInst.getRkpDeviceUniqueKeyPair();
     operation[0] =
         seProvider.getRkpOperation(
             KMType.SIGN,
@@ -870,30 +872,31 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
-  private short getAdditionalCertChainProcessedLength() {
-    short dataEntryIndex = getEntry(ACC_PROCESSED_LENGTH);
+  private short getResponseProcessedLength(short AccBccIndex) {
+    short dataEntryIndex = getEntry(AccBccIndex);
     if (dataEntryIndex == 0) {
-      dataEntryIndex = createEntry(ACC_PROCESSED_LENGTH, SHORT_SIZE);
+      dataEntryIndex = createEntry(AccBccIndex, SHORT_SIZE);
       Util.setShort(data, dataEntryIndex, (short) 0);
       return (short) 0;
     }
     return Util.getShort(data, dataEntryIndex);
   }
 
-  private void updateAdditionalCertChainProcessedLength(short processedLen) {
-    short dataEntryIndex = getEntry(ACC_PROCESSED_LENGTH);
+  private void updateAccBccProcessedLength(short AccBccIndex, short processedLen) {
+    short dataEntryIndex = getEntry(AccBccIndex);
     Util.setShort(data, dataEntryIndex, processedLen);
   }
 
   private short processAdditionalCertificateChain(byte[] scratchPad) {
     byte[] persistedData = storeDataInst.getAdditionalCertChain();
     short totalAccLen = Util.getShort(persistedData, (short) 0);
+    createEntry(RESPONSE_PROCESSING_STATE, BYTE_SIZE);
     if (totalAccLen == 0) {
       // No Additional certificate chain present.
       updateOutputProcessingState(PROCESSING_ACC_COMPLETE);
       return 0;
     }
-    short processedLen = getAdditionalCertChainProcessedLength();
+    short processedLen = getResponseProcessedLength(ACC_PROCESSED_LENGTH);
     short lengthToSend = (short) (totalAccLen - processedLen);
     if (lengthToSend > MAX_SEND_DATA) {
       lengthToSend = MAX_SEND_DATA;
@@ -902,7 +905,7 @@ public class RemotelyProvisionedComponentDevice {
         lengthToSend);
 
     processedLen += lengthToSend;
-    updateAdditionalCertChainProcessedLength(processedLen);
+    updateAccBccProcessedLength(ACC_PROCESSED_LENGTH, processedLen);
     // Update the output processing state.
     updateOutputProcessingState(
         (processedLen == totalAccLen) ? PROCESSING_ACC_COMPLETE : PROCESSING_ACC_IN_PROGRESS);
@@ -911,17 +914,27 @@ public class RemotelyProvisionedComponentDevice {
 
   // BCC for STRONGBOX has chain length of 2. So it can be returned in a single go.
   private short processBcc(byte[] scratchPad) {
-    short len;
     byte[] bcc = storeDataInst.getBootCertificateChain();
-    len = Util.getShort(bcc, (short) 0);
-    Util.arrayCopyNonAtomic(bcc, (short) 2, scratchPad, (short) 0, len);
+    short totalBccLen = Util.getShort(bcc, (short) 0);
+    if (totalBccLen == 0) {
+      // No Additional certificate chain present.
+      updateOutputProcessingState(PROCESSING_BCC_COMPLETE);
+      return 0;
+    }
+    short processedLen = getResponseProcessedLength(BCC_PROCESSED_LENGTH);
+    short lengthToSend = (short) (totalBccLen - processedLen);
+    if (lengthToSend > MAX_SEND_DATA) {
+      lengthToSend = MAX_SEND_DATA;
+    }
+    Util.arrayCopyNonAtomic(bcc, (short) (2 + processedLen), scratchPad, (short) 0,
+            lengthToSend);
 
-    createEntry(RESPONSE_PROCESSING_STATE, BYTE_SIZE);
-    // If there is no additional certificate chain present then put the state to
-    // PROCESSING_ACC_COMPLETE.
+    processedLen += lengthToSend;
+    updateAccBccProcessedLength(BCC_PROCESSED_LENGTH, processedLen);
+    // Update the output processing state.
     updateOutputProcessingState(
-        isAdditionalCertificateChainPresent() ? PROCESSING_BCC_COMPLETE : PROCESSING_ACC_COMPLETE);
-    return len;
+            (processedLen == totalBccLen) ? PROCESSING_BCC_COMPLETE : PROCESSING_BCC_IN_PROGRESS);
+    return lengthToSend;  
   }
 
   private short constructCoseMacForRkpKey(byte[] scratchPad, short pubKey) {
@@ -936,7 +949,7 @@ public class RemotelyProvisionedComponentDevice {
             KMByteBlob.cast(pubKey).getBuffer(),
             KMByteBlob.cast(pubKey).getStartOff(),
             KMByteBlob.cast(pubKey).length(),
-            KMType.INVALID_VALUE, false);
+            KMType.INVALID_VALUE);
     // Encode the cose key and make it as payload.
     short len = KMKeymasterApplet
         .encodeToApduBuffer(coseKey, scratchPad, (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);

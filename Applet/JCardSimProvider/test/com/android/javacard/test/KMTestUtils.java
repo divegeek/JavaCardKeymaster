@@ -255,7 +255,6 @@ public class KMTestUtils {
     short[] lengths = new short[2];
     KeyPair signingKey = null;
     short alg = KMNInteger.uint_8(KMCose.COSE_ALG_ES256);
-    boolean testMode = true;
     short xPtr = 0;
     short yPtr = 0;
     short keyId = KMType.INVALID_VALUE;
@@ -295,8 +294,7 @@ public class KMTestUtils {
               KMInteger.uint_8(KMCose.COSE_ECCURVE_256),
               xPtr,
               yPtr,
-              KMType.INVALID_VALUE,
-              testMode);
+              KMType.INVALID_VALUE);
       byte[] scratchpad = new byte[200];
       short coseKeyEncodedLen = encoder.encode(coseKey, scratchpad, (short) 0, (short) 200);
       short payload = KMByteBlob.instance(scratchpad, (short) 0, coseKeyEncodedLen);
@@ -509,7 +507,7 @@ public class KMTestUtils {
   }
 
   public static X509Certificate decodeCert(byte[] cert, short certOff, short certLen)
-    throws IOException {
+      throws IOException {
     byte[] certificate = new byte[certLen];
     Util.arrayCopyNonAtomic(cert, certOff, certificate, (short) 0, certLen);
     InputStream inStream = new ByteArrayInputStream(certificate);
@@ -809,7 +807,7 @@ public class KMTestUtils {
   public static short constructCoseKey(short keyType, short keyId, short keyAlg, short keyOps,
       short curve,
       byte[] pubKey, short pubKeyOff, short pubKeyLen,
-      byte[] priv, short privKeyOff, short privKeyLen, boolean testMode) {
+      byte[] priv, short privKeyOff, short privKeyLen) {
     if (pubKey[pubKeyOff] == 0x04) { // uncompressed format
       pubKeyOff += 1;
       pubKeyLen -= 1;
@@ -820,7 +818,7 @@ public class KMTestUtils {
     short privPtr = KMByteBlob.instance(priv, privKeyOff, privKeyLen);
     short[] scratchpad = new short[20];
     short coseKey = KMCose.constructCoseKey(scratchpad, keyType, keyId, keyAlg, keyOps, curve, xPtr,
-        yPtr, privPtr, testMode);
+        yPtr, privPtr);
     KMCoseKey.cast(coseKey).canonicalize();
     return coseKey;
   }

@@ -69,11 +69,7 @@ public class KMPoolManager {
   private Object[] keysPool;
   // RKP uses AESGCM and HMAC in generateCSR flow.
   KMOperation rkpOPeration;
-  Cipher rkpAesGcm;
-  Signature rkpHmac;
   Signature rkpEc;
-  KMKeyObject rkpHmacKey;
-  KMKeyObject rkpAesKey;
   KMKeyObject rkpEcKey;
 
   final byte[] KEY_ALGS = {
@@ -208,11 +204,7 @@ public class KMPoolManager {
 
   private void initializeRKpObjects() {
     rkpOPeration = new KMOperationImpl();
-    rkpAesGcm = Cipher.getInstance(AEADCipher.ALG_AES_GCM, false);
-    rkpHmac = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
     rkpEc = Signature.getInstance(Signature.ALG_ECDSA_SHA_256, false);
-    rkpAesKey = createKeyObjectInstance(AES_256);
-    rkpHmacKey = createKeyObjectInstance(KMType.HMAC);
     rkpEcKey = createKeyObjectInstance(KMType.EC);
   }
 
@@ -451,22 +443,14 @@ public class KMPoolManager {
     KMKeyObject keyObject = null;
 
     switch (alg) {
-    case AEADCipher.ALG_AES_GCM:
-      cryptoObj = rkpAesGcm;
-      keyObject = rkpAesKey;
-      break;
-    case Signature.ALG_HMAC_SHA_256:
-      cryptoObj = rkpHmac;
-      keyObject = rkpHmacKey;
-      break;
-    case Signature.ALG_ECDSA_SHA_256:
-      cryptoObj = rkpEc;
-      keyObject = rkpEcKey;
-      break;
-    default:
-      // Should not come here.
-      KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
-      break;
+      case Signature.ALG_ECDSA_SHA_256:
+        cryptoObj = rkpEc;
+        keyObject = rkpEcKey;
+        break;
+      default:
+        // Should not come here.
+        KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
+        break;
     }
     reserveOperation(rkpOPeration, purpose, strongboxAlgType, padding, blockMode, macLength,
         cryptoObj, keyObject);

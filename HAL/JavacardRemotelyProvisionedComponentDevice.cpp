@@ -108,12 +108,10 @@ JavacardRemotelyProvisionedComponentDevice::getHardwareInfo(RpcHardwareInfo* inf
 }
 
 ScopedAStatus
-JavacardRemotelyProvisionedComponentDevice::generateEcdsaP256KeyPair(bool testMode,
+JavacardRemotelyProvisionedComponentDevice::generateEcdsaP256KeyPair(bool,
                                                 MacedPublicKey* macedPublicKey,
                                                 std::vector<uint8_t>* privateKeyHandle) {
-    cppbor::Array array;
-    array.add(testMode);
-    auto [item, err] = card_->sendRequest(Instruction::INS_GENERATE_RKP_KEY_CMD, array);
+    auto [item, err] = card_->sendRequest(Instruction::INS_GENERATE_RKP_KEY_CMD);
     if (err != KM_ERROR_OK) {
         LOG(ERROR) << "Error in sending generateEcdsaP256KeyPair.";
         return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
@@ -198,18 +196,23 @@ JavacardRemotelyProvisionedComponentDevice::finishSendData(
 ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::getDiceCertChain(
     std::vector<uint8_t>& diceCertChain) {
-    auto [item, err] = card_->sendRequest(Instruction::INS_GET_DICE_CERT_CHAIN_CMD);
-    if (err != KM_ERROR_OK) {
-        LOG(ERROR) << "Error in getDiceCertChain.";
-        return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
-    }
-    auto optPDiceCertChain = cbor_.getByteArrayVec(item, 1);
-    if (!optPDiceCertChain) {
-         LOG(ERROR) << "Error in decoding og response in getDiceCertChain.";
-         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
-    }
-    diceCertChain.insert(diceCertChain.end(), optPDiceCertChain->begin(), optPDiceCertChain->end());
-    return ScopedAStatus::ok();
+    uint32_t respFlag = 0;
+    do {
+        auto [item, err] = card_->sendRequest(Instruction::INS_GET_DICE_CERT_CHAIN_CMD);
+        if (err != KM_ERROR_OK) {
+            LOG(ERROR) << "Error in getDiceCertChain.";
+            return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
+        }
+        auto optDiceCertChain = cbor_.getByteArrayVec(item, 1);
+        auto optRespFlag = cbor_.getUint64<uint32_t>(item, 2);
+        if (!optDiceCertChain || !optRespFlag) {
+            LOG(ERROR) << "Error in decoding response in getDiceCertChain.";
+            return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+        }
+        respFlag = optRespFlag.value();
+        diceCertChain.insert(diceCertChain.end(), optDiceCertChain->begin(), optDiceCertChain->end());
+    } while (respFlag != 0);
+    return ScopedAStatus::ok();    
 }
 
 ScopedAStatus
@@ -222,14 +225,14 @@ JavacardRemotelyProvisionedComponentDevice::getUdsCertsChain(
             LOG(ERROR) << "Error in getUdsCertsChain.";
             return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
         }
-        auto optPUdsCertData = cbor_.getByteArrayVec(item, 1);
+        auto optUdsCertData = cbor_.getByteArrayVec(item, 1);
         auto optRespFlag = cbor_.getUint64<uint32_t>(item, 2);
-        if (!optPUdsCertData || !optRespFlag) {
+        if (!optUdsCertData || !optRespFlag) {
             LOG(ERROR) << "Error in decoding og response in getUdsCertsChain.";
             return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
         }
         respFlag = optRespFlag.value();
-        udsCertsChain.insert(udsCertsChain.end(), optPUdsCertData->begin(), optPUdsCertData->end());
+        udsCertsChain.insert(udsCertsChain.end(), optUdsCertData->begin(), optUdsCertData->end());
     } while (respFlag != 0);
     return ScopedAStatus::ok();
 }
@@ -241,7 +244,7 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequest(bool,
                                         const std::vector<uint8_t>&,
                                         DeviceInfo*, ProtectedData*,
                                         std::vector<uint8_t>*) {
-    return km_utils::kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED);
+    return km_utils::kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED); //TODO need to change the status to STATUS_REMOVED     
 }
 
 ScopedAStatus

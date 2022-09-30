@@ -373,7 +373,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     //Store the Device unique Key.
     kmDataStore.createRkpDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
         pubKeyLen, privKeyLen);
-    short bcc = generateBcc(false, scratchPad);
+    short bcc = generateBcc(scratchPad);
     short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
@@ -420,7 +420,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     kmDataStore.persistAdditionalCertChain(buffer, (short) (bufferStartOffset + byteHeaderLen),
         (short) (bufferLength - byteHeaderLen));
     kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
-    //reclaim memory
+    // reclaim memory
     repository.reclaimMemory(bufferLength);
     sendResponse(apdu, KMError.OK);
   }

@@ -441,9 +441,7 @@ public class KMProvision {
             KMInteger.uint_8(KMCose.COSE_KEY_OP_SIGN),
             KMInteger.uint_8(KMCose.COSE_ECCURVE_256),
             pubKey, (short) 0, lengths[1],
-            privKey, (short) 0, lengths[0],
-            false
-        );
+            privKey, (short) 0, lengths[0]);
     Assert.assertEquals(lengths[1], 65);
     Assert.assertTrue("Private key length should not be > 32", (lengths[0] <= 32));
     Util.arrayCopyNonAtomic(privKey, (short) 0, RKP_DK_PRIV, (short) (32 - lengths[0]), lengths[0]);

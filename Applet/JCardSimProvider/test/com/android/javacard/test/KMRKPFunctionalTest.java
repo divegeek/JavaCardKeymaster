@@ -93,8 +93,11 @@ public class KMRKPFunctionalTest {
   private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 48; //0x50
   private static final byte INS_END_KM_CMD = 0x7F;
 
-  public static byte[] CSR_CHALLENGE = {0x56, 0x78, 0x65, 0x23, (byte) 0xFE, 0x32};
-
+  public static byte[] CSR_CHALLENGE = {0x56, 0x78, 0x65, 0x23, (byte) 0xFE, 0x32, 0x56, 0x78,
+                                        0x65, 0x23, (byte) 0xFE, 0x32, 0x56, 0x78, 0x65, 0x23,
+                                        (byte) 0xFE, 0x32, (byte) 0xFE, 0x32, 0x56, 0x78, 0x65,
+                                        0x23, (byte) 0xFE, 0x32, 0x56, 0x78, 0x65, 0x23, (byte) 0xFE,
+                                        0x32, 0x56, 0x78, 0x65, 0x23};
   private CardSimulator simulator;
   private KMEncoder encoder;
   private KMDecoder decoder;
@@ -428,47 +431,6 @@ public class KMRKPFunctionalTest {
 	        coseKeyBytesLen);
     payloadLen += coseKeyBytesLen;
     
-    apdu = new CommandAPDU(0x80, INS_GET_DICE_CERT_CHAIN_CMD, 0x50, 0x00, (byte[]) null, 65536);// BCC
-    response = simulator.transmitCommand(apdu);
-    arr = KMArray.instance((short) 2);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp()); // OK
-    KMArray.cast(arr).add((short) 1, KMByteBlob.exp()); // data
-    resp = response.getBytes();
-    ret = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMTestUtils.getErrorCode(ret), KMError.OK);
-    short diceCersts = KMArray.cast(ret).get((short) 1);
-    
-    short coseKeyExp = KMCoseKey.exp();
-    short signedMacArr = KMArray.instance((short) 4);
-    short headersExp = KMCoseHeaders.exp();
-    KMArray.cast(signedMacArr).add((short) 0, KMByteBlob.exp());
-    KMArray.cast(signedMacArr).add((short) 1, headersExp);
-    KMArray.cast(signedMacArr).add((short) 2, KMByteBlob.exp());
-    KMArray.cast(signedMacArr).add((short) 3, KMByteBlob.exp());
-    short bccArr = KMArray.instance((short) 2);
-    KMArray.cast(bccArr).add((short) 0, coseKeyExp);
-    KMArray.cast(bccArr).add((short) 1, signedMacArr);
-    
-    short bccPtr = decoder.decode(bccArr, KMByteBlob.cast(diceCersts).getBuffer(), KMByteBlob.cast(diceCersts).getStartOff(), KMByteBlob.cast(diceCersts).length());
-    
-    byte[] pubKey = new byte[100];
-    short pubLen = KMTestUtils.getBccPublicKey(cryptoProvider, encoder, decoder,
-    		bccPtr, pubKey, (short) 0);
-    
-    byte[] encodedSignBuf = new byte[512];
-    short encodedSignLen =
-    		KMTestUtils.encodeES256CoseSignSignature(
-    			signature,
-                (short)0,
-                signatureLen,
-                encodedSignBuf,
-                (short) 0);
-    // Verify the signature of cose sign1.
-    KMTestUtils.print(payload, (short) 0, payloadLen);
-        Assert.assertTrue(
-            cryptoProvider.ecVerify256(pubKey, (short)0, pubLen, payload, (short) 0, payloadLen,
-            		encodedSignBuf, (short) 0, encodedSignLen));
-        
     byte moreData;
     byte[] udsCerts = new byte[2500];
     short offset = 0;
@@ -489,13 +451,65 @@ public class KMRKPFunctionalTest {
       offset += KMByteBlob.cast(partialData).length();
     
       moreData = KMInteger.cast(KMArray.cast(ret).get((short) 2)).getByte();
-    }while (moreData != 0);
+    } while (moreData != 0);
     short x509Arr = KMArray.exp(KMByteBlob.exp());
     short additionalCertChain = KMMap.instance((short) 1);
     KMMap.cast(additionalCertChain).add((short) 0, KMTextString.exp(), x509Arr);
     ret = decoder.decode(additionalCertChain, udsCerts, (short) 0, offset);
     ret = KMMap.cast(ret).getKeyValue((short) 0);
     Assert.assertTrue(KMTestUtils.validateCertChain(ret));
+
+    byte[] diceCerts = new byte[2500];
+    offset = 0;
+    do {
+        apdu = new CommandAPDU(0x80, INS_GET_DICE_CERT_CHAIN_CMD, 0x50, 0x00, (byte[]) null, 65536);// BCC
+        response = simulator.transmitCommand(apdu);
+        arr = KMArray.instance((short) 3);
+        KMArray.cast(arr).add((short) 0, KMInteger.exp()); // OK
+        KMArray.cast(arr).add((short) 1, KMByteBlob.exp()); // data
+        KMArray.cast(arr).add((short) 2, KMInteger.exp()); // more data
+        resp = response.getBytes();
+        ret = decoder.decode(arr, resp, (short) 0, (short) resp.length);
+        Assert.assertEquals(KMTestUtils.getErrorCode(ret), KMError.OK);
+        short partialData = KMArray.cast(ret).get((short) 1);
+        Util.arrayCopyNonAtomic(KMByteBlob.cast(partialData).getBuffer(), KMByteBlob.cast(partialData).getStartOff(),
+      		  diceCerts, offset, KMByteBlob.cast(partialData).length());
+        offset += KMByteBlob.cast(partialData).length();
+        
+        moreData = KMInteger.cast(KMArray.cast(ret).get((short) 2)).getByte();
+      } while (moreData != 0);
+            
+      short coseKeyExp = KMCoseKey.exp();
+      short signedMacArr = KMArray.instance((short) 4);
+      short headersExp = KMCoseHeaders.exp();
+      KMArray.cast(signedMacArr).add((short) 0, KMByteBlob.exp());
+      KMArray.cast(signedMacArr).add((short) 1, headersExp);
+      KMArray.cast(signedMacArr).add((short) 2, KMByteBlob.exp());
+      KMArray.cast(signedMacArr).add((short) 3, KMByteBlob.exp());
+      short bccArr = KMArray.instance((short) 2);
+      KMArray.cast(bccArr).add((short) 0, coseKeyExp);
+      KMArray.cast(bccArr).add((short) 1, signedMacArr);
+      
+      short bccPtr = decoder.decode(bccArr, diceCerts, (short)0, offset);
+      
+      byte[] pubKey = new byte[100];
+      short pubLen = KMTestUtils.getBccPublicKey(cryptoProvider, encoder, decoder,
+      		bccPtr, pubKey, (short) 0);
+      
+      byte[] encodedSignBuf = new byte[512];
+      short encodedSignLen =
+      		KMTestUtils.encodeES256CoseSignSignature(
+      			signature,
+                  (short)0,
+                  signatureLen,
+                  encodedSignBuf,
+                  (short) 0);
+      // Verify the signature of cose sign1.
+      KMTestUtils.print(payload, (short) 0, payloadLen);
+          Assert.assertTrue(
+              cryptoProvider.ecVerify256(pubKey, (short)0, pubLen, payload, (short) 0, payloadLen,
+              		encodedSignBuf, (short) 0, encodedSignLen));
+    
   }
 
 }

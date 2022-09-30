@@ -777,7 +777,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
 	KMOperation operation = null;
     byte alg = mapSignature256Alg(KMType.EC, (byte) 0, (byte) digest);
     if (isRkp) {
-      operation = poolMgr.getRKpOperation(KMType.SIGN, Signature.ALG_HMAC_SHA_256, KMType.HMAC,
+      operation = poolMgr.getRKpOperation(KMType.SIGN, Signature.ALG_ECDSA_SHA_256, KMType.EC,
             KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE);
     } else {
       operation = poolMgr
