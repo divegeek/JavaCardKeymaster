@@ -180,11 +180,11 @@ JavacardRemotelyProvisionedComponentDevice::finishSendData(
     }
     auto optCEncryptProtectedHeader = cbor_.getByteArrayVec(item, 1);
     auto optSignature = cbor_.getByteArrayVec(item, 2);
-    auto optVersion = cbor_.getUint64<uint32_t>(item, 2);
+    auto optVersion = cbor_.getUint64<uint32_t>(item, 3);
     auto optRespFlag = cbor_.getUint64<uint32_t>(item, 4);
     if (!optCEncryptProtectedHeader || !optSignature ||
         !optVersion || !optRespFlag) {
-         LOG(ERROR) << "Error in decoding og response in finishSendData.";
+         LOG(ERROR) << "Error in decoding response in finishSendData.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
 
@@ -204,8 +204,7 @@ JavacardRemotelyProvisionedComponentDevice::getDiceCertChain(
         return km_utils::kmError2ScopedAStatus(translateRkpErrorCode(err));
     }
     auto optPDiceCertChain = cbor_.getByteArrayVec(item, 1);
-    auto optRespFlag = cbor_.getUint64<uint32_t>(item, 2);
-    if (!optPDiceCertChain || !optRespFlag) {
+    if (!optPDiceCertChain) {
          LOG(ERROR) << "Error in decoding og response in getDiceCertChain.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
@@ -278,7 +277,7 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
     if (!ret.isOk()) return ret;
 
     auto payload = cppbor::Array()
-            .add(deviceInfo.deviceInfo) // deviceinfo
+            .add(EncodedItem(deviceInfo.deviceInfo)) // deviceinfo
             .add(challenge)  // Challenge
             .add(std::move(coseKeys))  // KeysToSign
             .encode();
@@ -287,13 +286,12 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
         .add(std::move(coseEncryptProtectedHeader))
         .add(cppbor::Map() /* unprotected parameters */)
         .add(std::move(payload))
-        .add(std::move(signature))
-        .encode();
+        .add(std::move(signature));
     
     *keysToSignMac = cppbor::Array()
         .add(version)
-        .add(std::move(udsCertChain))
-        .add(std::move(diceCertChain))
+        .add(EncodedItem(udsCertChain))
+        .add(EncodedItem(diceCertChain))
         .add(std::move(signedData))
         .encode();
 
