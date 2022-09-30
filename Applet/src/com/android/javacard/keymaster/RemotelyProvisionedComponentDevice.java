@@ -92,7 +92,7 @@ public class RemotelyProvisionedComponentDevice {
       0x78};
   public static final byte[] DI_CERT_TYPE = {0x6B, 0x65, 0x79, 0x6D, 0x69, 0x6E, 0x74};
 
-  private static final short MAX_SEND_DATA = 1024;
+  private static final short MAX_SEND_DATA = 512;
 
   private static final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
 
