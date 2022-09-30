@@ -74,7 +74,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   private static final short SHARED_SECRET_KEY_SIZE = 32;
   private static final byte DEVICE_STATUS_FLAG_SIZE = 1;
   
-  private static final short ADDITIONAL_CERT_CHAIN_MAX_SIZE = 512;//First 2 bytes for length.
+  private static final short ADDITIONAL_CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
   private static final short BCC_MAX_SIZE = 512;
 
  //Device boot states. Applet starts executing the
@@ -924,7 +924,13 @@ public class KMKeymintDataStore implements KMUpgradable {
       // have to update the secureBootMode with the correct input.
       secureBootMode = 0;
       provisionStatus |= KMKeymasterApplet.PROVISION_STATUS_SECURE_BOOT_MODE;
+      // Applet package Versions till 2 had CoseSign1 for additionalCertificateChain.
+      // From package version 3, the additionalCertificateChain is in X.509 format. 
+      // So Unreference the old address and allocate new persistent memory.
+      additionalCertChain = new byte[ADDITIONAL_CERT_CHAIN_MAX_SIZE];
       JCSystem.commitTransaction();
+      // Request for ObjectDeletion for unreferenced address of additionalCertChain.
+      JCSystem.requestObjectDeletion();
       return;
     }
     handleUpgrade(element, oldVersion);
@@ -1009,8 +1015,14 @@ public class KMKeymintDataStore implements KMUpgradable {
     // have to update the secureBootMode with the correct input.
     secureBootMode = 0;
     provisionStatus = pStatus;
+    // Applet package Versions till 2 had CoseSign1 for additionalCertificateChain.
+    // From package version 3, the additionalCertificateChain is in X.509 format. 
+    // So Unreference the old address and allocate new persistent memory.
+    additionalCertChain = new byte[ADDITIONAL_CERT_CHAIN_MAX_SIZE];
     JCSystem.commitTransaction();
     repository.reclaimMemory((short)2);
+    // Request object deletion for unreferenced address for additionalCertChain
+    JCSystem.requestObjectDeletion();
   }
   
   @Override

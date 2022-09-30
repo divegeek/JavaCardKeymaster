@@ -88,7 +88,7 @@ public class RemotelyProvisionedComponentDevice {
   public static final byte DI_SCHEMA_VERSION = 2;
   public static final byte[] DI_SECURITY_LEVEL = {0x73, 0x74, 0x72, 0x6F, 0x6E, 0x67, 0x62, 0x6F,
       0x78};
-  private static final short MAX_SEND_DATA = 1024;
+  private static final short MAX_SEND_DATA = 512;
   
   private static final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
 
@@ -196,9 +196,8 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private void initializeDataTable() {
-    if (dataIndex[0] != 0) {
-      KMException.throwIt(KMError.INVALID_STATE);
-    }
+    clearDataTable();
+    releaseOperation();
     dataIndex[0] = (short) (DATA_INDEX_SIZE * DATA_INDEX_ENTRY_SIZE);
   }
 
@@ -412,13 +411,17 @@ public class RemotelyProvisionedComponentDevice {
       arr = KMKeymasterApplet.receiveIncoming(apdu, arr);
       // Store the challenge in the data table.
       short challenge = KMArray.cast(arr).get((short) 0);
-      short dataEntryIndex = createEntry(CHALLENGE, KMByteBlob.cast(challenge).length());
+      short challengeLen = KMByteBlob.cast(challenge).length();
+      if (challengeLen < 32 || challengeLen > 64) {
+        KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
+      }
+      short dataEntryIndex = createEntry(CHALLENGE, challengeLen);
       Util.arrayCopyNonAtomic(
           KMByteBlob.cast(challenge).getBuffer(),
           KMByteBlob.cast(challenge).getStartOff(),
           data,
           dataEntryIndex,
-          KMByteBlob.cast(challenge).length()
+          challengeLen
       );
       // Update the state
       updateState(UPDATE);
@@ -561,8 +564,10 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private boolean isAdditionalCertificateChainPresent() {
-    if ((TRUE == data[getEntry(TEST_MODE)])) {
-      // In test mode, don't include AdditionalCertificateChain in ProtectedData.
+    if ((0x02 == RKP_VERSION) || (TRUE == data[getEntry(TEST_MODE)])) {
+      // Don't include AdditionalCertificateChain in ProtectedData if either
+      // 1. KeyMint Version is 2 or
+      // 2. Requested CSR for test mode.
       return false;
     }
     return (storeDataInst.getAdditionalCertChainLength() == 0 ? false : true);
@@ -836,23 +841,23 @@ public class RemotelyProvisionedComponentDevice {
 
   /**
    * DeviceInfo is a CBOR Map structure described by the following CDDL.
-   * <p>
+   *
    * DeviceInfo = {
-   * ? "brand" : tstr,
-   * ? "manufacturer" : tstr,
-   * ? "product" : tstr,
-   * ? "model" : tstr,
-   * ? "board" : tstr,
-   * ? "vb_state" : "green" / "yellow" / "orange",    // Taken from the AVB values
-   * ? "bootloader_state" : "locked" / "unlocked",    // Taken from the AVB values
-   * ? "vbmeta_digest": bstr,                         // Taken from the AVB values
+   *  "brand" : tstr,
+   *  "manufacturer" : tstr,
+   *  "product" : tstr,
+   *  "model" : tstr,
+   *  "device" : tstr,
+   *  "vb_state" : "green" / "yellow" / "orange",    // Taken from the AVB values
+   *  "bootloader_state" : "locked" / "unlocked",    // Taken from the AVB values
+   *  "vbmeta_digest": bstr,                         // Taken from the AVB values
    * ? "os_version" : tstr,                    // Same as android.os.Build.VERSION.release
-   * ? "system_patch_level" : uint,                   // YYYYMMDD
-   * ? "boot_patch_level" : uint,                     //YYYYMMDD
-   * ? "vendor_patch_level" : uint,                   // YYYYMMDD
-   * "version" : 1, // TheCDDL schema version
+   *  "system_patch_level" : uint,                   // YYYYMMDD
+   *  "boot_patch_level" : uint,                     //YYYYMMDD
+   *  "vendor_patch_level" : uint,                   // YYYYMMDD
+   * "version" : 2, // TheCDDL schema version
    * "security_level" : "tee" / "strongbox"
-   * "att_id_state": "locked" / "open"
+   * "fused": 1 / 0,
    * }
    */
   private short createDeviceInfo(byte[] scratchpad) {
