@@ -300,14 +300,14 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
 
   public void setOsVersion(byte[] buf, short start, short len) {
-    if (len != OS_VERSION_SIZE) {
+    if ((len == 0) || (len != OS_VERSION_SIZE)) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     writeDataEntry(BOOT_OS_VERSION, buf, start, len);
   }
 
   public void setVendorPatchLevel(byte[] buf, short start, short len) {
-    if (len != VENDOR_PATCH_SIZE) {
+    if ((len == 0) || (len != VENDOR_PATCH_SIZE)) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     writeDataEntry(VENDOR_PATCH_LEVEL, buf, start, len);
@@ -379,7 +379,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
 
   public void setOsPatch(byte[] buf, short start, short len) {
-    if (len != OS_PATCH_SIZE) {
+    if ((len == 0) || (len != OS_PATCH_SIZE)) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     writeDataEntry(BOOT_OS_PATCH_LEVEL, buf, start, len);
@@ -778,7 +778,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     if (verifiedHash == null) {
       verifiedHash = new byte[32];
     }
-    if (length != 32) {
+    if ((length == 0) || (length != KMKeymasterApplet.VERIFIED_BOOT_HASH_SIZE)) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     Util.arrayCopy(buffer, start, verifiedHash, (short) 0, (short) 32);
@@ -788,7 +788,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     if (bootKey == null) {
       bootKey = new byte[32];
     }
-    if (length != 32) {
+    if ((length == 0) || (length != KMKeymasterApplet.VERIFIED_BOOT_KEY_SIZE)) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     Util.arrayCopy(buffer, start, bootKey, (short) 0, (short) 32);

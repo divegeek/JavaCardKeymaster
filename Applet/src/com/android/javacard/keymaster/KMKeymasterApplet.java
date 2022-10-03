@@ -137,7 +137,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte OEM_LOCK = 1;
   private static final byte OEM_UNLOCK = 0;
  
-  public static final short MAX_COSE_BUF_SIZE = (short) 1024;
+  public static final short MAX_COSE_BUF_SIZE = (short) 512;
   // Maximum allowed buffer size for to encode the key parameters
   // which is used while creating mac for key paramters.
   public static final short MAX_KEY_PARAMS_BUF_SIZE = (short) 3072; // 3K
@@ -1700,18 +1700,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected short getBootKey(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_KEY_SIZE, (byte)0);
     short len = kmDataStore.getBootKey(scratchPad, (short) 0);
-    if(len != VERIFIED_BOOT_KEY_SIZE) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
     return KMByteBlob.instance(scratchPad,(short)0, VERIFIED_BOOT_KEY_SIZE);
   }
 
   protected short getVerifiedBootHash(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_HASH_SIZE, (byte)0);
     short len = kmDataStore.getVerifiedBootHash(scratchPad, (short) 0);
-    if(len != VERIFIED_BOOT_HASH_SIZE) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
     return KMByteBlob.instance(scratchPad,(short)0, VERIFIED_BOOT_HASH_SIZE);
   }
   // --------------------------------

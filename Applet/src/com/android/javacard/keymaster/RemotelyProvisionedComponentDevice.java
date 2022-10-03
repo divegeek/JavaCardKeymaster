@@ -141,6 +141,10 @@ public class RemotelyProvisionedComponentDevice {
   //RKP CDDL Schema version
   private static final byte RKP_SCHEMA_VERSION = 3;
 
+  private static final short MAX_ENCODED_BUF_SIZE = 1024;
+
+  private static final boolean isUdsCertsSupportedInRkpServer = false;
+  
   // variables
   private byte[] data;
   private KMEncoder encoder;
@@ -305,7 +309,7 @@ public class RemotelyProvisionedComponentDevice {
     // Add payload Byte Header
     short prevReclaimIndex = repository.getHeapReclaimIndex();
     byte[] heap = repository.getHeap();
-    short heapIndex = repository.allocReclaimableMemory((short) 1024);
+    short heapIndex = repository.allocReclaimableMemory(MAX_ENCODED_BUF_SIZE);
     short byteBlobHeaderLen =
         encoder.encodeByteBlobHeader(payloadLen, heap, heapIndex, (short) 3);
     ((KMOperation) operation[0]).update(heap, heapIndex, byteBlobHeaderLen);
@@ -322,7 +326,7 @@ public class RemotelyProvisionedComponentDevice {
     short keysToSignArrayHeaderLen =
         encoder.encodeArrayHeader(coseKeysCount, heap, heapIndex, (short) 3);
     ((KMOperation) operation[0]).update(heap, heapIndex, keysToSignArrayHeaderLen);
-    repository.reclaimMemory((short) 1024);
+    repository.reclaimMemory(MAX_ENCODED_BUF_SIZE);
   }
 
   public void processBeginSendData(APDU apdu) throws Exception {
@@ -353,9 +357,12 @@ public class RemotelyProvisionedComponentDevice {
       if (0 == KMInteger.cast(KMArray.cast(arr).get((short) 0)).getShort()) {
         updateState(UPDATE);
       }
-      short len = KMKeymasterApplet.encodeToApduBuffer(deviceInfo, scratchPad,
-          (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-      short encodedDeviceInfo = KMByteBlob.instance(scratchPad, (short) 0, len);
+      short prevReclaimIndex = repository.getHeapReclaimIndex();  
+      short offset = repository.allocReclaimableMemory(MAX_ENCODED_BUF_SIZE);
+      short length = encoder.encode(deviceInfo, repository.getHeap(), offset, prevReclaimIndex, MAX_ENCODED_BUF_SIZE);
+      short encodedDeviceInfo = KMByteBlob.instance(repository.getHeap(), offset, length);
+      //release memory
+      repository.reclaimMemory(MAX_ENCODED_BUF_SIZE);
       // Send response.
       short array = KMArray.instance((short) 2);
       KMArray.cast(array).add((short) 0, KMInteger.uint_16(KMError.OK));
@@ -389,15 +396,13 @@ public class RemotelyProvisionedComponentDevice {
       // Validate and extract the CoseKey from CoseMac0 message.
       short coseKey = validateAndExtractPublicKey(arrInst, scratchPad);
       // Encode CoseKey
-      short prevReclaimIndex = repository.getHeapReclaimIndex();  
-      short offset = repository.allocReclaimableMemory(KMKeymasterApplet.MAX_COSE_BUF_SIZE);
-      short length = encoder.encode(coseKey, repository.getHeap(), offset, prevReclaimIndex, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+      short length = KMKeymasterApplet.encodeToApduBuffer(coseKey, scratchPad,
+              (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
 
       // Do ecSign update with input as encoded CoseKey.
-      ((KMOperation) operation[0]).update(repository.getHeap(), offset, length);
-      short encodedCoseKey = KMByteBlob.instance(repository.getHeap(), offset, length);
-      //release memory
-      repository.reclaimMemory(KMKeymasterApplet.MAX_COSE_BUF_SIZE);
+      ((KMOperation) operation[0]).update(scratchPad, (short)0, length);
+      short encodedCoseKey = KMByteBlob.instance(scratchPad, (short)0, length);
+      
       // Increment the count each time this function gets executed.
       // Store the count in data table.
       short dataEntryIndex = getEntry(KEYS_TO_SIGN_COUNT);
@@ -501,26 +506,42 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
+  private boolean isUdsCertsChainPresent() {
+    if(!isUdsCertsSupportedInRkpServer || (storeDataInst.getAdditionalCertChainLength() == 0)) {
+      return false;
+    }
+    return true;
+  }
+
   public void processGetUdsCerts(APDU apdu) throws Exception {
     try {
       // The prior state should be FINISH.
       validateState((byte) (FINISH));
+      short len;
+      byte moreData;
       byte[] scratchPad = apdu.getBuffer();
-      short len = processAdditionalCertificateChain(scratchPad);
-      
-      byte moreData = MORE_DATA;
-      byte state = getCurrentOutputProcessingState();
-      switch (state) {
-        case PROCESSING_ACC_IN_PROGRESS:
-          moreData = MORE_DATA;
-          break;
-        case PROCESSING_ACC_COMPLETE:
-          updateState(GET_UDS_CERTS_RESPONSE);
-          moreData = NO_DATA;
-          break;
-        default:
-          KMException.throwIt(KMError.INVALID_STATE);
-      }
+      if(!isUdsCertsChainPresent()) { 
+        createEntry(RESPONSE_PROCESSING_STATE, BYTE_SIZE);
+    	updateState(GET_UDS_CERTS_RESPONSE);
+        moreData = NO_DATA;
+        scratchPad[0] = (byte)0xA0; // CBOR Encoded empty map is A0
+        len = 1;
+      } else {
+        len = processAdditionalCertificateChain(scratchPad);//change names to uds 
+        moreData = MORE_DATA;
+        byte state = getCurrentOutputProcessingState();
+        switch (state) {
+          case PROCESSING_ACC_IN_PROGRESS:
+            moreData = MORE_DATA;
+            break;
+          case PROCESSING_ACC_COMPLETE:
+            updateState(GET_UDS_CERTS_RESPONSE);
+            moreData = NO_DATA;
+            break;
+          default:
+            KMException.throwIt(KMError.INVALID_STATE);
+        }
+      } 
       short data = KMByteBlob.instance(scratchPad, (short) 0, len);
       short arr = KMArray.instance((short) 3);
       KMArray.cast(arr).add((short) 0, KMInteger.uint_16(KMError.OK));
@@ -754,18 +775,15 @@ public class RemotelyProvisionedComponentDevice {
 
   private short getAttestationId(short attestId, byte[] scratchpad) {
     short attIdTagLen = storeDataInst.getAttestationId(attestId, scratchpad, (short) 0);
-    if (attIdTagLen != 0) {
-      return KMTextString.instance(scratchpad, (short) 0, attIdTagLen);
+    if (attIdTagLen == 0) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
-    return KMType.INVALID_VALUE;
+    return KMTextString.instance(scratchpad, (short) 0, attIdTagLen);
   }
 
   private short getVerifiedBootHash(byte[] scratchPad) {
     short len = storeDataInst.getVerifiedBootHash(scratchPad, (short) 0);
-    if (len != 0) {
-      return KMByteBlob.instance(scratchPad, (short) 0, len);
-    }
-    return KMType.INVALID_VALUE;
+    return KMByteBlob.instance(scratchPad, (short) 0, len);
   }
 
   private short getBootloaderState() {

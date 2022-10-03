@@ -246,7 +246,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isSeFactoryProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short seCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN;
+    short seCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR;
     if (seCompleteStatus == (pStatus & seCompleteStatus)) {
       return true;
     }
@@ -459,7 +459,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         KMException.throwIt(KMError.INVALID_ARGUMENT);
       }
       obj = KMByteTag.cast(obj).getValue();
-      if (KMByteBlob.cast(obj).length() > KMConfigurations.MAX_ATTESTATION_IDS_SIZE) {
+      if ((KMByteBlob.cast(obj).length() == 0) ||
+    		  (KMByteBlob.cast(obj).length() > KMConfigurations.MAX_ATTESTATION_IDS_SIZE)) {
         KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
       }
       kmDataStore.setAttestationId(key, KMByteBlob.cast(obj).getBuffer(),
@@ -523,8 +524,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
-		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
+    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
          PROVISION_STATUS_SECURE_BOOT_MODE;
     if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
       return true;

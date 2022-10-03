@@ -244,14 +244,14 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequest(bool,
                                         const std::vector<uint8_t>&,
                                         DeviceInfo*, ProtectedData*,
                                         std::vector<uint8_t>*) {
-    return km_utils::kmError2ScopedAStatus(KM_ERROR_UNIMPLEMENTED); //TODO need to change the status to STATUS_REMOVED     
+    return km_utils::kmError2ScopedAStatus(static_cast<keymaster_error_t>(STATUS_REMOVED));    
 }
 
 ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
                                         const std::vector<MacedPublicKey>& keysToSign,
                                         const std::vector<uint8_t>& challenge,
-                                        std::vector<uint8_t>* keysToSignMac) {
+                                        std::vector<uint8_t>* csr) {
     uint32_t version;
     uint32_t respFlag;
     DeviceInfo deviceInfo;
@@ -273,10 +273,10 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
                          version, respFlag);
     if (!ret.isOk()) return ret;
 
-    ret = getDiceCertChain(diceCertChain);
+    ret = getUdsCertsChain(udsCertChain);
     if (!ret.isOk()) return ret;
 
-    ret = getUdsCertsChain(udsCertChain);
+    ret = getDiceCertChain(diceCertChain);
     if (!ret.isOk()) return ret;
 
     auto payload = cppbor::Array()
@@ -291,7 +291,7 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
         .add(std::move(payload))
         .add(std::move(signature));
     
-    *keysToSignMac = cppbor::Array()
+    *csr = cppbor::Array()
         .add(version)
         .add(EncodedItem(udsCertChain))
         .add(EncodedItem(diceCertChain))

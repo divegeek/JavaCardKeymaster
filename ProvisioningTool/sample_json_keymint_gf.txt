@@ -3,7 +3,7 @@
       "brand": "Android",
       "device": "emulator_x86_64",
       "product": "sdk_phone_x86_64",
-      "serial": "",
+      "serial": "123456",
       "imei": "000000000000000",
       "meid": "000000000000000",
       "manufacturer": "unknown",
