@@ -44,7 +44,7 @@ public class KMProvision {
   private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 12;
   private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 13;
-  private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
+  private static final byte INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 14;
   private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 15;
@@ -393,7 +393,7 @@ public class KMProvision {
     return simulator.transmitCommand(apdu);
   }
 
-  public static ResponseAPDU provisionAdditionalCertChain(CardSimulator simulator,
+  public static ResponseAPDU provisionUdsCertChain(CardSimulator simulator,
       KMEncoder encoder, KMDecoder decoder) {
     short innerArrPtr = KMArray.instance((short) 2);
 
@@ -412,17 +412,8 @@ public class KMProvision {
     short encodedData = KMByteBlob.instance(output, (short) 0, encodedLen);
 
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder,
-        (byte) INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD, encodedData);
-    // print(commandAPDU.getBytes());
-    ResponseAPDU response = simulator.transmitCommand(apdu);
-
-    Assert.assertEquals(0x9000, response.getSW());
-    byte[] resp = response.getBytes();
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, KMInteger.exp());
-    short ptr = decoder.decode(arr, resp, (short) 0, (short) resp.length);
-    Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(ptr).get((short) 0)).getShort());
-    return response;
+        (byte) INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD, encodedData);
+    return simulator.transmitCommand(apdu);
   }
 
   public static ResponseAPDU provisionDeviceUniqueKeyPair(CardSimulator simulator,
@@ -661,7 +652,7 @@ public class KMProvision {
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        provisionAdditionalCertChain(simulator, encoder, decoder)));
+        provisionUdsCertChain(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,

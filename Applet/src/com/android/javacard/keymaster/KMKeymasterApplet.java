@@ -288,7 +288,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short PROVISION_STATUS_PRESHARED_SECRET = 0x0010;
   public static final short PROVISION_STATUS_PROVISIONING_LOCKED = 0x0020;
   public static final short PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR = 0x0040;
-  public static final short PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x0080;
+  public static final short PROVISION_STATUS_UDS_CERT_CHAIN = 0x0080;
   public static final short PROVISION_STATUS_SE_LOCKED = 0x0100; 
   public static final short PROVISION_STATUS_OEM_PUBLIC_KEY = 0x0200;
   public static final short PROVISION_STATUS_SECURE_BOOT_MODE = 0x0400;
@@ -1700,12 +1700,18 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected short getBootKey(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_KEY_SIZE, (byte)0);
     short len = kmDataStore.getBootKey(scratchPad, (short) 0);
+    if(len != VERIFIED_BOOT_KEY_SIZE) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
     return KMByteBlob.instance(scratchPad,(short)0, VERIFIED_BOOT_KEY_SIZE);
   }
 
   protected short getVerifiedBootHash(byte[] scratchPad){
     Util.arrayFillNonAtomic(scratchPad, (short)0, VERIFIED_BOOT_HASH_SIZE, (byte)0);
     short len = kmDataStore.getVerifiedBootHash(scratchPad, (short) 0);
+    if(len != VERIFIED_BOOT_HASH_SIZE) {
+      KMException.throwIt(KMError.UNKNOWN_ERROR);
+    }
     return KMByteBlob.instance(scratchPad,(short)0, VERIFIED_BOOT_HASH_SIZE);
   }
   // --------------------------------
@@ -4706,7 +4712,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
 
-  public static short generateBcc(byte[] scratchPad) {
+  public static short generateDiceCertChain(byte[] scratchPad) {
     if (kmDataStore.isProvisionLocked()) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
@@ -4784,10 +4790,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMCose.constructCoseSign1(protectedHeader, unprotectedHeader, payload, coseSignStructure);
 
     // [Cose_Key, Cose_Sign1]
-    short bcc = KMArray.instance((short) 2);
-    KMArray.cast(bcc).add((short) 0, coseKey);
-    KMArray.cast(bcc).add((short) 1, coseSign1);
-    return bcc;
+    short dcc = KMArray.instance((short) 2);
+    KMArray.cast(dcc).add((short) 0, coseKey);
+    KMArray.cast(dcc).add((short) 1, coseSign1);
+    return dcc;
   }
 
   private void updateTrustedConfirmationOperation(KMOperationState op) {

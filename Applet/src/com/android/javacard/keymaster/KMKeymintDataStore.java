@@ -74,8 +74,8 @@ public class KMKeymintDataStore implements KMUpgradable {
   private static final short SHARED_SECRET_KEY_SIZE = 32;
   private static final byte DEVICE_STATUS_FLAG_SIZE = 1;
   
-  private static final short ADDITIONAL_CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
-  private static final short BCC_MAX_SIZE = 512;
+  private static final short UDS_CERT_CHAIN_MAX_SIZE = 2500;//First 2 bytes for length.
+  private static final short DICE_CERT_CHAIN_MAX_SIZE = 512;
 
  //Device boot states. Applet starts executing the
  // core commands once all the states are set. The commands
@@ -115,8 +115,8 @@ public class KMKeymintDataStore implements KMUpgradable {
   private byte[] dataTable;
   private KMSEProvider seProvider;
   private KMRepository repository;
-  private byte[] additionalCertChain;
-  private byte[] bcc;
+  private byte[] udsCertChain;
+  private byte[] diceCertChain;
   private KMMasterKey masterKey;
   private KMDeviceUniqueKeyPair deviceUniqueKeyPair;
   private KMPreSharedKey preSharedKey;
@@ -137,8 +137,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     initDataTable();
     //Initialize the device locked status
     if (!isUpgrading) {
-      additionalCertChain = new byte[ADDITIONAL_CERT_CHAIN_MAX_SIZE];
-      bcc = new byte[BCC_MAX_SIZE];
+      udsCertChain = new byte[UDS_CERT_CHAIN_MAX_SIZE];
+      diceCertChain = new byte[DICE_CERT_CHAIN_MAX_SIZE];
       oemRootPublicKey = new byte[65];
     }
     setDeviceLockPasswordOnly(false);
@@ -300,14 +300,14 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
 
   public void setOsVersion(byte[] buf, short start, short len) {
-    if ((len == 0) || (len != OS_VERSION_SIZE)) {
+    if (len != OS_VERSION_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     writeDataEntry(BOOT_OS_VERSION, buf, start, len);
   }
 
   public void setVendorPatchLevel(byte[] buf, short start, short len) {
-    if ((len == 0) || (len != VENDOR_PATCH_SIZE)) {
+    if (len != VENDOR_PATCH_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     writeDataEntry(VENDOR_PATCH_LEVEL, buf, start, len);
@@ -379,7 +379,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   }
 
   public void setOsPatch(byte[] buf, short start, short len) {
-    if ((len == 0) || (len != OS_PATCH_SIZE)) {
+    if (len != OS_PATCH_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     writeDataEntry(BOOT_OS_PATCH_LEVEL, buf, start, len);
@@ -502,9 +502,9 @@ public class KMKeymintDataStore implements KMUpgradable {
     }
   }
   
-  public void persistAdditionalCertChain(byte[] buf, short offset, short len) {
-    // Input buffer contains encoded additional certificate chain as shown below.
-    //    AdditionalDKSignatures = {
+  public void persistUdsCertChain(byte[] buf, short offset, short len) {
+    // Input buffer contains encoded Uds certificate chain as shown below.
+    //    UdsDKSignatures = {
     //      + SignerName => DKCertChain
     //    }
     //    SignerName = tstr
@@ -513,35 +513,35 @@ public class KMKeymintDataStore implements KMUpgradable {
     //            // self-signed cert, leaf contains DK_pu b
     //    ]
     //    Certificate = COSE_Sign1 of a public key
-    if ((short) (len + 2) > ADDITIONAL_CERT_CHAIN_MAX_SIZE) {
+    if ((short) (len + 2) > UDS_CERT_CHAIN_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     JCSystem.beginTransaction();
-    Util.setShort(additionalCertChain, (short) 0, (short) len);
-    Util.arrayCopyNonAtomic(buf, offset, additionalCertChain,
+    Util.setShort(udsCertChain, (short) 0, (short) len);
+    Util.arrayCopyNonAtomic(buf, offset, udsCertChain,
         (short) 2, len);
     JCSystem.commitTransaction();
   }
 
-  public short getAdditionalCertChainLength() {
-    return Util.getShort(additionalCertChain, (short) 0);
+  public short getUdsCertChainLength() {
+    return Util.getShort(udsCertChain, (short) 0);
   }
 
-  public byte[] getAdditionalCertChain() {
-    return additionalCertChain;
+  public byte[] getUdsCertChain() {
+    return udsCertChain;
   }
 
-  public byte[] getBootCertificateChain() {
-    return bcc;
+  public byte[] getDiceCertificateChain() {
+    return diceCertChain;
   }
 
   public void persistBootCertificateChain(byte[] buf, short offset, short len) {
-    if ((short) (len + 2) > BCC_MAX_SIZE) {
+    if ((short) (len + 2) > DICE_CERT_CHAIN_MAX_SIZE) {
       KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
     }
     JCSystem.beginTransaction();
-    Util.setShort(bcc, (short) 0, (short) len);
-    Util.arrayCopyNonAtomic(buf, offset, bcc,
+    Util.setShort(diceCertChain, (short) 0, (short) len);
+    Util.arrayCopyNonAtomic(buf, offset, diceCertChain,
         (short) 2, len);
     JCSystem.commitTransaction();
   }
@@ -741,6 +741,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     attIdMeId = null;
     attIdManufacturer = null;
     attIdModel = null;
+    //Trigger garbage collection
+    JCSystem.requestObjectDeletion();
   }
   
   public short getVerifiedBootHash(byte[] buffer, short start) {
@@ -778,7 +780,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     if (verifiedHash == null) {
       verifiedHash = new byte[32];
     }
-    if ((length == 0) || (length != KMKeymasterApplet.VERIFIED_BOOT_HASH_SIZE)) {
+    if (length != KMKeymasterApplet.VERIFIED_BOOT_HASH_SIZE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     Util.arrayCopy(buffer, start, verifiedHash, (short) 0, (short) 32);
@@ -788,7 +790,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     if (bootKey == null) {
       bootKey = new byte[32];
     }
-    if ((length == 0) || (length != KMKeymasterApplet.VERIFIED_BOOT_KEY_SIZE)) {
+    if (length != KMKeymasterApplet.VERIFIED_BOOT_KEY_SIZE) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     Util.arrayCopy(buffer, start, bootKey, (short) 0, (short) 32);
@@ -885,8 +887,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     element.write(attIdMeId);
     element.write(attIdManufacturer);
     element.write(attIdModel);
-    element.write(additionalCertChain);
-    element.write(bcc);
+    element.write(udsCertChain);
+    element.write(diceCertChain);
     element.write(oemRootPublicKey);
     
     // Key Objects
@@ -937,8 +939,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     element.readObject(); // pop verifiedHash
     element.readObject(); //pop bootKey
     element.readObject(); // pop bootPatchLevel
-    additionalCertChain = (byte[]) element.readObject();
-    bcc = (byte[]) element.readObject();
+    udsCertChain = (byte[]) element.readObject();
+    diceCertChain = (byte[]) element.readObject();
 
     // Read Key Objects
     masterKey = (KMMasterKey) seProvider.onRestore(element);
@@ -964,8 +966,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     attIdMeId = (byte[]) element.readObject();
     attIdManufacturer = (byte[]) element.readObject();
     attIdModel = (byte[]) element.readObject();
-    additionalCertChain = (byte[]) element.readObject();
-    bcc = (byte[]) element.readObject();
+    udsCertChain = (byte[]) element.readObject();
+    diceCertChain = (byte[]) element.readObject();
     oemRootPublicKey = (byte[]) element.readObject();
     // Read Key Objects
     masterKey = (KMMasterKey) seProvider.onRestore(element);
@@ -1012,8 +1014,8 @@ public class KMKeymintDataStore implements KMUpgradable {
   @Override
   public short getBackupObjectCount() {
     // AttestationIds - 8 
-    // AdditionalCertificateChain - 1
-    // BCC - 1
+    // UdsCertificateChain - 1
+    // diceCertificateChain - 1
     // oemRootPublicKey - 1
     return (short) (11 +
         seProvider.getBackupObjectCount(KMDataStoreConstants.INTERFACE_TYPE_MASTER_KEY) +

@@ -69,7 +69,7 @@ static int getIntValue(Json::Value& Obj, const char* key, uint32_t *value);
 static int getBlobValue(Json::Value& Obj, const char* key, std::vector<uint8_t>& blob);
 static int getStringValue(Json::Value& Obj, const char* key, std::string& str);
 static int processDeviceUniqueKey();
-static int processAdditionalCertificateChain();
+static int processUdsCertificateChain();
 static int getDeviceUniqueKey(bytevec& privKey, bytevec& x, bytevec& y);
 static int processOEMRootPublicKey();
 static int processSEFactoryLock();
@@ -294,7 +294,7 @@ int processInputFile() {
         return FAILURE;
     }
     if (0 != processDeviceUniqueKey() ||
-        0 != processAdditionalCertificateChain() ||
+        0 != processUdsCertificateChain() ||
         0 != processAttestationIds() ||
         0 != processSharedSecret() ||
         0 != processOEMRootPublicKey() ||
@@ -313,7 +313,7 @@ int processInputFile() {
     return SUCCESS;
 }
 
-int processAdditionalCertificateChain() {
+int processUdsCertificateChain() {
     Json::Value signerInfo = root.get(kSignerInfo, Json::Value::nullRef);
     if (!signerInfo.isNull()) {
         std::vector<uint8_t> certData;
@@ -358,17 +358,17 @@ int processAdditionalCertificateChain() {
         cppbor::Bstr bstr(map.encode());
         std::vector<uint8_t> cborData = bstr.encode();
 
-        if(SUCCESS != addApduHeader(kAdditionalCertChainCmd, cborData)) {
+        if(SUCCESS != addApduHeader(kUdsCertChainCmd, cborData)) {
             return FAILURE;
         }
         // Write to json.
-        writerRoot[kAdditionalCertChain] = getHexString(cborData);
+        writerRoot[kUdsCertChain] = getHexString(cborData);
 
     } else {
         printf("\n Improper value for signer_info in json file \n");
         return FAILURE;
     }
-    printf("\n Constructed additional cert chain APDU successfully. \n");
+    printf("\n Constructed uds cert chain APDU successfully. \n");
     return SUCCESS;
 }
 

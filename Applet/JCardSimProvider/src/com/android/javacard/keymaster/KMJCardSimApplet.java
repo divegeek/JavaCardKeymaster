@@ -43,7 +43,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 12;
   private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
      INS_KEYMINT_PROVIDER_APDU_START + 13;
-  private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
+  private static final byte INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD =
      INS_KEYMINT_PROVIDER_APDU_START + 14;
   private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 15;
@@ -127,8 +127,8 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
             processProvisionRkpDeviceUniqueKeyPair(apdu);
             break;
 
-          case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
-            processProvisionRkpAdditionalCertChain(apdu);
+          case INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD:
+            processProvisionRkpUdsCertChain(apdu);
             break;
           
           case INS_SE_FACTORY_PROVISIONING_LOCK_CMD:
@@ -209,7 +209,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
         break;
         
       case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
-      case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
+      case INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD:
         if(isSeFactoryProvisioningLocked()) {
           result = false;  
         }
@@ -239,9 +239,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
 
   private boolean isSeFactoryProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short seCompleteStatus = (PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR |
-        PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
-    if (seCompleteStatus == (pStatus & seCompleteStatus)) {
+    if (PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR == (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR)) {
       return true;
     }
     return false;
@@ -373,15 +371,15 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     //Store the Device unique Key.
     kmDataStore.createRkpDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
         pubKeyLen, privKeyLen);
-    short bcc = generateBcc(scratchPad);
-    short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
+    short dcc = generateDiceCertChain(scratchPad);
+    short len = KMKeymasterApplet.encodeToApduBuffer(dcc, scratchPad, (short) 0,
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR);
     sendResponse(apdu, KMError.OK);
   }
 
-  private void processProvisionRkpAdditionalCertChain(APDU apdu) {
+  private void processProvisionRkpUdsCertChain(APDU apdu) {
     // X509 certificate chain is received as shown below:
     /**
      *     x509CertChain = bstr .cbor UdsCerts
@@ -417,9 +415,9 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     }
     short byteHeaderLen = decoder.readCertificateChainHeaderLen(buffer, bufferStartOffset,
         bufferLength);
-    kmDataStore.persistAdditionalCertChain(buffer, (short) (bufferStartOffset + byteHeaderLen),
+    kmDataStore.persistUdsCertChain(buffer, (short) (bufferStartOffset + byteHeaderLen),
         (short) (bufferLength - byteHeaderLen));
-    kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
+    kmDataStore.setProvisionStatus(PROVISION_STATUS_UDS_CERT_CHAIN);
     // reclaim memory
     repository.reclaimMemory(bufferLength);
     sendResponse(apdu, KMError.OK);
@@ -580,9 +578,8 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
 
   private boolean isProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
-		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
-         PROVISION_STATUS_SECURE_BOOT_MODE;
+    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR  | PROVISION_STATUS_PRESHARED_SECRET
+    		| PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY | PROVISION_STATUS_SECURE_BOOT_MODE;
     if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
       return true;
     }

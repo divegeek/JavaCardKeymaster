@@ -54,7 +54,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 12;
   private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 13;
-  private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
+  private static final byte INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 14;
   private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 15;
@@ -135,8 +135,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             processProvisionRkpDeviceUniqueKeyPair(apdu);
             break;
 
-          case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
-            processProvisionRkpAdditionalCertChain(apdu);
+          case INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD:
+            processProvisionRkpUdsCertChain(apdu);
             break;
           
           case INS_SE_FACTORY_PROVISIONING_LOCK_CMD:
@@ -217,7 +217,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         break;
         
       case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
-      case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
+      case INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD:
         if(isSeFactoryProvisioningLocked()) {
           result = false;  
         }
@@ -246,8 +246,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isSeFactoryProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short seCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR;
-    if (seCompleteStatus == (pStatus & seCompleteStatus)) {
+    if (PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR == (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR)) {
       return true;
     }
     return false;
@@ -379,15 +378,15 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     //Store the Device unique Key.
     kmDataStore.createRkpDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
         pubKeyLen, privKeyLen);
-    short bcc = generateBcc(scratchPad);
-    short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
+    short dcc = generateDiceCertChain(scratchPad);
+    short len = KMKeymasterApplet.encodeToApduBuffer(dcc, scratchPad, (short) 0,
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR);
     sendResponse(apdu, KMError.OK);
   }
 
-  private void processProvisionRkpAdditionalCertChain(APDU apdu) {
+  private void processProvisionRkpUdsCertChain(APDU apdu) {
     // X509 certificate chain is received as shown below:
     /**
      *     x509CertChain = bstr .cbor UdsCerts
@@ -423,9 +422,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     }
     short byteHeaderLen = decoder.readCertificateChainHeaderLen(buffer, bufferStartOffset,
         bufferLength);
-    kmDataStore.persistAdditionalCertChain(buffer, (short) (bufferStartOffset + byteHeaderLen),
+    kmDataStore.persistUdsCertChain(buffer, (short) (bufferStartOffset + byteHeaderLen),
         (short) (bufferLength - byteHeaderLen));
-    kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
+    kmDataStore.setProvisionStatus(PROVISION_STATUS_UDS_CERT_CHAIN);
     // reclaim memory
     repository.reclaimMemory(bufferLength);
     sendResponse(apdu, KMError.OK);
@@ -459,8 +458,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         KMException.throwIt(KMError.INVALID_ARGUMENT);
       }
       obj = KMByteTag.cast(obj).getValue();
-      if ((KMByteBlob.cast(obj).length() == 0) ||
-    		  (KMByteBlob.cast(obj).length() > KMConfigurations.MAX_ATTESTATION_IDS_SIZE)) {
+      if (KMByteBlob.cast(obj).length() > KMConfigurations.MAX_ATTESTATION_IDS_SIZE) {
         KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
       }
       kmDataStore.setAttestationId(key, KMByteBlob.cast(obj).getBuffer(),

@@ -454,10 +454,10 @@ public class KMTestUtils {
     Assert.assertTrue(valid);
     //--------------------------------------------
     //  Validate the decrypted payload.
-    //  payload = [signedMac + bcc + ? AdditionalCertChain]
+    //  payload = [signedMac + dcc + ? UdsCertChain]
     //--------------------------------------------
     short payloadLength = testMode ? (short) 2 : (short) 3;
-    short additionalCertChain = 0;
+    short udsCertChain = 0;
     short headersExp = KMCoseHeaders.exp();
     short coseKeyExp = KMCoseKey.exp();
     short signedMacArr = KMArray.instance((short) 4);
@@ -465,28 +465,28 @@ public class KMTestUtils {
     KMArray.cast(signedMacArr).add((short) 1, headersExp);
     KMArray.cast(signedMacArr).add((short) 2, KMByteBlob.exp());
     KMArray.cast(signedMacArr).add((short) 3, KMByteBlob.exp());
-    // bcc exp
-    short bccArr = KMArray.instance((short) 2);
-    KMArray.cast(bccArr).add((short) 0, coseKeyExp);
-    KMArray.cast(bccArr).add((short) 1, signedMacArr);
+    // dcc exp
+    short dccArr = KMArray.instance((short) 2);
+    KMArray.cast(dccArr).add((short) 0, coseKeyExp);
+    KMArray.cast(dccArr).add((short) 1, signedMacArr);
     //if (!testMode) {
     short headers = KMCoseHeaders.exp();
     short x509Arr = KMArray.exp(KMByteBlob.exp());
-    additionalCertChain = KMMap.instance((short) 1);
-    KMMap.cast(additionalCertChain).add((short) 0, KMTextString.exp(), x509Arr);
+    udsCertChain = KMMap.instance((short) 1);
+    KMMap.cast(udsCertChain).add((short) 0, KMTextString.exp(), x509Arr);
     // protected payload exp
     short payload = KMArray.instance(payloadLength);
     KMArray.cast(payload).add((short) 0, signedMacArr);
-    KMArray.cast(payload).add((short) 1, bccArr);
-    if (additionalCertChain != 0) {
-      KMArray.cast(payload).add((short) 2, additionalCertChain);
+    KMArray.cast(payload).add((short) 1, dccArr);
+    if (udsCertChain != 0) {
+      KMArray.cast(payload).add((short) 2, udsCertChain);
     }
     short payloadPtr = decoder.decode(payload, plainText, (short) 0, encryptedDataLen);
     byte[] pub = new byte[100];
     //--------------------------------------------
-    //  Validate BCC and get public key.
+    //  Validate DCC and get public key.
     //--------------------------------------------
-    short pubLen = getBccPublicKey(cryptoProvider, encoder, decoder,
+    short pubLen = getDccPublicKey(cryptoProvider, encoder, decoder,
         KMArray.cast(payloadPtr).get((short) 1), pub, (short) 0);
     //--------------------------------------------
     //  Validate Signed MacPtr.
@@ -496,7 +496,7 @@ public class KMTestUtils {
         deviceInfoMapPtr,
         pubKeysToSignMac);
     //--------------------------------------------
-    //  Validate Additional certificate chain.
+    //  Validate Uds certificate chain.
     //--------------------------------------------
     //if (!testMode) {
     {
@@ -628,16 +628,16 @@ public class KMTestUtils {
     return length;
   }
 
-  public static short getBccPublicKey(KMSEProvider cryptoProvider, KMEncoder encoder,
-      KMDecoder decoder, short bccPtr, byte[] pub, short pubOff) {
-    short len = KMArray.cast(bccPtr).length();
+  public static short getDccPublicKey(KMSEProvider cryptoProvider, KMEncoder encoder,
+      KMDecoder decoder, short dccPtr, byte[] pub, short pubOff) {
+    short len = KMArray.cast(dccPtr).length();
     short pubKeyLen = 0;
-    short prevCoseKey = KMArray.cast(bccPtr).get((short) 0);
+    short prevCoseKey = KMArray.cast(dccPtr).get((short) 0);
     for (short index = 1; index < len; index++) {
       //--------------------------------------------
       //  Validate Cose_Sign1
       //--------------------------------------------
-      short coseSign1Arr = KMArray.cast(bccPtr).get(index);
+      short coseSign1Arr = KMArray.cast(dccPtr).get(index);
       // Validate protected Header.
       short headers = KMArray.cast(coseSign1Arr).get((short) 0);
       short protectedHeader = headers;

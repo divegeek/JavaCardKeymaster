@@ -93,11 +93,8 @@ public class KMRKPFunctionalTest {
   private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 48; //0x50
   private static final byte INS_END_KM_CMD = 0x7F;
 
-  public static byte[] CSR_CHALLENGE = {0x56, 0x78, 0x65, 0x23, (byte) 0xFE, 0x32, 0x56, 0x78,
-                                        0x65, 0x23, (byte) 0xFE, 0x32, 0x56, 0x78, 0x65, 0x23,
-                                        (byte) 0xFE, 0x32, (byte) 0xFE, 0x32, 0x56, 0x78, 0x65,
-                                        0x23, (byte) 0xFE, 0x32, 0x56, 0x78, 0x65, 0x23, (byte) 0xFE,
-                                        0x32, 0x56, 0x78, 0x65, 0x23};
+  public static byte[] CSR_CHALLENGE = new byte[32];
+
   private CardSimulator simulator;
   private KMEncoder encoder;
   private KMDecoder decoder;
@@ -453,12 +450,13 @@ public class KMRKPFunctionalTest {
       moreData = KMInteger.cast(KMArray.cast(ret).get((short) 2)).getByte();
     } while (moreData != 0);
     short x509Arr = KMArray.exp(KMByteBlob.exp());
-    short additionalCertChain = KMMap.instance((short) 1);
-    KMMap.cast(additionalCertChain).add((short) 0, KMTextString.exp(), x509Arr);
-    ret = decoder.decode(additionalCertChain, udsCerts, (short) 0, offset);
-    ret = KMMap.cast(ret).getKeyValue((short) 0);
-    Assert.assertTrue(KMTestUtils.validateCertChain(ret));
-
+    short udsCertChain = KMMap.instance((short) 1);
+    KMMap.cast(udsCertChain).add((short) 0, KMTextString.exp(), x509Arr);
+    ret = decoder.decode(udsCertChain, udsCerts, (short) 0, offset);
+    if (KMMap.cast(ret).length() > 0) {
+      ret = KMMap.cast(ret).getKeyValue((short) 0);
+      Assert.assertTrue(KMTestUtils.validateCertChain(ret));
+    }
     byte[] diceCerts = new byte[2500];
     offset = 0;
     do {
@@ -486,15 +484,15 @@ public class KMRKPFunctionalTest {
       KMArray.cast(signedMacArr).add((short) 1, headersExp);
       KMArray.cast(signedMacArr).add((short) 2, KMByteBlob.exp());
       KMArray.cast(signedMacArr).add((short) 3, KMByteBlob.exp());
-      short bccArr = KMArray.instance((short) 2);
-      KMArray.cast(bccArr).add((short) 0, coseKeyExp);
-      KMArray.cast(bccArr).add((short) 1, signedMacArr);
+      short dccArr = KMArray.instance((short) 2);
+      KMArray.cast(dccArr).add((short) 0, coseKeyExp);
+      KMArray.cast(dccArr).add((short) 1, signedMacArr);
       
-      short bccPtr = decoder.decode(bccArr, diceCerts, (short)0, offset);
+      short dccPtr = decoder.decode(dccArr, diceCerts, (short)0, offset);
       
       byte[] pubKey = new byte[100];
-      short pubLen = KMTestUtils.getBccPublicKey(cryptoProvider, encoder, decoder,
-      		bccPtr, pubKey, (short) 0);
+      short pubLen = KMTestUtils.getDccPublicKey(cryptoProvider, encoder, decoder,
+      		dccPtr, pubKey, (short) 0);
       
       byte[] encodedSignBuf = new byte[512];
       short encodedSignLen =

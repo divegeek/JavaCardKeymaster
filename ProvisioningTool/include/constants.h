@@ -92,7 +92,7 @@ constexpr char kSharedSecret[] = "shared_secret";
 constexpr char kBootParams[] = "boot_params";
 constexpr char kAttestationIds[] = "attestation_ids";
 constexpr char kDeviceUniqueKey[] = "device_unique_key";
-constexpr char kAdditionalCertChain[] = "additional_cert_chain";
+constexpr char kUdsCertChain[] = "uds_cert_chain";
 constexpr char kSignerInfo[] = "signer_info";
 constexpr char kProvisionStatus[] = "provision_status";
 constexpr char kLockProvision[] = "lock_provision";
@@ -111,7 +111,7 @@ constexpr int kSeFactoryLockCmd = INS_BEGIN_KM_CMD + 10;
 constexpr int kOemRootPublicKeyCmd = INS_BEGIN_KM_CMD + 11;
 constexpr int kOemUnLockProvisionCmd = INS_BEGIN_KM_CMD + 12;
 constexpr int kDeviceUniqueKeyCmd = INS_BEGIN_KM_CMD + 13;
-constexpr int kAdditionalCertChainCmd = INS_BEGIN_KM_CMD + 14;
+constexpr int kUdsCertChainCmd = INS_BEGIN_KM_CMD + 14;
 constexpr int kSecureBootModeCmd = INS_BEGIN_KM_CMD + 18;
 
 

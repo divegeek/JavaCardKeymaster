@@ -103,10 +103,10 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte NO_DATA = 0x00;
   // Response processing states
   private static final byte START_PROCESSING = 0x00;
-  private static final byte PROCESSING_BCC_IN_PROGRESS = 0x02;
-  private static final byte PROCESSING_BCC_COMPLETE = 0x04;
-  private static final byte PROCESSING_ACC_IN_PROGRESS = 0x08; // Additional certificate chain.
-  private static final byte PROCESSING_ACC_COMPLETE = 0x0A;
+  private static final byte PROCESSING_DICE_CERTS_IN_PROGRESS = 0x02;
+  private static final byte PROCESSING_DICE_CERTS_COMPLETE = 0x04;
+  private static final byte PROCESSING_UDS_CERTS_IN_PROGRESS = 0x08;
+  private static final byte PROCESSING_UDS_CERTS_COMPLETE = 0x0A;
   // data table
   private static final short DATA_SIZE = 512;
   private static final short DATA_INDEX_SIZE = 6;
@@ -118,8 +118,8 @@ public class RemotelyProvisionedComponentDevice {
   private static final short KEYS_TO_SIGN_COUNT = 1;
   private static final short GENERATE_CSR_PHASE = 2;
   private static final short RESPONSE_PROCESSING_STATE = 3;
-  private static final short ACC_PROCESSED_LENGTH = 4;
-  private static final short BCC_PROCESSED_LENGTH = 5;
+  private static final short UDS_PROCESSED_LENGTH = 4;
+  private static final short DICE_PROCESSED_LENGTH = 5;
 
   // data item sizes
   private static final short SHORT_SIZE = 2;
@@ -143,7 +143,7 @@ public class RemotelyProvisionedComponentDevice {
 
   private static final short MAX_ENCODED_BUF_SIZE = 1024;
 
-  private static final boolean isUdsCertsSupportedInRkpServer = false;
+  private static final boolean IS_UCC_SUPPORTED_IN_RKP_SERVER = false;
   
   // variables
   private byte[] data;
@@ -357,7 +357,7 @@ public class RemotelyProvisionedComponentDevice {
       if (0 == KMInteger.cast(KMArray.cast(arr).get((short) 0)).getShort()) {
         updateState(UPDATE);
       }
-      short prevReclaimIndex = repository.getHeapReclaimIndex();  
+      short prevReclaimIndex = repository.getHeapReclaimIndex();
       short offset = repository.allocReclaimableMemory(MAX_ENCODED_BUF_SIZE);
       short length = encoder.encode(deviceInfo, repository.getHeap(), offset, prevReclaimIndex, MAX_ENCODED_BUF_SIZE);
       short encodedDeviceInfo = KMByteBlob.instance(repository.getHeap(), offset, length);
@@ -479,14 +479,14 @@ public class RemotelyProvisionedComponentDevice {
       validateState((byte) (GET_UDS_CERTS_RESPONSE));
       byte[] scratchPad = apdu.getBuffer();
       short len = 0;
-      len = processBcc(scratchPad);
+      len = processDiceCertChain(scratchPad);
       byte moreData = MORE_DATA;
       byte state = getCurrentOutputProcessingState();
       switch (state) {
-        case PROCESSING_BCC_IN_PROGRESS:
+        case PROCESSING_DICE_CERTS_IN_PROGRESS:
           moreData = MORE_DATA;
           break;
-        case PROCESSING_BCC_COMPLETE:
+        case PROCESSING_DICE_CERTS_COMPLETE:
           moreData = NO_DATA;
           clearDataTable();
           break;
@@ -507,7 +507,7 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private boolean isUdsCertsChainPresent() {
-    if(!isUdsCertsSupportedInRkpServer || (storeDataInst.getAdditionalCertChainLength() == 0)) {
+    if(!IS_UCC_SUPPORTED_IN_RKP_SERVER || (storeDataInst.getUdsCertChainLength() == 0)) {
       return false;
     }
     return true;
@@ -527,14 +527,14 @@ public class RemotelyProvisionedComponentDevice {
         scratchPad[0] = (byte)0xA0; // CBOR Encoded empty map is A0
         len = 1;
       } else {
-        len = processAdditionalCertificateChain(scratchPad);//change names to uds 
+        len = processUdsCertificateChain(scratchPad); 
         moreData = MORE_DATA;
         byte state = getCurrentOutputProcessingState();
         switch (state) {
-          case PROCESSING_ACC_IN_PROGRESS:
+          case PROCESSING_UDS_CERTS_IN_PROGRESS:
             moreData = MORE_DATA;
             break;
-          case PROCESSING_ACC_COMPLETE:
+          case PROCESSING_UDS_CERTS_COMPLETE:
             updateState(GET_UDS_CERTS_RESPONSE);
             moreData = NO_DATA;
             break;
@@ -776,13 +776,16 @@ public class RemotelyProvisionedComponentDevice {
   private short getAttestationId(short attestId, byte[] scratchpad) {
     short attIdTagLen = storeDataInst.getAttestationId(attestId, scratchpad, (short) 0);
     if (attIdTagLen == 0) {
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
+      KMException.throwIt(KMError.INVALID_STATE);
     }
     return KMTextString.instance(scratchpad, (short) 0, attIdTagLen);
   }
 
   private short getVerifiedBootHash(byte[] scratchPad) {
     short len = storeDataInst.getVerifiedBootHash(scratchPad, (short) 0);
+    if (len == 0) {
+      KMException.throwIt(KMError.INVALID_STATE);
+    }
     return KMByteBlob.instance(scratchPad, (short) 0, len);
   }
 
@@ -890,32 +893,32 @@ public class RemotelyProvisionedComponentDevice {
     }
   }
 
-  private short getResponseProcessedLength(short AccBccIndex) {
-    short dataEntryIndex = getEntry(AccBccIndex);
+  private short getResponseProcessedLength(short index) {
+    short dataEntryIndex = getEntry(index);
     if (dataEntryIndex == 0) {
-      dataEntryIndex = createEntry(AccBccIndex, SHORT_SIZE);
+      dataEntryIndex = createEntry(index, SHORT_SIZE);
       Util.setShort(data, dataEntryIndex, (short) 0);
       return (short) 0;
     }
     return Util.getShort(data, dataEntryIndex);
   }
 
-  private void updateAccBccProcessedLength(short AccBccIndex, short processedLen) {
-    short dataEntryIndex = getEntry(AccBccIndex);
+  private void updateResponseProcessedLength(short index, short processedLen) {
+    short dataEntryIndex = getEntry(index);
     Util.setShort(data, dataEntryIndex, processedLen);
   }
 
-  private short processAdditionalCertificateChain(byte[] scratchPad) {
-    byte[] persistedData = storeDataInst.getAdditionalCertChain();
-    short totalAccLen = Util.getShort(persistedData, (short) 0);
+  private short processUdsCertificateChain(byte[] scratchPad) {
+    byte[] persistedData = storeDataInst.getUdsCertChain();
+    short totalUccLen = Util.getShort(persistedData, (short) 0);
     createEntry(RESPONSE_PROCESSING_STATE, BYTE_SIZE);
-    if (totalAccLen == 0) {
-      // No Additional certificate chain present.
-      updateOutputProcessingState(PROCESSING_ACC_COMPLETE);
+    if (totalUccLen == 0) {
+      // No Uds certificate chain present.
+      updateOutputProcessingState(PROCESSING_UDS_CERTS_COMPLETE);
       return 0;
     }
-    short processedLen = getResponseProcessedLength(ACC_PROCESSED_LENGTH);
-    short lengthToSend = (short) (totalAccLen - processedLen);
+    short processedLen = getResponseProcessedLength(UDS_PROCESSED_LENGTH);
+    short lengthToSend = (short) (totalUccLen - processedLen);
     if (lengthToSend > MAX_SEND_DATA) {
       lengthToSend = MAX_SEND_DATA;
     }
@@ -923,35 +926,35 @@ public class RemotelyProvisionedComponentDevice {
         lengthToSend);
 
     processedLen += lengthToSend;
-    updateAccBccProcessedLength(ACC_PROCESSED_LENGTH, processedLen);
+    updateResponseProcessedLength(UDS_PROCESSED_LENGTH, processedLen);
     // Update the output processing state.
     updateOutputProcessingState(
-        (processedLen == totalAccLen) ? PROCESSING_ACC_COMPLETE : PROCESSING_ACC_IN_PROGRESS);
+        (processedLen == totalUccLen) ? PROCESSING_UDS_CERTS_COMPLETE : PROCESSING_UDS_CERTS_IN_PROGRESS);
     return lengthToSend;
   }
 
-  // BCC for STRONGBOX has chain length of 2. So it can be returned in a single go.
-  private short processBcc(byte[] scratchPad) {
-    byte[] bcc = storeDataInst.getBootCertificateChain();
-    short totalBccLen = Util.getShort(bcc, (short) 0);
-    if (totalBccLen == 0) {
-      // No Additional certificate chain present.
-      updateOutputProcessingState(PROCESSING_BCC_COMPLETE);
+  // Dice cert chain for STRONGBOX has chain length of 2. So it can be returned in a single go.
+  private short processDiceCertChain(byte[] scratchPad) {
+    byte[] diceCertChain = storeDataInst.getDiceCertificateChain();
+    short totalDccLen = Util.getShort(diceCertChain, (short) 0);
+    if (totalDccLen == 0) {
+      // No Uds certificate chain present.
+      updateOutputProcessingState(PROCESSING_DICE_CERTS_COMPLETE);
       return 0;
     }
-    short processedLen = getResponseProcessedLength(BCC_PROCESSED_LENGTH);
-    short lengthToSend = (short) (totalBccLen - processedLen);
+    short processedLen = getResponseProcessedLength(DICE_PROCESSED_LENGTH);
+    short lengthToSend = (short) (totalDccLen - processedLen);
     if (lengthToSend > MAX_SEND_DATA) {
       lengthToSend = MAX_SEND_DATA;
     }
-    Util.arrayCopyNonAtomic(bcc, (short) (2 + processedLen), scratchPad, (short) 0,
+    Util.arrayCopyNonAtomic(diceCertChain, (short) (2 + processedLen), scratchPad, (short) 0,
             lengthToSend);
 
     processedLen += lengthToSend;
-    updateAccBccProcessedLength(BCC_PROCESSED_LENGTH, processedLen);
+    updateResponseProcessedLength(DICE_PROCESSED_LENGTH, processedLen);
     // Update the output processing state.
     updateOutputProcessingState(
-            (processedLen == totalBccLen) ? PROCESSING_BCC_COMPLETE : PROCESSING_BCC_IN_PROGRESS);
+            (processedLen == totalDccLen) ? PROCESSING_DICE_CERTS_COMPLETE : PROCESSING_DICE_CERTS_IN_PROGRESS);
     return lengthToSend;  
   }
 
