@@ -88,6 +88,7 @@ public class RemotelyProvisionedComponentDevice {
   public static final byte DI_SCHEMA_VERSION = 2;
   public static final byte[] DI_SECURITY_LEVEL = {0x73, 0x74, 0x72, 0x6F, 0x6E, 0x67, 0x62, 0x6F,
       0x78};
+  private static final boolean IS_ACC_SUPPORTED_IN_RKP_SERVER = false;
   private static final short MAX_SEND_DATA = 512;
   
   private static final byte[] google = {0x47, 0x6F, 0x6F, 0x67, 0x6C, 0x65};
@@ -445,7 +446,7 @@ public class RemotelyProvisionedComponentDevice {
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
       }
       // PubKeysToSignMac
-      short empty = repository.alloc((short)0) ;
+      short empty = repository.alloc((short)0);
       short len =
           ((KMOperation) operation[0]).sign(repository.getHeap(), (short) empty,
               (short) 0, scratchPad, (short) 0);
@@ -564,9 +565,9 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   private boolean isAdditionalCertificateChainPresent() {
-    if ((0x02 == RKP_VERSION) || (TRUE == data[getEntry(TEST_MODE)])) {
+    if (!IS_ACC_SUPPORTED_IN_RKP_SERVER || (TRUE == data[getEntry(TEST_MODE)])) {
       // Don't include AdditionalCertificateChain in ProtectedData if either
-      // 1. KeyMint Version is 2 or
+      // 1. RKP server does not support processing of X.509 Additional Certificate Chain.
       // 2. Requested CSR for test mode.
       return false;
     }
@@ -575,9 +576,10 @@ public class RemotelyProvisionedComponentDevice {
 
   private short processFinalData(byte[] scratchPad) {
     // Call finish on AES GCM Cipher
-    short empty = repository.alloc((short)0) ;
+    short empty = repository.alloc((short) 0);
     short len =
-        ((KMOperation) operation[0]).finish(repository.getHeap(), (short) empty, (short) 0, scratchPad, (short) 0);
+        ((KMOperation) operation[0]).finish(repository.getHeap(), (short) empty, (short) 0,
+            scratchPad, (short) 0);
     return len;
   }
 
@@ -888,7 +890,7 @@ public class RemotelyProvisionedComponentDevice {
     updateItem(rkpTmpVariables, metaOffset, DEVICE_INFO_VERSION, KMInteger.uint_8(DI_SCHEMA_VERSION));
     updateItem(rkpTmpVariables, metaOffset, SECURITY_LEVEL,
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
-    updateItem(rkpTmpVariables, metaOffset, FUSED, KMInteger.uint_8((byte) storeDataInst.secureBootMode));
+    updateItem(rkpTmpVariables, metaOffset, FUSED, KMInteger.uint_8(storeDataInst.secureBootMode));
     // Create device info map.
     short map = KMMap.instance(rkpTmpVariables[1]);
     short mapIndex = 0;
@@ -925,18 +927,18 @@ public class RemotelyProvisionedComponentDevice {
 
   private short getAttestationId(short attestId, byte[] scratchpad) {
     short attIdTagLen = storeDataInst.getAttestationId(attestId, scratchpad, (short) 0);
-    if (attIdTagLen != 0) {
-      return KMTextString.instance(scratchpad, (short) 0, attIdTagLen);
+    if (attIdTagLen == 0) {
+      KMException.throwIt(KMError.INVALID_STATE);
     }
-    return KMType.INVALID_VALUE;
+    return KMTextString.instance(scratchpad, (short) 0, attIdTagLen);
   }
 
   private short getVerifiedBootHash(byte[] scratchPad) {
     short len = storeDataInst.getVerifiedBootHash(scratchPad, (short) 0);
-    if (len != 0) {
-      return KMByteBlob.instance(scratchPad, (short) 0, len);
+    if (len == 0) {
+      KMException.throwIt(KMError.INVALID_STATE);
     }
-    return KMType.INVALID_VALUE;
+    return KMByteBlob.instance(scratchPad, (short) 0, len);
   }
 
   private short getBootloaderState() {
