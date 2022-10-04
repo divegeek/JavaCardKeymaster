@@ -756,6 +756,8 @@ public class KMKeymintDataStore implements KMUpgradable {
     attIdMeId = null;
     attIdManufacturer = null;
     attIdModel = null;
+    // Trigger garbage collection.
+    JCSystem.requestObjectDeletion();
   }
   
   public short getVerifiedBootHash(byte[] buffer, short start) {

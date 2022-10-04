@@ -96,7 +96,7 @@ public class KMRKPFunctionalTest {
   private static final byte KEYMINT_CMD_APDU_END = KEYMINT_CMD_APDU_START + 48; //0x50
   private static final byte INS_END_KM_CMD = 0x7F;
 
-  public static byte[] CSR_CHALLENGE = {0x56, 0x78, 0x65, 0x23, (byte) 0xFE, 0x32};
+  public static byte[] CSR_CHALLENGE = new byte[32];
 
   private CardSimulator simulator;
   private KMEncoder encoder;

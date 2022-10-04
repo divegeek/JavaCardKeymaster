@@ -211,8 +211,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         // 1. All the necessary provisioning commands are succcessfully executed
         // 2. SE provision is locked
         // 3. OEM Root Public is provisioned.
-        if (kmDataStore.isProvisionLocked() || !(isProvisioningComplete() && isSeFactoryProvisioningLocked())) {
-          result = false; 
+        if (kmDataStore.isProvisionLocked() || !(isProvisioningComplete()
+            && isSeFactoryProvisioningLocked())) {
+          result = false;
         }
         break;
         
@@ -246,8 +247,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isSeFactoryProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short seCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN;
-    if (seCompleteStatus == (pStatus & seCompleteStatus)) {
+    if (PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR ==
+        (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR)) {
       return true;
     }
     return false;
@@ -523,9 +524,10 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
-		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
-         PROVISION_STATUS_SECURE_BOOT_MODE;
+    short pCompleteStatus =
+        PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_PRESHARED_SECRET
+            | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
+            PROVISION_STATUS_SECURE_BOOT_MODE;
     if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
       return true;
     }
