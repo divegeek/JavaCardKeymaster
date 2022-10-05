@@ -1565,7 +1565,7 @@ public class KMFunctionalTest {
   }
 
   @Test
-  public void testVerifySeLockWithOutCertDataFailure() {
+  public void testVerifySeLockWithOutCertDataSuccess() {
     AID appletAID1 = AIDUtil.create("A000000062");
     simulator.installApplet(appletAID1, KMJCardSimApplet.class);
     // Select applet
@@ -1573,7 +1573,7 @@ public class KMFunctionalTest {
     // provision attest key
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
-    Assert.assertEquals(KMError.UNKNOWN_ERROR, KMTestUtils.decodeError(decoder,
+    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     cleanUp();
   }
