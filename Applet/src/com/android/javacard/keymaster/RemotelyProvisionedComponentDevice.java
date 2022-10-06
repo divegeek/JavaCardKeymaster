@@ -413,7 +413,7 @@ public class RemotelyProvisionedComponentDevice {
       // Store the challenge in the data table.
       short challenge = KMArray.cast(arr).get((short) 0);
       short challengeLen = KMByteBlob.cast(challenge).length();
-      if (challengeLen < 32 || challengeLen > 64) {
+      if (challengeLen > 64) {
         KMException.throwIt(KMError.INVALID_INPUT_LENGTH);
       }
       short dataEntryIndex = createEntry(CHALLENGE, challengeLen);
