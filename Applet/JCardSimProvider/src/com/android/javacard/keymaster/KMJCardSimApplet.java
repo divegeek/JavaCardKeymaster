@@ -153,7 +153,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
           case INS_PROVISION_SECURE_BOOT_MODE_CMD:
             processSecureBootCmd(apdu);
             break;
-        
+
           default:
             super.process(apdu);
             break;

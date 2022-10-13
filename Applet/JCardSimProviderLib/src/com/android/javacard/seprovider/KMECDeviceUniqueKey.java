@@ -20,34 +20,15 @@ import javacard.security.KeyPair;
 
 public class KMECDeviceUniqueKey implements KMDeviceUniqueKeyPair {
 
-  private KeyPair ecKeyPair;
+  public KeyPair ecKeyPair;
 
   @Override
   public short getPublicKey(byte[] buf, short offset) {
-    ECPublicKey publicKey = getPublicKey();
+    ECPublicKey publicKey = (ECPublicKey) ecKeyPair.getPublic();
     return publicKey.getW(buf, offset);
   }
 
   public KMECDeviceUniqueKey(KeyPair ecPair) {
     ecKeyPair = ecPair;
   }
-
-  public void setS(byte[] buffer, short offset, short length) {
-    ECPrivateKey ecPriv = (ECPrivateKey) ecKeyPair.getPrivate();
-    ecPriv.setS(buffer, offset, length);
-  }
-
-  public void setW(byte[] buffer, short offset, short length) {
-    ECPublicKey ecPublicKey = (ECPublicKey) ecKeyPair.getPublic();
-    ecPublicKey.setW(buffer, offset, length);
-  }
-
-  public ECPrivateKey getPrivateKey() {
-    return (ECPrivateKey) ecKeyPair.getPrivate();
-  }
-
-  public ECPublicKey getPublicKey() {
-    return (ECPublicKey) ecKeyPair.getPublic();
-  }
-
 }

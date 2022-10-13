@@ -20,19 +20,9 @@ import javacard.security.KeyPair;
 
 public class KMECPrivateKey implements KMAttestationKey {
 
-  private KeyPair ecKeyPair;
+  public KeyPair ecKeyPair;
 
   public KMECPrivateKey(KeyPair ecPair) {
     ecKeyPair = ecPair;
   }
-
-  public void setS(byte[] buffer, short offset, short length) {
-    ECPrivateKey ecPriv = (ECPrivateKey) ecKeyPair.getPrivate();
-    ecPriv.setS(buffer, offset, length);
-  }
-
-  public ECPrivateKey getPrivateKey() {
-    return (ECPrivateKey) ecKeyPair.getPrivate();
-  }
-
 }
