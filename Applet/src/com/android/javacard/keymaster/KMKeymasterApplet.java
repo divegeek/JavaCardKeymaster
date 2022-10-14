@@ -137,7 +137,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private static final byte OEM_LOCK = 1;
   private static final byte OEM_UNLOCK = 0;
  
-  public static final short MAX_COSE_BUF_SIZE = (short) 1024;
+  public static final short MAX_COSE_BUF_SIZE = (short) 512;
   // Maximum allowed buffer size for to encode the key parameters
   // which is used while creating mac for key paramters.
   public static final short MAX_KEY_PARAMS_BUF_SIZE = (short) 3072; // 3K
@@ -179,6 +179,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte INS_UPDATE_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 32; //0x40
   public static final byte INS_FINISH_SEND_DATA_CMD = KEYMINT_CMD_APDU_START + 33; //0x41
   public static final byte INS_GET_RESPONSE_CMD = KEYMINT_CMD_APDU_START + 34; //0x42
+  public static final byte INS_GET_UDS_CERTS_CMD = KEYMINT_CMD_APDU_START + 35; //0x43
+  public static final byte INS_GET_DICE_CERT_CHAIN_CMD = KEYMINT_CMD_APDU_START + 36; //0x44
   // The instructions from 0x43 to 0x4C will be reserved for KeyMint 1.0 for any future use.
   // KeyMint 2.0 Instructions
   private static final byte INS_GET_ROT_CHALLENGE_CMD = KEYMINT_CMD_APDU_START + 45; // 0x4D
@@ -286,7 +288,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short PROVISION_STATUS_PRESHARED_SECRET = 0x0010;
   public static final short PROVISION_STATUS_PROVISIONING_LOCKED = 0x0020;
   public static final short PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR = 0x0040;
-  public static final short PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x0080;
+  public static final short PROVISION_STATUS_UDS_CERT_CHAIN = 0x0080;
   public static final short PROVISION_STATUS_SE_LOCKED = 0x0100; 
   public static final short PROVISION_STATUS_OEM_PUBLIC_KEY = 0x0200;
   public static final short PROVISION_STATUS_SECURE_BOOT_MODE = 0x0400;
@@ -550,6 +552,8 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         case INS_FINISH_SEND_DATA_CMD:
         case INS_GET_RESPONSE_CMD:
         case INS_GET_RKP_HARDWARE_INFO:
+        case INS_GET_UDS_CERTS_CMD:
+        case INS_GET_DICE_CERT_CHAIN_CMD:	
           rkp.process(apduIns, apdu);
           break;
           //KeyMint 2.0
@@ -926,7 +930,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   private void processGetHwInfoCmd(APDU apdu) {
     // No arguments expected
-    final byte version = 2;
+    final byte version = 3;
     // Make the response
     short respPtr = KMArray.instance((short) 6);
     KMArray resp = KMArray.cast(respPtr);
@@ -4708,11 +4712,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   }
 
 
-  public static short generateBcc(boolean testMode, byte[] scratchPad) {
-    if (!testMode && kmDataStore.isProvisionLocked()) {
+  public static short generateDiceCertChain(byte[] scratchPad) {
+    if (kmDataStore.isProvisionLocked()) {
       KMException.throwIt(KMError.STATUS_FAILED);
     }
-    KMDeviceUniqueKeyPair deviceUniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair(testMode);
+    KMDeviceUniqueKeyPair deviceUniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair();
     short temp = deviceUniqueKey.getPublicKey(scratchPad, (short) 0);
     short coseKey =
         KMCose.constructCoseKey(rkp.rkpTmpVariables,
@@ -4724,9 +4728,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
             scratchPad,
             (short) 0,
             temp,
-            KMType.INVALID_VALUE,
-            false
-        );
+            KMType.INVALID_VALUE);
     temp = KMKeymasterApplet.encodeToApduBuffer(coseKey, scratchPad, (short) 0,
         KMKeymasterApplet.MAX_COSE_BUF_SIZE);
     // Construct payload.
@@ -4788,10 +4790,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         KMCose.constructCoseSign1(protectedHeader, unprotectedHeader, payload, coseSignStructure);
 
     // [Cose_Key, Cose_Sign1]
-    short bcc = KMArray.instance((short) 2);
-    KMArray.cast(bcc).add((short) 0, coseKey);
-    KMArray.cast(bcc).add((short) 1, coseSign1);
-    return bcc;
+    short dcc = KMArray.instance((short) 2);
+    KMArray.cast(dcc).add((short) 0, coseKey);
+    KMArray.cast(dcc).add((short) 1, coseSign1);
+    return dcc;
   }
 
   private void updateTrustedConfirmationOperation(KMOperationState op) {

@@ -54,7 +54,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 12;
   private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 13;
-  private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
+  private static final byte INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 14;
   private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 15;
@@ -135,8 +135,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             processProvisionRkpDeviceUniqueKeyPair(apdu);
             break;
 
-          case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
-            processProvisionRkpAdditionalCertChain(apdu);
+          case INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD:
+            processProvisionRkpUdsCertChain(apdu);
             break;
           
           case INS_SE_FACTORY_PROVISIONING_LOCK_CMD:
@@ -217,7 +217,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         break;
         
       case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
-      case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
+      case INS_PROVISION_RKP_UDS_CERT_CHAIN_CMD:
         if(isSeFactoryProvisioningLocked()) {
           result = false;  
         }
@@ -246,8 +246,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isSeFactoryProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short seCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN;
-    if (seCompleteStatus == (pStatus & seCompleteStatus)) {
+    if (PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR == (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR)) {
       return true;
     }
     return false;
@@ -379,26 +378,36 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
     //Store the Device unique Key.
     kmDataStore.createRkpDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
         pubKeyLen, privKeyLen);
-    short bcc = generateBcc(false, scratchPad);
-    short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
+    short dcc = generateDiceCertChain(scratchPad);
+    short len = KMKeymasterApplet.encodeToApduBuffer(dcc, scratchPad, (short) 0,
         MAX_COSE_BUF_SIZE);
     kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
     kmDataStore.setProvisionStatus(PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR);
     sendResponse(apdu, KMError.OK);
   }
 
-  private static void processProvisionRkpAdditionalCertChain(APDU apdu) {
-    // Prepare the expression to decode
-    short headers = KMCoseHeaders.exp();
-    short arrInst = KMArray.instance((short) 4);
-    KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
-    KMArray.cast(arrInst).add((short) 1, headers);
-    KMArray.cast(arrInst).add((short) 2, KMByteBlob.exp());
-    KMArray.cast(arrInst).add((short) 3, KMByteBlob.exp());
-    short coseSignArr = KMArray.exp(arrInst);
-    short map = KMMap.instance((short) 1);
-    KMMap.cast(map).add((short) 0, KMTextString.exp(), coseSignArr);
-    // receive incoming data and decode it.
+  private void processProvisionRkpUdsCertChain(APDU apdu) {
+    // X509 certificate chain is received as shown below:
+    /**
+     *     x509CertChain = bstr .cbor UdsCerts
+     *
+     *     UdsCerts = {
+     *         * SignerName => UdsCertChain
+     *     }
+     *     ; SignerName is a string identifier that indicates both the signing authority as
+     *     ; well as the format of the UdsCertChain
+     *     SignerName = tstr
+     *
+     *     UdsCertChain = [
+     *         2* X509Certificate       ; Root -> ... -> Leaf. "Root" is the vendor self-signed
+     *                                  ; cert, "Leaf" contains UDS_Public. There may also be
+     *                                  ; intermediate certificates between Root and Leaf.
+     *     ]
+     *     ; A bstr containing a DER-encoded X.509 certificate (RSA, NIST P-curve, or edDSA)
+     *     X509Certificate = bstr
+     */
+    // Store the cbor encoded UdsCerts as it is in the persistent memory so cbor decoding is
+    // required here.
     byte[] srcBuffer = apdu.getBuffer();
     short recvLen = apdu.setIncomingAndReceive();
     short srcOffset = apdu.getOffsetCdata();
@@ -411,27 +420,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
       index += recvLen;
       recvLen = apdu.receiveBytes(srcOffset);
     }
-    // decode
-    map = decoder.decode(map, buffer, bufferStartOffset, bufferLength);
-    arrInst = KMMap.cast(map).getKeyValue((short) 0);
-    // Validate Additional certificate chain.
-    short leafCoseKey =
-        validateCertChain(false, KMCose.COSE_ALG_ES256, KMCose.COSE_ALG_ES256, arrInst,
-            srcBuffer, null);
-    // Compare the DK_Pub.
-    short pubKeyLen = KMCoseKey.cast(leafCoseKey).getEcdsa256PublicKey(srcBuffer, (short) 0);
-    KMDeviceUniqueKeyPair uniqueKey = kmDataStore.getRkpDeviceUniqueKeyPair(false);
-    if (uniqueKey == null) {
-      KMException.throwIt(KMError.STATUS_FAILED);
-    }
-    short uniqueKeyLen = uniqueKey.getPublicKey(srcBuffer, pubKeyLen);
-    if ((pubKeyLen != uniqueKeyLen) ||
-        (0 != Util.arrayCompare(srcBuffer, (short) 0, srcBuffer, pubKeyLen, pubKeyLen))) {
-      KMException.throwIt(KMError.STATUS_FAILED);
-    }
-    kmDataStore.persistAdditionalCertChain(buffer, bufferStartOffset, bufferLength);
-    kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
-    //reclaim memory
+    short byteHeaderLen = decoder.readCertificateChainHeaderLen(buffer, bufferStartOffset,
+        bufferLength);
+    kmDataStore.persistUdsCertChain(buffer, (short) (bufferStartOffset + byteHeaderLen),
+        (short) (bufferLength - byteHeaderLen));
+    kmDataStore.setProvisionStatus(PROVISION_STATUS_UDS_CERT_CHAIN);
+    // reclaim memory
     repository.reclaimMemory(bufferLength);
     sendResponse(apdu, KMError.OK);
   }
@@ -528,8 +522,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_ADDITIONAL_CERT_CHAIN | 
-		     PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
+    short pCompleteStatus = PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
          PROVISION_STATUS_SECURE_BOOT_MODE;
     if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
       return true;

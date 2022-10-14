@@ -20,7 +20,7 @@
    "device_unique_key": "test_resources/batch_key.der",
    "signer_info": {
       "signer_name": "Google",
-      "signing_keys": [
+      "public_keys": [
       "test_resources/ca_key.der",
       "test_resources/intermediate_key.der"
       ]

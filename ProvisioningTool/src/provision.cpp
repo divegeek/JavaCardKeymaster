@@ -38,7 +38,7 @@ enum ProvisionStatus {
     PROVISION_STATUS_PRESHARED_SECRET = 0x0010,
     PROVISION_STATUS_PROVISIONING_LOCKED = 0x0020,
     PROVISION_STATUS_DEVICE_UNIQUE_KEY = 0x0040,
-    PROVISION_STATUS_ADDITIONAL_CERT_CHAIN = 0x0080,
+    PROVISION_STATUS_UDS_CERT_CHAIN = 0x0080,
     PROVISION_STATUS_SE_LOCKED = 0x0100,
     PROVISION_STATUS_OEM_PUBLIC_KEY = 0x0200
 };
@@ -213,7 +213,7 @@ int processInputFile() {
     }
     if (!isSEFactoryProvisionLocked(provisionStatus) &&
         ((0 != provisionData(pSocket, kDeviceUniqueKey)) ||
-        (0 != provisionData(pSocket, kAdditionalCertChain)))) {
+        (0 != provisionData(pSocket, kUdsCertChain)))) {
         return FAILURE;
     }
     if (!isOEMProvisionLocked(provisionStatus) &&
@@ -325,7 +325,7 @@ int getProvisionStatus(uint64_t *provisionStatus) {
         }   
         if (printProvisionStatus) {
             if ((0 != (status & ProvisionStatus::PROVISION_STATUS_DEVICE_UNIQUE_KEY)) &&
-                (0 != (status & ProvisionStatus::PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)) &&
+                (0 != (status & ProvisionStatus::PROVISION_STATUS_UDS_CERT_CHAIN)) &&
                 (0 != (status & ProvisionStatus::PROVISION_STATUS_ATTEST_IDS)) &&
                 (0 != (status & ProvisionStatus::PROVISION_STATUS_PRESHARED_SECRET))) {
                 printf("\n SE is provisioned \n");
@@ -334,7 +334,7 @@ int getProvisionStatus(uint64_t *provisionStatus) {
                 if (0 == (status & ProvisionStatus::PROVISION_STATUS_DEVICE_UNIQUE_KEY)) {
                     printf("\n Attestation key is not provisioned \n");
                 }
-                if (0 == (status & ProvisionStatus::PROVISION_STATUS_ADDITIONAL_CERT_CHAIN)) {
+                if (0 == (status & ProvisionStatus::PROVISION_STATUS_UDS_CERT_CHAIN)) {
                     printf("\n Attestation certificate chain is not provisioned \n");
                 }
                 if (0 == (status & ProvisionStatus::PROVISION_STATUS_ATTEST_IDS)) {

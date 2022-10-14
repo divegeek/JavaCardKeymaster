@@ -756,4 +756,12 @@ public void encodeArrayOnlyLength(short arrLength, byte[] buffer, short offset, 
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
   }
+  
+  public short encodeArrayHeader(short bufLen, byte[] buffer, short startOff, short length) {
+    bufferRef[0] = buffer;
+	scratchBuf[START_OFFSET] = startOff;
+	scratchBuf[LEN_OFFSET] = (short) (startOff + length + 1);
+	writeMajorTypeWithLength(ARRAY_TYPE, bufLen);
+	return (short) (scratchBuf[START_OFFSET] - startOff);
+  }
 }

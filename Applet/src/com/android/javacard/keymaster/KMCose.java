@@ -247,7 +247,7 @@ public class KMCose {
    * @param includeTestMode flag which indicates if TEST_COSE_KEY should be included or not.
    * @return instance of KMArray.
    */
-  private static short handleCosePairTags(short[] tag, short[] keyValues, short valueIndex, boolean includeTestMode) {
+  private static short handleCosePairTags(short[] tag, short[] keyValues, short valueIndex) {
     short index = 0;
     // var is used to calculate the length of the array.
     short var = 0;
@@ -260,7 +260,6 @@ public class KMCose {
       }
       index++;
     }
-    var += includeTestMode ? 1 : 0;
     short arrPtr = KMArray.instance(var);
     index = 0;
     // var is used to index the array.
@@ -312,7 +311,7 @@ public class KMCose {
     for(short i = 4; i < 8; i++) {
       buff[i] = KMType.INVALID_VALUE;
     }
-    short ptr = handleCosePairTags(coseHeaderConst, buff, (short)4, false);
+    short ptr = handleCosePairTags(coseHeaderConst, buff, (short)4);
     ptr = KMCoseHeaders.instance(ptr);
     KMCoseHeaders.cast(ptr).canonicalize();
     return ptr;
@@ -445,12 +444,11 @@ public class KMCose {
    * @param pubKeyOff  Start offset of the buffer.
    * @param pubKeyLen  Length of the public key.
    * @param privKeyPtr Instance of the private key.
-   * @param testMode   Represents if key is used in test mode or production mode.
    * @return Instance of the CoseKey structure.
    */
   public static short constructCoseKey(short []buff, short keyType, short keyId, short keyAlg, short keyOps,
       short curve, byte[] pubKey, short pubKeyOff, short pubKeyLen,
-      short privKeyPtr, boolean testMode) {
+      short privKeyPtr) {
     if (pubKey[pubKeyOff] == 0x04) { // uncompressed format
       pubKeyOff += 1;
       pubKeyLen -= 1;
@@ -458,7 +456,7 @@ public class KMCose {
     pubKeyLen = (short) (pubKeyLen / 2);
     short xPtr = KMByteBlob.instance(pubKey, pubKeyOff, pubKeyLen);
     short yPtr = KMByteBlob.instance(pubKey, (short) (pubKeyOff + pubKeyLen), pubKeyLen);
-    short coseKey = constructCoseKey(buff, keyType, keyId, keyAlg, keyOps, curve, xPtr, yPtr, privKeyPtr, testMode);
+    short coseKey = constructCoseKey(buff, keyType, keyId, keyAlg, keyOps, curve, xPtr, yPtr, privKeyPtr);
     KMCoseKey.cast(coseKey).canonicalize();
     return coseKey;
   }
@@ -475,11 +473,10 @@ public class KMCose {
    * @param pubX           instance of KMByteBlob which holds EC public key's x value.
    * @param pubY           instance of KMByteBlob which holds EC public key's y value.
    * @param priv           instance of KMByteBlob which holds EC private value.
-   * @param includeTestKey flag which identifies whether to construct test key or production key.
    * @return instance of the KMCoseKey object.
    */
   public static short constructCoseKey(short []buff, short keyType, short keyId, short keyAlg, short keyOps, short curve,
-                                       short pubX, short pubY, short priv, boolean includeTestKey) {
+                                       short pubX, short pubY, short priv) {
     short valueIndex = 8;  
     buff[0] = keyType;
     buff[1] = keyId;
@@ -492,13 +489,7 @@ public class KMCose {
     for (short i = valueIndex; i < 16; i++) {
       buff[i] = KMType.INVALID_VALUE;
     } 
-    short arrPtr = handleCosePairTags(coseKeyConst, buff, valueIndex, includeTestKey);
-    if (includeTestKey) {
-      short testKey =
-          KMCosePairSimpleValueTag.instance(KMNInteger.uint_32(KMCose.COSE_TEST_KEY, (short) 0),
-              KMSimpleValue.instance(KMSimpleValue.NULL));
-      KMArray.cast(arrPtr).add((short) (KMArray.cast(arrPtr).length() - 1), testKey);
-    }
+    short arrPtr = handleCosePairTags(coseKeyConst, buff, valueIndex);
     arrPtr = KMCoseKey.instance(arrPtr);
     KMCoseKey.cast(arrPtr).canonicalize();
     return arrPtr;

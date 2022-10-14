@@ -340,9 +340,7 @@ public interface KMSEProvider {
   /**
    * This is a oneshot operation that verifies the signature using hmac algorithm.
    *
-   * @param keyBuf is the buffer with hmac key.
-   * @param keyStart is the start of the buffer.
-   * @param keyLength is the length of the buffer which will be in bytes from 8 to 64.
+   * @param hmacKey is the Hmac key.
    * @param data is the buffer containing data.
    * @param dataStart is the start of the data.
    * @param dataLength is the length of the data.
@@ -624,9 +622,7 @@ public interface KMSEProvider {
       byte digest,
       byte padding,
       byte blockMode,
-      byte[] keyBuf,
-      short keyStart,
-      short keyLength,
+      KMDeviceUniqueKeyPair ecPrivKey,
       byte[] ivBuf,
       short ivStart,
       short ivLength,
@@ -693,7 +689,8 @@ public interface KMSEProvider {
    * @param length length of the buffer.
    * @return An instance of the KMComputedHmacKey.
    */
-  KMComputedHmacKey createComputedHmacKey(KMComputedHmacKey computedHmacKey, byte[] keyData, short offset, short length);
+  KMComputedHmacKey createComputedHmacKey(KMComputedHmacKey computedHmacKey, byte[] keyData,
+      short offset, short length);
 
   /**
    * Returns true if factory provisioned attestation key is supported.
@@ -765,8 +762,8 @@ public interface KMSEProvider {
   Object onRestore(Element element);
 
   /**
-   * This function returns the count of the primitive bytes required to
-   * be stored by the implementation of the interface type.
+   * This function returns the count of the primitive bytes required to be stored by the
+   * implementation of the interface type.
    *
    * @param interfaceType type interface of the parent object.
    * @return count of the primitive bytes.
@@ -774,8 +771,8 @@ public interface KMSEProvider {
   short getBackupPrimitiveByteCount(byte interfaceType);
 
   /**
-   * This function returns the object count required to be stored by the
-   * implementation of the interface type.
+   * This function returns the object count required to be stored by the implementation of the
+   * interface type.
    *
    * @param interfaceType type interface of the parent object.
    * @return count of the objects.

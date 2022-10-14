@@ -753,13 +753,12 @@ public class KMDecoder {
     return version;
   }
 
-  public short readCertificateChainLengthAndHeaderLen(byte[] buf, short bufOffset,
-                                                      short bufLen) {
+  public short readCertificateChainHeaderLen(byte[] buf, short bufOffset,
+      short bufLen) {
     bufferRef[0] = buf;
     scratchBuf[START_OFFSET] = bufOffset;
     scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
-    short totalLen = readMajorTypeWithPayloadLength(BYTES_TYPE);
-    totalLen += (short) (scratchBuf[START_OFFSET] - bufOffset);
-    return totalLen;
+    readMajorTypeWithPayloadLength(BYTES_TYPE);
+    return (short) (scratchBuf[START_OFFSET] - bufOffset);
   }
 }
