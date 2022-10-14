@@ -21,7 +21,7 @@ import javacard.framework.ISOException;
 import javacard.framework.Util;
 
 /**
- * KMCoseCertPayload represents the COSE_Sign1 payload for each certificate in BCC. The supported key types are
+ * KMCoseCertPayload represents the COSE_Sign1 payload for each certificate in Dice cert chain. The supported key types are
  * KMInteger, KMNInteger and the supported value types are KMByteBlob and KMTextString.
  * It corresponds to a CBOR Map type. struct{byte TAG_TYPE; short length; short arrayPtr }  where
  * arrayPtr is a pointer to array with any KMCosePairTagType subtype instances.

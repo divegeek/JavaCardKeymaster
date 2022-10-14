@@ -157,18 +157,6 @@ public class KMCoseKey extends KMCoseMap {
     return KMByteBlob.cast(ptr).length();
   }
 
-  public boolean isTestKey() {
-    short ptr =
-        getValueType(
-            Util.getShort(KMCose.COSE_TEST_KEY, (short) 2), // LSB
-            Util.getShort(KMCose.COSE_TEST_KEY, (short) 0) // MSB (Significant)
-        );
-    boolean isTestKey = false;
-    if (ptr != 0)
-      isTestKey = (KMSimpleValue.cast(ptr).getValue() == KMSimpleValue.NULL);
-    return isTestKey;
-  }
-
   /**
    * Verifies the KMCoseKey values against the input values.
    *
