@@ -130,7 +130,8 @@ JavacardRemotelyProvisionedComponentDevice::generateEcdsaP256KeyPair(bool,
 
 ScopedAStatus
 JavacardRemotelyProvisionedComponentDevice::beginSendData(const std::vector<MacedPublicKey>& keysToSign, 
-    DeviceInfo &deviceInfo, const std::vector<uint8_t>& challenge) {
+    const std::vector<uint8_t>& challenge, DeviceInfo* deviceInfo, uint32_t* version,
+    std::string* certificateType) {
     uint32_t totalEncodedSize = coseKeyEncodedSize(keysToSign);
     cppbor::Array array;
     array.add(keysToSign.size());
@@ -143,10 +144,22 @@ JavacardRemotelyProvisionedComponentDevice::beginSendData(const std::vector<Mace
     }
     auto optDecodedDeviceInfo = cbor_.getByteArrayVec(item, 1);
     if (!optDecodedDeviceInfo) {
-         LOG(ERROR) << "Error in decoding og response in beginSendData.";
+         LOG(ERROR) << "Error in decoding deviceInfo response in beginSendData.";
          return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
     }
-    deviceInfo.deviceInfo = std::move(optDecodedDeviceInfo.value());
+    deviceInfo->deviceInfo = std::move(optDecodedDeviceInfo.value());
+    auto optVersion = cbor_.getUint64<uint32_t>(item, 2);
+    if (!optVersion) {
+         LOG(ERROR) << "Error in decoding version in beginSendData.";
+         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+    }
+    *version = optVersion.value();
+    auto optCertType = cbor_.getTextStr(item, 3);
+    if (!optCertType) {
+         LOG(ERROR) << "Error in decoding cert type in beginSendData.";
+         return km_utils::kmError2ScopedAStatus(KM_ERROR_UNKNOWN_ERROR);
+    }
+    *certificateType = std::move(optCertType.value());
     return ScopedAStatus::ok();
 }
 
@@ -253,6 +266,8 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
                                         const std::vector<uint8_t>& challenge,
                                         std::vector<uint8_t>* csr) {
     uint32_t version;
+    uint32_t csrPayloadSchemaVersion;
+    std::string certificateType;
     uint32_t respFlag;
     DeviceInfo deviceInfo;
     Array coseKeys;
@@ -263,7 +278,7 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
     std::vector<uint8_t> udsCertChain;
     cppbor::Array payLoad;
 
-    auto ret = beginSendData(keysToSign, deviceInfo, challenge);
+    auto ret = beginSendData(keysToSign, challenge, &deviceInfo, &csrPayloadSchemaVersion, &certificateType);
     if (!ret.isOk()) return ret;
 
     ret = updateMacedKey(keysToSign, coseKeys);
@@ -280,6 +295,8 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
     if (!ret.isOk()) return ret;
 
     auto payload = cppbor::Array()
+            .add(csrPayloadSchemaVersion)
+            .add(certificateType)
             .add(EncodedItem(deviceInfo.deviceInfo)) // deviceinfo
             .add(challenge)  // Challenge
             .add(std::move(coseKeys))  // KeysToSign

@@ -27,8 +27,8 @@
 
 namespace keymint::javacard {
 
-constexpr uint8_t SELECTABLE_AID[] = {0xA0, 0x00, 0x00, 0x04, 0x76, 0x41, 0x6E, 0x64,
-        0x72, 0x6F, 0x69, 0x64, 0x43, 0x54, 0x53, 0x31};
+constexpr uint8_t KEYMINT_APPLET_AID[] = {0xA0, 0x00, 0x00, 0x00, 0x62, 0x03,
+                                          0x02, 0x0C, 0x01, 0x01, 0x01};
 std::string const ESE_READER_PREFIX = "eSE";
 constexpr const char omapiServiceName[] =
         "android.se.omapi.ISecureElementService/default";
@@ -49,7 +49,7 @@ keymaster_error_t OmapiTransport::initialize() {
         return static_cast<keymaster_error_t>(KM_ERROR_HARDWARE_NOT_YET_AVAILABLE);
     }
 
-    int size = sizeof(SELECTABLE_AID) / sizeof(SELECTABLE_AID[0]);
+    int size = sizeof(KEYMINT_APPLET_AID) / sizeof(KEYMINT_APPLET_AID[0]);
     // reset readers, clear readers if already existing
     if (mVSReaders.size() > 0) {
         closeConnection();
@@ -116,7 +116,7 @@ keymaster_error_t OmapiTransport::initialize() {
         return KM_ERROR_SECURE_HW_COMMUNICATION_FAILED;
     }
 
-    std::vector<uint8_t> aid(SELECTABLE_AID, SELECTABLE_AID + size);
+    std::vector<uint8_t> aid(KEYMINT_APPLET_AID, KEYMINT_APPLET_AID + size);
     auto mSEListener = ndk::SharedRefBase::make<SEListener>();
     status = session->openLogicalChannel(aid, 0x00, mSEListener, &channel);
     if (!status.isOk()) {
@@ -171,9 +171,9 @@ bool OmapiTransport::internalTransmitApdu(
         }
     }
 
-    int size = sizeof(SELECTABLE_AID) / sizeof(SELECTABLE_AID[0]);
-    std::vector<uint8_t> aid(SELECTABLE_AID, SELECTABLE_AID + size);
-    if(result) {
+    int size = sizeof(KEYMINT_APPLET_AID) / sizeof(KEYMINT_APPLET_AID[0]);
+    std::vector<uint8_t> aid(KEYMINT_APPLET_AID, KEYMINT_APPLET_AID + size);
+    if (result) {
         auto mSEListener = ndk::SharedRefBase::make<SEListener>();
         res = session->openLogicalChannel(aid, 0x00, mSEListener, &channel);
         if (!res.isOk()) {
