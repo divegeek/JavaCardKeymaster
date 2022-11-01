@@ -41,6 +41,8 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte FALSE = 0x00;
   // RKP Version
   private static final short RKP_VERSION = (short) 0x03;
+  // The CsrPayload CDDL Schema version.
+  private static final short CSR_PAYLOAD_CDDL_SCHEMA_VERSION = 1;
   // Boot params
   private static final byte OS_VERSION_ID = 0x00;
   private static final byte SYSTEM_PATCH_LEVEL_ID = 0x01;
@@ -260,10 +262,15 @@ public class RemotelyProvisionedComponentDevice {
   }
 
   public void constructPartialSignedData(byte[] scratchPad, short coseKeysCount,
-      short totalCoseKeysLen, short challengeByteBlob, short deviceInfo) {
+      short totalCoseKeysLen, short challengeByteBlob, short deviceInfo,
+      short versionPtr, short certTypePtr) {
     // Initialize ECDSA operation
     initECDSAOperation();
 
+    // Calculate the version Length including header
+    short versionLength = encoder.getEncodedLength(versionPtr);
+    // Calculate the CertificateType including header
+    short certTypeLen = encoder.getEncodedLength(certTypePtr);
     // Calculate the challenge length
     short challengeLen = (short) KMByteBlob.cast(challengeByteBlob).length();
     if (challengeLen < 32 || challengeLen > 64) {
@@ -281,10 +288,10 @@ public class RemotelyProvisionedComponentDevice {
     short coseKeysArrHeaderLen = getHeaderLen(coseKeysCount);
     short keysToSignLen = (short) (coseKeysArrHeaderLen + totalCoseKeysLen);
 
-    // Calcualte the payload array header len
-    short paylaodArrHeaderLen = 1; // Array of 3 elements occupies 1 byte.
-    short payloadLen = (short) (paylaodArrHeaderLen + deviceInfoLen + challengeHeaderLen
-        + challengeLen + keysToSignLen);
+    // Calculate the payload array header len
+    short paylaodArrHeaderLen = 1; // Array of 5 elements occupies 1 byte.
+    short payloadLen = (short) (paylaodArrHeaderLen + versionLength + certTypeLen 
+        + deviceInfoLen + challengeHeaderLen + challengeLen + keysToSignLen);
 
     // Empty aad
     short aad = KMByteBlob.instance(scratchPad, (short) 0, (short) 0);
@@ -315,10 +322,12 @@ public class RemotelyProvisionedComponentDevice {
     ((KMOperation) operation[0]).update(heap, heapIndex, byteBlobHeaderLen);
 
     // Construct partial payload array
-    short arr = KMArray.instance((short) 3);
-    KMArray.cast(arr).add((short) 0, deviceInfo);
-    KMArray.cast(arr).add((short) 1, challengeByteBlob);
-    KMArray.cast(arr).add((short) 2, KMType.INVALID_VALUE);
+    short arr = KMArray.instance((short) 5);
+    KMArray.cast(arr).add((short) 0, versionPtr);
+    KMArray.cast(arr).add((short) 1, certTypePtr);
+    KMArray.cast(arr).add((short) 2, deviceInfo);
+    KMArray.cast(arr).add((short) 3, challengeByteBlob);
+    KMArray.cast(arr).add((short) 4, KMType.INVALID_VALUE);
     short paritalPayloadArrayLen = encoder.encode(arr, heap, heapIndex, prevReclaimIndex);
     ((KMOperation) operation[0]).update(heap, heapIndex, paritalPayloadArrayLen);
 
@@ -341,12 +350,14 @@ public class RemotelyProvisionedComponentDevice {
       byte[] scratchPad = apdu.getBuffer();
       // Create DeviceInfo
       short deviceInfo = createDeviceInfo(scratchPad);
+      short versionPtr = KMInteger.uint_16(CSR_PAYLOAD_CDDL_SCHEMA_VERSION);
+      short certTypePtr = KMTextString.instance(DI_CERT_TYPE, (short) 0, (short) DI_CERT_TYPE.length);
 
       constructPartialSignedData(scratchPad,
           KMInteger.cast(KMArray.cast(arr).get((short) 0)).getShort(),
           KMInteger.cast(KMArray.cast(arr).get((short) 1)).getShort(),
           KMArray.cast(arr).get((short) 2),
-          deviceInfo);
+          deviceInfo, versionPtr, certTypePtr);
       // Store the total keys in data table.
       short dataEntryIndex = createEntry(TOTAL_KEYS_TO_SIGN, SHORT_SIZE);
       Util.setShort(data, dataEntryIndex,
@@ -364,9 +375,11 @@ public class RemotelyProvisionedComponentDevice {
       //release memory
       repository.reclaimMemory(MAX_ENCODED_BUF_SIZE);
       // Send response.
-      short array = KMArray.instance((short) 2);
+      short array = KMArray.instance((short) 4);
       KMArray.cast(array).add((short) 0, KMInteger.uint_16(KMError.OK));
       KMArray.cast(array).add((short) 1, encodedDeviceInfo);
+      KMArray.cast(array).add((short) 2, versionPtr);
+      KMArray.cast(array).add((short) 3, certTypePtr);
       KMKeymasterApplet.sendOutgoing(apdu, array);
     } catch (Exception e) {
       clearDataTable();
@@ -700,7 +713,6 @@ public class RemotelyProvisionedComponentDevice {
    * "vendor_patch_level" : uint,                   // YYYYMMDD
    * "security_level" : "tee" / "strongbox"
    * "fused": 1 / 0,
-   * "cert_type": "widevine" / "keymint"
    * }
    */
   private short createDeviceInfo(byte[] scratchpad) {
@@ -736,8 +748,6 @@ public class RemotelyProvisionedComponentDevice {
         KMTextString.instance(DI_SECURITY_LEVEL, (short) 0, (short) DI_SECURITY_LEVEL.length));
     updateItem(rkpTmpVariables, metaOffset, FUSED,
         KMInteger.uint_8((byte) storeDataInst.secureBootMode));
-    updateItem(rkpTmpVariables, metaOffset, CERT_TYPE,
-        KMTextString.instance(DI_CERT_TYPE, (short) 0, (short) DI_CERT_TYPE.length));
     // Create device info map.
     short map = KMMap.instance(rkpTmpVariables[1]);
     short mapIndex = 0;

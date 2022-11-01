@@ -2350,8 +2350,19 @@ public class KMFunctionalTest {
     Util.arrayCopyNonAtomic(output, (short) 0, encTransportKey, (short) 0,
         outlen);
     // Begn Import wrapped key.
-    short nullParams = KMArray.instance((short) 0);
-    nullParams = KMKeyParameters.instance(nullParams);
+    // Unwrapping params should have Digest: SHA256 and padding as RSA_OAEP
+    short unwrappingParamsArr = KMArray.instance((short) 2);
+    // RSA OAEP Padding
+    short paddingBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(paddingBlob).add((short) 0, KMType.RSA_OAEP);
+    short padding = KMEnumArrayTag.instance(KMType.PADDING, paddingBlob);
+    // SHA256 digest
+    short digestBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(digestBlob).add((short) 0, KMType.SHA2_256);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, digestBlob);
+    KMArray.cast(unwrappingParamsArr).add((short) 0, padding);
+    KMArray.cast(unwrappingParamsArr).add((short) 1, digest);
+    short unwrappingParams = KMKeyParameters.instance(unwrappingParamsArr);
     short arr = KMArray.instance((short) 4);
     KMArray.cast(arr).add((short) 0, KMByteBlob.instance(encTransportKey, (short) 0,
         (short) encTransportKey.length)); // Encrypted Transport Key
@@ -2359,7 +2370,7 @@ public class KMFunctionalTest {
         (short) wrappingKeyBlob.length)); // Wrapping Key KeyBlob
     KMArray.cast(arr).add((short) 2, KMByteBlob.instance(maskingKey, (short) 0,
         (short) maskingKey.length)); // Masking Key
-    KMArray.cast(arr).add((short) 3, nullParams); // unwrapping params
+    KMArray.cast(arr).add((short) 3, unwrappingParams); // unwrapping params
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_BEGIN_IMPORT_WRAPPED_KEY_CMD,
         arr);
     ResponseAPDU response = simulator.transmitCommand(apdu);

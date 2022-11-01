@@ -61,7 +61,8 @@ class JavacardRemotelyProvisionedComponentDevice
 
  private:
   ScopedAStatus beginSendData(const std::vector<MacedPublicKey>& keysToSign, 
-    DeviceInfo &deviceInfo, const std::vector<uint8_t>& challenge);
+    const std::vector<uint8_t>& challenge, DeviceInfo* deviceInfo, uint32_t* version,
+    std::string* certificateType);
 
   ScopedAStatus updateMacedKey(const std::vector<MacedPublicKey>& keysToSign, Array& coseKeys);
 

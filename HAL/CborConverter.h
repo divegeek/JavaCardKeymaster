@@ -73,6 +73,8 @@ class CborConverter {
     std::optional<SharedSecretParameters> getSharedSecretParameters(const std::unique_ptr<Item>& item, const uint32_t pos);
     
     std::optional<string> getByteArrayStr(const unique_ptr<Item>& item, const uint32_t pos);
+    
+    std::optional<string> getTextStr(const unique_ptr<Item>& item, const uint32_t pos);
 
     std::optional<std::vector<uint8_t>> getByteArrayVec(const unique_ptr<Item>& item, const uint32_t pos);
 

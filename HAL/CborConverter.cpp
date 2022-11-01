@@ -271,6 +271,15 @@ std::optional<vector<Certificate>> CborConverter::getCertificateChain(const std:
     return certChain;
 }
 
+std::optional<string> CborConverter::getTextStr(const unique_ptr<Item>& item, const uint32_t pos) {
+    auto textStrItem = getItemAtPos(item, pos);
+    if (!textStrItem || (MajorType::TSTR != getType(textStrItem.value()))) {
+        return std::nullopt;
+    }
+    const Tstr* tstr = textStrItem.value().get()->asTstr();
+    return tstr->value();
+}
+
 std::optional<string> CborConverter::getByteArrayStr(const unique_ptr<Item>& item, const uint32_t pos) {
     auto optTemp = getByteArrayVec(item, pos);
     if (!optTemp) {
