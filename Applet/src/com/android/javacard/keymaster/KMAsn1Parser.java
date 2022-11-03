@@ -1,6 +1,8 @@
 package com.android.javacard.keymaster;
 
 import com.android.javacard.seprovider.KMException;
+
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
 public class KMAsn1Parser {
@@ -19,6 +21,9 @@ public class KMAsn1Parser {
   public static final byte ASN1_UNIVERSAL_STRING = 0x1C;
   public static final byte ASN1_BMP_STRING = 0x1E;
   public static final byte IA5_STRING = 0x16;
+  private static final byte DATA_START_OFFSET = 0;
+  private static final byte DATA_LENGTH_OFFSET = 1;
+  private static final byte DATA_CURSOR_OFFSET = 2;
 
   public static final byte[] EC_CURVE = {
       0x06,0x08,0x2a,(byte)0x86,0x48,(byte)0xce,0x3d,0x03,
@@ -87,14 +92,13 @@ public class KMAsn1Parser {
       (byte) 0x80 /* 1-128 pseudonym */
   };
   private byte[] data;
-  private short start;
-  private short length;
-  private short cur;
+  private short[] dataInfo;
   private static KMAsn1Parser inst;
-  private KMAsn1Parser(){
-    start = 0;
-    length =  0;
-    cur = 0;
+  private KMAsn1Parser() {
+    dataInfo = JCSystem.makeTransientShortArray((short) 3, JCSystem.CLEAR_ON_RESET);
+    dataInfo[DATA_START_OFFSET] = 0;
+    dataInfo[DATA_LENGTH_OFFSET] = 0;
+    dataInfo[DATA_CURSOR_OFFSET] = 0;
   }
 
   public short decodeRsa(short blob){
@@ -124,7 +128,7 @@ public class KMAsn1Parser {
   public void validateDerSubject(short blob) {
     init(blob);
     header(ASN1_SEQUENCE);
-    while (cur < ((short) (start + length))) {
+    while (dataInfo[DATA_CURSOR_OFFSET] < ((short) (dataInfo[DATA_START_OFFSET] +  dataInfo[DATA_LENGTH_OFFSET]))) {
       header(ASN1_SET);
       header(ASN1_SEQUENCE);
       // Parse and validate OBJECT-IDENTIFIER and Value fields
@@ -265,20 +269,20 @@ public class KMAsn1Parser {
     return resp;
   }
   private void validateTag0IfPresent(){
-    if(data[cur] != ASN1_A0_TAG) return;;
+    if(data[dataInfo[DATA_CURSOR_OFFSET]] != ASN1_A0_TAG) return;;
     short len = header(ASN1_A0_TAG);
     if(len != EC_CURVE.length) KMException.throwIt(KMError.UNKNOWN_ERROR);
-    if(Util.arrayCompare(data, cur, EC_CURVE, (short)0, len) != 0) KMException.throwIt(KMError.UNKNOWN_ERROR);
+    if(Util.arrayCompare(data, dataInfo[DATA_CURSOR_OFFSET], EC_CURVE, (short)0, len) != 0) KMException.throwIt(KMError.UNKNOWN_ERROR);
     incrementCursor(len);
   }
 
   private void validateAttributeTypeAndValue() {
     // First byte should be OBJECT_IDENTIFIER, otherwise it is not well-formed DER Subject.
-    if (data[cur] != OBJECT_IDENTIFIER) {
+    if (data[dataInfo[DATA_CURSOR_OFFSET]] != OBJECT_IDENTIFIER) {
       KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
     // Check if the OID matches the email address
-    if ((Util.arrayCompare(data, cur, EMAIL_ADDRESS_OID, (short) 0,
+    if ((Util.arrayCompare(data, dataInfo[DATA_CURSOR_OFFSET], EMAIL_ADDRESS_OID, (short) 0,
         (short) EMAIL_ADDRESS_OID.length) == 0)) {
       incrementCursor((short) EMAIL_ADDRESS_OID.length);
       // Validate the length of the attribute value.
@@ -294,8 +298,8 @@ public class KMAsn1Parser {
     }
     // Check other OIDs.
     for (short i = 0; i < (short) attributeOIds.length; i++) {
-      if ((Util.arrayCompare(data, cur, COMMON_OID, (short) 0, (short) COMMON_OID.length) == 0) &&
-          (attributeOIds[i] == data[(short) (cur + COMMON_OID.length)])) {
+      if ((Util.arrayCompare(data, dataInfo[DATA_CURSOR_OFFSET], COMMON_OID, (short) 0, (short) COMMON_OID.length) == 0) &&
+          (attributeOIds[i] == data[(short) (dataInfo[DATA_CURSOR_OFFSET] + COMMON_OID.length)])) {
         incrementCursor((short) (COMMON_OID.length + 1));
         // Validate the length of the attribute value.
         short tag = getByte();
@@ -328,26 +332,26 @@ public class KMAsn1Parser {
   }
 
   private byte getByte(){
-    byte d = data[cur];
+    byte d = data[dataInfo[DATA_CURSOR_OFFSET]];
     incrementCursor((short)1);
     return d;
   }
 
   private short getShort(){
-    short d = Util.getShort(data, cur);
+    short d = Util.getShort(data, dataInfo[DATA_CURSOR_OFFSET]);
     incrementCursor((short)2);
     return d;
   }
 
   private void getBytes(short blob){
     short len = KMByteBlob.cast(blob).length();
-    Util.arrayCopyNonAtomic(data, cur, KMByteBlob.cast(blob).getBuffer(),
+    Util.arrayCopyNonAtomic(data, dataInfo[DATA_CURSOR_OFFSET], KMByteBlob.cast(blob).getBuffer(),
         KMByteBlob.cast(blob).getStartOff(), len);
     incrementCursor(len);
   }
 
   private void getBytes(byte[] buffer, short offset, short len) {
-    Util.arrayCopyNonAtomic(data, cur, buffer, offset, len);
+    Util.arrayCopyNonAtomic(data, dataInfo[DATA_CURSOR_OFFSET], buffer, offset, len);
     incrementCursor(len);
   }
 
@@ -369,13 +373,13 @@ public class KMAsn1Parser {
 
   public void init(short blob) {
     data = KMByteBlob.cast(blob).getBuffer();
-    start = KMByteBlob.cast(blob).getStartOff();
-    length = KMByteBlob.cast(blob).length();
-    cur = start;
+    dataInfo[DATA_START_OFFSET] = KMByteBlob.cast(blob).getStartOff();
+    dataInfo[DATA_LENGTH_OFFSET] = KMByteBlob.cast(blob).length();
+    dataInfo[DATA_CURSOR_OFFSET] = dataInfo[DATA_START_OFFSET];
   }
 
   public void incrementCursor(short n){
-    cur += n;
-    if(cur > ((short)(start+length))) KMException.throwIt(KMError.UNKNOWN_ERROR);
+    dataInfo[DATA_CURSOR_OFFSET] += n;
+    if(dataInfo[DATA_CURSOR_OFFSET] > ((short)(dataInfo[DATA_START_OFFSET]+ dataInfo[DATA_LENGTH_OFFSET]))) KMException.throwIt(KMError.UNKNOWN_ERROR);
   }
 }
