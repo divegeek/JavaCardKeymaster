@@ -341,9 +341,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   private static void pushTbsCert(boolean rsaCert, boolean rsa) {
     short last = indexes[STACK_PTR];
-    if(states[CERT_MODE] == KMType.ATTESTATION_CERT) {
-      pushExtensions();
-    }
+    pushExtensions();
     // subject public key info
     if (rsaCert) {
       pushRsaSubjectKeyInfo();
@@ -384,7 +382,9 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     if (states[KEY_USAGE] != 0) {
       pushKeyUsage(states[KEY_USAGE], states[UNUSED_BITS]);
     }
-    pushKeyDescription();
+    if (states[CERT_MODE] == KMType.ATTESTATION_CERT) {
+      pushKeyDescription();
+    }
     pushSequenceHeader((short) (last - indexes[STACK_PTR]));
     // Extensions have explicit tag of [3]
     pushLength((short) (last - indexes[STACK_PTR]));
