@@ -42,14 +42,6 @@ public class KMException extends RuntimeException {
     reason[0] = e;
     throw exception;
   }
-/*
-  public static KMException instance() {
-    if (exception == null) {
-      exception = new KMException();
-    }
-    return exception;
-  }
-*/
 }
 
 
