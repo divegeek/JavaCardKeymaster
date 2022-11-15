@@ -3542,7 +3542,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // check the keysize tag if present in key parameters.
     short keysize =
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.KEYSIZE, data[KEY_PARAMETERS]);
-    short kSize = (short) (KMByteBlob.length(data[SECRET]) * 8);
+    short kSize = (short) (KMByteBlob.length(data[PUB_KEY]) * 8);
     if (keysize != KMType.INVALID_VALUE) {
       if (keysize != 2048 || (keysize != kSize)) {
         KMException.throwIt(KMError.IMPORT_PARAMETER_MISMATCH);
