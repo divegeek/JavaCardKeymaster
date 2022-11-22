@@ -382,7 +382,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     if (states[KEY_USAGE] != 0) {
       pushKeyUsage(states[KEY_USAGE], states[UNUSED_BITS]);
     }
-    if (states[CERT_MODE] == KMType.ATTESTATION_CERT) {
+    if (states[CERT_MODE] == KMType.ATTESTATION_CERT ||
+        states[CERT_MODE] == KMType.FACTORY_ATTESTATION_CERT) {
       pushKeyDescription();
     }
     pushSequenceHeader((short) (last - indexes[STACK_PTR]));
@@ -907,12 +908,16 @@ public class KMAttestationCertImpl implements KMAttestationCert {
         if (sigLen > ECDSA_MAX_SIG_LEN)
           KMException.throwIt(KMError.UNKNOWN_ERROR);
       }
-      // Adjust signature length
-      indexes[STACK_PTR] = signatureOffset;
-      pushBitStringHeader((byte) 0, sigLen);
-    } else if (!fakeCert) { // No attestation key provisioned in the factory
-      KMException.throwIt(KMError.ATTESTATION_KEYS_NOT_PROVISIONED);
+    } else if (!fakeCert) {
+      // Sign with Factory provisioned attestation key.
+      sigLen = seProvider.ecSign256(KMKeymintDataStore.instance().getAttestationKeyPair(),
+          stack, indexes[TBS_START], indexes[TBS_LENGTH], stack, signatureOffset);
+      if (sigLen > ECDSA_MAX_SIG_LEN)
+        KMException.throwIt(KMError.UNKNOWN_ERROR);
     }
+    // Adjust signature length
+    indexes[STACK_PTR] = signatureOffset;
+    pushBitStringHeader((byte) 0, sigLen);
     last = (short) (signatureOffset + sigLen);
     // Add certificate sequence header
     indexes[STACK_PTR] = indexes[TBS_START];
@@ -925,6 +930,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   public void build() {
     if(states[CERT_MODE] == KMType.FAKE_CERT) {
       build(KMType.INVALID_VALUE, KMType.INVALID_VALUE, true, true);
+    } else if(states[CERT_MODE] == KMType.FACTORY_ATTESTATION_CERT) {
+      build(KMType.INVALID_VALUE, KMType.INVALID_VALUE, false, false);
     } else {
       build(indexes[CERT_ATT_KEY_SECRET], indexes[CERT_ATT_KEY_RSA_PUB_MOD], (states[CERT_RSA_SIGN] == 0 ? false: true), false);
     }

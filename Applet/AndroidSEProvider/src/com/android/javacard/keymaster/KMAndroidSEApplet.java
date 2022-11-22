@@ -20,7 +20,6 @@ import org.globalplatform.upgrade.OnUpgradeListener;
 import org.globalplatform.upgrade.UpgradeManager;
 
 import com.android.javacard.seprovider.KMAndroidSEProvider;
-import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMError;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMType;
@@ -38,12 +37,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
   // MSB byte is for Major version and LSB byte is for Minor version.
   public static final short KM_APPLET_PACKAGE_VERSION = 0x0300;
 
-  private static final byte KM_BEGIN_STATE = 0x00;
-  private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
 
   // Provider specific Commands
   private static final byte INS_KEYMINT_PROVIDER_APDU_START = 0x00;
+  private static final byte INS_PROVISION_ATTESTATION_KEY_CMD = INS_KEYMINT_PROVIDER_APDU_START + 1; //0x01
+  private static final byte INS_PROVISION_ATTESTATION_CERT_DATA_CMD = INS_KEYMINT_PROVIDER_APDU_START + 2; //0x02
   private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
   // Commands 4, 5 and 6 are reserved for vendor usage.
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 7;
@@ -131,12 +130,12 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
             processGetProvisionStatusCmd(apdu);
             break;
 
-          case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
-            processProvisionRkpDeviceUniqueKeyPair(apdu);
+          case INS_PROVISION_ATTESTATION_KEY_CMD:
+            processProvisionAttestationKey(apdu);
             break;
 
-          case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
-            processProvisionRkpAdditionalCertChain(apdu);
+          case INS_PROVISION_ATTESTATION_CERT_DATA_CMD:
+            processProvisionAttestationCertDataCmd(apdu);
             break;
           
           case INS_SE_FACTORY_PROVISIONING_LOCK_CMD:
@@ -219,6 +218,8 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         
       case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
       case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
+      case INS_PROVISION_ATTESTATION_KEY_CMD:
+      case INS_PROVISION_ATTESTATION_CERT_DATA_CMD:
         if(isSeFactoryProvisioningLocked()) {
           result = false;  
         }
@@ -247,8 +248,10 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isSeFactoryProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    if (PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR ==
-        (pStatus & PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR)) {
+    short completeStatus = PROVISION_STATUS_ATTESTATION_CERT_CHAIN |
+        PROVISION_STATUS_ATTESTATION_KEY |
+        PROVISION_STATUS_ATTESTATION_CERT_PARAMS;
+    if (completeStatus == (pStatus & completeStatus)) {
       return true;
     }
     return false;
@@ -304,7 +307,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private void processProvisionOEMRootPublicKeyCmd(APDU apdu) {  
     // Re-purpose the apdu buffer as scratch pad.
-    byte[] scratchPad = apdu.getBuffer();
     // Arguments
     short keyparams = KMKeyParameters.exp();
     short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT);
@@ -366,72 +368,6 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         KMByteBlob.cast(tmpVariables[0]).length());
   }
 
-  private static void processProvisionRkpDeviceUniqueKeyPair(APDU apdu) {
-    // Re-purpose the apdu buffer as scratch pad.
-    byte[] scratchPad = apdu.getBuffer();
-    short arr = KMArray.instance((short) 1);
-    short coseKeyExp = KMCoseKey.exp();
-    KMArray.cast(arr).add((short) 0, coseKeyExp); //[ CoseKey ]
-    arr = receiveIncoming(apdu, arr);
-    // Get cose key.
-    short coseKey = KMArray.cast(arr).get((short) 0);
-    short pubKeyLen = KMCoseKey.cast(coseKey).getEcdsa256PublicKey(scratchPad, (short) 0);
-    short privKeyLen = KMCoseKey.cast(coseKey).getPrivateKey(scratchPad, pubKeyLen);
-    //Store the Device unique Key.
-    kmDataStore.createRkpDeviceUniqueKeyPair(scratchPad, (short) 0, pubKeyLen, scratchPad,
-        pubKeyLen, privKeyLen);
-    short bcc = generateBcc(false, scratchPad);
-    short len = KMKeymasterApplet.encodeToApduBuffer(bcc, scratchPad, (short) 0,
-        MAX_COSE_BUF_SIZE);
-    kmDataStore.persistBootCertificateChain(scratchPad, (short) 0, len);
-    kmDataStore.setProvisionStatus(PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR);
-    sendResponse(apdu, KMError.OK);
-  }
-
-  private void processProvisionRkpAdditionalCertChain(APDU apdu) {
-    // X509 certificate chain is received as shown below:
-    /**
-     *     x509CertChain = bstr .cbor UdsCerts
-     *
-     *     AdditionalDKSignatures = {
-     *         * SignerName => DKCertChain
-     *     }
-     *     ; SignerName is a string identifier that indicates both the signing authority as
-     *     ; well as the format of the DKCertChain
-     *     SignerName = tstr
-     *
-     *     DKCertChain = [
-     *         2* X509Certificate       ; Root -> ... -> Leaf. "Root" is the vendor self-signed
-     *                                  ; cert, "Leaf" contains DK_pub. There may also be
-     *                                  ; intermediate certificates between Root and Leaf.
-     *     ]
-     *     ; A bstr containing a DER-encoded X.509 certificate (RSA, NIST P-curve, or edDSA)
-     *     X509Certificate = bstr
-     */
-    // Store the cbor encoded UdsCerts as it is in the persistent memory so cbor decoding is
-    // required here.
-    byte[] srcBuffer = apdu.getBuffer();
-    short recvLen = apdu.setIncomingAndReceive();
-    short srcOffset = apdu.getOffsetCdata();
-    short bufferLength = apdu.getIncomingLength();
-    short bufferStartOffset = repository.allocReclaimableMemory(bufferLength);
-    short index = bufferStartOffset;
-    byte[] buffer = repository.getHeap();
-    while (recvLen > 0 && ((short) (index - bufferStartOffset) < bufferLength)) {
-      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, index, recvLen);
-      index += recvLen;
-      recvLen = apdu.receiveBytes(srcOffset);
-    }
-    short byteHeaderLen = decoder.readCertificateChainHeaderLen(buffer, bufferStartOffset,
-        bufferLength);
-    kmDataStore.persistAdditionalCertChain(buffer, (short) (bufferStartOffset + byteHeaderLen),
-        (short) (bufferLength - byteHeaderLen));
-    kmDataStore.setProvisionStatus(PROVISION_STATUS_ADDITIONAL_CERT_CHAIN);
-    // reclaim memory
-    repository.reclaimMemory(bufferLength);
-    sendResponse(apdu, KMError.OK);
-  }
-
   private void processProvisionAttestIdsCmd(APDU apdu) {
     short keyparams = KMKeyParameters.exp();
     short cmd = KMArray.instance((short) 1);
@@ -488,6 +424,113 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
         KMByteBlob.cast(val).length());
 
   }
+  
+  private void processProvisionAttestationKey(APDU apdu) {
+    // Re-purpose the apdu buffer as scratch pad.
+    byte[] scratchPad = apdu.getBuffer();
+    // Arguments
+    short keyparams = KMKeyParameters.exp();
+    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT);
+    short blob = KMByteBlob.exp();
+    short argsProto = KMArray.instance((short) 3);
+    KMArray.cast(argsProto).add((short) 0, keyparams);
+    KMArray.cast(argsProto).add((short) 1, keyFormatPtr);
+    KMArray.cast(argsProto).add((short) 2, blob);
+    short args = receiveIncoming(apdu, argsProto);
+
+    // key params should have os patch, os version and verified root of trust
+    data[KEY_PARAMETERS] = KMArray.cast(args).get((short) 0);
+    tmpVariables[0] = KMArray.cast(args).get((short) 1);
+    data[IMPORTED_KEY_BLOB] = KMArray.cast(args).get((short) 2);
+    // Key format must be RAW format
+    byte keyFormat = KMEnum.cast(tmpVariables[0]).getVal();
+    if (keyFormat != KMType.RAW) {
+      KMException.throwIt(KMError.UNIMPLEMENTED);
+    }
+    data[ORIGIN] = KMType.IMPORTED;
+
+    // get algorithm - only EC keys expected
+    tmpVariables[0] = KMEnumTag.getValue(KMType.ALGORITHM, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] != KMType.EC) {
+      KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    // get digest - only SHA256 supported
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.DIGEST, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] != KMType.INVALID_VALUE) {
+      if (KMEnumArrayTag.cast(tmpVariables[0]).length() != 1) {
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+      tmpVariables[0] = KMEnumArrayTag.cast(tmpVariables[0]).get((short) 0);
+      if (tmpVariables[0] != KMType.SHA2_256) {
+        KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+      }
+    } else {
+      KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    // Purpose should be ATTEST_KEY
+    tmpVariables[0] =
+        KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, data[KEY_PARAMETERS]);
+    if (tmpVariables[0] != KMType.INVALID_VALUE) {
+      if (KMEnumArrayTag.cast(tmpVariables[0]).length() != 1) {
+        KMException.throwIt(KMError.INVALID_ARGUMENT);
+      }
+      tmpVariables[0] = KMEnumArrayTag.cast(tmpVariables[0]).get((short) 0);
+      if (tmpVariables[0] != KMType.ATTEST_KEY) {
+        KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
+      }
+    } else {
+      KMException.throwIt(KMError.INVALID_ARGUMENT);
+    }
+    // Import EC Key - initializes data[SECRET] data[PUB_KEY]
+    importECKeys(scratchPad, keyFormat);
+    // persist key
+    kmDataStore.createAttestationKeyPair(
+        KMByteBlob.cast(data[SECRET]).getBuffer(),
+        KMByteBlob.cast(data[SECRET]).getStartOff(),
+        KMByteBlob.cast(data[SECRET]).length());
+    kmDataStore.setProvisionStatus(PROVISION_STATUS_ATTESTATION_KEY);
+    sendResponse(apdu, KMError.OK);
+  }
+
+  private void processProvisionAttestationCertDataCmd(APDU apdu) {
+    byte[] srcBuffer = apdu.getBuffer();
+    short recvLen = apdu.setIncomingAndReceive();
+    short srcOffset = apdu.getOffsetCdata();
+    short bufferLength = apdu.getIncomingLength();
+    short bufferStartOffset = repository.allocReclaimableMemory(bufferLength);
+    short index = bufferStartOffset;
+    byte[] buffer = repository.getHeap();
+    while (recvLen > 0 && ((short) (index - bufferStartOffset) < bufferLength)) {
+      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, index, recvLen);
+      index += recvLen;
+      recvLen = apdu.receiveBytes(srcOffset);
+    }
+    // CertificateData = [
+    //     X509CertifcateChain: bstr,   ; DER encoded X.509 certificate chain ordered from Leaf to Root. 
+    //     Issuer: bstr,  ; DER encoded subject field
+    // ]
+
+    // srcBuffer holds the corresponding offsets and lengths of the certChain, certIssuer and certExpiry
+    // respectively in the input buffer.
+    decoder.decodeCertificateData((short) 2, /* Length of the input array */
+        buffer, bufferStartOffset, bufferLength, srcBuffer, (short) 0);
+    // Persist data.
+    // The offset and length of the CertChain in the input buffer are stored in the srcBuffer 
+    // at 0th and 2nd positions respectively.
+    kmDataStore.persistAttestationCertChain(buffer,
+        Util.getShort(srcBuffer, (short) 0), Util.getShort(srcBuffer, (short) 2));
+    // The offset and length of the CertIssuer in the input buffer are stored in the srcBuffer 
+    // at 4th and 6th positions respectively.
+    kmDataStore.persistAttestationCertIssuer(buffer,
+        Util.getShort(srcBuffer, (short) 4), Util.getShort(srcBuffer, (short) 6));
+        
+    // reclaim memory
+    repository.reclaimMemory(bufferLength);
+    kmDataStore.setProvisionStatus(
+        (short) (PROVISION_STATUS_ATTESTATION_CERT_CHAIN | PROVISION_STATUS_ATTESTATION_CERT_PARAMS));
+    sendResponse(apdu, KMError.OK);
+  }
 
   //This function masks the error code with POWER_RESET_MASK_FLAG
   // in case if card reset event occurred. The clients of the Applet
@@ -524,10 +567,9 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
 
   private boolean isProvisioningComplete() {
     short pStatus = kmDataStore.getProvisionStatus();
-    short pCompleteStatus =
-        PROVISION_STATUS_DEVICE_UNIQUE_KEYPAIR | PROVISION_STATUS_PRESHARED_SECRET
-            | PROVISION_STATUS_ATTEST_IDS | PROVISION_STATUS_OEM_PUBLIC_KEY |
-            PROVISION_STATUS_SECURE_BOOT_MODE;
+    short pCompleteStatus = PROVISION_STATUS_ATTESTATION_CERT_CHAIN | PROVISION_STATUS_ATTESTATION_CERT_PARAMS
+        | PROVISION_STATUS_ATTESTATION_KEY | PROVISION_STATUS_PRESHARED_SECRET | PROVISION_STATUS_ATTEST_IDS
+        | PROVISION_STATUS_OEM_PUBLIC_KEY | PROVISION_STATUS_SECURE_BOOT_MODE;
     if (kmDataStore.isProvisionLocked() || (pCompleteStatus == (pStatus & pCompleteStatus))) {
       return true;
     }

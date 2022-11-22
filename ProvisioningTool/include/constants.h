@@ -80,7 +80,7 @@ constexpr uint64_t kTagAttestationIdModel = 2415919821u;
 constexpr uint64_t kCurveP256 = 1;
 constexpr uint64_t kAlgorithmEc = 3;
 constexpr uint64_t kDigestSha256 = 4;
-constexpr uint64_t kPurposeAttest = 0x7F;
+constexpr uint64_t kPurposeAttest = 7;
 constexpr uint64_t kPurposeVerify = 3;
 constexpr uint64_t kKeyFormatRaw = 3;
 
@@ -102,6 +102,8 @@ constexpr char kUnLockProvision[] = "unlock_provision";
 constexpr char kSecureBootMode[] = "secure_boot_mode";
 
 // Instruction constatnts
+constexpr int kAttestationKeyCmd = INS_BEGIN_KM_CMD + 1;
+constexpr int kAttestCertDataCmd = INS_BEGIN_KM_CMD + 2;
 constexpr int kAttestationIdsCmd = INS_BEGIN_KM_CMD + 3;
 constexpr int kPresharedSecretCmd = INS_BEGIN_KM_CMD + 15;
 constexpr int kBootParamsCmd = INS_BEGIN_KM_CMD + 16;

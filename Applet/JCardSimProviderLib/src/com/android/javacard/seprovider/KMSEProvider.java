@@ -489,24 +489,6 @@ public interface KMSEProvider {
       short signatureDataStart,
       short signatureDataLen);
 
-  /**
-   * This is a oneshot operation that signs the data using device unique key.
-   *
-   * @param ecPrivKey instance of KMECDeviceUniqueKey to sign the input data.
-   * @param inputDataBuf is the buffer of the input data.
-   * @param inputDataStart is the start of the input data buffer.
-   * @param inputDataLength is the length of the input data buffer in bytes.
-   * @param outputDataBuf is the output buffer that contains the signature.
-   * @param outputDataStart is the start of the output data buffer.
-   * @return length of the decrypted data.
-   */
-  short ecSign256(
-      KMDeviceUniqueKeyPair ecPrivKey,
-      byte[] inputDataBuf,
-      short inputDataStart,
-      short inputDataLength,
-      byte[] outputDataBuf,
-      short outputDataStart);
 
   short ecSign256(byte[] secret, short secretStart, short secretLength,
       byte[] inputDataBuf, short inputDataStart, short inputDataLength,
@@ -598,40 +580,7 @@ public interface KMSEProvider {
       short ivLength,
       short macLength,
       boolean oneShot);
-
-  /**
-   *  This function creates an Operation instance only for RKP module.
-   *
-   * @param purpose is KMType.ENCRYPT or KMType.DECRYPT for AES and DES algorithm. It will be
-   * KMType.SIGN and KMType.VERIFY for HMAC algorithm
-   * @param alg is KMType.HMAC, KMType.AES or KMType.DES.
-   * @param digest is KMType.SHA2_256 in case of HMAC else it will be KMType.DIGEST_NONE.
-   * @param padding is KMType.PADDING_NONE or KMType.PKCS7 (in case of AES and DES).
-   * @param blockMode is KMType.CTR, KMType.GCM. KMType.CBC or KMType.ECB for AES or DES else it is
-   * 0.
-   * @param keyBuf is aes, des or hmac key buffer.
-   * @param keyStart is the start of the key buffer.
-   * @param keyLength is the length of the key buffer.
-   * @param ivBuf is the iv buffer (in case on AES and DES algorithm without ECB mode)
-   * @param ivStart is the start of the iv buffer.
-   * @param ivLength is the length of the iv buffer. It will be zero in case of HMAC and AES/DES
-   * with ECB mode.
-   * @param macLength is the mac length in case of signing operation for hmac algorithm.
-   * @return KMOperation instance.
-   */
-  KMOperation getRkpOperation(byte purpose,
-      byte alg,
-      byte digest,
-      byte padding,
-      byte blockMode,
-      byte[] keyBuf,
-      short keyStart,
-      short keyLength,
-      byte[] ivBuf,
-      short ivStart,
-      short ivLength,
-      short macLength);
-
+  
   /**
    * This creates a persistent operation for signing, verify, encryption and decryption using RSA
    * and EC algorithms when keymaster hal's beginOperation function is executed. For RSA the public
@@ -707,20 +656,18 @@ public interface KMSEProvider {
   short getAttestationKeyAlgorithm();
 
   /**
-   * Creates an ECKey instance and sets the public and private keys to it.
+   * This function creates an ECKey and initializes the ECPrivateKey with the provided input key
+   * data. The initialized Key is maintained by the SEProvider. This function should be called only
+   * while provisioning the attestation key.
    *
-   * @param testMode to indicate if current execution is for test or production.
-   * @param pubKey buffer containing the public key.
-   * @param pubKeyOff public key buffer start offset.
-   * @param pubKeyLen public key buffer length.
-   * @param privKey buffer containing the private key.
-   * @param privKeyOff private key buffer start offset.
-   * @param privKeyLen private key buffer length.
-   * @return instance of KMDeviceUniqueKey.
+   * @param key instance of the KMAttestationKey.
+   * @param keyData buffer containing the ec private key.
+   * @param offset start of the buffer.
+   * @param length length of the buffer.
+   * @return An instance of KMAttestationKey.
    */
-  KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
-      byte[] pubKey, short pubKeyOff, short pubKeyLen,
-      byte[] privKey, short privKeyOff, short privKeyLen);
+  KMAttestationKey createAttestationKey(KMAttestationKey key,
+      byte[] keyData, short offset, short length);
   
   /**
    * This is a one-shot operation the does digest of the input mesage.
@@ -781,16 +728,4 @@ public interface KMSEProvider {
    * @return count of the objects.
    */
   short getBackupObjectCount(byte interfaceType);
-  
-  /**
-   * This function creates an HMACKey and initializes the key with the provided input key data.
-   *
-   * @param keyData buffer containing the key data.
-   * @param offset start of the buffer.
-   * @param length length of the buffer.
-   * @return An instance of the KMRkpMacKey.
-   */
-  KMRkpMacKey createRkpMacKey(KMRkpMacKey createComputedHmacKey, byte[] keyData,
-      short offset, short length);
-
 }

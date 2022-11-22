@@ -101,6 +101,14 @@ ScopedAStatus JavacardKeyMintDevice::generateKey(const vector<KeyParameter>& key
     creationResult->keyCharacteristics = std::move(optKeyChars.value());
     creationResult->certificateChain = std::move(optCertChain.value());
     creationResult->keyBlob = std::move(optKeyBlob.value());
+    if (isFactoryAttestationCertMode(keyParams, attestationKey)) {
+        // Get provisioned attestation certificate chain.
+        err = getProvisionedAttestationCertChain(creationResult->certificateChain);
+        if (err != KM_ERROR_OK) {
+            LOG(ERROR) << "Error in getting Provisioned attestation certificate chain.";
+            return km_utils::kmError2ScopedAStatus(err);
+        }
+    }
     return ScopedAStatus::ok();
 }
 
@@ -146,6 +154,14 @@ ScopedAStatus JavacardKeyMintDevice::importKey(const vector<KeyParameter>& keyPa
     creationResult->keyCharacteristics = std::move(optKeyChars.value());
     creationResult->certificateChain = std::move(optCertChain.value());
     creationResult->keyBlob = std::move(optKeyBlob.value());
+    if (isFactoryAttestationCertMode(keyParams, attestationKey)) {
+        // Get provisioned attestation certificate chain.
+        err = getProvisionedAttestationCertChain(creationResult->certificateChain);
+        if (err != KM_ERROR_OK) {
+            LOG(ERROR) << "Error in getting Provisioned attestation certificate chain.";
+            return km_utils::kmError2ScopedAStatus(err);
+        }
+    }
     return ScopedAStatus::ok();
 }
 
@@ -448,6 +464,41 @@ ScopedAStatus JavacardKeyMintDevice::sendRootOfTrust(const vector<uint8_t>& root
     }
     LOG(ERROR) << "JavacardKeyMintDevice::sendRootOfTrust success";
     return ScopedAStatus::ok();
+}
+
+keymaster_error_t
+JavacardKeyMintDevice::getProvisionedAttestationCertChain(std::vector<Certificate>& certChain) {
+    auto [item, err] = card_->sendRequest(Instruction::INS_GET_CERT_CHAIN_CMD);
+    if (err != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in getProvisionedAttestationCertChain.";
+        return err;
+    }
+    auto optChain = cbor_.getByteArrayVec(item, 1);
+    if (!optChain) {
+        LOG(ERROR) << "Error in getProvisionedAttestationCertChain() while getting cert chain from parsed cbor item.";
+        return KM_ERROR_UNKNOWN_ERROR;
+    }
+    err = km_utils::getCertificateChain(*optChain, certChain);
+    if (err != KM_ERROR_OK) {
+        LOG(ERROR) << "Error in getCertificateChain.";
+        return err;
+    }
+    return KM_ERROR_OK;
+}
+
+bool
+JavacardKeyMintDevice::isFactoryAttestationCertMode(const vector<KeyParameter>& keyParams, const optional<AttestationKey>& attestationKey) {
+    AuthorizationSet authSet((KmParamSet(keyParams)));
+    keymaster_algorithm_t algorithm;
+    authSet.GetTagValue(TAG_ALGORITHM, &algorithm);
+    if (algorithm == KM_ALGORITHM_RSA || algorithm == KM_ALGORITHM_EC) {
+        if (!attestationKey || attestationKey->keyBlob.empty()) {
+            if (authSet.Contains(TAG_ATTESTATION_CHALLENGE)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 }  // namespace aidl::android::hardware::security::keymint

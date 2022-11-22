@@ -16,11 +16,6 @@
 
 package com.android.javacard.seprovider;
 
-import javacard.framework.ISO7816;
-import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
-import javacard.framework.Util;
-
 /**
  * This class declares all types, tag types, and tag keys. It also establishes basic structure of
  * any KMType i.e. struct{byte type, short length, value} where value can any of the KMType. Also,

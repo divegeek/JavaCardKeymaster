@@ -4,7 +4,6 @@ import com.android.javacard.keymaster.KMArray;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
 import com.android.javacard.keymaster.KMCose;
-import com.android.javacard.keymaster.KMCoseHeaders;
 import com.android.javacard.keymaster.KMDecoder;
 import com.android.javacard.keymaster.KMEncoder;
 import com.android.javacard.keymaster.KMEnum;
@@ -40,6 +39,10 @@ public class KMProvision {
 
   // Provision Instructions
   private static final byte INS_KEYMINT_PROVIDER_APDU_START = 0x00;
+  private static final byte INS_PROVISION_ATTESTATION_KEY_CMD =
+      INS_KEYMINT_PROVIDER_APDU_START + 1; //0x01
+  private static final byte INS_PROVISION_ATTESTATION_CERT_DATA_CMD =
+      INS_KEYMINT_PROVIDER_APDU_START + 2; //0x02
   private static final byte INS_PROVISION_ATTEST_IDS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 3;
   private static final byte INS_GET_PROVISION_STATUS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 7;
   //0x08 was reserved for INS_INIT_STRONGBOX_CMD
@@ -293,6 +296,40 @@ public class KMProvision {
       (byte) 0x71, (byte) 0xcc, (byte) 0x55, (byte) 0xfc, (byte) 0x6a, (byte) 0x0b, (byte) 0x84,
       (byte) 0x28, (byte) 0x88, (byte) 0xa2, (byte) 0xca, (byte) 0x19, (byte) 0xe0};
 
+  private static final byte[] X509Issuer = {
+      (byte) 0x30, (byte) 0x81, (byte) 0x88, (byte) 0x31, (byte) 0x0b,
+      (byte) 0x30, (byte) 0x09, (byte) 0x06, (byte) 0x03, (byte) 0x55,
+      (byte) 0x04, (byte) 0x06, (byte) 0x13, (byte) 0x02, (byte) 0x55,
+      (byte) 0x53, (byte) 0x31, (byte) 0x13, (byte) 0x30, (byte) 0x11,
+      (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x08,
+      (byte) 0x0c, (byte) 0x0a, (byte) 0x43, (byte) 0x61, (byte) 0x6c,
+      (byte) 0x69, (byte) 0x66, (byte) 0x6f, (byte) 0x72, (byte) 0x6e,
+      (byte) 0x69, (byte) 0x61, (byte) 0x31, (byte) 0x15, (byte) 0x30,
+      (byte) 0x13, (byte) 0x06, (byte) 0x03, (byte) 0x55, (byte) 0x04,
+      (byte) 0x0a, (byte) 0x0c, (byte) 0x0c, (byte) 0x47, (byte) 0x6f,
+      (byte) 0x6f, (byte) 0x67, (byte) 0x6c, (byte) 0x65, (byte) 0x2c,
+      (byte) 0x20, (byte) 0x49, (byte) 0x6e, (byte) 0x63, (byte) 0x2e,
+      (byte) 0x31, (byte) 0x10, (byte) 0x30, (byte) 0x0e, (byte) 0x06,
+      (byte) 0x03, (byte) 0x55, (byte) 0x04, (byte) 0x0b, (byte) 0x0c,
+      (byte) 0x07, (byte) 0x41, (byte) 0x6e, (byte) 0x64, (byte) 0x72,
+      (byte) 0x6f, (byte) 0x69, (byte) 0x64, (byte) 0x31, (byte) 0x3b,
+      (byte) 0x30, (byte) 0x39, (byte) 0x06, (byte) 0x03, (byte) 0x55,
+      (byte) 0x04, (byte) 0x03, (byte) 0x0c, (byte) 0x32, (byte) 0x41,
+      (byte) 0x6e, (byte) 0x64, (byte) 0x72, (byte) 0x6f, (byte) 0x69,
+      (byte) 0x64, (byte) 0x20, (byte) 0x4b, (byte) 0x65, (byte) 0x79,
+      (byte) 0x73, (byte) 0x74, (byte) 0x6f, (byte) 0x72, (byte) 0x65,
+      (byte) 0x20, (byte) 0x53, (byte) 0x6f, (byte) 0x66, (byte) 0x74,
+      (byte) 0x77, (byte) 0x61, (byte) 0x72, (byte) 0x65, (byte) 0x20,
+      (byte) 0x41, (byte) 0x74, (byte) 0x74, (byte) 0x65, (byte) 0x73,
+      (byte) 0x74, (byte) 0x61, (byte) 0x74, (byte) 0x69, (byte) 0x6f,
+      (byte) 0x6e, (byte) 0x20, (byte) 0x49, (byte) 0x6e, (byte) 0x74,
+      (byte) 0x65, (byte) 0x72, (byte) 0x6d, (byte) 0x65, (byte) 0x64,
+      (byte) 0x69, (byte) 0x61, (byte) 0x74, (byte) 0x65};
+
+  private static final byte[] expiryTime = {(byte) 0x32, (byte) 0x36, (byte) 0x30, (byte) 0x31,
+      (byte) 0x30, (byte) 0x38, (byte) 0x30, (byte) 0x30, (byte) 0x34, (byte) 0x36, (byte) 0x30,
+      (byte) 0x39, (byte) 0x5a};
+
   // OEM lock / unlock verification constants.
   private static final byte[] OEM_LOCK_PROVISION_VERIFICATION_LABEL = { // "OEM Provisioning Lock"
       0x4f, 0x45, 0x4d, 0x20, 0x50, 0x72, 0x6f, 0x76, 0x69, 0x73, 0x69, 0x6f, 0x6e, 0x69, 0x6e,
@@ -366,59 +403,75 @@ public class KMProvision {
     return simulator.transmitCommand(apdu);
   }
 
-  public static ResponseAPDU provisionAdditionalCertChain(CardSimulator simulator,
-      KMSEProvider cryptoProvider, KMEncoder encoder, KMDecoder decoder) {
-    short innerArrPtr = KMArray.instance((short) 2);
+  public static ResponseAPDU provisionAttestationKey(CardSimulator simulator, KMEncoder encoder) {
+    // KeyParameters.
+    short arrPtr = KMArray.instance((short) 4);
+    short ecCurve = KMEnumTag.instance(KMType.ECCURVE, KMType.P_256);
+    short byteBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob).add((short) 0, KMType.SHA2_256);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, byteBlob);
+    short byteBlob2 = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(byteBlob2).add((short) 0, KMType.ATTEST_KEY);
+    short purpose = KMEnumArrayTag.instance(KMType.PURPOSE, byteBlob2);
+    KMArray.cast(arrPtr).add((short) 0, ecCurve);
+    KMArray.cast(arrPtr).add((short) 1, digest);
+    KMArray.cast(arrPtr).add((short) 2,
+        KMEnumTag.instance(KMType.ALGORITHM, KMType.EC));
+    KMArray.cast(arrPtr).add((short) 3, purpose);
+    short keyParams = KMKeyParameters.instance(arrPtr);
+    // Note: VTS uses PKCS8 KeyFormat RAW
+    short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT, KMType.RAW);
 
-    short byteBlobPtr1 = KMByteBlob.instance(kEcAttestRootCert, (short) 0, (short) kEcAttestRootCert.length);
-    short byteBlobPtr2 = KMByteBlob.instance(kEcAttestCert, (short) 0, (short) kEcAttestCert.length);
+    // Key
+    short signKeyPtr = KMArray.instance((short) 2);
+    KMArray.cast(signKeyPtr).add((short) 0, KMByteBlob.instance(kEcPrivKey,
+        (short) 0, (short) kEcPrivKey.length));
+    KMArray.cast(signKeyPtr).add((short) 1, KMByteBlob.instance(kEcPubKey,
+        (short) 0, (short) kEcPubKey.length));
+    byte[] keyBuf = new byte[120];
+    short len = encoder.encode(signKeyPtr, keyBuf, (short) 0, (short) 120);
+    short signKeyBstr = KMByteBlob.instance(keyBuf, (short) 0, len);
 
-    KMArray.cast(innerArrPtr).add((short) 0, byteBlobPtr1);
-    KMArray.cast(innerArrPtr).add((short) 1, byteBlobPtr2);
-    short map = KMMap.instance((short) 1);
-    byte[] signerName = "TestSigner".getBytes();
-    KMMap.cast(map)
-        .add((short) 0, KMTextString.instance(signerName, (short) 0, (short) signerName.length),
-            innerArrPtr);
-    byte[] output = new byte[2048];
-    short encodedLen = encoder.encode(map, output, (short) 0, (short) 2048);
-    short encodedData = KMByteBlob.instance(output, (short) 0, encodedLen);
+    short finalArrayPtr = KMArray.instance((short) 3);
+    KMArray.cast(finalArrayPtr).add((short) 0, keyParams);
+    KMArray.cast(finalArrayPtr).add((short) 1, keyFormatPtr);
+    KMArray.cast(finalArrayPtr).add((short) 2, signKeyBstr);
 
-    CommandAPDU apdu = KMTestUtils.encodeApdu(encoder,
-        (byte) INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD, encodedData);
+    CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_PROVISION_ATTESTATION_KEY_CMD,
+        finalArrayPtr);
     // print(commandAPDU.getBytes());
-    return simulator.transmitCommand(apdu);
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return response;
   }
 
-  public static ResponseAPDU provisionDeviceUniqueKeyPair(CardSimulator simulator,
-      KMSEProvider cryptoProvider, KMEncoder encoder,
-      KMDecoder decoder) {
-    short[] lengths = new short[2];
-    byte[] privKey = new byte[128];
-    byte[] pubKey = new byte[128];
-    cryptoProvider.createAsymmetricKey(KMType.EC, privKey, (short) 0, (short) 128,
-        pubKey, (short) 0, (short) 128, lengths);
-    short coseKey =
-        KMTestUtils.constructCoseKey(
-            KMInteger.uint_8(KMCose.COSE_KEY_TYPE_EC2),
-            KMType.INVALID_VALUE,
-            KMNInteger.uint_8(KMCose.COSE_ALG_ES256),
-            KMInteger.uint_8(KMCose.COSE_KEY_OP_SIGN),
-            KMInteger.uint_8(KMCose.COSE_ECCURVE_256),
-            pubKey, (short) 0, lengths[1],
-            privKey, (short) 0, lengths[0],
-            false
-        );
-    Assert.assertEquals(lengths[1], 65);
-    Assert.assertTrue("Private key length should not be > 32", (lengths[0] <= 32));
-    Util.arrayCopyNonAtomic(privKey, (short) 0, RKP_DK_PRIV, (short) (32 - lengths[0]), lengths[0]);
-    Util.arrayCopyNonAtomic(pubKey, (short) 0, RKP_DK_PUB, (short) 0, lengths[1]);
-    short arr = KMArray.instance((short) 1);
-    KMArray.cast(arr).add((short) 0, coseKey);
+  public static ResponseAPDU provisionAttestationCertificateData(CardSimulator simulator,
+      KMEncoder encoder) {
+    short arrPtr = KMArray.instance((short) 2);
+
+    short byteBlobPtr = KMByteBlob.instance(
+        (short) (kEcAttestCert.length + kEcAttestRootCert.length));
+    Util.arrayCopyNonAtomic(kEcAttestCert, (short) 0,
+        KMByteBlob.cast(byteBlobPtr).getBuffer(),
+        KMByteBlob.cast(byteBlobPtr).getStartOff(),
+        (short) kEcAttestCert.length);
+    Util.arrayCopyNonAtomic(kEcAttestRootCert, (short) 0,
+        KMByteBlob.cast(byteBlobPtr).getBuffer(),
+        (short) (KMByteBlob.cast(byteBlobPtr).getStartOff()
+            + kEcAttestCert.length),
+        (short) kEcAttestRootCert.length);
+    KMArray.cast(arrPtr).add((short) 0, byteBlobPtr);
+
+    short byteBlob1 = KMByteBlob.instance(X509Issuer, (short) 0,
+        (short) X509Issuer.length);
+    KMArray.cast(arrPtr).add((short) 1, byteBlob1);
+
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder,
-        (byte) INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD, arr);
-    return simulator.transmitCommand(apdu);
+        (byte) INS_PROVISION_ATTESTATION_CERT_DATA_CMD, arrPtr);
+    // print(commandAPDU.getBytes());
+    ResponseAPDU response = simulator.transmitCommand(apdu);
+    return response;
   }
+
 
   public static ResponseAPDU provisionOEMRootPublicKey(CardSimulator simulator, KMEncoder encoder,
       KMDecoder decoder) {
@@ -626,9 +679,9 @@ public class KMProvision {
       KMSEProvider cryptoProvider, KMEncoder encoder,
       KMDecoder decoder) {
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
+        provisionAttestationKey(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        provisionAttestationCertificateData(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
@@ -689,17 +742,14 @@ public class KMProvision {
     // Payload
     short payload = constructRotPayload(encoder);
     // Protected Header
-    short headerPtr = KMCose.constructHeaders(scratchBuffer,
-        KMInteger.uint_8(KMCose.COSE_ALG_HMAC_256),
-        KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE,
-        KMType.INVALID_VALUE);
+    short pH = KMMap.instance((short) 1);
+    KMMap.cast(pH).add((short) 0, KMInteger.uint_8(KMCose.COSE_LABEL_ALGORITHM),
+        KMInteger.uint_8(KMCose.COSE_ALG_HMAC_256));
     // Encode the protected header as byte blob.
-    short len = encoder.encode(headerPtr, scratchPad, (short) 0, (short) 500);
+    short len = encoder.encode(pH, scratchPad, (short) 0, (short) 500);
     short protectedHeader = KMByteBlob.instance(scratchPad, (short) 0, len);
     // Unprotected Header
-    short unprotectedHeader = KMArray.instance((short) 0);
-    unprotectedHeader = KMCoseHeaders.instance(unprotectedHeader);
+    short unprotectedHeader = KMMap.instance((short) 0);
 
     // Construct Mac_Structure
     short macStructure =

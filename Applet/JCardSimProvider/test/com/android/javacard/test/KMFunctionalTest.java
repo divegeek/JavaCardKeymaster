@@ -22,8 +22,6 @@ import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
 import com.android.javacard.keymaster.KMConfigurations;
-import com.android.javacard.keymaster.KMCose;
-import com.android.javacard.keymaster.KMCoseHeaders;
 import com.android.javacard.keymaster.KMDecoder;
 import com.android.javacard.keymaster.KMEncoder;
 import com.android.javacard.keymaster.KMEnum;
@@ -1480,9 +1478,9 @@ public class KMFunctionalTest {
     // Select applet
     simulator.selectApplet(appletAID1);
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationKey(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationCertificateData(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSharedSecret(simulator, encoder, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
@@ -1503,9 +1501,9 @@ public class KMFunctionalTest {
     simulator.selectApplet(appletAID1);
     // provision attest key
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationKey(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationCertificateData(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
@@ -1550,9 +1548,9 @@ public class KMFunctionalTest {
     simulator.selectApplet(appletAID1);
     // provision attest key
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationKey(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationCertificateData(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
@@ -1572,8 +1570,8 @@ public class KMFunctionalTest {
     simulator.selectApplet(appletAID1);
     // provision attest key
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
-    Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
+        KMProvision.provisionAttestationKey(simulator, encoder)));
+    Assert.assertEquals(KMError.UNKNOWN_ERROR, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     cleanUp();
   }
@@ -1586,15 +1584,15 @@ public class KMFunctionalTest {
     simulator.selectApplet(appletAID1);
     // provision attest key
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationKey(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationCertificateData(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.UNKNOWN_ERROR, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationKey(simulator, encoder)));
     Assert.assertEquals(KMError.UNKNOWN_ERROR, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationCertificateData(simulator, encoder)));
     cleanUp();
   }
 
@@ -1606,9 +1604,9 @@ public class KMFunctionalTest {
     simulator.selectApplet(appletAID1);
     // provision attest key
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionDeviceUniqueKeyPair(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationKey(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
-        KMProvision.provisionAdditionalCertChain(simulator, cryptoProvider, encoder, decoder)));
+        KMProvision.provisionAttestationCertificateData(simulator, encoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
         KMProvision.provisionSeLocked(simulator, decoder)));
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder,
@@ -2359,7 +2357,20 @@ public class KMFunctionalTest {
         (short) wrappingKeyBlob.length)); // Wrapping Key KeyBlob
     KMArray.cast(arr).add((short) 2, KMByteBlob.instance(maskingKey, (short) 0,
         (short) maskingKey.length)); // Masking Key
-    KMArray.cast(arr).add((short) 3, nullParams); // unwrapping params
+    // Unwrapping params should have Digest: SHA256 and padding as RSA_OAEP
+    short unwrappingParamsArr = KMArray.instance((short) 2);
+    // RSA OAEP Padding
+    short paddingBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(paddingBlob).add((short) 0, KMType.RSA_OAEP);
+    short padding = KMEnumArrayTag.instance(KMType.PADDING, paddingBlob);
+    // SHA256 digest
+    short digestBlob = KMByteBlob.instance((short) 1);
+    KMByteBlob.cast(digestBlob).add((short) 0, KMType.SHA2_256);
+    short digest = KMEnumArrayTag.instance(KMType.DIGEST, digestBlob);
+    KMArray.cast(unwrappingParamsArr).add((short) 0, padding);
+    KMArray.cast(unwrappingParamsArr).add((short) 1, digest);
+    short unwrappingParams = KMKeyParameters.instance(unwrappingParamsArr);
+    KMArray.cast(arr).add((short) 3, unwrappingParams); // unwrapping params
     CommandAPDU apdu = KMTestUtils.encodeApdu(encoder, (byte) INS_BEGIN_IMPORT_WRAPPED_KEY_CMD,
         arr);
     ResponseAPDU response = simulator.transmitCommand(apdu);
