@@ -954,8 +954,8 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
     //Get the key data from the master key
     KMAESKey aesKey = (KMAESKey) masterKey;
-    short mKeyData = KMByteBlob.instance((short) (aesKey.getKeySizeBits() / 8));
-    aesKey.getKey(
+    short mKeyData = KMByteBlob.instance((short) (aesKey.aesKey.getSize() / 8));
+    aesKey.aesKey.getKey(
         KMByteBlob.cast(mKeyData).getBuffer(), /* Key */
         KMByteBlob.cast(mKeyData).getStartOff()); /* Key start*/
     timeOffset = KMByteBlob.instance((short) 32);
