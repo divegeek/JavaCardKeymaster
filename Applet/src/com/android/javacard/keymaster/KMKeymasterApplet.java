@@ -1358,6 +1358,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (!KMEnumArrayTag.contains(KMType.PURPOSE, KMType.WRAP_KEY, data[HW_PARAMETERS])) {
       KMException.throwIt((KMError.INCOMPATIBLE_PURPOSE));
     }
+
+    // Check that the digest and padding mode specified in unwrapping  parameters are SHA2_256
+    // and RSA_OAEP respectively.
+    if (!KMEnumArrayTag.contains(KMType.DIGEST, KMType.SHA2_256, data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+    }
+    if (!KMEnumArrayTag.contains(KMType.PADDING, KMType.RSA_OAEP, data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+    }
   }
 
   private short decryptTransportKey(short privExp, short modulus, short transportKey, byte[] scratchPad){
