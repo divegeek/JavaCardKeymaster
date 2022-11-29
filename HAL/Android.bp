@@ -22,7 +22,6 @@ cc_library {
     	"CborConverter.cpp",
         "JavacardKeyMintDevice.cpp",
         "JavacardKeyMintOperation.cpp",
-	"JavacardRemotelyProvisionedComponentDevice.cpp",
         "JavacardSecureElement.cpp",
         "JavacardSharedSecret.cpp",
 	"JavacardKeyMintUtils.cpp",

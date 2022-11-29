@@ -26,7 +26,6 @@
 #include "JavacardKeyMintDevice.h"
 #include "JavacardSecureElement.h"
 #include "JavacardSharedSecret.h"
-#include "JavacardRemotelyProvisionedComponentDevice.h"
 #include "keymint_utils.h"
 #include "OmapiTransport.h"
 #include "SocketTransport.h"
@@ -81,8 +80,6 @@ int main() {
     addService<JavacardKeyMintDevice>(card);
     // Add Shared Secret Service
     addService<JavacardSharedSecret>(card);
-    // Add Remotely Provisioned Component Service
-    addService<JavacardRemotelyProvisionedComponentDevice>(card);
 
     ABinderProcess_joinThreadPool();
     return EXIT_FAILURE;  // should not reach
