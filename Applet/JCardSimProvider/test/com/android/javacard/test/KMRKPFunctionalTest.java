@@ -405,17 +405,36 @@ public class KMRKPFunctionalTest {
     payloadLen = KMKeymasterApplet.encodeToApduBuffer(signStructure, payload,
         (short) 0, KMKeymasterApplet.MAX_COSE_BUF_SIZE);
 
-    short payloadByteLen = (short) ((short) 1 /*Array of 5 elements occupies 1 byte */ +
+    short csrPayloadLen = (short)(1/*Array of 4 elements occupies 1 byte*/
+        + 1 /*version*/ + encoder.getEncodedBytesLength(certTypeLen) + certTypeLen + deviceInfoBytesLen
+        + coseKeyBytesLen);
+    short csrPayloadByteLen = encoder.getEncodedBytesLength(csrPayloadLen);
+    short payloadByteLen = (short) ((short) 1 /*Array of 2 elements occupies 1 byte */
+        +encoder.getEncodedBytesLength((short) CSR_CHALLENGE.length) +
+        (short) CSR_CHALLENGE.length +
+        csrPayloadByteLen +
+        (short) 1 /*Array of 4 elements occupies 1 byte */ +
         (short) 1 + // Version occupies 1 byte
         encoder.getEncodedBytesLength(certTypeLen) +
         certTypeLen +
         deviceInfoBytesLen +
-        encoder.getEncodedBytesLength((short) CSR_CHALLENGE.length) +
-        (short) CSR_CHALLENGE.length +
         coseKeyBytesLen);
 
     payloadLen += encoder.encodeByteBlobHeader(payloadByteLen, payload, payloadLen, (short) 3);
-    payloadLen += encoder.encodeArrayHeader((short) 5, payload, payloadLen, (short) 3);
+    payloadLen += encoder.encodeArrayHeader((short) 2, payload, payloadLen, (short) 3);
+
+    payloadLen += encoder.encodeByteBlobHeader((short) CSR_CHALLENGE.length, payload, payloadLen,
+            (short) 3);
+
+    Util.arrayCopyNonAtomic(CSR_CHALLENGE,
+            (short) 0,
+            payload,
+            payloadLen,
+            (short) CSR_CHALLENGE.length);
+    payloadLen += (short) CSR_CHALLENGE.length;
+
+    payloadLen += encoder.encodeByteBlobHeader(csrPayloadLen, payload, payloadLen, (short) 3);
+    payloadLen += encoder.encodeArrayHeader((short) 4, payload, payloadLen, (short) 3);
 
     short payloadSchemaVersion = KMInteger.uint_16(schemaVersion);
     payloadLen +=
@@ -432,16 +451,6 @@ public class KMRKPFunctionalTest {
         payloadLen,
         deviceInfoBytesLen);
     payloadLen += deviceInfoBytesLen;
-
-    payloadLen += encoder.encodeByteBlobHeader((short) CSR_CHALLENGE.length, payload, payloadLen,
-        (short) 3);
-
-    Util.arrayCopyNonAtomic(CSR_CHALLENGE,
-        (short) 0,
-        payload,
-        payloadLen,
-        (short) CSR_CHALLENGE.length);
-    payloadLen += (short) CSR_CHALLENGE.length;
 
     Util.arrayCopyNonAtomic(cosyKeyArrayBytes,
         (short) 0,

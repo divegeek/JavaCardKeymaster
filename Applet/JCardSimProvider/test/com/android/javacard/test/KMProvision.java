@@ -507,7 +507,7 @@ public class KMProvision {
 
   public static ResponseAPDU provisionAttestIds(CardSimulator simulator, KMEncoder encoder,
       KMDecoder decoder) {
-    short arrPtr = KMArray.instance((short) 8);
+    short arrPtr = KMArray.instance((short) 9);
 
     byte[] buf = "Attestation Id".getBytes();
 
@@ -527,12 +527,15 @@ public class KMProvision {
         KMByteTag.instance(KMType.ATTESTATION_ID_IMEI,
             KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
     KMArray.cast(arrPtr).add((short) 5,
+            KMByteTag.instance(KMType.ATTESTATION_ID_SECOND_IMEI,
+                KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
+    KMArray.cast(arrPtr).add((short) 6,
         KMByteTag.instance(KMType.ATTESTATION_ID_MEID,
             KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
-    KMArray.cast(arrPtr).add((short) 6,
+    KMArray.cast(arrPtr).add((short) 7,
         KMByteTag.instance(KMType.ATTESTATION_ID_MANUFACTURER,
             KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
-    KMArray.cast(arrPtr).add((short) 7,
+    KMArray.cast(arrPtr).add((short) 8,
         KMByteTag.instance(KMType.ATTESTATION_ID_SERIAL,
             KMByteBlob.instance(buf, (short) 0, (short) buf.length)));
     short keyParams = KMKeyParameters.instance(arrPtr);

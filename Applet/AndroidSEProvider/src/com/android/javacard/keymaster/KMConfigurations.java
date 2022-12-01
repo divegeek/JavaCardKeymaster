@@ -23,5 +23,6 @@ public class KMConfigurations {
   // If the size of the attestation ids is known and lesser than 64
   // then reduce the size here. It reduces the heap memory usage.
   public static final byte MAX_ATTESTATION_IDS_SIZE = 64;
+  // DER subject max length.
   public static final short MAX_SUBJECT_DER_LEN = 1095;
 }

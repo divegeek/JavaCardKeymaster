@@ -127,6 +127,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 	            KMType.ATTESTATION_ID_BRAND,
 	            KMType.ATTESTATION_ID_DEVICE,
 	            KMType.ATTESTATION_ID_IMEI,
+	            KMType.ATTESTATION_ID_SECOND_IMEI,
 	            KMType.ATTESTATION_ID_MANUFACTURER,
 	            KMType.ATTESTATION_ID_MEID,
 	            KMType.ATTESTATION_ID_MODEL,
@@ -3257,6 +3258,12 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
     data[CERTIFICATE] = KMArray.instance((short)0); //by default the cert is empty.
     data[ORIGIN] = KMType.IMPORTED;
+    //ID_IMEI should be present if ID_SECOND_IMEI is present
+    short attIdTag = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.ATTESTATION_ID_SECOND_IMEI, data[KEY_PARAMETERS]);
+    if (attIdTag != KMType.INVALID_VALUE) {
+        KMTag.assertPresence(data[KEY_PARAMETERS], KMType.BYTES_TAG, KMType.ATTESTATION_ID_IMEI,
+                KMError.CANNOT_ATTEST_IDS);
+    }
     importKey(apdu, keyFmt, scratchPad);
   }
 
@@ -3721,6 +3728,14 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (KMKeyParameters.hasUnsupportedTags(data[KEY_PARAMETERS])) {
       KMException.throwIt(KMError.UNSUPPORTED_TAG);
     }
+
+    //ID_IMEI should be present if ID_SECOND_IMEI is present
+    short attIdTag = KMKeyParameters.findTag(KMType.BYTES_TAG, KMType.ATTESTATION_ID_SECOND_IMEI, data[KEY_PARAMETERS]);
+    if (attIdTag != KMType.INVALID_VALUE) {
+        KMTag.assertPresence(data[KEY_PARAMETERS], KMType.BYTES_TAG, KMType.ATTESTATION_ID_IMEI,
+                KMError.CANNOT_ATTEST_IDS);
+    }
+
     short attKeyPurpose =
         KMKeyParameters.findTag(KMType.ENUM_ARRAY_TAG, KMType.PURPOSE, data[KEY_PARAMETERS]);
     // ATTEST_KEY cannot be combined with any other purpose.

@@ -106,19 +106,19 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final short[] hwTagIds = {
       KMType.BOOT_PATCH_LEVEL, KMType.VENDOR_PATCH_LEVEL,
       KMType.ATTESTATION_ID_MODEL, KMType.ATTESTATION_ID_MANUFACTURER,
-      KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI,
+      KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI, KMType.ATTESTATION_ID_SECOND_IMEI,
       KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
       KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
       KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
-      KMType.ORIGIN,  KMType.UNLOCKED_DEVICE_REQUIRED,
+      KMType.ORIGIN, KMType.UNLOCKED_DEVICE_REQUIRED,
       KMType.TRUSTED_CONFIRMATION_REQUIRED,
       KMType.AUTH_TIMEOUT, KMType.USER_AUTH_TYPE,
       KMType.NO_AUTH_REQUIRED, KMType.EARLY_BOOT_ONLY,
       KMType.ROLLBACK_RESISTANCE, KMType.RSA_OAEP_MGF_DIGEST,
       KMType.RSA_PUBLIC_EXPONENT, KMType.ECCURVE,
       KMType.PADDING, KMType.DIGEST,
-      KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE 
-   };
+      KMType.KEYSIZE, KMType.ALGORITHM, KMType.PURPOSE
+  };
 
   private static final byte keyUsageSign = (byte) 0x80; // 0 bit
   private static final byte keyUsageKeyEncipher = (byte) 0x20; // 2nd- bit
@@ -167,14 +167,14 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   private static KMAttestationCert inst;
   private static KMSEProvider seProvider;
- 
+
   private static short[] indexes;
   private static byte[] states;
-  
+
   private static byte[] stack;
-  private static short[] swParams; 
+  private static short[] swParams;
   private static short[] hwParams;
- 
+
   private static final byte SERIAL_NUM_MAX_LEN = 20;
 
   private KMAttestationCertImpl() {
@@ -184,7 +184,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     if (inst == null) {
       inst = new KMAttestationCertImpl();
       seProvider = provider;
-      
+
       // Allocate transient memory
       indexes = JCSystem.makeTransientShortArray(NUM_INDEX_ENTRIES, JCSystem.CLEAR_ON_RESET);
       states = JCSystem.makeTransientByteArray(NUM_STATE_ENTRIES, JCSystem.CLEAR_ON_RESET);
@@ -923,13 +923,13 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   @Override
   public void build() {
-    if(states[CERT_MODE] == KMType.FAKE_CERT) {
+    if (states[CERT_MODE] == KMType.FAKE_CERT) {
       build(KMType.INVALID_VALUE, KMType.INVALID_VALUE, true, true);
     } else {
       build(indexes[CERT_ATT_KEY_SECRET], indexes[CERT_ATT_KEY_RSA_PUB_MOD], (states[CERT_RSA_SIGN] == 0 ? false: true), false);
     }
   }
-  
+
   @Override
   public KMAttestationCert makeUniqueId(byte[] scratchPad, short scratchPadOff,
       byte[] creationTime, short timeOffset, short creationTimeLen,
@@ -978,12 +978,12 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   public boolean serialNumber(short number) {
     // https://datatracker.ietf.org/doc/html/rfc5280#section-4.1.2.2
     short length = KMByteBlob.cast(number).length();
-    if(length > SERIAL_NUM_MAX_LEN) {
+    if (length > SERIAL_NUM_MAX_LEN) {
       return false;
     }
     // The serial number Must be a positive integer.
     byte msb = KMByteBlob.cast(number).get((short) 0);
-    if(msb < 0 && length > (SERIAL_NUM_MAX_LEN -1)) {
+    if (msb < 0 && length > (SERIAL_NUM_MAX_LEN - 1)) {
       return false;
     }
     indexes[SERIAL_NUMBER] = number;
@@ -992,7 +992,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   @Override
   public boolean subjectName(short sub) {
-    if(sub == KMType.INVALID_VALUE || KMByteBlob.cast(sub).length() == 0) return false;
+    if (sub == KMType.INVALID_VALUE || KMByteBlob.cast(sub).length() == 0) return false;
     indexes[SUBJECT_NAME] = sub;
     return true;
   }

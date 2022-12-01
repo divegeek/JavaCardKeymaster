@@ -161,7 +161,7 @@ public class KMAndroidSEApplet extends KMKeymasterApplet implements OnUpgradeLis
           case INS_PROVISION_SECURE_BOOT_MODE_CMD:
             processSecureBootCmd(apdu);
             break;
-        
+
           default:
             super.process(apdu);
             break;

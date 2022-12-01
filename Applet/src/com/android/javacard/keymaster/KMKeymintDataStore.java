@@ -95,6 +95,7 @@ public class KMKeymintDataStore implements KMUpgradable {
   private byte[] attIdProduct;
   private byte[] attIdSerial;
   private byte[] attIdImei;
+  private byte[] attIdSecondImei;
   private byte[] attIdMeId;
   private byte[] attIdManufacturer;
   private byte[] attIdModel;
@@ -651,6 +652,10 @@ public class KMKeymintDataStore implements KMUpgradable {
       case KMType.ATTESTATION_ID_IMEI:
     	attestId = attIdImei;
     	break;
+      // Attestation Id SECOND IMEI
+      case KMType.ATTESTATION_ID_SECOND_IMEI:
+        attestId = attIdSecondImei;
+        break;
       // Attestation Id MEID
       case KMType.ATTESTATION_ID_MEID:
     	attestId = attIdMeId;
@@ -708,6 +713,13 @@ public class KMKeymintDataStore implements KMUpgradable {
     	Util.arrayCopyNonAtomic(buffer, (short) start, attIdImei, (short) 0, length);
     	JCSystem.commitTransaction();        
         break;
+      // Attestation Id SECOND IMEI
+      case KMType.ATTESTATION_ID_SECOND_IMEI:
+        JCSystem.beginTransaction();
+        attIdSecondImei = new byte[length];
+        Util.arrayCopyNonAtomic(buffer, (short) start, attIdSecondImei, (short) 0, length);
+        JCSystem.commitTransaction();
+        break;
       // Attestation Id MEID
       case KMType.ATTESTATION_ID_MEID:
     	JCSystem.beginTransaction();
@@ -738,6 +750,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     attIdProduct = null;
     attIdSerial = null;
     attIdImei = null;
+    attIdSecondImei = null;
     attIdMeId = null;
     attIdManufacturer = null;
     attIdModel = null;
@@ -884,6 +897,7 @@ public class KMKeymintDataStore implements KMUpgradable {
     element.write(attIdProduct);
     element.write(attIdSerial);
     element.write(attIdImei);
+    element.write(attIdSecondImei);
     element.write(attIdMeId);
     element.write(attIdManufacturer);
     element.write(attIdModel);
@@ -963,6 +977,9 @@ public class KMKeymintDataStore implements KMUpgradable {
     attIdProduct = (byte[]) element.readObject();
     attIdSerial = (byte[]) element.readObject();
     attIdImei = (byte[]) element.readObject();
+    if (oldVersion >= KM_APPLET_PACKAGE_VERSION_3) {
+        attIdSecondImei = (byte[]) element.readObject();
+    }
     attIdMeId = (byte[]) element.readObject();
     attIdManufacturer = (byte[]) element.readObject();
     attIdModel = (byte[]) element.readObject();

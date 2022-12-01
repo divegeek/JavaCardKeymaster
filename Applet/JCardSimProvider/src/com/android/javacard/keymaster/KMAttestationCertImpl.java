@@ -20,6 +20,7 @@ import com.android.javacard.seprovider.KMAttestationCert;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMMasterKey;
 import com.android.javacard.seprovider.KMSEProvider;
+
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
@@ -105,7 +106,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final short[] hwTagIds = {
       KMType.BOOT_PATCH_LEVEL, KMType.VENDOR_PATCH_LEVEL,
       KMType.ATTESTATION_ID_MODEL, KMType.ATTESTATION_ID_MANUFACTURER,
-      KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI,
+      KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI, KMType.ATTESTATION_ID_SECOND_IMEI,
       KMType.ATTESTATION_ID_SERIAL, KMType.ATTESTATION_ID_PRODUCT,
       KMType.ATTESTATION_ID_DEVICE, KMType.ATTESTATION_ID_BRAND,
       KMType.OS_PATCH_LEVEL, KMType.OS_VERSION, KMType.ROOT_OF_TRUST,
@@ -128,7 +129,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final short KEYMINT_VERSION = 300;
   private static final short ATTESTATION_VERSION = 300;
   private static final byte[] pubExponent = {0x01, 0x00, 0x01};
-  private static final byte SERIAL_NUM = (byte) 0x01;
   private static final byte X509_VERSION = (byte) 0x02;
 
   // Buffer indexes in transient array
@@ -349,8 +349,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       pushEccSubjectKeyInfo();
     }
     // subject
-    pushBytes(KMByteBlob.cast(indexes[SUBJECT_NAME]).getBuffer(),
-        KMByteBlob.cast(indexes[SUBJECT_NAME]).getStartOff(),
+    pushBytes(KMByteBlob.cast(indexes[SUBJECT_NAME]).getBuffer(), KMByteBlob.cast(indexes[SUBJECT_NAME]).getStartOff(),
         KMByteBlob.cast(indexes[SUBJECT_NAME]).length());
     pushValidity();
     // issuer - der encoded
@@ -365,8 +364,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       pushAlgorithmId(X509EcdsaSignAlgIdentifier);
     }
     // Serial Number
-    pushBytes(KMByteBlob.cast(indexes[SERIAL_NUMBER]).getBuffer(),
-        KMByteBlob.cast(indexes[SERIAL_NUMBER]).getStartOff(),
+    pushBytes(KMByteBlob.cast(indexes[SERIAL_NUMBER]).getBuffer(), KMByteBlob.cast(indexes[SERIAL_NUMBER]).getStartOff(),
         KMByteBlob.cast(indexes[SERIAL_NUMBER]).length());
     pushIntegerHeader(KMByteBlob.cast(indexes[SERIAL_NUMBER]).length());
     // Version
@@ -896,36 +894,18 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       // Sign with the attestation key
       // The pubKey is the modulus.
       if (rsaSign) {
-        sigLen = seProvider
-            .rsaSign256Pkcs1(
-                KMByteBlob.cast(attSecret).getBuffer(),
-                KMByteBlob.cast(attSecret).getStartOff(),
-                KMByteBlob.cast(attSecret).length(),
-                KMByteBlob.cast(attMod).getBuffer(),
-                KMByteBlob.cast(attMod).getStartOff(),
-                KMByteBlob.cast(attMod).length(),
-                stack,
-                indexes[TBS_START],
-                indexes[TBS_LENGTH],
-                stack,
-                signatureOffset);
-        if (sigLen > RSA_SIG_LEN) {
+        sigLen = seProvider.rsaSign256Pkcs1(KMByteBlob.cast(attSecret).getBuffer(),
+            KMByteBlob.cast(attSecret).getStartOff(), KMByteBlob.cast(attSecret).length(),
+            KMByteBlob.cast(attMod).getBuffer(), KMByteBlob.cast(attMod).getStartOff(),
+            KMByteBlob.cast(attMod).length(), stack, indexes[TBS_START], indexes[TBS_LENGTH], stack, signatureOffset);
+        if (sigLen > RSA_SIG_LEN)
           KMException.throwIt(KMError.UNKNOWN_ERROR);
-        }
       } else {
-        sigLen = seProvider
-            .ecSign256(
-                KMByteBlob.cast(attSecret).getBuffer(),
-                KMByteBlob.cast(attSecret).getStartOff(),
-                KMByteBlob.cast(attSecret).length(),
-                stack,
-                indexes[TBS_START],
-                indexes[TBS_LENGTH],
-                stack,
-                signatureOffset);
-        if (sigLen > ECDSA_MAX_SIG_LEN) {
+        sigLen = seProvider.ecSign256(KMByteBlob.cast(attSecret).getBuffer(), KMByteBlob.cast(attSecret).getStartOff(),
+            KMByteBlob.cast(attSecret).length(), stack, indexes[TBS_START], indexes[TBS_LENGTH], stack,
+            signatureOffset);
+        if (sigLen > ECDSA_MAX_SIG_LEN)
           KMException.throwIt(KMError.UNKNOWN_ERROR);
-        }
       }
       // Adjust signature length
       indexes[STACK_PTR] = signatureOffset;
@@ -946,8 +926,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
     if (states[CERT_MODE] == KMType.FAKE_CERT) {
       build(KMType.INVALID_VALUE, KMType.INVALID_VALUE, true, true);
     } else {
-      build(indexes[CERT_ATT_KEY_SECRET], indexes[CERT_ATT_KEY_RSA_PUB_MOD],
-          (states[CERT_RSA_SIGN] == 0 ? false : true), false);
+      build(indexes[CERT_ATT_KEY_SECRET], indexes[CERT_ATT_KEY_RSA_PUB_MOD], (states[CERT_RSA_SIGN] == 0 ? false: true), false);
     }
   }
 
@@ -1013,9 +992,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   @Override
   public boolean subjectName(short sub) {
-    if (sub == KMType.INVALID_VALUE || KMByteBlob.cast(sub).length() == 0) {
-      return false;
-    }
+    if (sub == KMType.INVALID_VALUE || KMByteBlob.cast(sub).length() == 0) return false;
     indexes[SUBJECT_NAME] = sub;
     return true;
   }
