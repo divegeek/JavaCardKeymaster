@@ -339,7 +339,8 @@ public class KMPoolManager {
       KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
     }
     KMKeyObject ptr = new KMKeyObject();
-    ptr.setKeyObjectData(alg, keyObject);
+    ptr.algorithm = alg;
+    ptr.keyObjectInst = keyObject;
     return ptr;
   }
 
@@ -529,7 +530,7 @@ public class KMPoolManager {
         break;
       }
       keyObject = (KMKeyObject) keysPool[index];
-      if (algo == keyObject.getAlgorithm()) {
+      if (algo == keyObject.algorithm) {
         // Check if the Object instance is not busy and free to use.
         if (!isResourceBusy(keyObject, RESOURCE_TYPE_KEY)) {
           break;

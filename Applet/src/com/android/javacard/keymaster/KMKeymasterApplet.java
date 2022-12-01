@@ -1358,6 +1358,15 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     if (!KMEnumArrayTag.contains(KMType.PURPOSE, KMType.WRAP_KEY, data[HW_PARAMETERS])) {
       KMException.throwIt((KMError.INCOMPATIBLE_PURPOSE));
     }
+
+    // Check that the digest and padding mode specified in unwrapping  parameters are SHA2_256
+    // and RSA_OAEP respectively.
+    if (!KMEnumArrayTag.contains(KMType.DIGEST, KMType.SHA2_256, data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.INCOMPATIBLE_DIGEST);
+    }
+    if (!KMEnumArrayTag.contains(KMType.PADDING, KMType.RSA_OAEP, data[KEY_PARAMETERS])) {
+      KMException.throwIt(KMError.INCOMPATIBLE_PADDING_MODE);
+    }
   }
 
   private short decryptTransportKey(short privExp, short modulus, short transportKey, byte[] scratchPad){
@@ -3542,7 +3551,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // check the keysize tag if present in key parameters.
     short keysize =
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.KEYSIZE, data[KEY_PARAMETERS]);
-    short kSize = (short) (KMByteBlob.length(data[SECRET]) * 8);
+    short kSize = (short) (KMByteBlob.length(data[PUB_KEY]) * 8);
     if (keysize != KMType.INVALID_VALUE) {
       if (keysize != 2048 || (keysize != kSize)) {
         KMException.throwIt(KMError.IMPORT_PARAMETER_MISMATCH);

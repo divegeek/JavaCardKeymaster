@@ -125,10 +125,8 @@ public class KMRsaOAEPEncoding extends Cipher {
     if (len != 256 || outBuff[0] != 0) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
-    inBuff = outBuff;
-    inOffset = (short) (outOffset + 1);
-    return rsaOAEPDecode(inBuff, inOffset, (short) (len - 1), outBuff,
-        outOffset);
+    Util.arrayCopyNonAtomic(outBuff, (short) (outOffset + 1), outBuff, (short) 0, (short) (len -1));
+    return rsaOAEPDecode(outBuff, (short) 0, (short) (len - 1));
 
   }
 
@@ -177,7 +175,7 @@ public class KMRsaOAEPEncoding extends Cipher {
   }
 
   private short rsaOAEPDecode(byte[] encodedMsg, short encodedMsgOff,
-      short encodedMsgLen, byte[] msg, short offset) {
+      short encodedMsgLen) {
     MessageDigest.OneShot md = null;
     byte[] tmpArray = KMAndroidSEProvider.getInstance().tmpArray;
 
@@ -232,22 +230,26 @@ public class KMRsaOAEPEncoding extends Cipher {
       // encoding parameters is calculated and then copied from the
       // starting of the block and a variable length of 0's are
       // appended to the end of the hash till the 0x01 byte.
-      short start = 0;
+      short start = (short) (encodedMsgOff + encodedMsgLen);
       for (short i = (short) (encodedMsgOff + 2 * hLen);
           i < (short) (encodedMsgOff + encodedMsgLen); i++) {
-        if (i == (short) ((encodedMsgOff + encodedMsgLen) - 1)) {
-          // Bad Padding.
-          CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
-        }
-        if (encodedMsg[i] != 0) {
+        if ((encodedMsg[i] != 0)) {
           start = i;
           break;
         }
       }
-      // Copy the message
-      Util.arrayCopyNonAtomic(encodedMsg, (short) (start + 1), msg, offset,
-          (short) (encodedMsgLen - ((start - encodedMsgOff) + 1)));
-      return (short) (encodedMsgLen - ((start - encodedMsgOff) + 1));
+      if ((start >= (short)(encodedMsgOff + encodedMsgLen)) ||
+          (encodedMsg[start] != 0x01)) {
+        // Bad Padding.
+        CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+      }
+      start++; // Message starting pos.
+      if (start < (short)(encodedMsgOff + encodedMsgLen)) {
+        // Copy the message
+        Util.arrayCopyNonAtomic(encodedMsg, start, encodedMsg, encodedMsgOff,
+            (short) (encodedMsgLen - (start - encodedMsgOff)));
+      }
+      return (short) (encodedMsgLen - (start - encodedMsgOff));
 
     } finally {
       if (md != null) {
