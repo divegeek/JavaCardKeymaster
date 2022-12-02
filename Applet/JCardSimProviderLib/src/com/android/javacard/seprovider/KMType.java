@@ -281,6 +281,8 @@ public abstract class KMType {
   public static final short ATTESTATION_ID_SERIAL = (short) 0x02C9;
   // Attestation Id IMEI
   public static final short ATTESTATION_ID_IMEI = (short) 0x02CA;
+  //Attestation Id SECOND IMEI
+  public static final short ATTESTATION_ID_SECOND_IMEI = (short) 0x02D3;
   // Attestation Id MEID
   public static final short ATTESTATION_ID_MEID = (short) 0x02CB;
   // Attestation Id Manufacturer
@@ -345,4 +347,5 @@ public abstract class KMType {
   public static final byte BUF_RSA_NO_DIGEST = 1;
   public static final byte BUF_EC_NO_DIGEST = 2;
   public static final byte BUF_BLOCK_ALIGN = 3;
+
 }

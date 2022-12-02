@@ -128,6 +128,7 @@ public class KMByteTag extends KMTag {
       case ATTESTATION_ID_PRODUCT:
       case ATTESTATION_ID_SERIAL:
       case ATTESTATION_ID_IMEI:
+      case ATTESTATION_ID_SECOND_IMEI:
       case ATTESTATION_ID_MEID:
       case ATTESTATION_ID_MANUFACTURER:
       case ATTESTATION_ID_MODEL:

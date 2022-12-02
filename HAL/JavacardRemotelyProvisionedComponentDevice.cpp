@@ -62,6 +62,7 @@ ScopedAStatus defaultHwInfo(RpcHardwareInfo* info) {
     info->rpcAuthorName = "Google";
     info->supportedEekCurve = RpcHardwareInfo::CURVE_P256;
     info->uniqueId = "strongbox keymint";
+    info->supportedNumKeysInCsr = RpcHardwareInfo::MIN_SUPPORTED_NUM_KEYS_IN_CSR;
     return ScopedAStatus::ok();
 }
 
@@ -91,11 +92,13 @@ JavacardRemotelyProvisionedComponentDevice::getHardwareInfo(RpcHardwareInfo* inf
     std::optional<uint32_t> optSupportedEekCurve;
     std::optional<string> optRpcAuthorName;
     std::optional<string> optUniqueId;
+    std::optional<uint32_t> optMinSupportedKeysInCsr;
     if (err != KM_ERROR_OK ||
         !(optVersionNumber = cbor_.getUint64<uint32_t>(item, 1)) ||
         !(optRpcAuthorName = cbor_.getByteArrayStr(item, 2)) ||
         !(optSupportedEekCurve = cbor_.getUint64<uint32_t>(item, 3)) ||
-        !(optUniqueId = cbor_.getByteArrayStr(item, 4))) {
+        !(optUniqueId = cbor_.getByteArrayStr(item, 4)) ||
+        !(optMinSupportedKeysInCsr = cbor_.getUint64<uint32_t>(item, 5))) {
         LOG(ERROR) << "Error in response of getHardwareInfo.";
         LOG(INFO) << "Returning defaultHwInfo in getHardwareInfo.";
         return defaultHwInfo(info);
@@ -104,6 +107,7 @@ JavacardRemotelyProvisionedComponentDevice::getHardwareInfo(RpcHardwareInfo* inf
     info->versionNumber = static_cast<int32_t>(std::move(optVersionNumber.value()));
     info->supportedEekCurve = static_cast<int32_t>(std::move(optSupportedEekCurve.value()));
     info->uniqueId = std::move(optUniqueId.value());
+    info->supportedNumKeysInCsr = static_cast<int32_t>(std::move(optMinSupportedKeysInCsr.value()));
     return ScopedAStatus::ok();
 }
 
@@ -298,16 +302,20 @@ JavacardRemotelyProvisionedComponentDevice::generateCertificateRequestV2(
             .add(csrPayloadSchemaVersion)
             .add(certificateType)
             .add(EncodedItem(deviceInfo.deviceInfo)) // deviceinfo
-            .add(challenge)  // Challenge
             .add(std::move(coseKeys))  // KeysToSign
+            .encode();
+
+    auto signDataPayload = cppbor::Array()
+            .add(challenge)  // Challenge
+            .add(std::move(payload))
             .encode();
 
     auto signedData = cppbor::Array()
         .add(std::move(coseEncryptProtectedHeader))
         .add(cppbor::Map() /* unprotected parameters */)
-        .add(std::move(payload))
+        .add(std::move(signDataPayload))
         .add(std::move(signature));
-    
+
     *csr = cppbor::Array()
         .add(version)
         .add(EncodedItem(udsCertChain))
