@@ -119,13 +119,6 @@ public class KMDecoder {
         return decodeHmacSharingParam(exp);
       case KMType.HW_AUTH_TOKEN_TYPE:
         return decodeHwAuthToken(exp);
-      case KMType.COSE_KEY_TYPE:
-      case KMType.COSE_HEADERS_TYPE:
-      case KMType.COSE_CERT_PAYLOAD_TYPE:
-        return decodeCoseMap(exp);
-      case KMType.COSE_PAIR_TAG_TYPE:
-        short tagValueType = KMCosePairTagType.getTagValueType(exp);
-        return decodeCosePairTag(tagValueType, exp);
       case KMType.TAG_TYPE:
         short tagType = KMTag.getTagType(exp);
         return decodeTag(tagType, exp);
@@ -178,159 +171,6 @@ public class KMDecoder {
   private short decodeKeyChar(short exp) {
     short vals = decode(KMKeyCharacteristics.cast(exp).getVals());
     return KMKeyCharacteristics.instance(vals);
-  }
-
-  private short decodeCosePairKey(short exp) {
-    byte[] buffer = (byte[]) bufferRef[0];
-    short startOff = scratchBuf[START_OFFSET];
-    short keyPtr = (short) 0;
-    // Cose Key should be always either UINT or Negative int
-    if ((buffer[startOff] & MAJOR_TYPE_MASK) == UINT_TYPE) {
-      keyPtr = decodeInteger(exp);
-    } else if ((buffer[startOff] & MAJOR_TYPE_MASK) == NEG_INT_TYPE) {
-      keyPtr = decodeNegInteger(exp);
-    } else {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    return keyPtr;
-  }
-
-  private short decodeCosePairSimpleValueTag(short exp) {
-    short keyPtr = decodeCosePairKey((KMCosePairSimpleValueTag.cast(exp).getKeyPtr()));
-    short valuePtr = decode(KMCosePairSimpleValueTag.cast(exp).getValuePtr());
-    return KMCosePairSimpleValueTag.instance(keyPtr, valuePtr);
-  }
-
-  private short decodeCosePairIntegerValueTag(short exp) {
-    short keyPtr = decodeCosePairKey((KMCosePairIntegerTag.cast(exp).getKeyPtr()));
-    short valuePtr = decode(KMCosePairIntegerTag.cast(exp).getValuePtr());
-    return KMCosePairIntegerTag.instance(keyPtr, valuePtr);
-  }
-
-  private short decodeCosePairNegIntegerTag(short exp) {
-    short keyPtr = decodeCosePairKey((KMCosePairNegIntegerTag.cast(exp).getKeyPtr()));
-    short valuePtr = decode(KMCosePairNegIntegerTag.cast(exp).getValuePtr());
-    return KMCosePairNegIntegerTag.instance(keyPtr, valuePtr);
-  }
-
-  private short decodeCosePairTxtStringTag(short exp) {
-    short keyPtr = decodeCosePairKey((KMCosePairTextStringTag.cast(exp).getKeyPtr()));
-    short valuePtr = decode(KMCosePairTextStringTag.cast(exp).getValuePtr());
-    return KMCosePairTextStringTag.instance(keyPtr, valuePtr);
-  }
-
-  private short decodeCosePairCoseKeyTag(short exp) {
-    short keyPtr = decodeCosePairKey((KMCosePairCoseKeyTag.cast(exp).getKeyPtr()));
-    short valuePtr = decode(KMCosePairCoseKeyTag.cast(exp).getValuePtr());
-    return KMCosePairCoseKeyTag.instance(keyPtr, valuePtr);
-  }
-
-  private short decodeCosePairByteBlobTag(short exp) {
-    short keyPtr = decodeCosePairKey((KMCosePairByteBlobTag.cast(exp).getKeyPtr()));
-    short valuePtr = decode(KMCosePairByteBlobTag.cast(exp).getValuePtr());
-    return KMCosePairByteBlobTag.instance(keyPtr, valuePtr);
-  }
-
-  private short peekCosePairTagType() {
-    byte[] buffer = (byte[]) bufferRef[0];
-    short startOff = scratchBuf[START_OFFSET];
-    // Cose Key should be always either UINT or Negative int
-    if ((buffer[startOff] & MAJOR_TYPE_MASK) != UINT_TYPE &&
-        (buffer[startOff] & MAJOR_TYPE_MASK) != NEG_INT_TYPE) {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-
-    short additionalMask = (short) (buffer[startOff] & ADDITIONAL_MASK);
-    short increment = 0;
-    if (additionalMask < UINT8_LENGTH) {
-      increment++;
-    } else if (additionalMask == UINT8_LENGTH) {
-      increment += 2;
-    } else if (additionalMask == UINT16_LENGTH) {
-      increment += 3;
-    } else if (additionalMask == UINT32_LENGTH) {
-      increment += 5;
-    } else {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    short majorType = (short) (buffer[(short) (startOff + increment)] & MAJOR_TYPE_MASK);
-    short tagValueType = 0;
-    if (majorType == BYTES_TYPE) {
-      tagValueType = KMType.COSE_PAIR_BYTE_BLOB_TAG_TYPE;
-    } else if (majorType == UINT_TYPE) {
-      tagValueType = KMType.COSE_PAIR_INT_TAG_TYPE;
-    } else if (majorType == NEG_INT_TYPE) {
-      tagValueType = KMType.COSE_PAIR_NEG_INT_TAG_TYPE;
-    } else if (majorType == MAP_TYPE) {
-      tagValueType = KMType.COSE_PAIR_COSE_KEY_TAG_TYPE;
-    } else if (majorType == SIMPLE_VALUE_TYPE) {
-      tagValueType = KMType.COSE_PAIR_SIMPLE_VALUE_TAG_TYPE;
-    } else if (majorType == TSTR_TYPE) {
-      tagValueType = KMType.COSE_PAIR_TEXT_STR_TAG_TYPE;
-    }else {
-      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    return tagValueType;
-  }
-
-  private short decodeCosePairTag(short tagValueType, short exp) {
-    switch (tagValueType) {
-      case KMType.COSE_PAIR_BYTE_BLOB_TAG_TYPE:
-        return decodeCosePairByteBlobTag(exp);
-      case KMType.COSE_PAIR_NEG_INT_TAG_TYPE:
-        return decodeCosePairNegIntegerTag(exp);
-      case KMType.COSE_PAIR_INT_TAG_TYPE:
-        return decodeCosePairIntegerValueTag(exp);
-      case KMType.COSE_PAIR_SIMPLE_VALUE_TAG_TYPE:
-        return decodeCosePairSimpleValueTag(exp);
-      case KMType.COSE_PAIR_COSE_KEY_TAG_TYPE:
-        return decodeCosePairCoseKeyTag(exp);
-      case KMType.COSE_PAIR_TEXT_STR_TAG_TYPE:
-        return decodeCosePairTxtStringTag(exp);
-      default:
-        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-        return 0;
-    }
-  }
-
-  private short decodeCoseMap(short exp) {
-    short payloadLength = readMajorTypeWithPayloadLength(MAP_TYPE);
-    // get allowed key pairs
-    short allowedKeyPairs = KMCoseMap.getVals(exp);
-    short vals = KMArray.instance(payloadLength);
-    short length = KMArray.cast(allowedKeyPairs).length();
-    short index = 0;
-    boolean tagFound;
-    short tagInd;
-    short cosePairTagType;
-    short tagClass;
-    short allowedType;
-    short obj;
-
-    // For each tag in payload ...
-    while (index < payloadLength) {
-      tagFound = false;
-      tagInd = 0;
-      cosePairTagType = peekCosePairTagType();
-      // Check against the allowed tags ...
-      while (tagInd < length) {
-        tagClass = KMArray.cast(allowedKeyPairs).get(tagInd);
-        allowedType = KMCosePairTagType.getTagValueType(tagClass);
-        if (allowedType == cosePairTagType) {
-          obj = decode(tagClass);
-          KMArray.cast(vals).add(index, obj);
-          tagFound = true;
-          break;
-        }
-        tagInd++;
-      }
-      if (!tagFound) {
-        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-      } else {
-        index++;
-      }
-    }
-    return KMCoseMap.createInstanceFromType(exp, vals);
   }
 
   private short decodeKeyParam(short exp) {
@@ -760,5 +600,34 @@ public class KMDecoder {
     scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
     readMajorTypeWithPayloadLength(BYTES_TYPE);
     return (short) (scratchBuf[START_OFFSET] - bufOffset);
+  }
+  
+  // Reads the offset and length values of the ByteBlobs from a CBOR array buffer.
+  // CertificateData = [
+  //     X509CertifcateChain: bstr,   ; DER encoded X.509 certificate chain ordered from Leaf to Root. 
+  //     Issuer: bstr,  ; DER encoded subject field
+  //     Expiry: bstr
+  // ]
+  public void decodeCertificateData(short expectedArrLen, byte[] buf, short bufOffset, short bufLen,
+      byte[] out, short outOff) {
+    bufferRef[0] = buf;
+    scratchBuf[START_OFFSET] = bufOffset;
+    scratchBuf[LEN_OFFSET] = (short) (bufOffset + bufLen);
+    short byteBlobLength = 0;
+    // Read Array length
+    short payloadLength = readMajorTypeWithPayloadLength(ARRAY_TYPE);
+    if (expectedArrLen != payloadLength) {
+      ISOException.throwIt(ISO7816.SW_DATA_INVALID);
+    }
+    short index = 0;
+    while (index < payloadLength) {
+      incrementStartOff(byteBlobLength);
+      byteBlobLength = readMajorTypeWithPayloadLength(BYTES_TYPE);
+      Util.setShort(out, outOff, scratchBuf[START_OFFSET]); // offset
+      outOff += 2;
+      Util.setShort(out, outOff, byteBlobLength); // length
+      outOff += 2;
+      index++;
+    }    
   }
 }

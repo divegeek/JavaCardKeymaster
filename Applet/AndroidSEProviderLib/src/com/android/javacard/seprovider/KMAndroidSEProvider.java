@@ -595,11 +595,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
 	  short cipherAlg = mapCipherAlg((byte) alg, (byte) padding, (byte) blockMode, (byte) 0);	  
 	  KMOperation operation = null;
-	  if (isRkp) {
-	    operation = poolMgr.getRKpOperation(purpose, cipherAlg, alg, padding, blockMode, macLength);
-	  } else {
-	    operation = poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, secretLength, false);
-	  }
+	  operation = poolMgr.getOperationImpl(purpose, cipherAlg, alg, padding, blockMode, macLength, secretLength, false);
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
     Key key = (Key)keyObj.keyObjectInst;
@@ -625,13 +621,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
     if (digest != KMType.SHA2_256) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
-    if (isRkp) {
-      operation = poolMgr.getRKpOperation(purpose, Signature.ALG_HMAC_SHA_256, KMType.HMAC,
-          KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE);
-    } else {
-      operation = poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
+    
+    operation = poolMgr.getOperationImpl(purpose, Signature.ALG_HMAC_SHA_256,
           KMType.HMAC, KMType.INVALID_VALUE, KMType.INVALID_VALUE, KMType.INVALID_VALUE, (short)0, false);
-    }
     // Get the KeyObject from the operation and update the key with the secret key material.
     KMKeyObject keyObj = operation.getKeyObject();
     HMACKey key = (HMACKey)keyObj.keyObjectInst;
@@ -654,29 +646,6 @@ public class KMAndroidSEProvider implements KMSEProvider {
     key.setKey(tmpArray, (short) 0, len);
     ((KMOperationImpl) operation).init(key, digest, null, (short) 0, (short) 0);
     return operation; 
-  }
-
-  @Override
-  public KMOperation getRkpOperation(byte purpose, byte alg,
-      byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart,
-      short keyLength, byte[] ivBuf, short ivStart, short ivLength,
-      short macLength) {
-    KMOperation opr = null;
-    switch (alg) {
-    case KMType.AES:
-      // Convert macLength to bytes
-      macLength = (short) (macLength / 8);
-      opr = createSymmetricCipher(alg, purpose, macLength, blockMode, padding, keyBuf, keyStart, keyLength, ivBuf,
-          ivStart, ivLength, true/* isRKP */);
-      break;
-    case KMType.HMAC:
-      opr = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart, keyLength, true/* isRKP */);
-      break;
-    default:
-      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-      break;
-    }
-    return opr;
   }
 
   @Override
@@ -974,7 +943,7 @@ public class KMAndroidSEProvider implements KMSEProvider {
 
   @Override
   public boolean isAttestationKeyProvisioned() {
-    return false;
+    return true;
   }
 
   @Override
@@ -1064,49 +1033,16 @@ public class KMAndroidSEProvider implements KMSEProvider {
   }
 
   @Override
-  public short ecSign256(KMDeviceUniqueKeyPair ecPrivKey, byte[] inputDataBuf,
-      short inputDataStart, short inputDataLength, byte[] outputDataBuf,
-      short outputDataStart) {
-    Signature.OneShot signer = null;
-    try {
-      signer = Signature.OneShot.open(MessageDigest.ALG_SHA_256,
-          Signature.SIG_CIPHER_ECDSA, Cipher.PAD_NULL);
-      signer.init(((KMECDeviceUniqueKey) ecPrivKey).ecKeyPair.getPrivate(), Signature.MODE_SIGN);
-      return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
-          outputDataBuf, outputDataStart);
-    } finally {
-      if (signer != null) {
-        signer.close();
-      }
-    }
-  }
-  
-  @Override
-  public KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(KMDeviceUniqueKeyPair key,
-      byte[] pubKey, short pubKeyOff, short pubKeyLen, byte[] privKey,
-      short privKeyOff, short privKeyLen) {
+  public KMAttestationKey createAttestationKey(KMAttestationKey key,
+      byte[] keyData, short offset, short length) {
     if (key == null) {
       KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
       poolMgr.initECKey(ecKeyPair);
-      key = new KMECDeviceUniqueKey(ecKeyPair);
+      key = new KMECPrivateKey(ecKeyPair);
     }
-    ECPrivateKey ecKeyPair = (ECPrivateKey) ((KMECDeviceUniqueKey) key).ecKeyPair.getPrivate();
-    ECPublicKey ecPublicKey = (ECPublicKey) ((KMECDeviceUniqueKey) key).ecKeyPair.getPublic();
-    ecKeyPair.setS(privKey, privKeyOff, privKeyLen);
-    ecPublicKey.setW(pubKey, pubKeyOff, pubKeyLen);
-    return (KMDeviceUniqueKeyPair) key;
-  }
-
-  @Override
-  public KMRkpMacKey createRkpMacKey(KMRkpMacKey rkpMacKey, byte[] keyData,
-      short offset, short length) {
-    if (rkpMacKey == null) {
-      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) (length * 8),
-          false);
-      rkpMacKey = new KMHmacKey(key);
-    }
-    ((KMHmacKey) rkpMacKey).hmacKey.setKey(keyData, offset, length);
-    return rkpMacKey;
+    ECPrivateKey ecKeyPair = (ECPrivateKey) ((KMECPrivateKey) key).ecKeyPair.getPrivate();
+    ecKeyPair.setS(keyData, offset, length);
+    return (KMAttestationKey) key;
   }
 
   @Override
@@ -1152,12 +1088,9 @@ public class KMAndroidSEProvider implements KMSEProvider {
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
         KMHmacKey.onSave(element, (KMHmacKey) object);
         break;
-      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
-        KMECDeviceUniqueKey.onSave(element, (KMECDeviceUniqueKey) object);
+      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
+        KMECPrivateKey.onSave(element, (KMECPrivateKey) object);
         break;
-      case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
-          KMHmacKey.onSave(element, (KMHmacKey) object);
-          break;
       default:
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
@@ -1176,16 +1109,14 @@ public class KMAndroidSEProvider implements KMSEProvider {
         return KMAESKey.onRestore((AESKey) element.readObject());
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
         return KMHmacKey.onRestore((HMACKey) element.readObject());
-      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
-        return KMECDeviceUniqueKey.onRestore((KeyPair) element.readObject());
-      case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
-          return KMHmacKey.onRestore((HMACKey) element.readObject());
+      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
+        return KMECPrivateKey.onRestore((KeyPair) element.readObject());
       default:
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     return null;
   }
-  
+
   @Override
   public short getBackupPrimitiveByteCount(byte interfaceType) {
     short primitiveCount = 1; // interface type
@@ -1196,11 +1127,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
         primitiveCount += KMHmacKey.getBackupPrimitiveByteCount();
         break;
-      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
-        primitiveCount += KMECDeviceUniqueKey.getBackupPrimitiveByteCount();
-        break;
-      case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
-        primitiveCount += KMHmacKey.getBackupPrimitiveByteCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
+        primitiveCount += KMECPrivateKey.getBackupPrimitiveByteCount();
         break;
       default:
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
@@ -1215,10 +1143,8 @@ public class KMAndroidSEProvider implements KMSEProvider {
         return KMAESKey.getBackupObjectCount();
       case KMDataStoreConstants.INTERFACE_TYPE_PRE_SHARED_KEY:
         return KMHmacKey.getBackupObjectCount();
-      case KMDataStoreConstants.INTERFACE_TYPE_DEVICE_UNIQUE_KEY_PAIR:
-        return KMECDeviceUniqueKey.getBackupObjectCount();
-      case KMDataStoreConstants.INTERFACE_TYPE_RKP_MAC_KEY:
-          return KMHmacKey.getBackupObjectCount();
+      case KMDataStoreConstants.INTERFACE_TYPE_ATTESTATION_KEY:
+        return KMECPrivateKey.getBackupObjectCount();
       default:
         ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }

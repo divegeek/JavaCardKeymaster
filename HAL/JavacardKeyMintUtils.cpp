@@ -22,6 +22,10 @@
 
 namespace aidl::android::hardware::security::keymint::km_utils {
 
+constexpr uint32_t TAG_SEQUENCE = 0x30;
+constexpr uint32_t LENGTH_MASK = 0x80;
+constexpr uint32_t LENGTH_VALUE_MASK = 0x7F;
+
 keymaster_key_param_t kInvalidTag{.tag = KM_TAG_INVALID, .integer = 0};
 
 KeyParameter kmEnumParam2Aidl(const keymaster_key_param_t& param) {
@@ -239,5 +243,57 @@ keymaster_key_param_set_t aidlKeyParams2Km(const vector<KeyParameter>& keyParams
 
     return set;
 }
+
+keymaster_error_t 
+getCertificateChain(std::vector<uint8_t>& chainBuffer, std::vector<Certificate>& certChain) {
+    uint8_t *data = chainBuffer.data();
+    int index = 0;
+    uint32_t length = 0;
+    while (index < chainBuffer.size()) {
+        std::vector<uint8_t> temp;
+        if(data[index] == TAG_SEQUENCE) {
+            // Short form. One octet. Bit 8 has value "0" and bits 7-1 give the length.
+            if (0 == (data[index+1] & LENGTH_MASK)) {
+                length = (uint32_t)data[index];
+                //Add SEQ and Length fields
+                length += 2;
+            } else {
+                // Long form. Two to 127 octets. Bit 8 of first octet has value "1" and
+                // bits 7-1 give the number of additional length octets. Second and following
+                // octets give the actual length.
+                int additionalBytes = data[index+1] & LENGTH_VALUE_MASK;
+                if (additionalBytes == 0x01) {
+                    length = data[index+2];
+                    //Add SEQ and Length fields
+                    length += 3;
+                } else if (additionalBytes == 0x02) {
+                    length = (data[index+2] << 8 | data[index+3]);
+                    //Add SEQ and Length fields
+                    length += 4;
+                } else if (additionalBytes == 0x04) {
+                    length = data[index+2] << 24;
+                    length |= data[index+3] << 16;
+                    length |= data[index+4] << 8;
+                    length |= data[index+5];
+                    //Add SEQ and Length fields
+                    length += 6;
+                } else {
+                    //Length is larger than uint32_t max limit.
+                    return KM_ERROR_UNKNOWN_ERROR;
+                }
+            }
+            temp.insert(temp.end(), (data+index), (data+index+length));
+            index += length;
+            Certificate certificate;
+            certificate.encodedCertificate = std::move(temp);
+            certChain.push_back(std::move(certificate));
+        } else {
+            //SEQUENCE TAG MISSING.
+            return KM_ERROR_UNKNOWN_ERROR;
+        }
+    }
+    return KM_ERROR_OK;
+}
+
 
 }  // namespace aidl::android::hardware::security::keymint

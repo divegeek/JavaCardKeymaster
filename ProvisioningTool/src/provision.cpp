@@ -212,8 +212,8 @@ int processInputFile() {
         return false;
     }
     if (!isSEFactoryProvisionLocked(provisionStatus) &&
-        ((0 != provisionData(pSocket, kDeviceUniqueKey)) ||
-        (0 != provisionData(pSocket, kAdditionalCertChain)))) {
+        ((0 != provisionData(pSocket, kAttestKey)) ||
+        (0 != provisionData(pSocket, kAttestCertChain)))) {
         return FAILURE;
     }
     if (!isOEMProvisionLocked(provisionStatus) &&

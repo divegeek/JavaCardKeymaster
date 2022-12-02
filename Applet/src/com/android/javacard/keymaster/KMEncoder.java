@@ -107,7 +107,6 @@ public class KMEncoder {
     return encode(object, buffer, startOff, bufLen, (short) (bufLen - startOff));
   }
 
-  //array{KMError.OK,Array{KMByteBlobs}}
   public short encodeCert(byte[] certBuffer, short bufferStart, short certStart, short certLength) {
     if (bufferStart > certStart) {
       ISOException.throwIt(ISO7816.SW_DATA_INVALID);
@@ -124,6 +123,34 @@ public class KMEncoder {
     }
     bufferStart = scratchBuf[START_OFFSET];
     writeMajorTypeWithLength(ARRAY_TYPE, (short) 1); // Array of 1 elements
+    writeMajorTypeWithLength(BYTES_TYPE, certLength); // Cert Byte Blob of length
+    return bufferStart;
+  }
+  
+  // [KMError.OK, CertChain]
+  public short encodeProvisionedCertChain(byte[] certBuffer, short bufferStart, short certStart, short certLength, short errInt32Ptr) {
+    bufferRef[0] = certBuffer;
+    scratchBuf[START_OFFSET] = certStart;
+    scratchBuf[LEN_OFFSET] = (short) (certStart + 1);
+    //Array header - 2 elements i.e. 1 byte
+    scratchBuf[START_OFFSET]--;
+    // Integer header + value
+    scratchBuf[START_OFFSET] -= getEncodedIntegerLength(errInt32Ptr);
+    // Cert Byte blob - typically 2 bytes length i.e. 3 bytes header
+    scratchBuf[START_OFFSET] -= 2;
+    if (certLength >= SHORT_PAYLOAD) {
+      scratchBuf[START_OFFSET]--;
+    }
+    if (scratchBuf[START_OFFSET] < bufferStart) {
+      ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+    }
+    bufferStart = scratchBuf[START_OFFSET];
+    writeMajorTypeWithLength(ARRAY_TYPE, (short) 2); // Array of 2 elements
+    encodeInteger(
+        KMInteger.cast(errInt32Ptr).getBuffer(),
+        KMInteger.cast(errInt32Ptr).length(),
+        KMInteger.cast(errInt32Ptr).getStartOff(), UINT_TYPE);
+    writeMajorTypeWithLength(ARRAY_TYPE, (short) 1); // Array of 1 element
     writeMajorTypeWithLength(BYTES_TYPE, certLength); // Cert Byte Blob of length
     return bufferStart;
   }
@@ -163,11 +190,6 @@ public class KMEncoder {
         case KMType.SEMANTIC_TAG_TYPE:
           encodeSemanticTag(exp);
           break;
-        case KMType.COSE_KEY_TYPE:
-        case KMType.COSE_HEADERS_TYPE:
-        case KMType.COSE_CERT_PAYLOAD_TYPE:
-          encodeCoseMap(exp);
-          break;
         case KMType.KEY_CHAR_TYPE:
           encodeKeyChar(exp);
           break;
@@ -184,82 +206,12 @@ public class KMEncoder {
           short tagType = KMTag.getTagType(exp);
           encodeTag(tagType, exp);
           break;
-        case KMType.COSE_PAIR_TAG_TYPE:
-          short cosePairTagType = KMCosePairTagType.getTagValueType(exp);
-          encodeCosePairTag(cosePairTagType, exp);
-          break;
         default:
           ISOException.throwIt(ISO7816.SW_DATA_INVALID);
       }
     }
   }
 
-  private void encodeCosePairIntegerTag(short exp) {
-    KMCosePairIntegerTag cosePairIntTag = KMCosePairIntegerTag.cast(exp);
-    // push key and value ptr in stack to get encoded.
-    encode(cosePairIntTag.getValuePtr());
-    encode(cosePairIntTag.getKeyPtr());
-  }
-
-  private void encodeCosePairByteBlobTag(short exp) {
-    KMCosePairByteBlobTag cosePairByteBlobTag = KMCosePairByteBlobTag.cast(exp);
-    // push key and value ptr in stack to get encoded.
-    encode(cosePairByteBlobTag.getValuePtr());
-    encode(cosePairByteBlobTag.getKeyPtr());
-  }
-
-  private void encodeCosePairCoseKeyTag(short exp) {
-    KMCosePairCoseKeyTag cosePairCoseKeyTag = KMCosePairCoseKeyTag.cast(exp);
-    // push key and value ptr in stack to get encoded.
-    encode(cosePairCoseKeyTag.getValuePtr());
-    encode(cosePairCoseKeyTag.getKeyPtr());
-  }
-
-  private void encodeCosePairTextStringTag(short exp) {
-    KMCosePairTextStringTag cosePairTextStringTag = KMCosePairTextStringTag.cast(exp);
-    // push key and value ptr in stack to get encoded.
-    encode(cosePairTextStringTag.getValuePtr());
-    encode(cosePairTextStringTag.getKeyPtr());
-  }
-
-  private void encodeCosePairSimpleValueTag(short exp) {
-    KMCosePairSimpleValueTag cosePairSimpleValueTag = KMCosePairSimpleValueTag.cast(exp);
-    // push key and value ptr in stack to get encoded.
-    encode(cosePairSimpleValueTag.getValuePtr());
-    encode(cosePairSimpleValueTag.getKeyPtr());
-  }
-
-  private void encodeCosePairNegIntegerTag(short exp) {
-    KMCosePairNegIntegerTag cosePairNegIntegerTag = KMCosePairNegIntegerTag.cast(exp);
-    // push key and value ptr in stack to get encoded.
-    encode(cosePairNegIntegerTag.getValuePtr());
-    encode(cosePairNegIntegerTag.getKeyPtr());
-  }
-
-  private void encodeCosePairTag(short tagType, short exp) {
-    switch (tagType) {
-      case KMType.COSE_PAIR_BYTE_BLOB_TAG_TYPE:
-        encodeCosePairByteBlobTag(exp);
-        return;
-      case KMType.COSE_PAIR_INT_TAG_TYPE:
-        encodeCosePairIntegerTag(exp);
-        return;
-      case KMType.COSE_PAIR_NEG_INT_TAG_TYPE:
-        encodeCosePairNegIntegerTag(exp);
-        return;
-      case KMType.COSE_PAIR_SIMPLE_VALUE_TAG_TYPE:
-        encodeCosePairSimpleValueTag(exp);
-        return;
-      case KMType.COSE_PAIR_TEXT_STR_TAG_TYPE:
-        encodeCosePairTextStringTag(exp);
-        return;
-      case KMType.COSE_PAIR_COSE_KEY_TAG_TYPE:
-        encodeCosePairCoseKeyTag(exp);
-        return;
-      default:
-        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-  }
 
   private void encodeTag(short tagType, short exp) {
     switch (tagType) {
@@ -290,10 +242,6 @@ public class KMEncoder {
       default:
         ISOException.throwIt(ISO7816.SW_DATA_INVALID);
     }
-  }
-
-  private void encodeCoseMap(short obj) {
-    encodeAsMap(KMCoseMap.getVals(obj));
   }
 
   private void encodeKeyParam(short obj) {
@@ -556,58 +504,10 @@ public void encodeArrayOnlyLength(short arrLength, byte[] buffer, short offset, 
       case KMType.MAP_TYPE:
         len += getEncodedMapLen(ptr);
         break;
-      case KMType.COSE_PAIR_TAG_TYPE:
-        short cosePairTagType = KMCosePairTagType.getTagValueType(ptr);
-        len += getEncodedCosePairTagLen(cosePairTagType, ptr);
-        break;
-      case KMType.COSE_KEY_TYPE:
-      case KMType.COSE_HEADERS_TYPE:
-      case KMType.COSE_CERT_PAYLOAD_TYPE:
-        len += getEncodedArrayLen(KMCoseMap.getVals(ptr));
-        break;
       default:
         KMException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
     }
     return len;
-  }
-
-  private short getEncodedCosePairTagLen(short tagType, short exp) {
-    short length = 0;
-    switch (tagType) {
-      case KMType.COSE_PAIR_BYTE_BLOB_TAG_TYPE:
-        KMCosePairByteBlobTag cosePairByteBlobTag = KMCosePairByteBlobTag.cast(exp);
-        length = getEncodedLength(cosePairByteBlobTag.getKeyPtr());
-        length += getEncodedLength(cosePairByteBlobTag.getValuePtr());
-        break;
-      case KMType.COSE_PAIR_INT_TAG_TYPE:
-        KMCosePairIntegerTag cosePairIntTag = KMCosePairIntegerTag.cast(exp);
-        length = getEncodedLength(cosePairIntTag.getValuePtr());
-        length += getEncodedLength(cosePairIntTag.getKeyPtr());
-        break;
-      case KMType.COSE_PAIR_NEG_INT_TAG_TYPE:
-        KMCosePairNegIntegerTag cosePairNegIntegerTag = KMCosePairNegIntegerTag.cast(exp);
-        length = getEncodedLength(cosePairNegIntegerTag.getValuePtr());
-        length += getEncodedLength(cosePairNegIntegerTag.getKeyPtr());
-        break;
-      case KMType.COSE_PAIR_SIMPLE_VALUE_TAG_TYPE:
-        KMCosePairSimpleValueTag cosePairSimpleValueTag = KMCosePairSimpleValueTag.cast(exp);
-        length = getEncodedLength(cosePairSimpleValueTag.getValuePtr());
-        length += getEncodedLength(cosePairSimpleValueTag.getKeyPtr());
-        break;
-      case KMType.COSE_PAIR_TEXT_STR_TAG_TYPE:
-        KMCosePairTextStringTag cosePairTextStringTag = KMCosePairTextStringTag.cast(exp);
-        length = getEncodedLength(cosePairTextStringTag.getValuePtr());
-        length += getEncodedLength(cosePairTextStringTag.getKeyPtr());
-        break;
-      case KMType.COSE_PAIR_COSE_KEY_TAG_TYPE:
-        KMCosePairCoseKeyTag cosePairCoseKeyTag = KMCosePairCoseKeyTag.cast(exp);
-        length = getEncodedLength(cosePairCoseKeyTag.getValuePtr());
-        length += getEncodedLength(cosePairCoseKeyTag.getKeyPtr());
-        break;
-      default:
-        ISOException.throwIt(ISO7816.SW_DATA_INVALID);
-    }
-    return length;
   }
 
   private short getEncodedMapLen(short obj) {

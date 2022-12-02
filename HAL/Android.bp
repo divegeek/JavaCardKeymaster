@@ -17,13 +17,11 @@ cc_library {
     name: "libjc_keymint",
     defaults: [
     	"keymaster_defaults",
-        "keymint_use_latest_hal_aidl_ndk_shared",
     ],
     srcs: [
     	"CborConverter.cpp",
         "JavacardKeyMintDevice.cpp",
         "JavacardKeyMintOperation.cpp",
-	"JavacardRemotelyProvisionedComponentDevice.cpp",
         "JavacardSecureElement.cpp",
         "JavacardSharedSecret.cpp",
 	"JavacardKeyMintUtils.cpp",
@@ -33,6 +31,7 @@ cc_library {
     shared_libs: [
         "android.hardware.security.secureclock-V1-ndk",
         "android.hardware.security.sharedsecret-V1-ndk",
+	"android.hardware.security.keymint-V2-ndk",
     	"libbase",
         "libcppbor_external",
         "libkeymaster_portable",
@@ -83,11 +82,9 @@ cc_binary {
         "-Wall",
         "-Wextra",
     ],
-    defaults: [
-        "keymint_use_latest_hal_aidl_ndk_shared",
-    ],
     shared_libs: [
         "android.hardware.security.sharedsecret-V1-ndk",
+	"android.hardware.security.keymint-V2-ndk",
         "libbase",
         "libbinder_ndk",
         "libcppbor_external",
