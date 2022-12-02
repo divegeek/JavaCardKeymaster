@@ -85,6 +85,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   @Override
   public void process(APDU apdu) {
     try {
+      receiveLen[0] = apdu.setIncomingAndReceive();
       handleDeviceBooted();
       // If this is select applet apdu which is selecting this applet then return
       if (apdu.isISOInterindustryCLA()) {
@@ -486,7 +487,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
 
   private void processProvisionAttestationCertDataCmd(APDU apdu) {
     byte[] srcBuffer = apdu.getBuffer();
-    short recvLen = apdu.setIncomingAndReceive();
+    short recvLen = receiveLen[0];
     short srcOffset = apdu.getOffsetCdata();
     short bufferLength = apdu.getIncomingLength();
     short bufferStartOffset = repository.allocReclaimableMemory(bufferLength);
