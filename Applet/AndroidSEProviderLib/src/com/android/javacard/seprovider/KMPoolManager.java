@@ -67,12 +67,6 @@ public class KMPoolManager {
   private Object[] hmacSignOperationPool;
   
   private Object[] keysPool;
-  // RKP uses AESGCM and HMAC in generateCSR flow.
-  KMOperation rkpOPeration;
-  Cipher rkpAesGcm;
-  Signature rkpHmac;
-  KMKeyObject rkpHmacKey;
-  KMKeyObject rkpAesKey;
 
   final byte[] KEY_ALGS = {
       AES_128,
@@ -200,16 +194,6 @@ public class KMPoolManager {
     initializeCipherPool();
     initializeKeyAgreementPool();
     initializeKeysPool();
-    // Initialize the Crypto and Key objects required for RKP flow.
-    initializeRKpObjects();
-  }
-
-  private void initializeRKpObjects() {
-    rkpOPeration = new KMOperationImpl();
-    rkpAesGcm = Cipher.getInstance(AEADCipher.ALG_AES_GCM, false);
-    rkpHmac = Signature.getInstance(Signature.ALG_HMAC_SHA_256, false);
-    rkpAesKey = createKeyObjectInstance(AES_256);
-    rkpHmacKey = createKeyObjectInstance(KMType.HMAC);
   }
 
   private void initializeKeysPool() {
@@ -437,35 +421,6 @@ public class KMPoolManager {
     ((KMOperationImpl) operation).setKeyObject(keyObject);
     setObject(purpose, operation, obj);
   }
-  
-  public KMOperation getRKpOperation(short purpose, short alg, short strongboxAlgType,
-      short padding, short blockMode, short macLength) {
-    if (((KMOperationImpl) rkpOPeration).getPurpose() != KMType.INVALID_VALUE) {
-      // Should not come here.
-      KMException.throwIt(KMError.UNKNOWN_ERROR);
-    }
-    Object cryptoObj = null;
-    KMKeyObject keyObject = null;
-
-    switch (alg) {
-    case AEADCipher.ALG_AES_GCM:
-      cryptoObj = rkpAesGcm;
-      keyObject = rkpAesKey;
-      break;
-    case Signature.ALG_HMAC_SHA_256:
-      cryptoObj = rkpHmac;
-      keyObject = rkpHmacKey;
-      break;
-    default:
-      // Should not come here.
-      KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
-      break;
-    }
-    reserveOperation(rkpOPeration, purpose, strongboxAlgType, padding, blockMode, macLength,
-        cryptoObj, keyObject);
-    return rkpOPeration;
-  }
-
 
   public KMOperation getOperationImpl(short purpose, short alg, short strongboxAlgType,
       short padding,
@@ -610,8 +565,6 @@ public class KMPoolManager {
       ((KMOperationImpl) hmacSignOperationPool[index]).abort();
       index++;
     }
-    // release rkp operation
-    rkpOPeration.abort();
   }
 
 }

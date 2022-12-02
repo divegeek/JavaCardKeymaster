@@ -1298,19 +1298,6 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public KMDeviceUniqueKeyPair createRkpDeviceUniqueKeyPair(
-      KMDeviceUniqueKeyPair key, byte[] pubKey, short pubKeyOff,
-      short pubKeyLen, byte[] privKey, short privKeyOff, short privKeyLen) {
-    if (key == null) {
-      KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
-      key = new KMECDeviceUniqueKey(ecKeyPair);
-    }
-    ((KMECDeviceUniqueKey) key).setS(privKey, privKeyOff, privKeyLen);
-    ((KMECDeviceUniqueKey) key).setW(pubKey, pubKeyOff, pubKeyLen);
-    return (KMDeviceUniqueKeyPair) key;
-  }
-
-  @Override
   public short rsaSign256Pkcs1(
       byte[] secret,
       short secretStart,
@@ -1343,18 +1330,6 @@ public class KMJCardSimulator implements KMSEProvider {
 
     ECPrivateKey key = ((KMECPrivateKey) attestationKey).getPrivateKey();
 
-    Signature signer = Signature
-        .getInstance(Signature.ALG_ECDSA_SHA_256, false);
-    signer.init(key, Signature.MODE_SIGN);
-    return signer.sign(inputDataBuf, inputDataStart, inputDataLength,
-        outputDataBuf, outputDataStart);
-  }
-
-
-  @Override
-  public short ecSign256(KMDeviceUniqueKeyPair deviceUniqueKey, byte[] inputDataBuf, short inputDataStart,
-                         short inputDataLength, byte[] outputDataBuf, short outputDataStart) {
-    ECPrivateKey key = ((KMECDeviceUniqueKey) deviceUniqueKey).getPrivateKey();
     Signature signer = Signature
         .getInstance(Signature.ALG_ECDSA_SHA_256, false);
     signer.init(key, Signature.MODE_SIGN);
@@ -1416,7 +1391,7 @@ public class KMJCardSimulator implements KMSEProvider {
 
   @Override
   public boolean isAttestationKeyProvisioned(){
-    return false;
+    return true;
   }
 
   public boolean isPowerReset(){
@@ -1426,6 +1401,18 @@ public class KMJCardSimulator implements KMSEProvider {
       flag = true;
     }
     return flag;
+  }
+
+  @Override
+  public KMAttestationKey createAttestationKey(KMAttestationKey key,
+      byte[] keyData, short offset, short length) {
+    if (key == null) {
+      KeyPair ecKeyPair = new KeyPair(KeyPair.ALG_EC_FP, KeyBuilder.LENGTH_EC_FP_256);
+      key = new KMECPrivateKey(ecKeyPair);
+    }
+    ECPrivateKey ecKeyPair = (ECPrivateKey) ((KMECPrivateKey) key).getPrivateKey();
+    ecKeyPair.setS(keyData, offset, length);
+    return (KMAttestationKey) key;
   }
 
   @Override
@@ -1463,18 +1450,6 @@ public class KMJCardSimulator implements KMSEProvider {
   }
 
   @Override
-  public KMRkpMacKey createRkpMacKey(KMRkpMacKey rkpMacKey, byte[] keyData,
-      short offset, short length) {
-    if (rkpMacKey == null) {
-      HMACKey key = (HMACKey) KeyBuilder.buildKey(KeyBuilder.TYPE_HMAC, (short) (length * 8),
-          false);
-      rkpMacKey = new KMHmacKey(key);
-    }
-    ((KMHmacKey) rkpMacKey).setKey(keyData, offset, length);
-    return rkpMacKey;
-  }
-
-  @Override
   public com.android.javacard.seprovider.KMPreSharedKey createPreSharedKey(
       com.android.javacard.seprovider.KMPreSharedKey presharedKey, byte[] keyData, short offset,
       short length) {
@@ -1489,31 +1464,6 @@ public class KMJCardSimulator implements KMSEProvider {
     }
     ((KMHmacKey)preSharedKey).setKey(keyData, offset, length);
     return (KMPreSharedKey) preSharedKey;
-  }
-
-
-@Override
-public KMOperation getRkpOperation(byte purpose, byte alg,
-	      byte digest, byte padding, byte blockMode, byte[] keyBuf, short keyStart,
-	      short keyLength, byte[] ivBuf, short ivStart, short ivLength,
-	      short macLength) {
-    KMOperation opr = null;
-    switch (alg) {
-    case KMType.AES:
-    KMCipher aesGcm = createAesGcmCipher(purpose, macLength, keyBuf, keyStart, keyLength,
-                ivBuf, ivStart, ivLength);
-      opr = new KMOperationImpl(aesGcm);
-      break;
-    case KMType.HMAC:
-      Signature signerVerifier = createHmacSignerVerifier(purpose, digest, keyBuf, keyStart,
-                keyLength);
-      opr = new KMOperationImpl(signerVerifier);      
-      break;
-    default:
-      CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
-      break;
-    }
-    return opr;
   }
 
   @Override

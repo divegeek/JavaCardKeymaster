@@ -19,7 +19,7 @@ import org.globalplatform.upgrade.Element;
 
 import javacard.security.HMACKey;
 
-public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey, KMRkpMacKey {
+public class KMHmacKey implements KMPreSharedKey, KMComputedHmacKey {
 
   public HMACKey hmacKey;
 

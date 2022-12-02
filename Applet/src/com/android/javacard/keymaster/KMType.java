@@ -346,6 +346,7 @@ public abstract class KMType {
   public static final byte ATTESTATION_CERT = 1;
   public static final byte SELF_SIGNED_CERT = 2;
   public static final byte FAKE_CERT = 3;
+  public static final byte FACTORY_ATTESTATION_CERT = 4;
   // Buffering Mode
   public static final byte BUF_NONE = 0;
   public static final byte BUF_RSA_DECRYPT_OR_NO_DIGEST = 1;

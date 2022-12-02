@@ -157,7 +157,6 @@ public interface KMAttestationCert {
    */
   short getCertLength();
 
-
   /**
    * Build a fake signed certificate. After this method executes the certificate is ready with the
    * signature equal to 1 byte which is 0 and with rsa signature algorithm.

@@ -22,6 +22,7 @@
 #include <aidl/android/hardware/security/secureclock/ISecureClock.h>
 #include <aidl/android/hardware/security/keymint/KeyParameter.h>
 #include <aidl/android/hardware/security/keymint/Tag.h>
+#include <aidl/android/hardware/security/keymint/Certificate.h>
 
 #include <keymaster/android_keymaster_messages.h>
 #include <keymaster/android_keymaster_utils.h>
@@ -66,6 +67,9 @@ keymaster_error_t legacyHardwareAuthToken(const HardwareAuthToken& aidlToken,
 
 keymaster_error_t encodeTimestampToken(const TimeStampToken& timestampToken,
                                        vector<uint8_t>* encodedToken);
+
+keymaster_error_t getCertificateChain(std::vector<uint8_t>& chainBuffer,
+                                      std::vector<Certificate>& certChain);
 
 inline ScopedAStatus kmError2ScopedAStatus(const keymaster_error_t value) {
     return (value == KM_ERROR_OK

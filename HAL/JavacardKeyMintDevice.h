@@ -115,6 +115,10 @@ class JavacardKeyMintDevice : public BnKeyMintDevice {
 
     ScopedAStatus defaultHwInfo(KeyMintHardwareInfo* info);
 
+    keymaster_error_t getProvisionedAttestationCertChain(std::vector<Certificate>& certChain);
+
+    bool isFactoryAttestationCertMode(const vector<KeyParameter>& keyParams, const optional<AttestationKey>& attestationKey);
+
     const SecurityLevel securitylevel_;
     const shared_ptr<JavacardSecureElement> card_;
     CborConverter cbor_;
