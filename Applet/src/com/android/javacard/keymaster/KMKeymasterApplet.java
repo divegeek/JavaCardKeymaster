@@ -296,6 +296,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static short[] tmpVariables;
   protected static short[] data;
   protected static byte[] wrappingKey;
+  protected static short[] receiveLen;
 
   /**
    * Registers this applet.
@@ -311,6 +312,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     tmpVariables =
         JCSystem.makeTransientShortArray(TMP_VARIABLE_ARRAY_SIZE, JCSystem.CLEAR_ON_DESELECT);
     wrappingKey = JCSystem.makeTransientByteArray((short)(WRAPPING_KEY_SIZE+1), JCSystem.CLEAR_ON_RESET);
+    receiveLen = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
     resetWrappingKey();
     opTable = new KMOperationState[MAX_OPERATIONS_COUNT];
     short index = 0;
@@ -916,7 +918,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    */
   public static short receiveIncoming(APDU apdu, short reqExp) {
     byte[] srcBuffer = apdu.getBuffer();
-    short recvLen = apdu.setIncomingAndReceive();
+    short recvLen = receiveLen[0];
     short srcOffset = apdu.getOffsetCdata();
     // TODO add logic to handle the extended length buffer. In this case the memory can be reused
     //  from extended buffer.
