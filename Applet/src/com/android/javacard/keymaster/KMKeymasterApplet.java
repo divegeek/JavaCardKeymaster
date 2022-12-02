@@ -305,6 +305,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   protected static short[] tmpVariables;
   protected static short[] data;
   protected static byte[] wrappingKey;
+  protected static short[] apduDataRecLen;
 
   /**
    * Registers this applet.
@@ -321,6 +322,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
         JCSystem.makeTransientShortArray(TMP_VARIABLE_ARRAY_SIZE, JCSystem.CLEAR_ON_DESELECT);
     wrappingKey = JCSystem.makeTransientByteArray((short)(WRAPPING_KEY_SIZE+1), JCSystem.CLEAR_ON_RESET);
     resetWrappingKey();
+    apduDataRecLen = JCSystem.makeTransientShortArray((short)1, JCSystem.CLEAR_ON_RESET);
     opTable = new KMOperationState[MAX_OPERATIONS_COUNT];
     short index = 0;
     while(index < MAX_OPERATIONS_COUNT){
@@ -911,7 +913,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    */
   public static short receiveIncoming(APDU apdu, short reqExp) {
     byte[] srcBuffer = apdu.getBuffer();
-    short recvLen = apdu.setIncomingAndReceive();
     short srcOffset = apdu.getOffsetCdata();
     // TODO add logic to handle the extended length buffer. In this case the memory can be reused
     //  from extended buffer.
@@ -919,10 +920,10 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short bufferStartOffset = repository.allocReclaimableMemory(bufferLength);
     short index = bufferStartOffset;
     byte[] buffer = repository.getHeap();
-    while (recvLen > 0 && ((short) (index - bufferStartOffset) < bufferLength)) {
-      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, index, recvLen);
-      index += recvLen;
-      recvLen = apdu.receiveBytes(srcOffset);
+    while (apduDataRecLen[0] > 0 && ((short) (index - bufferStartOffset) < bufferLength)) {
+      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, index, apduDataRecLen[0]);
+      index += apduDataRecLen[0];
+      apduDataRecLen[0] = apdu.receiveBytes(srcOffset);
     }
     short req = decoder.decode(reqExp, buffer, bufferStartOffset, bufferLength);
     repository.reclaimMemory(bufferLength);
@@ -3562,7 +3563,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     // check the keysize tag if present in key parameters.
     short keysize =
         KMIntegerTag.getShortValue(KMType.UINT_TAG, KMType.KEYSIZE, data[KEY_PARAMETERS]);
-    short kSize = (short) (KMByteBlob.length(data[SECRET]) * 8);
+    short kSize = (short) (KMByteBlob.length(data[PUB_KEY]) * 8);
     if (keysize != KMType.INVALID_VALUE) {
       if (keysize != 2048 || (keysize != kSize)) {
         KMException.throwIt(KMError.IMPORT_PARAMETER_MISMATCH);

@@ -86,6 +86,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   @Override
   public void process(APDU apdu) {
     try {
+      apduDataRecLen[0] = apdu.setIncomingAndReceive();
       handleDeviceBooted();
       // If this is select applet apdu which is selecting this applet then return
       if (apdu.isISOInterindustryCLA()) {
@@ -171,6 +172,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
       sendResponse(apdu, KMError.GENERIC_UNKNOWN_ERROR);
     } finally {
       repository.clean();
+      apduDataRecLen[0] = 0;
     }
   }
 
@@ -402,16 +404,15 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
     // Store the cbor encoded UdsCerts as it is in the persistent memory so cbor decoding is
     // required here.
     byte[] srcBuffer = apdu.getBuffer();
-    short recvLen = apdu.setIncomingAndReceive();
     short srcOffset = apdu.getOffsetCdata();
     short bufferLength = apdu.getIncomingLength();
     short bufferStartOffset = repository.allocReclaimableMemory(bufferLength);
     short index = bufferStartOffset;
     byte[] buffer = repository.getHeap();
-    while (recvLen > 0 && ((short) (index - bufferStartOffset) < bufferLength)) {
-      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, index, recvLen);
-      index += recvLen;
-      recvLen = apdu.receiveBytes(srcOffset);
+    while (apduDataRecLen[0] > 0 && ((short) (index - bufferStartOffset) < bufferLength)) {
+      Util.arrayCopyNonAtomic(srcBuffer, srcOffset, buffer, index, apduDataRecLen[0]);
+      index += apduDataRecLen[0];
+      apduDataRecLen[0] = apdu.receiveBytes(srcOffset);
     }
     short byteHeaderLen = decoder.readCertificateChainHeaderLen(buffer, bufferStartOffset,
         bufferLength);
