@@ -396,9 +396,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public void deselect() {
     repository.onDeselect();
   }
-  public static void install(byte[] bArray, short bOffset, byte bLength) {
-    //new KMAndroidSEApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
-  }
 
   /**
    * Uninstalls the applet after cleaning the repository.
@@ -622,7 +619,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   private short sendRootOfTrustCmd(APDU apdu) {
     short arrInst = KMArray.instance((short) 4);
     short intExp = KMInteger.exp();
-    //short headers = KMCoseHeaders.exp();
     short mapExp = KMMap.instance((short) 1);
     KMMap.cast(mapExp).add((short) 0, intExp, intExp);
     KMArray.cast(arrInst).add((short) 0, KMByteBlob.exp());
@@ -633,7 +629,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     short arr = KMArray.exp(semanticTag);
     return receiveIncoming(apdu, arr);
   }
-  
+
   private void processSendRootOfTrust(APDU apdu) {
     byte[] scratchPad = apdu.getBuffer();
     short cmd = KMType.INVALID_VALUE;
@@ -899,6 +895,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       // reclaim the unused memory in the certificate.
       repository.reclaimMemory((short) (bufferStart - certStart));
     }
+
     // Encode KeyCharacteristics at the end of heap just before data[CERTIFICATE]
     encodeKeyCharacteristics(keyChars);
     // and encode it to the end of the buffer before KEY_CHARACTERISTICS
@@ -3842,7 +3839,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     } else { // no attestation key blob
       // Attestation challenge present then it is an error because no factory provisioned attest key
       if (attChallenge != KMType.INVALID_VALUE && KMByteBlob.cast(attChallenge).length() > 0) {
-        //KMException.throwIt(KMError.ATTESTATION_KEYS_NOT_PROVISIONED);
         mode = KMType.FACTORY_ATTESTATION_CERT;
       } else if (KMEnumArrayTag.contains(KMType.PURPOSE, KMType.ATTEST_KEY, data[HW_PARAMETERS]) ||
           KMEnumArrayTag.contains(KMType.PURPOSE, KMType.SIGN, data[HW_PARAMETERS])) {

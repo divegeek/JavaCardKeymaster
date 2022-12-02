@@ -125,8 +125,6 @@ public class KMRsaOAEPEncoding extends Cipher {
     if (len != 256 || outBuff[0] != 0) {
       CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
-    //inBuff = outBuff;
-    //inOffset = (short) (outOffset + 1);
     Util.arrayCopyNonAtomic(outBuff, (short) (outOffset + 1), outBuff, (short) 0, (short) (len -1));
     return rsaOAEPDecode(outBuff, (short) 0, (short) (len - 1));
 
@@ -177,7 +175,7 @@ public class KMRsaOAEPEncoding extends Cipher {
   }
 
   private short rsaOAEPDecode(byte[] encodedMsg, short encodedMsgOff,
-      short encodedMsgLen/*, byte[] msg, short offset*/) {
+      short encodedMsgLen) {
     MessageDigest.OneShot md = null;
     byte[] tmpArray = KMAndroidSEProvider.getInstance().tmpArray;
 

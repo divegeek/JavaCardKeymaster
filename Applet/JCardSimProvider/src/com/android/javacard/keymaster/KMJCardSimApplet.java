@@ -43,10 +43,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private static final byte INS_SE_FACTORY_PROVISIONING_LOCK_CMD = INS_KEYMINT_PROVIDER_APDU_START + 10;
   private static final byte INS_PROVISION_OEM_ROOT_PUBLIC_KEY_CMD = INS_KEYMINT_PROVIDER_APDU_START + 11;
   private static final byte INS_OEM_UNLOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 12;
-  private static final byte INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD =
-     INS_KEYMINT_PROVIDER_APDU_START + 13;
-  private static final byte INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD =
-     INS_KEYMINT_PROVIDER_APDU_START + 14;
+  // 13 and 14 are reserved for RKP Device UniqueKeyPair and Cert chain.
   private static final byte INS_PROVISION_PRESHARED_SECRET_CMD =
       INS_KEYMINT_PROVIDER_APDU_START + 15;
   private static final byte INS_SET_BOOT_PARAMS_CMD = INS_KEYMINT_PROVIDER_APDU_START + 16;  // Unused
@@ -211,8 +208,6 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
         }
         break;
         
-      case INS_PROVISION_RKP_DEVICE_UNIQUE_KEYPAIR_CMD:
-      case INS_PROVISION_RKP_ADDITIONAL_CERT_CHAIN_CMD:
       case INS_PROVISION_ATTESTATION_KEY_CMD:
       case INS_PROVISION_ATTESTATION_CERT_DATA_CMD:
         if(isSeFactoryProvisioningLocked()) {
