@@ -5,6 +5,7 @@
       "product": "sdk_phone_x86_64",
       "serial": "",
       "imei": "000000000000000",
+      "secondImei": "000000000000001",
       "meid": "000000000000000",
       "manufacturer": "unknown",
       "model": "Android SDK built for x86_64"

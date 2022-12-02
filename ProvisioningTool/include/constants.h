@@ -75,6 +75,7 @@ constexpr uint64_t kTagAttestationIdImei = 2415919818u;
 constexpr uint64_t kTagAttestationIdMeid = 2415919819u;
 constexpr uint64_t kTagAttestationIdManufacturer = 2415919820u;
 constexpr uint64_t kTagAttestationIdModel = 2415919821u;
+constexpr uint64_t kTagAttestationIdSecondImei = 2415919827u;
 
 // Values
 constexpr uint64_t kCurveP256 = 1;

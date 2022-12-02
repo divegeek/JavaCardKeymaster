@@ -20,6 +20,7 @@ import com.android.javacard.seprovider.KMAttestationCert;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMMasterKey;
 import com.android.javacard.seprovider.KMSEProvider;
+
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 
@@ -103,6 +104,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
 
   // Below are the allowed hardwareEnforced Authorization tags inside the attestation certificate's extension.
   private static final short[] hwTagIds = {
+      KMType.ATTESTATION_ID_SECOND_IMEI,
       KMType.BOOT_PATCH_LEVEL, KMType.VENDOR_PATCH_LEVEL,
       KMType.ATTESTATION_ID_MODEL, KMType.ATTESTATION_ID_MANUFACTURER,
       KMType.ATTESTATION_ID_MEID, KMType.ATTESTATION_ID_IMEI,
@@ -128,7 +130,6 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final short KEYMINT_VERSION = 300;
   private static final short ATTESTATION_VERSION = 300;
   private static final byte[] pubExponent = {0x01, 0x00, 0x01};
-  private static final byte SERIAL_NUM = (byte) 0x01;
   private static final byte X509_VERSION = (byte) 0x02;
 
   // Buffer indexes in transient array

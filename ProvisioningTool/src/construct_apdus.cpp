@@ -591,6 +591,8 @@ int processAttestationIds() {
                 map.add(kTagAttestationIdSerial, std::vector<uint8_t>(idVal.begin(), idVal.end()));
             } else if(0 == key.compare("imei")) {
                 map.add(kTagAttestationIdImei, std::vector<uint8_t>(idVal.begin(), idVal.end()));
+            } else if(0 == key.compare("secondImei")) {
+                map.add(kTagAttestationIdSecondImei, std::vector<uint8_t>(idVal.begin(), idVal.end()));
             } else if(0 == key.compare("meid")) {
                 map.add(kTagAttestationIdMeid, std::vector<uint8_t>(idVal.begin(), idVal.end()));
             } else if(0 == key.compare("manufacturer")) {
