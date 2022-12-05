@@ -53,7 +53,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
       0x06, 0x0A, 0X2B, 0X06, 0X01, 0X04, 0X01, (byte) 0XD6, 0X79, 0X02, 0X01, 0X11
   };
   private static final short RSA_SIG_LEN = 256;
-  private static final short ECDSA_MAX_SIG_LEN = 72;
+  private static final byte ECDSA_MAX_SIG_LEN = 72;
   //Signature algorithm identifier - ecdsaWithSha256 - 1.2.840.10045.4.3.2
   //SEQUENCE of alg OBJ ID and parameters = NULL.
   private static final byte[] X509EcdsaSignAlgIdentifier = {
@@ -133,7 +133,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte X509_VERSION = (byte) 0x02;
 
   // Buffer indexes in transient array
-  private static final short NUM_INDEX_ENTRIES = 21;
+  private static final byte NUM_INDEX_ENTRIES = 21;
   private static final byte CERT_START = (byte) 0;
   private static final byte CERT_LENGTH = (byte) 1;
   private static final byte TBS_START = (byte) 2;
@@ -157,7 +157,7 @@ public class KMAttestationCertImpl implements KMAttestationCert {
   private static final byte CERT_ATT_KEY_SECRET = (byte) 19;
   private static final byte CERT_ATT_KEY_RSA_PUB_MOD = (byte) 20;
   // State indexes in transient array
-  private static final short NUM_STATE_ENTRIES = 7;
+  private static final byte NUM_STATE_ENTRIES = 7;
   private static final byte KEY_USAGE = (byte) 0;
   private static final byte UNUSED_BITS = (byte) 1;
   private static final byte DEVICE_LOCKED = (byte) 2;

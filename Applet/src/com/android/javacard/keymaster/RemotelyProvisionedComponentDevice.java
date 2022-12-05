@@ -44,7 +44,7 @@ public class RemotelyProvisionedComponentDevice {
   // RKP supportedNumKeysInCsr
   private static final byte MIN_SUPPORTED_NUM_KEYS_IN_CSR = 20;
   // The CsrPayload CDDL Schema version.
-  private static final short CSR_PAYLOAD_CDDL_SCHEMA_VERSION = 3;
+  private static final byte CSR_PAYLOAD_CDDL_SCHEMA_VERSION = 3;
   // Boot params
   private static final byte OS_VERSION_ID = 0x00;
   private static final byte SYSTEM_PATCH_LEVEL_ID = 0x01;
@@ -113,21 +113,21 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte PROCESSING_UDS_CERTS_COMPLETE = 0x0A;
   // data table
   private static final short DATA_SIZE = 512;
-  private static final short DATA_INDEX_SIZE = 6;
-  public static final short DATA_INDEX_ENTRY_SIZE = 4;
-  public static final short DATA_INDEX_ENTRY_LENGTH = 0;
-  public static final short DATA_INDEX_ENTRY_OFFSET = 2;
+  private static final byte DATA_INDEX_SIZE = 6;
+  public static final byte DATA_INDEX_ENTRY_SIZE = 4;
+  public static final byte DATA_INDEX_ENTRY_LENGTH = 0;
+  public static final byte DATA_INDEX_ENTRY_OFFSET = 2;
   // data offsets
-  private static final short TOTAL_KEYS_TO_SIGN = 0;
-  private static final short KEYS_TO_SIGN_COUNT = 1;
-  private static final short GENERATE_CSR_PHASE = 2;
-  private static final short RESPONSE_PROCESSING_STATE = 3;
-  private static final short UDS_PROCESSED_LENGTH = 4;
-  private static final short DICE_PROCESSED_LENGTH = 5;
+  private static final byte TOTAL_KEYS_TO_SIGN = 0;
+  private static final byte KEYS_TO_SIGN_COUNT = 1;
+  private static final byte GENERATE_CSR_PHASE = 2;
+  private static final byte RESPONSE_PROCESSING_STATE = 3;
+  private static final byte UDS_PROCESSED_LENGTH = 4;
+  private static final byte DICE_PROCESSED_LENGTH = 5;
 
   // data item sizes
-  private static final short SHORT_SIZE = 2;
-  private static final short BYTE_SIZE = 1;
+  private static final byte SHORT_SIZE = 2;
+  private static final byte BYTE_SIZE = 1;
 
   // generate csr states
   private static final byte BEGIN = 0x01;
@@ -137,9 +137,9 @@ public class RemotelyProvisionedComponentDevice {
   private static final byte GET_DICE_CERT_RESPONSE = 0x08;
 
   //RKP mac key size
-  private static final short RKP_MAC_KEY_SIZE = 32;
+  private static final byte RKP_MAC_KEY_SIZE = 32;
 
-  private static final short TINY_PAYLOAD = 0x17;
+  private static final byte TINY_PAYLOAD = 0x17;
   private static final short SHORT_PAYLOAD = 0x100;
 
   //RKP CDDL Schema version

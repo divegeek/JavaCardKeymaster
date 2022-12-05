@@ -43,10 +43,10 @@ public class KMDecoder {
   private static final short UINT32_LENGTH = 0x1A;
   private static final short UINT64_LENGTH = 0x1B;
 
-  private static final short SCRATCH_BUF_SIZE = 6;
-  private static final short START_OFFSET = 0;
-  private static final short LEN_OFFSET = 2;
-  private static final short TAG_KEY_OFFSET = 4;
+  private static final byte SCRATCH_BUF_SIZE = 6;
+  private static final byte START_OFFSET = 0;
+  private static final byte LEN_OFFSET = 2;
+  private static final byte TAG_KEY_OFFSET = 4;
   private Object[] bufferRef;
   private short[] scratchBuf;
 

@@ -33,8 +33,8 @@ import javacardx.crypto.Cipher;
  */
 public class KMPoolManager {
 
-  public static final short MAX_OPERATION_INSTANCES = 4;
-  private static final short HMAC_MAX_OPERATION_INSTANCES = 8;
+  public static final byte MAX_OPERATION_INSTANCES = 4;
+  private static final byte HMAC_MAX_OPERATION_INSTANCES = 8;
   public static final byte AES_128 = 0x04;
   public static final byte AES_256 = 0x05;
   //Resource type constants
@@ -52,7 +52,7 @@ public class KMPoolManager {
   // Uncompressed form
   static byte[] secp256r1_UCG;
   static byte[] secp256r1_N;
-  static final short secp256r1_H = 1;
+  static final byte secp256r1_H = 1;
   // --------------------------------------------------------------  
   
   // Cipher pool

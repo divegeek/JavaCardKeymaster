@@ -25,7 +25,7 @@ import javacardx.crypto.Cipher;
 public class KMEcdsa256NoDigestSignature extends Signature {
 
   public static final byte ALG_ECDSA_NODIGEST = (byte) 0x67;
-  public static final short MAX_NO_DIGEST_MSG_LEN = 32;
+  public static final byte MAX_NO_DIGEST_MSG_LEN = 32;
   private byte algorithm;
   private Signature inst;
 

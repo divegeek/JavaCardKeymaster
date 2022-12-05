@@ -44,11 +44,11 @@ public class KMEncoder {
   private static final byte UINT64_LENGTH = (byte) 0x1B;
   private static final short TINY_PAYLOAD = 0x17;
   private static final short SHORT_PAYLOAD = 0x100;
-  private static final short STACK_SIZE = (short) 50;
-  private static final short SCRATCH_BUF_SIZE = (short) 6;
-  private static final short START_OFFSET = (short) 0;
-  private static final short LEN_OFFSET = (short) 2;
-  private static final short STACK_PTR_OFFSET = (short) 4;
+  private static final byte STACK_SIZE = (short) 50;
+  private static final byte SCRATCH_BUF_SIZE = (short) 6;
+  private static final byte START_OFFSET = (short) 0;
+  private static final byte LEN_OFFSET = (short) 2;
+  private static final byte STACK_PTR_OFFSET = (short) 4;
 
   private Object[] bufferRef;
   private short[] scratchBuf;
