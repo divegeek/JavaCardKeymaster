@@ -709,7 +709,6 @@ public class KMJCardSimulator implements KMSEProvider {
 
   @Override
   public KMOperation initTrustedConfirmationSymmetricOperation(KMComputedHmacKey computedHmacKey) {
-    KMOperationImpl opr = null;
     KMHmacKey key = (KMHmacKey) computedHmacKey;
     Signature signerVerifier = createHmacSignerVerifier(KMType.VERIFY, KMType.SHA2_256, key.hmacKey);
     return new KMOperationImpl(signerVerifier);

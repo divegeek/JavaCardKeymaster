@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package com.android.javacard.seprovider;
-import javacard.security.ECPrivateKey;
+
 import javacard.security.ECPublicKey;
 import javacard.security.KeyPair;
 

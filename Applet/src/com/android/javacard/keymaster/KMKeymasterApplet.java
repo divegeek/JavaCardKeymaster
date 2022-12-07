@@ -30,7 +30,6 @@ import javacard.framework.ISOException;
 import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
-import javacard.security.Signature;
 import javacardx.apdu.ExtendedLength;
 
 /**
@@ -53,7 +52,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
 
   protected static final short KM_HAL_VERSION = (short) 0x6000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
-  private static final short DERIVE_KEY_INPUT_SIZE = (short) 256;
   public static final byte TRUSTED_ENVIRONMENT = 1;
 
   // Subject is a fixed field with only CN= Android Keystore Key - same for all the keys
@@ -294,7 +292,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final short PROVISION_STATUS_OEM_PUBLIC_KEY = 0x0200;
   public static final short PROVISION_STATUS_SECURE_BOOT_MODE = 0x0400;
 
-  protected static RemotelyProvisionedComponentDevice rkp;
+  protected static KMRemotelyProvisionedComponentDevice rkp;
   protected static KMEncoder encoder;
   protected static KMDecoder decoder;
   protected static KMRepository repository;
@@ -335,7 +333,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
    }
    // initialize default values
    initHmacNonceAndSeed();
-   rkp = new RemotelyProvisionedComponentDevice(encoder, decoder, repository, seProvider, kmDataStore);
+   rkp = new KMRemotelyProvisionedComponentDevice(encoder, decoder, repository, seProvider, kmDataStore);
   }
 
   protected void initHmacNonceAndSeed(){
@@ -1621,7 +1619,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
       KMException.throwIt(KMError.INCOMPATIBLE_PURPOSE);
     }
     KMAsn1Parser asn1Decoder = KMAsn1Parser.instance();
-    short length = 0;
     try {
       asn1Decoder.validateDerSubject(issuer);
     } catch (KMException e) {
@@ -2517,14 +2514,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
     KMArray.cast(resp).add((short) 3, KMInteger.uint_8(op.getBufferingMode()));
     KMArray.cast(resp).add((short) 4, KMInteger.uint_16(macLen));
     sendOutgoing(apdu, resp);
-  }
-
-  private void authorizeAlgorithm(KMOperationState op) {
-    short alg = KMEnumTag.getValue(KMType.ALGORITHM, data[HW_PARAMETERS]);
-    if (alg == KMType.INVALID_VALUE) {
-      KMException.throwIt(KMError.UNSUPPORTED_ALGORITHM);
-    }
-    op.setAlgorithm((byte) alg);
   }
 
   private void authorizePurpose(KMOperationState op) {
@@ -3644,7 +3633,6 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // is moved to a place where it is called on every boot.
   private void processInitStrongBoxCmd(APDU apdu) {
     short cmd = initStrongBoxCmd(apdu);
-    byte[] scratchPad = apdu.getBuffer();
 
     short osVersion = KMArray.cast(cmd).get((short) 0);
     short osPatchLevel = KMArray.cast(cmd).get((short) 1);

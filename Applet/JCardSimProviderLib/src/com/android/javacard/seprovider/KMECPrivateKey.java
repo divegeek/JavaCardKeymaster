@@ -15,7 +15,6 @@
  */
 package com.android.javacard.seprovider;
 
-import javacard.security.ECPrivateKey;
 import javacard.security.KeyPair;
 
 public class KMECPrivateKey implements KMAttestationKey {

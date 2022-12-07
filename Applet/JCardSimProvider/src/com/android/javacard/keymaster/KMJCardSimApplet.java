@@ -26,8 +26,6 @@ import javacard.security.CryptoException;
 
 public class KMJCardSimApplet extends KMKeymasterApplet {
 
-  private static final byte KM_BEGIN_STATE = 0x00;
-  private static final byte ILLEGAL_STATE = KM_BEGIN_STATE + 1;
   private static final short POWER_RESET_MASK_FLAG = (short) 0x4000;
 
   // Provider specific Commands
@@ -50,7 +48,6 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private static final byte INS_OEM_LOCK_PROVISIONING_CMD = INS_KEYMINT_PROVIDER_APDU_START + 17;
   private static final byte INS_PROVISION_SECURE_BOOT_MODE_CMD = INS_KEYMINT_PROVIDER_APDU_START + 18;
 
-  private static final byte INS_KEYMINT_PROVIDER_APDU_END = 0x1F;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
   public static final byte SHARED_SECRET_KEY_SIZE = 32;
@@ -295,8 +292,6 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   }
 
   private void processProvisionOEMRootPublicKeyCmd(APDU apdu) {  
-    // Re-purpose the apdu buffer as scratch pad.
-    byte[] scratchPad = apdu.getBuffer();
     // Arguments
     short keyparams = KMKeyParameters.exp();
     short keyFormatPtr = KMEnum.instance(KMType.KEY_FORMAT);
