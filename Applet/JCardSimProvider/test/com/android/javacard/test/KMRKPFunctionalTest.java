@@ -167,12 +167,13 @@ public class KMRKPFunctionalTest {
     byte[] resp = response.getBytes();
     KMTestUtils.print(resp, (short) 0, (short) resp.length);
     short blobExp = KMByteBlob.exp();
-    arrPtr = KMArray.instance((short) 5);
+    arrPtr = KMArray.instance((short) 6);
     KMArray.cast(arrPtr).add((short) 0, KMInteger.exp()); // ErrorCode
     KMArray.cast(arrPtr).add((short) 1, KMInteger.exp()); // Version
     KMArray.cast(arrPtr).add((short) 2, blobExp); // Text string
     KMArray.cast(arrPtr).add((short) 3, KMInteger.exp()); // support Eek Curve.
     KMArray.cast(arrPtr).add((short) 4, blobExp); // unique id
+    KMArray.cast(arrPtr).add((short) 5, KMInteger.exp()); // supported number of keys in CSR
     arrPtr = decoder.decode(arrPtr, resp, (short) 0, (short) resp.length);
     Assert.assertEquals(KMError.OK, KMInteger.cast(KMArray.cast(arrPtr).get((short) 0)).getShort());
     byte[] authorName = new byte[6];
@@ -183,6 +184,9 @@ public class KMRKPFunctionalTest {
     Assert.assertEquals(KMType.RKP_CURVE_P256,
         KMInteger.cast(KMArray.cast(arrPtr).get((short) 3)).getShort());
     Assert.assertEquals(3, KMInteger.cast(KMArray.cast(arrPtr).get((short) 1)).getShort());
+    if(KMInteger.cast(KMArray.cast(arrPtr).get((short) 5)).getShort() < 20) {
+      Assert.fail("supportedNumKeysInCsr is less than MIN_SUPPORTED_NUM_KEYS_IN_CSR(20)");
+    }
     cleanUp();
   }
 
@@ -367,7 +371,7 @@ public class KMRKPFunctionalTest {
 
     // finish
     // Extended length.
-    apdu = new CommandAPDU(0x80, INS_FINISH_SEND_DATA_CMD, 0x50, 0x00, (byte[]) null, 65536);
+    apdu = new CommandAPDU(0x80, INS_FINISH_SEND_DATA_CMD, KMTestUtils.APDU_P1, KMTestUtils.APDU_P2, (byte[]) null, 65536);
     response = simulator.transmitCommand(apdu);
 
     short coseHeadersExp = KMCoseHeaders.exp();
@@ -463,7 +467,7 @@ public class KMRKPFunctionalTest {
     byte[] udsCerts = new byte[2500];
     short offset = 0;
     do {
-      apdu = new CommandAPDU(0x80, INS_GET_UDS_CERTS_CMD, 0x50, 0x00, (byte[]) null, 65536); //Acc
+      apdu = new CommandAPDU(0x80, INS_GET_UDS_CERTS_CMD, KMTestUtils.APDU_P1, KMTestUtils.APDU_P2, (byte[]) null, 65536); //Acc
       response = simulator.transmitCommand(apdu);
       arr = KMArray.instance((short) 3);
       KMArray.cast(arr).add((short) 0, KMInteger.exp()); // OK
@@ -492,7 +496,7 @@ public class KMRKPFunctionalTest {
     byte[] diceCerts = new byte[2500];
     offset = 0;
     do {
-      apdu = new CommandAPDU(0x80, INS_GET_DICE_CERT_CHAIN_CMD, 0x50, 0x00, (byte[]) null,
+      apdu = new CommandAPDU(0x80, INS_GET_DICE_CERT_CHAIN_CMD, KMTestUtils.APDU_P1, KMTestUtils.APDU_P2, (byte[]) null,
           65536);// BCC
       response = simulator.transmitCommand(apdu);
       arr = KMArray.instance((short) 3);

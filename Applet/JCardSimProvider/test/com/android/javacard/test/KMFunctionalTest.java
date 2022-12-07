@@ -1022,7 +1022,7 @@ public class KMFunctionalTest {
     keyBlobPtr = KMArray.cast(ret2).get((short) 1);
     byte[] keyBlob2 = new byte[KMByteBlob.cast(keyBlobPtr).length()];
     len = KMByteBlob.cast(keyBlobPtr).getValues(keyBlob2, (short) 0);
-    CommandAPDU apdu = new CommandAPDU(0x80, INS_DELETE_ALL_KEYS_CMD, 0x50, 0x00);
+    CommandAPDU apdu = new CommandAPDU(0x80, INS_DELETE_ALL_KEYS_CMD, KMTestUtils.APDU_P1, KMTestUtils.APDU_P2);
     // print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(apdu);
     Assert.assertEquals(KMError.OK, KMTestUtils.decodeError(decoder, response));
@@ -1085,7 +1085,7 @@ public class KMFunctionalTest {
   @Test
   public void testGetHmacSharingParams() {
     init();
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_GET_HMAC_SHARING_PARAM_CMD, 0x50, 0x00);
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_GET_HMAC_SHARING_PARAM_CMD, KMTestUtils.APDU_P1, KMTestUtils.APDU_P2);
     //print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     Assert.assertEquals(0x9000, response.getSW());

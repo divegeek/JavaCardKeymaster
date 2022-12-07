@@ -600,7 +600,7 @@ public class KMProvision {
 
   public static ResponseAPDU provisionSeLocked(CardSimulator simulator, KMDecoder decoder) {
     CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_SE_FACTORY_PROVISIONING_LOCK_CMD,
-        0x50, 0x00);
+      KMTestUtils.APDU_P1, KMTestUtils.APDU_P2);
     // print(commandAPDU.getBytes());
     return simulator.transmitCommand(commandAPDU);
   }
@@ -682,7 +682,7 @@ public class KMProvision {
   }
 
   public static void sendEarlyBootEnded(CardSimulator simulator, KMDecoder decoder) {
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_EARLY_BOOT_ENDED_CMD, 0x50, 0x00);
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_EARLY_BOOT_ENDED_CMD, KMTestUtils.APDU_P1, KMTestUtils.APDU_P2);
     //print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     Assert.assertEquals(0x9000, response.getSW());
@@ -694,7 +694,7 @@ public class KMProvision {
   }
 
   public static short getHmacSharingParams(CardSimulator simulator, KMDecoder decoder) {
-    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_GET_HMAC_SHARING_PARAM_CMD, 0x50, 0x00);
+    CommandAPDU commandAPDU = new CommandAPDU(0x80, INS_GET_HMAC_SHARING_PARAM_CMD, KMTestUtils.APDU_P1, KMTestUtils.APDU_P2);
     //print(commandAPDU.getBytes());
     ResponseAPDU response = simulator.transmitCommand(commandAPDU);
     KMDecoder dec = new KMDecoder();
