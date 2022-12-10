@@ -27,23 +27,23 @@ public class KMCose {
   //COSE SIGN1
   public static final byte COSE_SIGN1_ENTRY_COUNT = 4;
   public static final byte COSE_SIGN1_PROTECTED_PARAMS_OFFSET = 0;
-  public static final short COSE_SIGN1_UNPROTECTED_PARAMS_OFFSET = 1;
-  public static final short COSE_SIGN1_PAYLOAD_OFFSET = 2;
-  public static final short COSE_SIGN1_SIGNATURE_OFFSET = 3;
+  public static final byte COSE_SIGN1_UNPROTECTED_PARAMS_OFFSET = 1;
+  public static final byte COSE_SIGN1_PAYLOAD_OFFSET = 2;
+  public static final byte COSE_SIGN1_SIGNATURE_OFFSET = 3;
   //COSE MAC0
-  public static final short COSE_MAC0_ENTRY_COUNT = 4;
-  public static final short COSE_MAC0_PROTECTED_PARAMS_OFFSET = 0;
-  public static final short COSE_MAC0_UNPROTECTED_PARAMS_OFFSET = 1;
-  public static final short COSE_MAC0_PAYLOAD_OFFSET = 2;
-  public static final short COSE_MAC0_TAG_OFFSET = 3;
+  public static final byte COSE_MAC0_ENTRY_COUNT = 4;
+  public static final byte COSE_MAC0_PROTECTED_PARAMS_OFFSET = 0;
+  public static final byte COSE_MAC0_UNPROTECTED_PARAMS_OFFSET = 1;
+  public static final byte COSE_MAC0_PAYLOAD_OFFSET = 2;
+  public static final byte COSE_MAC0_TAG_OFFSET = 3;
   //COSE ENCRYPT
-  public static final short COSE_ENCRYPT_ENTRY_COUNT = 4;
-  public static final short COSE_ENCRYPT_STRUCTURE_ENTRY_COUNT = 3;
-  public static final short COSE_ENCRYPT_RECIPIENT_ENTRY_COUNT = 3;
-  public static final short COSE_ENCRYPT_PROTECTED_PARAMS_OFFSET = 0;
-  public static final short COSE_ENCRYPT_UNPROTECTED_PARAMS_OFFSET = 1;
-  public static final short COSE_ENCRYPT_PAYLOAD_OFFSET = 2;
-  public static final short COSE_ENCRYPT_RECIPIENTS_OFFSET = 3;
+  public static final byte COSE_ENCRYPT_ENTRY_COUNT = 4;
+  public static final byte COSE_ENCRYPT_STRUCTURE_ENTRY_COUNT = 3;
+  public static final byte COSE_ENCRYPT_RECIPIENT_ENTRY_COUNT = 3;
+  public static final byte COSE_ENCRYPT_PROTECTED_PARAMS_OFFSET = 0;
+  public static final byte COSE_ENCRYPT_UNPROTECTED_PARAMS_OFFSET = 1;
+  public static final byte COSE_ENCRYPT_PAYLOAD_OFFSET = 2;
+  public static final byte COSE_ENCRYPT_RECIPIENTS_OFFSET = 3;
 
   //COSE Labels
   public static final byte COSE_LABEL_ALGORITHM = 1;
@@ -71,9 +71,9 @@ public class KMCose {
   public static final byte COSE_KEY_OP_DECRYPT = 4;
 
   // AES GCM
-  public static final short AES_GCM_NONCE_LENGTH = 12;
-  public static final short AES_GCM_TAG_SIZE = 16;
-  public static final short AES_GCM_KEY_SIZE = 32;
+  public static final byte AES_GCM_NONCE_LENGTH = 12;
+  public static final byte AES_GCM_TAG_SIZE = 16;
+  public static final byte AES_GCM_KEY_SIZE = 32;
   public static final short AES_GCM_KEY_SIZE_BITS = 256;
   // Cose key parameters.
   public static final byte COSE_KEY_KEY_TYPE = 1;
@@ -85,7 +85,7 @@ public class KMCose {
   public static final byte COSE_KEY_PUBKEY_Y = -3;
   public static final byte COSE_KEY_PRIV_KEY = -4;
   public static final byte[] COSE_TEST_KEY = {(byte) 0xFF, (byte) 0xFE, (byte) 0xEE, (byte) 0x90}; // -70000
-  public static final short COSE_KEY_MAX_SIZE = 4;
+  public static final byte COSE_KEY_MAX_SIZE = 4;
 
   // kdfcontext strings
   public static final byte[] client = {0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74};

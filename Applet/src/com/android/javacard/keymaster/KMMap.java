@@ -22,7 +22,7 @@ import javacard.framework.Util;
 
 public class KMMap extends KMType {
   public static final short ANY_MAP_LENGTH = 0x1000;
-  private static final short MAP_HEADER_SIZE = 4;
+  private static final byte MAP_HEADER_SIZE = 4;
   private static KMMap prototype;
 
   private KMMap() {
@@ -37,7 +37,7 @@ public class KMMap extends KMType {
   }
 
   public static short exp() {
-    short ptr = instance(MAP_TYPE, MAP_HEADER_SIZE);
+    short ptr = instance(MAP_TYPE, (short) MAP_HEADER_SIZE);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), (short) 0);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), ANY_MAP_LENGTH);
     return ptr;

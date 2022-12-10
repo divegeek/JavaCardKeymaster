@@ -26,7 +26,7 @@ import javacard.framework.Util;
  * TEXT_STR_TYPE; short length; sequence of bytes}
  */
 public class KMTextString extends KMByteBlob {
-  private static short OFFSET_SIZE = 2;
+  private static byte OFFSET_SIZE = 2;
 
   private static KMTextString prototype;
 

@@ -27,8 +27,8 @@ import javacard.framework.Util;
  */
 public class KMInteger extends KMType {
 
-  public static final short UINT_32 = 4;
-  public static final short UINT_64 = 8;
+  public static final byte UINT_32 = 4;
+  public static final byte UINT_64 = 8;
   private static KMInteger prototype;
 
   protected KMInteger() {

@@ -15,7 +15,6 @@
  */
 package com.android.javacard.keymaster;
 
-import com.android.javacard.seprovider.KMDeviceUniqueKeyPair;
 import com.android.javacard.seprovider.KMException;
 import com.android.javacard.seprovider.KMJCardSimulator;
 import javacard.framework.APDU;
@@ -54,7 +53,7 @@ public class KMJCardSimApplet extends KMKeymasterApplet {
   private static final byte INS_KEYMINT_PROVIDER_APDU_END = 0x1F;
   public static final byte BOOT_KEY_MAX_SIZE = 32;
   public static final byte BOOT_HASH_MAX_SIZE = 32;
-  public static final short SHARED_SECRET_KEY_SIZE = 32;
+  public static final byte SHARED_SECRET_KEY_SIZE = 32;
 
   // Package version.
   protected short packageVersion;

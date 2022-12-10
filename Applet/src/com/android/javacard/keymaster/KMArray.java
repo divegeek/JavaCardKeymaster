@@ -34,7 +34,7 @@ import javacard.framework.Util;
 public class KMArray extends KMType {
 
   public static final short ANY_ARRAY_LENGTH = 0x1000;
-  private static final short ARRAY_HEADER_SIZE = 4;
+  private static final byte ARRAY_HEADER_SIZE = 4;
   private static KMArray prototype;
 
   private KMArray() {
@@ -49,14 +49,14 @@ public class KMArray extends KMType {
   }
 
   public static short exp() {
-    short ptr = instance(ARRAY_TYPE, ARRAY_HEADER_SIZE);
+    short ptr = instance(ARRAY_TYPE, (short) ARRAY_HEADER_SIZE);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), KMType.INVALID_VALUE);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), ANY_ARRAY_LENGTH);
     return ptr;
   }
 
   public static short exp(short type) {
-    short ptr = instance(ARRAY_TYPE, ARRAY_HEADER_SIZE);
+    short ptr = instance(ARRAY_TYPE, (short) ARRAY_HEADER_SIZE);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE), type);
     Util.setShort(heap, (short) (ptr + TLV_HEADER_SIZE + 2), ANY_ARRAY_LENGTH);
     return ptr;

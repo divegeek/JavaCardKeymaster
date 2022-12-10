@@ -45,11 +45,11 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte AES_BLOCK_SIZE = 16;
   public static final byte DES_BLOCK_SIZE = 8;
   public static final short MASTER_KEY_SIZE = 128;
-  public static final short WRAPPING_KEY_SIZE = 32;
-  public static final short MAX_OPERATIONS_COUNT = 4;
-  public static final short VERIFIED_BOOT_KEY_SIZE = 32;
-  public static final short VERIFIED_BOOT_HASH_SIZE = 32;
-  public static final short BOOT_PATCH_LVL_SIZE = 4;
+  public static final byte WRAPPING_KEY_SIZE = 32;
+  public static final byte MAX_OPERATIONS_COUNT = 4;
+  public static final byte VERIFIED_BOOT_KEY_SIZE = 32;
+  public static final byte VERIFIED_BOOT_HASH_SIZE = 32;
+  public static final byte BOOT_PATCH_LVL_SIZE = 4;
 
   protected static final short KM_HAL_VERSION = (short) 0x5000;
   private static final short MAX_AUTH_DATA_SIZE = (short) 512;
@@ -254,7 +254,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   public static final byte AES_GCM_AUTH_TAG_LENGTH = 16;
   public static final byte AES_GCM_NONCE_LENGTH = 12;
   // ComputeHMAC constants
-  private static final short HMAC_SHARED_PARAM_MAX_SIZE = 64;
+  private static final byte HMAC_SHARED_PARAM_MAX_SIZE = 64;
   protected static final short MAX_CERT_SIZE = 3000;
   protected static final short MAX_KEY_CHARS_SIZE = 512;
   protected static final short MAX_KEYBLOB_SIZE = 1024;
@@ -262,9 +262,9 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // the KeyBlobs if it is changed. please increment this
   // version number whenever you change anything related to
   // KeyBlob (structure, encryption algorithm etc).
-  public static final short KEYBLOB_CURRENT_VERSION = 3;
+  public static final byte KEYBLOB_CURRENT_VERSION = 3;
   // KeyBlob Verion 1 constant.
-  public static final short KEYBLOB_VERSION_1 = 1;
+  public static final byte KEYBLOB_VERSION_1 = 1;
   // KeyBlob array size constants.
   public static final byte SYM_KEY_BLOB_SIZE_V2_V3 = 6;
   public static final byte ASYM_KEY_BLOB_SIZE_V2_V3 = 7;
@@ -278,7 +278,7 @@ public class KMKeymasterApplet extends Applet implements AppletEvent, ExtendedLe
   // SHA-256 Digest length in bits
   public static final short SHA256_DIGEST_LEN_BITS = 256;
   // Minimum HMAC length in bits
-  public static final short MIN_HMAC_LENGTH_BITS = 64;
+  public static final byte MIN_HMAC_LENGTH_BITS = 64;
 
   // Provision reporting status
   public  static final short NOT_PROVISIONED = 0x0000;

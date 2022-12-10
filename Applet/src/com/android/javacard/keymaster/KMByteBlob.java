@@ -26,7 +26,7 @@ import javacard.framework.Util;
  * BYTE_BLOB_TYPE; short length; sequence of bytes}
  */
 public class KMByteBlob extends KMType {
-  private static short OFFSET_SIZE = 2;
+  private static byte OFFSET_SIZE = 2;
   private static KMByteBlob prototype;
 
   protected KMByteBlob() {

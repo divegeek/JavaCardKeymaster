@@ -27,16 +27,16 @@ import javacard.security.Key;
 
 public class KMOperationImpl implements KMOperation {
 
-  private static final short ALG_TYPE_OFFSET = 0x00;
-  private static final short PADDING_OFFSET = 0x01;
-  private static final short PURPOSE_OFFSET = 0x02;
-  private static final short BLOCK_MODE_OFFSET = 0x03;
-  private static final short MAC_LENGTH_OFFSET = 0x04;
+  private static final byte ALG_TYPE_OFFSET = 0x00;
+  private static final byte PADDING_OFFSET = 0x01;
+  private static final byte PURPOSE_OFFSET = 0x02;
+  private static final byte BLOCK_MODE_OFFSET = 0x03;
+  private static final byte MAC_LENGTH_OFFSET = 0x04;
   private final byte[] EMPTY = {};
   //This will hold the length of the buffer stored inside the
   //Java Card after the GCM update operation.
-  private static final short AES_GCM_UPDATE_LEN_OFFSET = 0x05;
-  private static final short PARAMETERS_LENGTH = 6;
+  private static final byte AES_GCM_UPDATE_LEN_OFFSET = 0x05;
+  private static final byte PARAMETERS_LENGTH = 6;
   private short[] parameters;
   // Either one of Cipher/Signature instance is stored.
   private Object[] operationInst;

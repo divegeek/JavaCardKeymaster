@@ -52,10 +52,10 @@ public class KMOperationState {
   private static final byte OPERATION = 0;
   private static final byte HMAC_SIGNER_OPERATION = 1;
   // Flag masks
-  private static final short AUTH_PER_OP_REQD = 1;
-  private static final short SECURE_USER_ID_REQD = 2;
-  private static final short AUTH_TIMEOUT_VALIDATED = 4;
-  private static final short AES_GCM_UPDATE_ALLOWED = 8;
+  private static final byte AUTH_PER_OP_REQD = 1;
+  private static final byte SECURE_USER_ID_REQD = 2;
+  private static final byte AUTH_TIMEOUT_VALIDATED = 4;
+  private static final byte AES_GCM_UPDATE_ALLOWED = 8;
   private static final byte PROCESSED_INPUT_MSG = 16;
   // Max user secure ids.
   private static final byte MAX_SECURE_USER_IDS = 5;
