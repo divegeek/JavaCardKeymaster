@@ -35,10 +35,8 @@ import javacard.framework.Util;
  * N is the number of keys. Similarly getResponse is called is multiple times till the client receives the
  * response completely.
  */
-public class RemotelyProvisionedComponentDevice {
+public class KMRemotelyProvisionedComponentDevice {
 
-  private static final byte TRUE = 0x01;
-  private static final byte FALSE = 0x00;
   // RKP Version
   private static final byte RKP_VERSION = 0x03;
   // RKP supportedNumKeysInCsr
@@ -158,10 +156,9 @@ public class RemotelyProvisionedComponentDevice {
   private KMKeymintDataStore storeDataInst;
   private Object[] operation;
   private short[] dataIndex;
-  public static Object[] authorizedEekRoots;
   public short[] rkpTmpVariables;
 
-  public RemotelyProvisionedComponentDevice(KMEncoder encoder, KMDecoder decoder,
+  public KMRemotelyProvisionedComponentDevice(KMEncoder encoder, KMDecoder decoder,
       KMRepository repository, KMSEProvider seProvider, KMKeymintDataStore storeDInst) {
     this.encoder = encoder;
     this.decoder = decoder;

@@ -22,8 +22,6 @@ import com.android.javacard.keymaster.KMBoolTag;
 import com.android.javacard.keymaster.KMByteBlob;
 import com.android.javacard.keymaster.KMByteTag;
 import com.android.javacard.keymaster.KMConfigurations;
-import com.android.javacard.keymaster.KMCose;
-import com.android.javacard.keymaster.KMCoseHeaders;
 import com.android.javacard.keymaster.KMDecoder;
 import com.android.javacard.keymaster.KMEncoder;
 import com.android.javacard.keymaster.KMEnum;
@@ -39,18 +37,13 @@ import com.android.javacard.keymaster.KMKeyCharacteristics;
 import com.android.javacard.keymaster.KMKeyParameters;
 import com.android.javacard.keymaster.KMKeymasterApplet;
 import com.android.javacard.keymaster.KMKeymintDataStore;
-import com.android.javacard.keymaster.KMNInteger;
 import com.android.javacard.keymaster.KMOperationState;
 import com.android.javacard.keymaster.KMRepository;
-import com.android.javacard.keymaster.KMSimpleValue;
 import com.android.javacard.keymaster.KMType;
 import com.android.javacard.keymaster.KMVerificationToken;
-import com.android.javacard.seprovider.KMHmacKey;
 import com.android.javacard.seprovider.KMJCardSimulator;
 import com.android.javacard.seprovider.KMSEProvider;
-import com.licel.jcardsim.bouncycastle.util.encoders.Hex;
 import com.licel.jcardsim.smartcardio.CardSimulator;
-import com.licel.jcardsim.smartcardio.JCardSimProvider;
 import com.licel.jcardsim.utils.AIDUtil;
 import java.math.BigInteger;
 import java.security.AlgorithmParameters;
@@ -338,7 +331,6 @@ public class KMFunctionalTest {
   private KMEncoder encoder;
   private KMDecoder decoder;
   private KMSEProvider cryptoProvider;
-  private KMAsn1Parser asn1Parser;
 
   public KMFunctionalTest() {
     cryptoProvider = new KMJCardSimulator();
