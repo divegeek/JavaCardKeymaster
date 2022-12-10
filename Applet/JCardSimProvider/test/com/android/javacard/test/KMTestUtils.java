@@ -118,6 +118,8 @@ public class KMTestUtils {
       (byte) 0xeb, (byte) 0x86, (byte) 0x99, (byte) 0x98, (byte) 0xab, (byte) 0x3a, (byte) 0xb4,
       (byte) 0x80, (byte) 0xaa, (byte) 0xbd, (byte) 0x50};
 
+  public static final byte APDU_P1 = 0x60;
+  public static final byte APDU_P2 = 0x00;
   public static final short ADDITIONAL_MASK = 0x1F;
   private static final short UINT8_LENGTH = 0x18;
   private static final short UINT16_LENGTH = 0x19;
@@ -137,8 +139,8 @@ public class KMTestUtils {
     byte[] buf = new byte[2500];
     buf[0] = (byte) 0x80;
     buf[1] = ins;
-    buf[2] = (byte) 0x50;
-    buf[3] = (byte) 0x00;
+    buf[2] = APDU_P1;
+    buf[3] = APDU_P2;
     buf[4] = 0;
     short len = encoder.encode(cmd, buf, (short) 7, (short) 2500);
     Util.setShort(buf, (short) 5, len);
@@ -152,8 +154,8 @@ public class KMTestUtils {
     byte[] buf = new byte[2500];
     buf[0] = (byte) 0x80;
     buf[1] = ins;
-    buf[2] = (byte) 0x50;
-    buf[3] = (byte) 0x00;
+    buf[2] = APDU_P1;
+    buf[3] = APDU_P2;
     buf[4] = 0;
     Util.arrayCopyNonAtomic(encodedCmd, (short) 0, buf, (short) 7, (short) encodedCmd.length);
     Util.setShort(buf, (short) 5, (short) encodedCmd.length);
